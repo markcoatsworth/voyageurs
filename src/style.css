@@ -1,0 +1,128 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0e14;
+  font-family: 'Press Start 2P', monospace;
+  color: #f4ead2;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#app canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 10px;
+  text-shadow: 2px 2px 0 #000;
+}
+
+#hud-speed-wrap {
+  width: 160px;
+  height: 8px;
+  border: 2px solid #f4ead2;
+  background: rgba(0,0,0,0.4);
+}
+
+#hud-speed-fill {
+  height: 100%;
+  width: 30%;
+  background: #e0a458;
+  transition: width 0.15s linear;
+}
+
+.screen {
+  pointer-events: all;
+  text-align: center;
+  background: rgba(10, 14, 20, 0.72);
+  border: 4px solid #e0a458;
+  padding: 32px 40px;
+  max-width: 90vw;
+}
+
+.screen h1 {
+  font-size: 28px;
+  color: #e0a458;
+  text-shadow: 3px 3px 0 #000;
+  margin: 0 0 16px;
+  letter-spacing: 2px;
+}
+
+.screen .subtitle {
+  font-size: 10px;
+  color: #9fc0a8;
+  margin: 0 0 24px;
+}
+
+.screen .instructions {
+  font-size: 9px;
+  line-height: 2;
+  color: #f4ead2;
+  margin: 0 0 28px;
+}
+
+#final-stats {
+  font-size: 10px;
+  line-height: 2;
+  margin-bottom: 28px;
+}
+
+button {
+  pointer-events: all;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  padding: 14px 22px;
+  background: #e0a458;
+  color: #1a1208;
+  border: 3px solid #f4ead2;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 #000;
+}
+
+button:hover {
+  background: #f4c07c;
+}
+
+button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #000;
+}

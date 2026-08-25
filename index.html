@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Voyageurs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="ui">
+    <div id="hud" class="hidden">
+      <div id="hud-score">FURS: 0</div>
+      <div id="hud-distance">DISTANCE: 0m</div>
+      <div id="hud-speed-wrap"><div id="hud-speed-fill"></div></div>
+    </div>
+
+    <div id="title-screen" class="screen">
+      <h1>VOYAGEURS</h1>
+      <p class="subtitle">a river runs west</p>
+      <p class="instructions">
+        &larr; / &rarr; or A / D &mdash; steer the canoe<br/>
+        &uarr; / &darr; or W / S &mdash; paddle faster / slower<br/>
+        Avoid rocks and deadfall. Collect fur pelts. Don't capsize.
+      </p>
+      <button id="start-btn">Push Off</button>
+    </div>
+
+    <div id="gameover-screen" class="screen hidden">
+      <h1>CAPSIZED</h1>
+      <p id="final-stats"></p>
+      <button id="restart-btn">Try Again</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
