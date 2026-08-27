@@ -1,16 +1,29 @@
 import * as THREE from 'three';
-import { createRockTexture, createBarkTexture } from '../utils/textures.js';
-import { RIVER_HALF_WIDTH } from './river.js';
+import { createRockTexture, createBarkTexture, createTreeSpriteTexture } from '../utils/textures.js';
+import { centerX, widthAt } from './riverPath.js';
+import { SPAWN_Z, RECYCLE_Z } from './world.js';
 
-const SPAWN_Z = -190;
-const RECYCLE_Z = 8;
-const POOL_SIZE = 14;
-const MIN_GAP = 9;
-const PLAY_HALF_WIDTH = RIVER_HALF_WIDTH - 0.6;
+const POOL_SIZE = 16;
+const BASE_GAP = 9;
+const GAP_VARIANCE = 10;
+const GAP_SHRINK_PER_METER = 0.012;
+const MIN_GAP = 5.5;
+const EDGE_MARGIN = 0.7;
 
 const ROCK = 'rock';
 const LOG = 'log';
+const ISLAND = 'island';
 const PELT = 'pelt';
+
+const islandTreeTextures = [createTreeSpriteTexture(0), createTreeSpriteTexture(2)];
+
+function pickType() {
+  const roll = Math.random();
+  if (roll < 0.35) return ROCK;
+  if (roll < 0.6) return LOG;
+  if (roll < 0.7) return ISLAND;
+  return PELT;
+}
 
 function buildRock(tex) {
   const mat = new THREE.MeshLambertMaterial({ map: tex, flatShading: true });
@@ -34,45 +47,105 @@ function buildPelt() {
   return mesh;
 }
 
-export function createObstacleField(scene) {
+function buildIsland(rockTex) {
+  const group = new THREE.Group();
+  const moundMat = new THREE.MeshLambertMaterial({ map: rockTex, color: 0x8a7a4a, flatShading: true });
+  const mound = new THREE.Mesh(new THREE.IcosahedronGeometry(1.3, 0), moundMat);
+  mound.scale.y = 0.4;
+  mound.position.y = 0.2;
+  group.add(mound);
+
+  const treeTex = islandTreeTextures[Math.floor(Math.random() * islandTreeTextures.length)];
+  const treeMat = new THREE.SpriteMaterial({ map: treeTex, transparent: true, alphaTest: 0.4 });
+  const tree = new THREE.Sprite(treeMat);
+  const scale = 2.4;
+  tree.scale.set(scale * 0.6, scale, 1);
+  tree.position.set(0.2, 0.4 + scale / 2, -0.1);
+  group.add(tree);
+  return group;
+}
+
+function buildMesh(type, rockTex, barkTex) {
+  if (type === ROCK) return buildRock(rockTex);
+  if (type === LOG) return buildLog(barkTex);
+  if (type === ISLAND) return buildIsland(rockTex);
+  return buildPelt();
+}
+
+function hitRadiusFor(type) {
+  if (type === LOG) return 1.1;
+  if (type === ISLAND) return 1.8;
+  return 0.6;
+}
+
+// Picks a world X for an obstacle at downstream distance d, staying clear of
+// the banks. Islands bias toward mid-channel so they force a real left/right
+// choice; everything else scatters across the navigable width.
+function pickX(type, d) {
+  const half = widthAt(d) / 2 - EDGE_MARGIN;
+  if (type === ISLAND) {
+    const clearance = half - 1.3;
+    if (clearance < 0.4) return null; // channel too narrow here, fall back
+    return centerX(d) + (Math.random() * 2 - 1) * clearance * 0.5;
+  }
+  return centerX(d) + (Math.random() * 2 - 1) * Math.max(0.1, half);
+}
+
+function gapFor(distance) {
+  const shrink = Math.min(BASE_GAP + GAP_VARIANCE - MIN_GAP, distance * GAP_SHRINK_PER_METER);
+  return Math.max(MIN_GAP, BASE_GAP + Math.random() * GAP_VARIANCE - shrink);
+}
+
+export function createObstacleField(scene, world) {
   const rockTex = createRockTexture();
   const barkTex = createBarkTexture();
 
   const pool = [];
-  let nextSpawnZ = SPAWN_Z;
 
-  function spawnOne(z) {
-    const roll = Math.random();
-    const type = roll < 0.45 ? ROCK : roll < 0.8 ? LOG : PELT;
-    const mesh = type === ROCK ? buildRock(rockTex) : type === LOG ? buildLog(barkTex) : buildPelt();
-    mesh.position.x = (Math.random() * 2 - 1) * PLAY_HALF_WIDTH;
+  function place(z) {
+    const d = world.distance - z;
+    let type = pickType();
+    let x = pickX(type, d);
+    if (x === null) { type = ROCK; x = pickX(type, d); }
+    const mesh = buildMesh(type, rockTex, barkTex);
+    mesh.position.x = x;
     mesh.position.z = z;
     scene.add(mesh);
-    pool.push({ mesh, type, active: true, spinPhase: Math.random() * Math.PI * 2 });
+    return { mesh, type, active: true, spinPhase: Math.random() * Math.PI * 2 };
   }
 
+  let z = SPAWN_Z;
   for (let i = 0; i < POOL_SIZE; i++) {
-    spawnOne(nextSpawnZ);
-    nextSpawnZ -= MIN_GAP + Math.random() * 10;
+    pool.push(place(z));
+    z -= gapFor(world.distance - z);
   }
 
-  function respawn(entry) {
+  function respawn(entry, distanceNow) {
     scene.remove(entry.mesh);
-    entry.mesh.geometry.dispose();
-    const roll = Math.random();
-    entry.type = roll < 0.45 ? ROCK : roll < 0.8 ? LOG : PELT;
-    entry.mesh = entry.type === ROCK ? buildRock(rockTex) : entry.type === LOG ? buildLog(barkTex) : buildPelt();
+    entry.mesh.traverse((obj) => obj.geometry && obj.geometry.dispose());
+
     let furthest = 0;
     for (const e of pool) if (e.mesh.position.z < furthest) furthest = e.mesh.position.z;
-    entry.mesh.position.x = (Math.random() * 2 - 1) * PLAY_HALF_WIDTH;
-    entry.mesh.position.z = furthest - (MIN_GAP + Math.random() * 10);
+    const newZ = furthest - gapFor(distanceNow);
+    const d = distanceNow - newZ;
+
+    let type = pickType();
+    let x = pickX(type, d);
+    if (x === null) { type = ROCK; x = pickX(type, d); }
+
+    const mesh = buildMesh(type, rockTex, barkTex);
+    mesh.position.x = x;
+    mesh.position.z = newZ;
+    scene.add(mesh);
+
+    entry.mesh = mesh;
+    entry.type = type;
     entry.active = true;
-    scene.add(entry.mesh);
   }
 
   return {
     pool,
-    update(time, dt, speed, canoeX, onHit, onCollect) {
+    update(time, dt, speed, canoeWorldX, onHit, onCollect) {
       for (const entry of pool) {
         entry.mesh.position.z += speed * dt;
 
@@ -82,9 +155,8 @@ export function createObstacleField(scene) {
         }
 
         if (entry.active && Math.abs(entry.mesh.position.z) < 0.9) {
-          const dx = Math.abs(entry.mesh.position.x - canoeX);
-          const hitRadius = entry.type === LOG ? 1.1 : 0.6;
-          if (dx < hitRadius) {
+          const dx = Math.abs(entry.mesh.position.x - canoeWorldX);
+          if (dx < hitRadiusFor(entry.type)) {
             entry.active = false;
             if (entry.type === PELT) onCollect(entry);
             else onHit(entry);
@@ -92,23 +164,20 @@ export function createObstacleField(scene) {
         }
 
         if (entry.mesh.position.z > RECYCLE_Z) {
-          respawn(entry);
+          respawn(entry, world.distance);
         }
       }
     },
     reset() {
-      let z = SPAWN_Z;
+      let zCursor = SPAWN_Z;
       for (const entry of pool) {
         scene.remove(entry.mesh);
-        entry.mesh.geometry.dispose();
-        const roll = Math.random();
-        entry.type = roll < 0.45 ? ROCK : roll < 0.8 ? LOG : PELT;
-        entry.mesh = entry.type === ROCK ? buildRock(rockTex) : entry.type === LOG ? buildLog(barkTex) : buildPelt();
-        entry.mesh.position.x = (Math.random() * 2 - 1) * PLAY_HALF_WIDTH;
-        entry.mesh.position.z = z;
+        entry.mesh.traverse((obj) => obj.geometry && obj.geometry.dispose());
+        const fresh = place(zCursor);
+        entry.mesh = fresh.mesh;
+        entry.type = fresh.type;
         entry.active = true;
-        scene.add(entry.mesh);
-        z -= MIN_GAP + Math.random() * 10;
+        zCursor -= gapFor(world.distance - zCursor);
       }
     },
   };

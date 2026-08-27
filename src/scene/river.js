@@ -1,53 +1,71 @@
 import * as THREE from 'three';
-import { createWaterTexture, createSandTexture } from '../utils/textures.js';
+import { createWaterTexture } from '../utils/textures.js';
+import { centerX, widthAt } from './riverPath.js';
+import { buildCurvedGrid } from './ribbon.js';
+import { SEGMENT_LENGTH, SEGMENTS_PER_SIDE, SPAWN_Z, RECYCLE_Z } from './world.js';
 
-export const RIVER_WIDTH = 8;
-export const RIVER_HALF_WIDTH = RIVER_WIDTH / 2;
-const RIVER_SPAN_BACK = 20;
-const RIVER_SPAN_FORWARD = 220;
+const ROWS = 6;
+const COLS = 4;
 
-export function createRiver(scene) {
+function buildWaterGeometry(D0) {
+  return buildCurvedGrid({
+    length: SEGMENT_LENGTH,
+    rows: ROWS,
+    cols: COLS,
+    uvXRepeat: 3,
+    uvZDensity: 0.3,
+    xAt(z, cf) {
+      const d = D0 - z;
+      const half = widthAt(d) / 2;
+      return centerX(d) + (cf * 2 - 1) * half;
+    },
+  });
+}
+
+export function createRiver(scene, world) {
   const waterTex = createWaterTexture();
-  const sandTex = createSandTexture();
-  sandTex.repeat.set(2, 60);
+  const mat = new THREE.MeshLambertMaterial({ map: waterTex, flatShading: true, side: THREE.DoubleSide });
 
-  const length = RIVER_SPAN_BACK + RIVER_SPAN_FORWARD;
-  const segmentsX = 16;
-  const segmentsZ = 60;
-  const geo = new THREE.PlaneGeometry(RIVER_WIDTH, length, segmentsX, segmentsZ);
-  geo.rotateX(-Math.PI / 2);
+  const segments = [];
+  for (let i = 0; i < SEGMENTS_PER_SIDE; i++) {
+    const z = SPAWN_Z + i * SEGMENT_LENGTH;
+    const D0 = world.distance - z;
+    const geo = buildWaterGeometry(D0);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.z = z;
+    scene.add(mesh);
+    segments.push({ mesh, geo, base: geo.attributes.position.array.slice() });
+  }
 
-  const mat = new THREE.MeshLambertMaterial({ map: waterTex, flatShading: true });
-  const water = new THREE.Mesh(geo, mat);
-  water.position.z = (RIVER_SPAN_BACK - RIVER_SPAN_FORWARD) / 2;
-  scene.add(water);
-
-  // Sandy banks hugging the river edge for a soft transition into the grass.
-  const sandGeo = new THREE.PlaneGeometry(1.4, length, 1, 1);
-  sandGeo.rotateX(-Math.PI / 2);
-  const sandMat = new THREE.MeshLambertMaterial({ map: sandTex, flatShading: true });
-  const sandL = new THREE.Mesh(sandGeo, sandMat);
-  sandL.position.set(-RIVER_HALF_WIDTH - 0.6, 0.01, water.position.z);
-  scene.add(sandL);
-  const sandR = sandL.clone();
-  sandR.position.x = RIVER_HALF_WIDTH + 0.6;
-  scene.add(sandR);
-
-  const basePositions = geo.attributes.position.array.slice();
+  function respawn(entry) {
+    let minZ = Infinity;
+    for (const s of segments) if (s.mesh.position.z < minZ) minZ = s.mesh.position.z;
+    const newZ = minZ - SEGMENT_LENGTH;
+    const D0 = world.distance - newZ;
+    entry.mesh.position.z = newZ;
+    entry.geo.dispose();
+    entry.geo = buildWaterGeometry(D0);
+    entry.mesh.geometry = entry.geo;
+    entry.base = entry.geo.attributes.position.array.slice();
+  }
 
   return {
-    mesh: water,
-    texture: waterTex,
-    update(time, dt, flowSpeed) {
-      waterTex.offset.y -= dt * flowSpeed * 0.15;
-      const pos = geo.attributes.position.array;
-      for (let i = 0; i < pos.length; i += 3) {
-        const x = basePositions[i];
-        const z = basePositions[i + 2];
-        pos[i + 1] = Math.sin(z * 0.35 + time * 2.2) * 0.045 + Math.cos(x * 0.8 + time * 1.3) * 0.03;
+    update(time, dt, speed) {
+      waterTex.offset.y -= dt * speed * 0.05;
+      for (const entry of segments) {
+        entry.mesh.position.z += speed * dt;
+        const pos = entry.geo.attributes.position.array;
+        const worldZ = entry.mesh.position.z;
+        for (let i = 0; i < pos.length; i += 3) {
+          const bx = entry.base[i];
+          const bz = entry.base[i + 2];
+          pos[i + 1] = Math.sin(bz * 0.35 + bx * 0.6 + worldZ * 0.35 + time * 2.2) * 0.04
+            + Math.cos(bx * 1.1 + bz * 0.2 + time * 1.3) * 0.03;
+        }
+        entry.geo.attributes.position.needsUpdate = true;
+
+        if (entry.mesh.position.z > RECYCLE_Z) respawn(entry);
       }
-      geo.attributes.position.needsUpdate = true;
-      geo.computeVertexNormals();
     },
   };
 }

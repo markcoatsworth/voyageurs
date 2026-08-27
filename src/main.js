@@ -5,6 +5,7 @@ import { createRiver } from './scene/river.js';
 import { createTerrain } from './scene/terrain.js';
 import { createCanoe } from './scene/canoe.js';
 import { createObstacleField } from './scene/obstacles.js';
+import { createWhalePod } from './scene/whales.js';
 import { Input } from './utils/input.js';
 import { Game } from './game.js';
 
@@ -25,10 +26,16 @@ scene.add(sun);
 const ambient = new THREE.HemisphereLight(0xbfe0e6, 0x2e5228, 0.7);
 scene.add(ambient);
 
-createSky(scene);
-const river = createRiver(scene);
-const terrain = createTerrain(scene);
-const obstacles = createObstacleField(scene);
+// Shared downstream-distance clock: written by Game each frame, read by
+// river/terrain/obstacles whenever they (re)spawn a piece of geometry so
+// everything samples the same river-course curve at the same point.
+const world = { distance: 0 };
+
+const hills = createSky(scene);
+const river = createRiver(scene, world);
+const terrain = createTerrain(scene, world);
+const obstacles = createObstacleField(scene, world);
+const whales = createWhalePod(scene, world);
 
 const canoe = createCanoe();
 scene.add(canoe);
@@ -43,11 +50,15 @@ const ui = {
   titleScreen: document.getElementById('title-screen'),
   gameoverScreen: document.getElementById('gameover-screen'),
   finalStats: document.getElementById('final-stats'),
-  startBtn: document.getElementById('start-btn'),
   restartBtn: document.getElementById('restart-btn'),
+  milestoneBanner: document.getElementById('milestone-banner'),
 };
 
-const game = new Game({ canoe, camera, input, river, terrain, obstacles, ui });
+const game = new Game({ canoe, camera, input, river, terrain, obstacles, whales, hills, world, ui });
+
+// The canoe launches immediately — this intro caption is just a fading
+// overlay, not a gate, so it disappears on its own after a few seconds.
+setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {

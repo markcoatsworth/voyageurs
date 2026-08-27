@@ -55,7 +55,7 @@ export function createWaterTexture() {
       }
     }
   }
-  return finalize(canvas, { repeatX: 6, repeatY: 40 });
+  return finalize(canvas);
 }
 
 export function createRiverbankTexture() {
@@ -78,7 +78,7 @@ export function createRiverbankTexture() {
       ctx.fillRect(x, y, 1, 1);
     }
   }
-  return finalize(canvas, { repeatX: 4, repeatY: 24 });
+  return finalize(canvas);
 }
 
 export function createSandTexture() {
@@ -99,7 +99,7 @@ export function createSandTexture() {
       ctx.fillRect(x, y, 1, 1);
     }
   }
-  return finalize(canvas, { repeatX: 3, repeatY: 3 });
+  return finalize(canvas);
 }
 
 export function createBarkTexture() {
@@ -130,6 +130,27 @@ export function createRockTexture() {
       const r = rand();
       if (r > 0.85) ctx.fillStyle = light;
       else if (r > 0.7) ctx.fillStyle = dark;
+      else continue;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return finalize(canvas);
+}
+
+export function createCliffTexture() {
+  const size = 16;
+  const { canvas, ctx } = makeCanvas(size);
+  const bands = ['#6b6a63', '#7d7c72', '#59584f', '#8a887c'];
+  const rand = mulberry32(55);
+  for (let y = 0; y < size; y++) {
+    ctx.fillStyle = bands[Math.floor((y / size) * bands.length) % bands.length];
+    ctx.fillRect(0, y, size, 1);
+  }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const r = rand();
+      if (r > 0.9) ctx.fillStyle = '#2f2e29';
+      else if (r > 0.82) ctx.fillStyle = '#a3a196';
       else continue;
       ctx.fillRect(x, y, 1, 1);
     }

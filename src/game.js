@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RIVER_HALF_WIDTH } from './scene/river.js';
+import { centerX, widthAt, MOUTH_DISTANCE } from './scene/riverPath.js';
 
 const MIN_SPEED = 7;
 const MAX_SPEED = 24;
@@ -9,44 +9,64 @@ const DECEL_DRIFT = 2.5;
 const STEER_ACCEL = 26;
 const STEER_MAX = 9;
 const STEER_DAMPING = 6;
-const PLAY_HALF_WIDTH = RIVER_HALF_WIDTH - 0.5;
+const EDGE_MARGIN = 0.55;
 const LOG_PENALTY_SPEED = 6;
+const BANK_PENALTY_SPEED = 4;
 const INVULN_TIME = 1.2;
+const BANK_INVULN_TIME = 0.7;
+const LOOKAHEAD = 9;
 
 export class Game {
-  constructor({ canoe, camera, input, river, terrain, obstacles, ui }) {
+  constructor({ canoe, camera, input, river, terrain, obstacles, whales, hills, world, ui }) {
     this.canoe = canoe;
     this.camera = camera;
     this.input = input;
     this.river = river;
     this.terrain = terrain;
     this.obstacles = obstacles;
+    this.whales = whales;
+    this.hills = hills;
+    this.world = world;
     this.ui = ui;
 
-    this.state = 'title';
     this.time = 0;
-    this.reset();
+    // world.distance is the persistent river "clock" driving the curve —
+    // it never resets, even across a game over, so scenery never jumps.
+    this.flowDistance = 0;
 
-    ui.startBtn.addEventListener('click', () => this.start());
     ui.restartBtn.addEventListener('click', () => this.start());
+
+    // No title-screen gate — the canoe launches the instant the page is
+    // ready; the intro caption (main.js) is a non-blocking overlay that
+    // fades on its own timer instead of waiting for a click.
+    this.start();
   }
 
   reset() {
-    this.canoeX = 0;
-    this.canoeVX = 0;
+    this.lateralOffset = 0;
+    this.lateralVX = 0;
     this.speed = BASE_SPEED;
     this.distance = 0;
     this.furs = 0;
     this.invulnTimer = 0;
-    this.canoe.position.set(0, 0, 0);
+    this.mouthAnnounced = false;
     this.canoe.rotation.set(0, 0, 0);
+  }
+
+  showBanner(text) {
+    clearTimeout(this._bannerTimeout);
+    const el = this.ui.milestoneBanner;
+    el.textContent = text;
+    el.classList.add('show');
+    this._bannerTimeout = setTimeout(() => el.classList.remove('show'), 4200);
   }
 
   start() {
     this.reset();
     this.obstacles.reset();
     this.state = 'playing';
-    this.ui.titleScreen.classList.add('hidden');
+    clearTimeout(this._bannerTimeout);
+    this.ui.milestoneBanner.classList.remove('show');
     this.ui.gameoverScreen.classList.add('hidden');
     this.ui.hud.classList.remove('hidden');
   }
@@ -61,8 +81,11 @@ export class Game {
 
   handleHit(entry) {
     if (this.invulnTimer > 0) return;
-    if (entry.type === 'rock') {
+    if (entry.type === 'rock' || entry.type === 'island') {
       this.gameOver();
+    } else if (entry.type === 'bank') {
+      this.speed = Math.max(MIN_SPEED - 2, this.speed - BANK_PENALTY_SPEED);
+      this.invulnTimer = BANK_INVULN_TIME;
     } else {
       this.speed = Math.max(MIN_SPEED - 2, this.speed - LOG_PENALTY_SPEED);
       this.invulnTimer = INVULN_TIME;
@@ -77,10 +100,13 @@ export class Game {
     this.time += dt;
 
     if (this.state !== 'playing') {
-      // Idle ambience: keep water/scenery alive behind the title screen.
-      this.river.update(this.time, dt, BASE_SPEED * 0.4);
-      this.terrain.update(dt, BASE_SPEED * 0.4);
-      this.updateCamera(dt);
+      const flowSpeed = BASE_SPEED * 0.4;
+      this.flowDistance += flowSpeed * dt;
+      this.world.distance = this.flowDistance;
+      this.river.update(this.time, dt, flowSpeed);
+      this.terrain.update(dt, flowSpeed);
+      this.whales.update(this.time, dt, flowSpeed);
+      this.updateCanoeAndCamera(dt);
       return;
     }
 
@@ -90,22 +116,34 @@ export class Game {
     else if (keys.down) this.speed = Math.max(MIN_SPEED, this.speed - ACCEL * dt);
     else this.speed = Math.max(MIN_SPEED, this.speed - DECEL_DRIFT * dt * 0.3);
 
+    // Advance the shared river clock using this frame's just-updated speed —
+    // the same value handed to river/terrain/obstacles below — so the baked
+    // downstream distance (d = world.distance - z) stays exactly invariant.
+    this.flowDistance += this.speed * dt;
+    this.world.distance = this.flowDistance;
+
     let steerInput = 0;
     if (keys.left) steerInput -= 1;
     if (keys.right) steerInput += 1;
 
-    this.canoeVX += steerInput * STEER_ACCEL * dt;
-    this.canoeVX -= this.canoeVX * STEER_DAMPING * dt;
-    this.canoeVX = THREE.MathUtils.clamp(this.canoeVX, -STEER_MAX, STEER_MAX);
+    this.lateralVX += steerInput * STEER_ACCEL * dt;
+    this.lateralVX -= this.lateralVX * STEER_DAMPING * dt;
+    this.lateralVX = THREE.MathUtils.clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
 
-    this.canoeX += this.canoeVX * dt;
-    const limit = PLAY_HALF_WIDTH;
-    if (this.canoeX > limit) { this.canoeX = limit; this.canoeVX = 0; }
-    if (this.canoeX < -limit) { this.canoeX = -limit; this.canoeVX = 0; }
+    const half = widthAt(this.flowDistance) / 2 - EDGE_MARGIN;
+    const proposed = this.lateralOffset + this.lateralVX * dt;
+    if (proposed > half || proposed < -half) {
+      this.lateralOffset = THREE.MathUtils.clamp(proposed, -half, half);
+      this.lateralVX *= -0.2;
+      this.handleHit({ type: 'bank' });
+    } else {
+      this.lateralOffset = proposed;
+    }
 
-    this.canoe.position.x = this.canoeX;
-    this.canoe.rotation.z = THREE.MathUtils.lerp(this.canoe.rotation.z, -this.canoeVX * 0.05, 0.15);
-    this.canoe.rotation.y = THREE.MathUtils.lerp(this.canoe.rotation.y, -this.canoeVX * 0.04, 0.15);
+    this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
+    this.canoe.position.x = this.canoeWorldX;
+    this.canoe.rotation.z = THREE.MathUtils.lerp(this.canoe.rotation.z, -this.lateralVX * 0.05, 0.15);
+    this.canoe.rotation.y = THREE.MathUtils.lerp(this.canoe.rotation.y, -this.lateralVX * 0.04, 0.15);
     this.canoe.position.y = Math.sin(this.time * 2.2) * 0.03;
 
     const paddle = this.canoe.userData.paddle;
@@ -122,24 +160,41 @@ export class Game {
 
     this.distance += this.speed * dt;
 
+    if (!this.mouthAnnounced && this.distance >= MOUTH_DISTANCE) {
+      this.mouthAnnounced = true;
+      this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");
+    }
+
     this.river.update(this.time, dt, this.speed);
     this.terrain.update(dt, this.speed);
+    this.whales.update(this.time, dt, this.speed);
     this.obstacles.update(
-      this.time, dt, this.speed, this.canoeX,
+      this.time, dt, this.speed, this.canoeWorldX,
       (entry) => this.handleHit(entry),
       (entry) => this.handleCollect(entry)
     );
 
-    this.updateCamera(dt);
+    this.updateCanoeAndCamera(dt);
     this.updateHud();
   }
 
-  updateCamera(dt) {
-    const targetX = THREE.MathUtils.lerp(this.camera.position.x, this.canoeX * 0.7, 1 - Math.pow(0.001, dt));
-    this.camera.position.x = targetX;
+  updateCanoeAndCamera(dt) {
+    const worldX = centerX(this.flowDistance) + this.lateralOffset;
+    if (this.state !== 'playing') this.canoe.position.x = worldX;
+
+    const aheadX = centerX(this.flowDistance + LOOKAHEAD);
+    const lookX = THREE.MathUtils.lerp(worldX, aheadX, 0.4);
+
+    const camTargetX = THREE.MathUtils.lerp(worldX, lookX, 0.3);
+    const followRate = 1 - Math.pow(0.001, dt);
+    this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, camTargetX, followRate);
     this.camera.position.y = 3.4;
     this.camera.position.z = 6.5;
-    this.camera.lookAt(this.canoeX * 0.5, 0.6, -10);
+    this.camera.lookAt(lookX, 0.6, -10);
+
+    if (this.hills) {
+      this.hills.position.x = THREE.MathUtils.lerp(this.hills.position.x, centerX(this.flowDistance) * 0.5, followRate);
+    }
   }
 
   updateHud() {

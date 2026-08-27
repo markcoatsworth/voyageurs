@@ -17,7 +17,7 @@ export function createSky(scene) {
       const geo = new THREE.IcosahedronGeometry(4 + Math.random() * 5, 0);
       const hill = new THREE.Mesh(geo, isFar ? hillMatFar : hillMat);
       hill.scale.y = 0.45;
-      hill.position.set(side * (18 + Math.random() * 14), -1.5, z);
+      hill.position.set(side * (33 + Math.random() * 20), -1.5, z);
       group.add(hill);
     }
   }
