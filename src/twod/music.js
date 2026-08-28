@@ -64,7 +64,10 @@ export function createMusic() {
   function playCurrent() {
     audio.src = order[index];
     audio.play().then(
-      () => debug(`playing ${order[index].split('/').pop()}`),
+      () => {
+        started = true;
+        debug(`playing ${order[index].split('/').pop()}`);
+      },
       (e) => {
         // Benign and expected whenever stop()'s pause() lands while a
         // play() from this same track is still pending — not a real
@@ -72,6 +75,7 @@ export function createMusic() {
         // reading this diagnostic mid-test.
         if (e.name === 'AbortError') return;
         debug(`play() rejected: ${e.name}: ${e.message}`);
+        // started deliberately stays false here — see start()'s comment.
       }
     );
   }
@@ -98,9 +102,18 @@ export function createMusic() {
     get muted() {
       return muted;
     },
+    // Real bug this fixes: `started` used to be set true *before* knowing
+    // whether play() actually succeeded, right when start() was first
+    // called — so the very first gesture on the page (which might not even
+    // be a deliberate one — a stray touch, whatever opened the tab) could
+    // permanently "use up" the only attempt. If that one attempt failed for
+    // any reason, every later gesture — including deliberately tapping
+    // mute — became a no-op forever, because the code believed it had
+    // already started. Now `started` only flips true on actual success
+    // (see playCurrent()'s .then above), so main.js can safely call this on
+    // every qualifying gesture and it keeps retrying until one works.
     start() {
       if (started) return;
-      started = true;
       debug('start() called');
       playCurrent();
     },
