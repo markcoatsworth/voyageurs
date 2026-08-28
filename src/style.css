@@ -235,7 +235,7 @@ button:hover {
   position: fixed;
   left: 16px;
   bottom: 16px;
-  width: 190px;
+  width: min(400px, calc(100vw - 32px));
   background: rgba(10, 14, 20, 0.72);
   border: 3px solid #f4ead2;
   box-shadow: 4px 4px 0 #000;
@@ -244,7 +244,7 @@ button:hover {
 }
 
 #minimap-title {
-  font-size: 8px;
+  font-size: 10px;
   color: #bcae94;
   text-shadow: 2px 2px 0 #000;
   letter-spacing: 1px;

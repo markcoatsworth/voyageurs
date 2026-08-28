@@ -73,6 +73,18 @@ export function createMusic() {
       started = true;
       playCurrent();
     },
+    // Pauses playback in place (capsizing) — resume() picks back up from
+    // the same spot rather than restarting the track.
+    stop() {
+      audio.pause();
+    },
+    // No-ops if start() was never called (e.g. capsizing before the player
+    // has interacted at all, which can't actually happen, but this keeps
+    // it safe to call unconditionally from Game.start()).
+    resume() {
+      if (!started) return;
+      audio.play().catch(() => {});
+    },
     toggleMute() {
       muted = !muted;
       audio.muted = muted;

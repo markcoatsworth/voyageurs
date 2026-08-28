@@ -14,19 +14,22 @@
 //   Les Escoumins         48°21′05″N 69°24′27″W  https://en.wikipedia.org/wiki/Les_Escoumins
 import { MOUTH_DISTANCE } from '../river/path.js';
 
+// labelPos hand-places each label clear of the route line and the widget's
+// edges — the route zigzags enough (and doubles back north near the mouth)
+// that a single default offset overlaps the line or another label somewhere.
 const FJORD_WAYPOINTS = [
-  { name: 'La Baie', lat: 48.4283, lon: -71.0622, label: 'Put-in' },
-  { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833 },
-  { name: 'Rivière-Éternité', lat: 48.2556, lon: -70.4139 },
-  { name: "L'Anse-Saint-Jean", lat: 48.2330, lon: -70.2000 },
-  { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670 },
-  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, label: 'Tadoussac' },
+  { name: 'La Baie', lat: 48.4283, lon: -71.0622, label: 'Put-in', labelPos: { dx: 1.4, dy: -2.4, anchor: 'start' } },
+  { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Rivière-Éternité', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: "L'Anse-Saint-Jean", lat: 48.2330, lon: -70.2000, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, label: 'Tadoussac', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
 ];
 // The game world has no fixed "end" the way the fjord has Tadoussac — past
 // the mouth it's open-ended estuary. This is just the real next stretch of
 // coast to draw the marker continuing onto.
 const ESTUARY_WAYPOINTS = [
-  { name: 'Les Escoumins', lat: 48.3514, lon: -69.4075 },
+  { name: 'Les Escoumins', lat: 48.3514, lon: -69.4075, labelPos: { dx: -1.4, dy: 0.9, anchor: 'end' } },
 ];
 // How much further downstream (game world units) it takes to cross the
 // drawn estuary stretch after the mouth, before the marker holds at its end.
@@ -81,7 +84,7 @@ function cumulativeForFlowDistance(flowDistance) {
   return fjordEndCumulative + frac * (totalCumulative - fjordEndCumulative);
 }
 
-const PAD = 4; // km of margin around the route inside the SVG viewBox
+const PAD = 6; // km of margin around the route inside the SVG viewBox
 const xs = points.map((p) => p.x);
 const ys = points.map((p) => p.y);
 const minX = Math.min(...xs) - PAD;
@@ -123,7 +126,7 @@ export function createMinimap() {
     d: toPath(fjordPts),
     fill: 'none',
     stroke: '#4fa8d8',
-    'stroke-width': 1.6,
+    'stroke-width': 1.1,
     'stroke-linejoin': 'round',
     'stroke-linecap': 'round',
   }));
@@ -131,33 +134,31 @@ export function createMinimap() {
     d: toPath(estuaryPts),
     fill: 'none',
     stroke: '#2a6f8f',
-    'stroke-width': 1.6,
+    'stroke-width': 1.1,
     'stroke-linejoin': 'round',
     'stroke-linecap': 'round',
-    'stroke-dasharray': '2.2,1.6',
+    'stroke-dasharray': '1.6,1.2',
   }));
 
-  // Waypoint dots, with labels only where they'd fit without crowding.
+  // Waypoint dots, every one labeled with its real name.
   for (const p of points) {
     const sp = toSvg(p);
-    svg.appendChild(svgEl('circle', { cx: sp.x, cy: sp.y, r: 0.9, fill: '#f4ead2' }));
-    if (p.label) {
-      // Tadoussac sits near the route's east edge — anchor its label from
-      // the right and tuck it below-left, or it runs off the widget.
-      const isTadoussac = p.name === 'Tadoussac';
-      const text = svgEl('text', {
-        x: sp.x + (isTadoussac ? -1.6 : 1.6),
-        y: sp.y + (isTadoussac ? 3.6 : 0.6),
-        fill: '#f4ead2',
-        'font-size': 3.6,
-        'text-anchor': isTadoussac ? 'end' : 'start',
-      });
-      text.textContent = p.label;
-      svg.appendChild(text);
-    }
+    svg.appendChild(svgEl('circle', { cx: sp.x, cy: sp.y, r: 0.7, fill: '#f4ead2' }));
+    const label = p.label || p.name;
+    const pos = p.labelPos || { dx: 1.4, dy: -2.2, anchor: 'start' };
+    const text = svgEl('text', {
+      x: sp.x + pos.dx,
+      y: sp.y + pos.dy,
+      fill: p.label ? '#ffd23f' : '#f4ead2',
+      'font-size': 2.9,
+      'font-weight': p.label ? 700 : 400,
+      'text-anchor': pos.anchor,
+    });
+    text.textContent = label;
+    svg.appendChild(text);
   }
 
-  const marker = svgEl('circle', { r: 1.7, fill: '#ffd23f', stroke: '#1a1208', 'stroke-width': 0.5 });
+  const marker = svgEl('circle', { r: 1.3, fill: '#ffd23f', stroke: '#1a1208', 'stroke-width': 0.4 });
   marker.id = 'minimap-marker';
   svg.appendChild(marker);
 

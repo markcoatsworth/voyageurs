@@ -80,19 +80,21 @@ const ui = {
   gameoverScreen: document.getElementById('gameover-screen'),
   finalStats: document.getElementById('final-stats'),
   restartBtn: document.getElementById('restart-btn'),
+  pauseScreen: document.getElementById('pause-screen'),
   milestoneBanner: document.getElementById('milestone-banner'),
   minimap,
 };
 
-const game = new Game({ ctx, water, input, obstacles, world, ui });
+// Background music — browsers block autoplay until a real user gesture, so
+// this starts on the player's first keypress or click rather than on load.
+const music = createMusic();
+
+const game = new Game({ ctx, water, input, obstacles, world, ui, music });
 
 // The canoe launches immediately — this intro caption is just a fading
 // overlay, not a gate, so it disappears on its own after a few seconds.
 setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
 
-// Background music — browsers block autoplay until a real user gesture, so
-// this starts on the player's first keypress or click rather than on load.
-const music = createMusic();
 const muteBtn = document.getElementById('mute-btn');
 muteBtn.classList.toggle('muted', music.muted);
 muteBtn.addEventListener('click', () => {
@@ -101,6 +103,13 @@ muteBtn.addEventListener('click', () => {
 });
 window.addEventListener('keydown', () => music.start(), { once: true });
 window.addEventListener('pointerdown', () => music.start(), { once: true });
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape') {
+    e.preventDefault();
+    game.togglePause();
+  }
+});
 
 let lastTime = performance.now();
 function loop(now) {

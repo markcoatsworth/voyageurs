@@ -3,6 +3,7 @@ import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEI
 import { drawBanks, drawWaterFallback } from './twod/terrain.js';
 import { drawWhales } from './twod/whales.js';
 import { createCanoeSprites } from './twod/canoe.js';
+import { playCapsizeHorn } from './twod/sfx.js';
 
 const MIN_SPEED = 5;
 const MAX_SPEED = 16;
@@ -59,13 +60,14 @@ function lerp(a, b, t) {
 }
 
 export class Game {
-  constructor({ ctx, water, input, obstacles, world, ui }) {
+  constructor({ ctx, water, input, obstacles, world, ui, music }) {
     this.ctx = ctx;
     this.water = water; // null falls back to a 2D-drawn water fill
     this.input = input;
     this.obstacles = obstacles;
     this.world = world;
     this.ui = ui;
+    this.music = music;
     this.canoeSprites = createCanoeSprites();
 
     this.time = 0;
@@ -97,6 +99,16 @@ export class Game {
     this.invulnTimer = SPAWN_INVULN_TIME;
     this.mouthAnnounced = false;
     this.tilt = 0;
+    this.paused = false;
+    this.ui.pauseScreen?.classList.add('hidden');
+  }
+
+  togglePause() {
+    if (this.state !== 'playing') return; // nothing sensible to pause over the title/gameover screens
+    this.paused = !this.paused;
+    this.ui.pauseScreen.classList.toggle('hidden', !this.paused);
+    if (this.paused) this.music?.stop();
+    else this.music?.resume();
   }
 
   showBanner(text) {
@@ -117,6 +129,9 @@ export class Game {
     this.ui.damageFlash.classList.remove('show');
     this.ui.gameoverScreen.classList.add('hidden');
     this.ui.hud.classList.remove('hidden');
+    // No-ops if music hasn't been started yet (e.g. the very first launch,
+    // before any keypress/click) — see music.resume()'s own guard.
+    this.music?.resume();
   }
 
   gameOver() {
@@ -125,6 +140,8 @@ export class Game {
     this.ui.finalStats.innerHTML =
       `FURS COLLECTED: ${this.furs}<br/>DISTANCE: ${Math.round(this.distance)}m`;
     this.ui.gameoverScreen.classList.remove('hidden');
+    playCapsizeHorn();
+    this.music?.stop();
   }
 
   handleHit(entry) {
@@ -159,6 +176,8 @@ export class Game {
   }
 
   update(dt) {
+    if (this.paused) return; // hard freeze, same as gameover below — see togglePause()
+
     this.time += dt;
 
     if (this.state !== 'playing') {
