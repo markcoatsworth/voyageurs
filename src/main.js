@@ -100,6 +100,12 @@ const game = new Game({ ctx, water, input, obstacles, world, ui, music });
 // The canoe launches immediately — this intro caption is just a fading
 // overlay, not a gate, so it disappears on its own after a few seconds.
 setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
+// opacity:0 alone leaves it fully interactive-transparent but still
+// occupying its layout box forever — harmless once every .screen
+// self-centers independently (see style.css), but there's no reason for
+// an invisible element to keep existing at all once its own fade
+// transition (0.8s) has actually finished.
+setTimeout(() => ui.titleScreen.classList.add('hidden'), 4500 + 900);
 
 const muteBtn = document.getElementById('mute-btn');
 muteBtn.classList.toggle('muted', music.muted);

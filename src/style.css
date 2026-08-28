@@ -37,9 +37,6 @@ html, body {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .hidden {
@@ -159,13 +156,28 @@ html, body {
   opacity: 0;
 }
 
+/* Each dialog centers itself, independent of any sibling — #ui used to
+   center these via flexbox, but the title screen's intro-fade only sets
+   opacity (never display:none), so it silently stayed in that flex layout
+   forever after fading, sharing the row with whichever dialog showed
+   later and pushing it off-center. Self-positioning here removes that
+   dependency entirely. max-height/overflow-y is a second, independent
+   safeguard: on a short viewport (a phone in landscape) even a correctly
+   centered dialog can be taller than the screen, and this makes that
+   scrollable instead of silently clipped by html/body's overflow:hidden. */
 .screen {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   pointer-events: all;
   text-align: center;
   background: rgba(10, 14, 20, 0.72);
   border: 4px solid #e0a458;
   padding: 32px 40px;
   max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .screen h1 {
