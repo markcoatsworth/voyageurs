@@ -1,8 +1,5 @@
 # Voyageurs
 
-*(`feature/top-down` branch — a 2D top-down reimagining. The `main` branch
-has the original fully-3D version; see "Two versions" below.)*
-
 A browser-based, top-down pixel-art canoe river-runner set at a real place:
 the Saguenay Fjord running down to its mouth at the Saint Lawrence, near
 Tadoussac — one of the earliest fur-trade posts in New France. Steer a
@@ -12,19 +9,31 @@ beluga-whale estuary — no install required, just a browser tab.
 
 ## Music
 
-Background music is "Grande Gigue Simple," performed by Isidore Soucy (Starr
-Records, 1931) — the best-known traditional Quebecois fiddle tune, sourced
-from [Internet Archive](https://archive.org/details/78_grande-gigue-simple_isidore-soucy_gbia0016274b).
+Five traditional Quebecois fiddle/reel recordings play as a shuffled
+playlist (`src/twod/music.js`) — reshuffled each time it cycles through, so
+it's not the same running order every session:
 
-**Rights note:** this recording is *not* confirmed public domain. Under the
-Music Modernization Act, US sound recordings first published 1923–1946
-enter the public domain 100 years after publication — for this 1931
-recording, that's 2032, not now. It's also hosted under Internet Archive's
-Great 78 Project, which is the subject of ongoing, unresolved litigation
-from major record labels over exactly this kind of use. It's included here
-as a deliberate, informed choice despite that, not because the rights are
-clean — swap `public/audio/grande-gigue-simple.mp3` for something with
-airtight licensing before this ships anywhere beyond casual/personal use.
+- "Grande Gigue Simple" and "Reel du Pendu," performed by Isidore Soucy
+  (Starr Records, 1931), sourced from Internet Archive's Great 78 Project
+  ([1](https://archive.org/details/78_grande-gigue-simple_isidore-soucy_gbia0016274b),
+  [2](https://archive.org/details/78_reel-du-pendu_isidore-soucy_gbia0016274a)).
+- "Reel des Laurentides," "Reel des Montagnes," and "Valse des Laboureurs,"
+  performed by Tommy Duchesne, sourced from Library and Archives Canada's
+  [Virtual Gramophone](https://www.bac-lac.gc.ca/eng/discover/films-videos-sound-recordings/virtual-gramophone/Pages/introduction.aspx)
+  collection of historical 78rpm recordings.
+
+**Rights note:** none of these five recordings are confirmed public domain.
+Under the Music Modernization Act, US sound recordings first published
+1923–1946 enter the public domain 100 years after publication — for the
+1931 Soucy recordings, that's 2032, not now, and they're also hosted under
+Internet Archive's Great 78 Project, the subject of ongoing, unresolved
+litigation from major record labels over exactly this kind of use. The
+Duchesne recordings' copyright status hasn't been separately researched —
+they're the same era of Quebec 78rpm recording as the Soucy tracks, so
+there's no reason to assume they're any more settled. All five are included
+as a deliberate, informed choice for casual/personal use, not because the
+rights are clean — swap the `public/audio/*.mp3` files for something with
+airtight licensing before this ships anywhere beyond that.
 
 ## Running it
 
@@ -56,16 +65,14 @@ few seconds while the run is already underway.
 - Run into a dock and you'll go ashore at that village instead of taking
   damage — see "Villages" below.
 
-## Two versions
+## History
 
-`main` renders the same game concept in real 3D (Three.js) from a
-third-person camera behind the canoe. This branch replaces that entire
-rendering layer with a 2D top-down Canvas view, closer to Stardew
-Valley/Final Fantasy overworld games — same river-course math, same
-obstacle/scoring rules, different camera and art style. They're independent
-implementations sharing only the "how the river bends" logic (see below);
-picking one over the other is a matter of which presentation reads better,
-not which is "done."
+This started as a full 3D (Three.js) build with a third-person camera
+behind the canoe. A 2D top-down reimagining — closer to a Stardew
+Valley/Final Fantasy overworld, same river-course math, different camera
+and art style entirely — replaced it as the main line; the original 3D
+version is still there in git history (see the `feature/top-down` merge
+and what it replaced) if it's ever worth revisiting.
 
 ## How the pixel art works
 

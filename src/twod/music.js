@@ -9,6 +9,9 @@
 const PLAYLIST = [
   '/audio/grande-gigue-simple.mp3',
   '/audio/reel-du-pendu.mp3',
+  '/audio/reel-des-laurentides.mp3',
+  '/audio/reel-des-montagnes.mp3',
+  '/audio/valse-des-laboureurs.mp3',
 ];
 
 const DEFAULT_VOLUME = 0.35;
