@@ -3,6 +3,7 @@ import { createObstacleField } from './twod/obstacles.js';
 import { createWaterRenderer } from './twod/waterGL.js';
 import { createMusic } from './twod/music.js';
 import { createMinimap } from './twod/minimap.js';
+import { createTouchControls } from './twod/touchControls.js';
 import { Input } from './utils/input.js';
 import { Game } from './game.js';
 
@@ -46,10 +47,14 @@ ctx.imageSmoothingEnabled = false;
 const water = createWaterRenderer(waterCanvas);
 
 function resize() {
-  const scale = Math.max(1, Math.floor(Math.min(
-    window.innerWidth / CANVAS_WIDTH,
-    window.innerHeight / CANVAS_HEIGHT
-  )));
+  const rawScale = Math.min(window.innerWidth / CANVAS_WIDTH, window.innerHeight / CANVAS_HEIGHT);
+  const flooredScale = Math.floor(rawScale);
+  // An integer multiple keeps pixel-art edges crisp, but on a small/mobile
+  // screen that floors all the way down to 1x, leaving most of the
+  // viewport empty — better to fill the screen at a fractional scale
+  // (image-rendering: pixelated still looks fine, just not perfectly even)
+  // than to render a postage stamp in the corner.
+  const scale = flooredScale >= 2 ? flooredScale : Math.max(rawScale, 1);
   screen.style.width = `${CANVAS_WIDTH * scale}px`;
   screen.style.height = `${CANVAS_HEIGHT * scale}px`;
 }
@@ -62,6 +67,7 @@ const world = { distance: 0 };
 
 const obstacles = createObstacleField(world);
 const input = new Input();
+createTouchControls(input);
 
 // Outside the game canvas entirely (fixed to the viewport, not #screen) —
 // see twod/minimap.js for why it's a real, geographically-placed route
@@ -110,6 +116,11 @@ window.addEventListener('keydown', (e) => {
     game.togglePause();
   }
 });
+
+// Escape has no touch equivalent, hence a visible button — shown for every
+// input type, not just touch, since a tappable/clickable pause control is
+// a reasonable thing to want on desktop too.
+document.getElementById('pause-btn').addEventListener('click', () => game.togglePause());
 
 let lastTime = performance.now();
 function loop(now) {

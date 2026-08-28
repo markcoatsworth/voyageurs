@@ -230,6 +230,62 @@ button:hover {
   text-decoration: line-through;
 }
 
+/* Sits beside mute-btn (top-right), not the opposite top-left corner —
+   the HUD's FURS/DISTANCE text starts flush at top-left too (see #hud),
+   so a top-left button sits right on top of it. */
+#pause-btn {
+  position: absolute;
+  top: 16px;
+  right: 62px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+#pause-btn:hover {
+  opacity: 1;
+}
+
+/* A virtual stick for touch devices — hidden on anything with a precise
+   pointer (mouse/trackpad), shown only where hover:none + pointer:coarse
+   both hold, which reliably means "touch is the primary input" rather than
+   just "the screen happens to be small." Bottom-right so it never overlaps
+   the minimap's bottom-left corner. */
+#touch-joystick {
+  display: none;
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: rgba(10, 14, 20, 0.45);
+  border: 3px solid rgba(244, 234, 210, 0.55);
+  pointer-events: all;
+  touch-action: none;
+  z-index: 5;
+}
+
+#touch-joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: rgba(224, 164, 88, 0.85);
+  border: 3px solid #f4ead2;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  #touch-joystick {
+    display: block;
+  }
+}
+
 /* The real-world locator map (twod/minimap.js) — deliberately outside the
    game canvas/HUD, always visible, never intercepting clicks. */
 #minimap {
@@ -265,6 +321,15 @@ button:hover {
 @keyframes minimap-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
+}
+
+/* Placed after the base #minimap rule (same specificity, later wins) so
+   this actually overrides it on touch devices — leaves clear room for the
+   joystick in the opposite corner instead of overlapping it. */
+@media (hover: none) and (pointer: coarse) {
+  #minimap {
+    width: min(220px, 42vw);
+  }
 }
 
 button:active {

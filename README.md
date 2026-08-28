@@ -52,8 +52,10 @@ few seconds while the run is already underway.
 
 ## Controls
 
-- `←`/`→` or `A`/`D` — steer
-- `↑`/`↓` or `W`/`S` — paddle faster / slower
+- `←`/`→` or `A`/`D` or the on-screen stick — steer
+- `↑`/`↓` or `W`/`S` or the stick — paddle faster / slower
+- `ESC` or the on-screen `II` button — pause (no touch equivalent for a key,
+  hence the button — it's shown for every input type, not just touch)
 - Rocks and mid-channel islands capsize you (game over); deadfall logs and
   running aground on the fjord walls just cost you speed; fur pelts add to
   your score. The river bends and narrows/widens as you go, and obstacle
@@ -148,6 +150,12 @@ src/
                          fixed local area, free 4-directional walking,
                          building collision, walk back onto the dock to
                          re-board
+    touchControls.js        a virtual joystick for touch devices — writes
+                         into the exact same left/right/up/down state the
+                         keyboard does, so nothing else needs to know it
+                         exists. Shown only where CSS's (hover:none) and
+                         (pointer:coarse) both hold, i.e. touch is the
+                         primary input, not just "the screen is small"
   utils/
     input.js              keyboard state
 ```
