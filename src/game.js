@@ -6,12 +6,21 @@ import { createCanoeSprites } from './twod/canoe.js';
 import { playCapsizeHorn } from './twod/sfx.js';
 import { getDockHit, DOCK_HIT_Z } from './twod/villages.js';
 import { createVillageScene } from './twod/villageScene.js';
+import { isTouchPrimary } from './twod/touchControls.js';
 
-const MIN_SPEED = 5;
-const MAX_SPEED = 16;
-const BASE_SPEED = 8;
-const ACCEL = 7;
-const DECEL_DRIFT = 1.8;
+// A D-pad's discrete taps are less precise than a keyboard's held keys, and
+// the same world speed reads as faster filling more of a small screen — the
+// same numbers that felt right on desktop consistently played as "way too
+// fast" on touch. Scale forward-motion constants down for touch specifically
+// rather than changing the feel for everyone.
+const MOBILE_SPEED_SCALE = 0.6;
+const speedScale = isTouchPrimary() ? MOBILE_SPEED_SCALE : 1;
+
+const MIN_SPEED = 5 * speedScale;
+const MAX_SPEED = 16 * speedScale;
+const BASE_SPEED = 8 * speedScale;
+const ACCEL = 7 * speedScale;
+const DECEL_DRIFT = 1.8 * speedScale;
 const STEER_ACCEL = 20;
 const STEER_MAX = 7;
 const STEER_DAMPING = 6;
@@ -50,7 +59,7 @@ const SPAWN_INVULN_TIME = 1.5;
 // it actually follows the curve — which is what makes it read as "the boat
 // is turning" rather than "the world is sliding."
 const CAMERA_SMOOTH = 0.025;
-const RAPIDS_BOOST = 7; // extra units/s the current adds at peak whitewater
+const RAPIDS_BOOST = 7 * speedScale; // extra units/s the current adds at peak whitewater
 const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 
 function clamp(v, lo, hi) {

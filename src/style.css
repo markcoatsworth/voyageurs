@@ -247,42 +247,56 @@ button:hover {
   opacity: 1;
 }
 
-/* A virtual stick for touch devices — hidden on anything with a precise
+/* An arrow D-pad for touch devices — hidden on anything with a precise
    pointer (mouse/trackpad), shown only where hover:none + pointer:coarse
    both hold, which reliably means "touch is the primary input" rather than
    just "the screen happens to be small." Bottom-right so it never overlaps
-   the minimap's bottom-left corner. */
-#touch-joystick {
+   the minimap's bottom-left corner. Four independent buttons rather than a
+   drag stick — see touchControls.js for why. */
+#touch-dpad {
   display: none;
   position: fixed;
-  right: 28px;
-  bottom: 28px;
-  width: 112px;
-  height: 112px;
-  border-radius: 50%;
-  background: rgba(10, 14, 20, 0.45);
-  border: 3px solid rgba(244, 234, 210, 0.55);
-  pointer-events: all;
-  touch-action: none;
+  right: 20px;
+  bottom: 20px;
+  width: 164px;
+  height: 164px;
+  grid-template-columns: 52px 52px 52px;
+  grid-template-rows: 52px 52px 52px;
+  gap: 4px;
   z-index: 5;
 }
 
-#touch-joystick-knob {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 48px;
-  height: 48px;
-  margin: -24px 0 0 -24px;
-  border-radius: 50%;
-  background: rgba(224, 164, 88, 0.85);
-  border: 3px solid #f4ead2;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+.dpad-btn {
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: rgba(10, 14, 20, 0.55);
+  color: #f4ead2;
+  border: 3px solid rgba(244, 234, 210, 0.65);
+  border-radius: 10px;
+  box-shadow: none;
+  pointer-events: all;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
+.dpad-btn:active,
+.dpad-btn.pressed {
+  background: rgba(224, 164, 88, 0.7);
+  border-color: #e0a458;
+}
+
+.dpad-up { grid-column: 2; grid-row: 1; }
+.dpad-left { grid-column: 1; grid-row: 2; }
+.dpad-right { grid-column: 3; grid-row: 2; }
+.dpad-down { grid-column: 2; grid-row: 3; }
+
 @media (hover: none) and (pointer: coarse) {
-  #touch-joystick {
-    display: block;
+  #touch-dpad {
+    display: grid;
   }
 }
 

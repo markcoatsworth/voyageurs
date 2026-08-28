@@ -16,8 +16,11 @@
     <button id="mute-btn" title="Mute music">&#9835;</button>
     <button id="pause-btn" title="Pause">II</button>
 
-    <div id="touch-joystick">
-      <div id="touch-joystick-knob"></div>
+    <div id="touch-dpad">
+      <button type="button" id="dpad-up" class="dpad-btn dpad-up" title="Up">&#9650;</button>
+      <button type="button" id="dpad-left" class="dpad-btn dpad-left" title="Left">&#9664;</button>
+      <button type="button" id="dpad-right" class="dpad-btn dpad-right" title="Right">&#9654;</button>
+      <button type="button" id="dpad-down" class="dpad-btn dpad-down" title="Down">&#9660;</button>
     </div>
 
     <div id="hud" class="hidden">
@@ -35,8 +38,8 @@
       <h1>VOYAGEURS</h1>
       <p class="subtitle">down the Saguenay, toward Tadoussac</p>
       <p class="instructions">
-        &larr; / &rarr; or A / D or the on-screen stick &mdash; steer<br/>
-        &uarr; / &darr; or W / S or the stick &mdash; paddle faster / slower<br/>
+        &larr; / &rarr; or A / D or the on-screen arrows &mdash; steer<br/>
+        &uarr; / &darr; or W / S or the arrows &mdash; paddle faster / slower<br/>
         ESC or the II button &mdash; pause<br/>
         Ride the fjord between its cliffs, avoid rocks and deadfall, and
         collect fur pelts &mdash; until the walls fall away and the Saint
