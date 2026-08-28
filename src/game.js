@@ -302,5 +302,11 @@ export class Game {
     const speedPct = ((this.effectiveSpeed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)) * 100;
     this.ui.hudSpeedFill.style.width = `${clamp(speedPct, 0, 100)}%`;
     this.ui.hudSpeedFill.classList.toggle('rapids', this.rapids > 0.15);
+
+    // flowDistance (not this.distance) — it's the persistent world
+    // position that never resets on restart, so the map marker holds its
+    // real place on the river across a capsize+retry instead of jumping
+    // back to the put-in.
+    this.ui.minimap.update(this.flowDistance);
   }
 }

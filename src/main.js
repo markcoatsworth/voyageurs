@@ -2,6 +2,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from './twod/config.js';
 import { createObstacleField } from './twod/obstacles.js';
 import { createWaterRenderer } from './twod/waterGL.js';
 import { createMusic } from './twod/music.js';
+import { createMinimap } from './twod/minimap.js';
 import { Input } from './utils/input.js';
 import { Game } from './game.js';
 
@@ -62,6 +63,12 @@ const world = { distance: 0 };
 const obstacles = createObstacleField(world);
 const input = new Input();
 
+// Outside the game canvas entirely (fixed to the viewport, not #screen) —
+// see twod/minimap.js for why it's a real, geographically-placed route
+// rather than an invented shape.
+const minimap = createMinimap();
+document.body.appendChild(minimap.el);
+
 const ui = {
   hud: document.getElementById('hud'),
   hudScore: document.getElementById('hud-score'),
@@ -74,6 +81,7 @@ const ui = {
   finalStats: document.getElementById('final-stats'),
   restartBtn: document.getElementById('restart-btn'),
   milestoneBanner: document.getElementById('milestone-banner'),
+  minimap,
 };
 
 const game = new Game({ ctx, water, input, obstacles, world, ui });
