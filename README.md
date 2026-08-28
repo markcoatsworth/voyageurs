@@ -53,6 +53,8 @@ few seconds while the run is already underway.
 - Reach 900m and you've made it to Tadoussac — a banner announces it, the
   cliffs give way to the wide Saint Lawrence estuary, and belugas start
   surfacing. The run keeps going after that, now in open water.
+- Run into a dock and you'll go ashore at that village instead of taking
+  damage — see "Villages" below.
 
 ## Two versions
 
@@ -106,6 +108,12 @@ src/
                         MOUTH_DISTANCE (the Tadoussac milestone). Shared
                         with the 3D version's math; tuned here for a much
                         smaller visible window (see note below)
+    route.js           the real Saguenay waypoints (La Baie to Tadoussac to
+                        Les Escoumins) and the cumulative-distance model
+                        that maps each one to an exact flowDistance — the
+                        single source of truth shared by both the minimap
+                        and the in-game villages, so "at Tadoussac" means
+                        the same point in both
   twod/
     config.js           screen resolution, world-to-pixel scale, the fixed
                          screen position the canoe always occupies
@@ -125,6 +133,14 @@ src/
     whales.js             stateless, hash-placed beluga sightings once the
                          channel reads as open estuary
     canoe.js              the two paddle-stroke sprite frames
+    villages.js            a village (dock + 3 log buildings) at each real
+                         waypoint from river/route.js; draws them into the
+                         river view and detects when the canoe touches a
+                         dock — see "Villages" below
+    villageScene.js         the small on-foot scene entered at a dock:
+                         fixed local area, free 4-directional walking,
+                         building collision, walk back onto the dock to
+                         re-board
   utils/
     input.js              keyboard state
 ```
@@ -147,6 +163,24 @@ time, so `centerX`/`widthAt` in this branch use a much shorter period —
 otherwise the river looks perfectly straight in any single view. If you
 port more math from the 3D branch, expect to retune frequencies, not just
 copy constants.
+
+### Villages
+
+Every real waypoint along the route (except the put-in) is a small village
+on the bank — a dock plus 3 log buildings, placed at the exact flowDistance
+`river/route.js` computes for that real place. Run the canoe into a dock
+(instead of taking damage like every other collision) and `game.js` swaps
+into `mode = 'village'`: the river freezes, `villageScene.js` takes over
+with a small fixed on-foot area, and you walk around with free 4-directional
+movement and simple building collision. Walk back onto the dock to re-board
+— `mode` returns to `'river'` and the world picks back up exactly where it
+left off (the canoe is nudged just past the dock's own trigger zone first,
+so stepping off the boat doesn't instantly dock it again).
+
+This first pass is deliberately just the mechanic: arrive, walk around,
+leave. The buildings don't do anything yet — turning them into actual shops
+(sell furs, repair the hull) is the planned next step, once this loop
+itself felt solid.
 
 ## Where to take it next
 

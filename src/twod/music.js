@@ -12,7 +12,6 @@ const PLAYLIST = [
 ];
 
 const DEFAULT_VOLUME = 0.35;
-const MUTE_STORAGE_KEY = 'voyageurs-music-muted';
 
 // Fisher-Yates — used once at startup so the play order isn't the same
 // every session, and again each time the shuffled order is exhausted so it
@@ -31,14 +30,10 @@ export function createMusic() {
   audio.volume = DEFAULT_VOLUME;
   audio.preload = 'auto';
 
+  // Always starts unmuted — deliberately not persisted (a muted preference
+  // silently carrying across every future reload is exactly what made a
+  // one-off mute click look like "the music broke" days later).
   let muted = false;
-  try {
-    muted = localStorage.getItem(MUTE_STORAGE_KEY) === '1';
-  } catch {
-    // localStorage can throw in some private-browsing contexts — fall back
-    // to unmuted for this session rather than breaking playback entirely.
-  }
-  audio.muted = muted;
 
   let order = shuffled(PLAYLIST);
   let index = 0;
@@ -88,11 +83,6 @@ export function createMusic() {
     toggleMute() {
       muted = !muted;
       audio.muted = muted;
-      try {
-        localStorage.setItem(MUTE_STORAGE_KEY, muted ? '1' : '0');
-      } catch {
-        // ignore — worst case the preference doesn't persist across visits
-      }
       return muted;
     },
   };

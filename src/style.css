@@ -227,6 +227,7 @@ button:hover {
 
 #mute-btn.muted {
   color: #8a8272;
+  text-decoration: line-through;
 }
 
 /* The real-world locator map (twod/minimap.js) — deliberately outside the
