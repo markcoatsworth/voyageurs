@@ -10,6 +10,22 @@ birch-bark canoe between sheer fjord cliffs, dodge rocks and deadfall logs,
 and collect fur pelts, until the walls fall away and the river opens into
 beluga-whale estuary — no install required, just a browser tab.
 
+## Music
+
+Background music is "Grande Gigue Simple," performed by Isidore Soucy (Starr
+Records, 1931) — the best-known traditional Quebecois fiddle tune, sourced
+from [Internet Archive](https://archive.org/details/78_grande-gigue-simple_isidore-soucy_gbia0016274b).
+
+**Rights note:** this recording is *not* confirmed public domain. Under the
+Music Modernization Act, US sound recordings first published 1923–1946
+enter the public domain 100 years after publication — for this 1931
+recording, that's 2032, not now. It's also hosted under Internet Archive's
+Great 78 Project, which is the subject of ongoing, unresolved litigation
+from major record labels over exactly this kind of use. It's included here
+as a deliberate, informed choice despite that, not because the rights are
+clean — swap `public/audio/grande-gigue-simple.mp3` for something with
+airtight licensing before this ships anywhere beyond casual/personal use.
+
 ## Running it
 
 ```bash

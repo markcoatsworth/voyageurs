@@ -1,6 +1,7 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './twod/config.js';
 import { createObstacleField } from './twod/obstacles.js';
 import { createWaterRenderer } from './twod/waterGL.js';
+import { createMusic } from './twod/music.js';
 import { Input } from './utils/input.js';
 import { Game } from './game.js';
 
@@ -78,6 +79,18 @@ const game = new Game({ ctx, water, input, obstacles, world, ui });
 // The canoe launches immediately — this intro caption is just a fading
 // overlay, not a gate, so it disappears on its own after a few seconds.
 setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
+
+// Background music — browsers block autoplay until a real user gesture, so
+// this starts on the player's first keypress or click rather than on load.
+const music = createMusic();
+const muteBtn = document.getElementById('mute-btn');
+muteBtn.classList.toggle('muted', music.muted);
+muteBtn.addEventListener('click', () => {
+  const muted = music.toggleMute();
+  muteBtn.classList.toggle('muted', muted);
+});
+window.addEventListener('keydown', () => music.start(), { once: true });
+window.addEventListener('pointerdown', () => music.start(), { once: true });
 
 let lastTime = performance.now();
 function loop(now) {

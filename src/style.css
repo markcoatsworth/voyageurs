@@ -155,6 +155,24 @@ button:hover {
   background: #f4c07c;
 }
 
+#mute-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+#mute-btn:hover {
+  opacity: 1;
+}
+
+#mute-btn.muted {
+  color: #8a8272;
+}
+
 button:active {
   transform: translate(2px, 2px);
   box-shadow: 2px 2px 0 #000;
