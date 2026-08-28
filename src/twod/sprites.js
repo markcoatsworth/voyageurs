@@ -48,41 +48,71 @@ function waterRipple(ctx, cx, cy, rx, ry) {
   ctx.stroke();
 }
 
-const TREE_CLUMPS = [
-  // pine-ish: several small clumps in a rough star, darker + taller
-  [[0, -13, 5.5], [-5, -9, 5], [5, -8, 5], [0, -5, 6], [-3, -2, 4.5], [3, -1, 4.5]],
-  // bushy/deciduous: fewer, bigger, rounder clumps
-  [[0, -10, 7.5], [-4, -4, 6], [4, -3, 6]],
-];
-const TREE_PALETTES = [
-  { dark: '#1c3f1a', mid: '#2e6b2a', shadow: '#204f1e', light: '#5cae4c', bright: '#7ecf67' },
-  { dark: '#2c4416', mid: '#4d7a2a', shadow: '#3a5e20', light: '#7fae4c', bright: '#a2cf6a' },
+function triangle(ctx, cx, topY, botY, halfW, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx, topY);
+  ctx.lineTo(cx + halfW, botY);
+  ctx.lineTo(cx - halfW, botY);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// Black spruce, balsam fir, jack pine — the boreal conifers that actually
+// line the Saguenay. Three tiers narrowing to a point (not round blobs) is
+// what reads as "pine" rather than "generic tree" at this size.
+const PINE_PALETTES = [
+  { outline: '#12241a', dark: '#1c3f1a', mid: '#254d22', light: '#3a6b34', bright: '#5a9450' }, // black spruce
+  { outline: '#152e26', dark: '#204a3a', mid: '#2b6047', light: '#3f8264', bright: '#63a888' }, // balsam fir
+  { outline: '#1f2612', dark: '#33481c', mid: '#425c26', light: '#5c7a35', bright: '#82a052' }, // jack pine
 ];
 
-export function createTreeSprite(variant = 0) {
-  const w = 28, h = 34;
-  const clumps = TREE_CLUMPS[variant % TREE_CLUMPS.length];
-  const pal = TREE_PALETTES[variant % TREE_PALETTES.length];
+export function createPineTreeSprite(variant = 0) {
+  const w = 20, h = 36;
+  const pal = PINE_PALETTES[variant % PINE_PALETTES.length];
   return makeSprite(w, h, (ctx) => {
-    const cx = w / 2, baseY = h - 6;
+    const cx = w / 2;
 
-    groundShadow(ctx, cx, h - 4, 9, 3);
+    groundShadow(ctx, cx, h - 3, 7, 2.2);
 
-    // trunk
+    // trunk sliver at the base, mostly hidden by the lowest tier
     ctx.fillStyle = '#3a2818';
-    ctx.fillRect(cx - 2, baseY - 3, 4, 9);
-    ctx.fillStyle = '#5a3d24';
-    ctx.fillRect(cx - 2, baseY - 3, 2, 9);
+    ctx.fillRect(cx - 1.4, h - 6, 2.8, 5);
 
-    // outline silhouette (drawn larger, behind the canopy)
-    for (const [dx, dy, r] of clumps) blob(ctx, cx + dx, baseY - 8 + dy, r + 1.6, pal.dark);
-    // base canopy fill
-    for (const [dx, dy, r] of clumps) blob(ctx, cx + dx, baseY - 8 + dy, r, pal.mid);
-    // shadow clump (lower-right, suggesting a light source upper-left)
-    blob(ctx, cx + 4, baseY - 6, 5.5, pal.shadow);
-    // highlights (upper-left)
-    blob(ctx, cx - 5, baseY - 16, 4.6, pal.light);
-    blob(ctx, cx - 2, baseY - 19, 3, pal.bright);
+    const tiers = [
+      { topY: 1, botY: 13, halfW: 5.5 },
+      { topY: 9, botY: 21, halfW: 7.2 },
+      { topY: 17, botY: 30, halfW: 8.8 },
+    ];
+
+    // outline silhouette, drawn larger and first
+    for (const t of tiers) triangle(ctx, cx, t.topY - 1.2, t.botY + 1.2, t.halfW + 1.4, pal.outline);
+    // base fill, bottom tier first so the tiers above it sit visibly on top
+    for (let i = tiers.length - 1; i >= 0; i--) {
+      triangle(ctx, cx, tiers[i].topY, tiers[i].botY, tiers[i].halfW, pal.mid);
+    }
+    // shadow wedge on one side of each tier (fixed light direction, upper-left)
+    for (const t of tiers) {
+      ctx.fillStyle = pal.dark;
+      ctx.beginPath();
+      ctx.moveTo(cx, t.topY);
+      ctx.lineTo(cx + t.halfW, t.botY);
+      ctx.lineTo(cx + t.halfW * 0.25, t.botY);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // highlight wedge on the other side
+    for (const t of tiers) {
+      ctx.fillStyle = pal.light;
+      ctx.beginPath();
+      ctx.moveTo(cx, t.topY);
+      ctx.lineTo(cx - t.halfW * 0.55, t.botY);
+      ctx.lineTo(cx - t.halfW * 0.1, t.botY);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // bright tip
+    blob(ctx, cx - 1, tiers[0].topY + 3, 1.7, pal.bright);
   });
 }
 
@@ -205,8 +235,8 @@ export function createIslandSprite() {
     ctx.fill();
 
     // Tree scaled down so the mound stays visible around its base.
-    const tree = createTreeSprite(0);
-    const tw = tree.width * 0.75, th = tree.height * 0.75;
+    const tree = createPineTreeSprite(0);
+    const tw = tree.width * 0.7, th = tree.height * 0.7;
     ctx.drawImage(tree, cx - tw / 2, cy - 4 - th, tw, th);
   });
 }

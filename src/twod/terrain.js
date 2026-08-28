@@ -1,19 +1,26 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } from './config.js';
 import { centerX, widthAt } from '../river/path.js';
-import { createWaterTile, createGrassTile, createCliffTile, createSandTile } from './tiles.js';
-import { createTreeSprite, createPebbleSprite } from './sprites.js';
+import { createWaterTile, createGrassTile, createBankTile, createSandTile } from './tiles.js';
+import { createPineTreeSprite, createPebbleSprite } from './sprites.js';
 import { hash, hashRange } from './hash.js';
 
 const STEP = 4; // sample every 4px down the screen when building curve outlines
 const SHORE_WIDTH = 0.4;
-const CLIFF_WIDTH = 1.8;
-const TREE_SLOT_SPACING = 1.6; // world units between candidate tree slots per side
-const TREE_CHANCE = 0.55;
+const BANK_ROCK_WIDTH = 1.8;
+
+// Trees scatter over a 2D grid — along the river (D) and back into the bank
+// (DEPTH) — instead of a single thin line hugging the shore, so it reads as
+// an actual boreal forest covering the bank rather than a hedge.
+const TREE_D_SPACING = 0.85;
+const TREE_DEPTH_SPACING = 1.15;
+const TREE_DEPTH_MAX = 8; // world units back from the bank's outer edge
+const TREE_CHANCE = 0.8;
+
 const PEBBLE_SPACING = 0.55;
 const PEBBLE_CHANCE = 0.8;
 
 let patterns = null;
-const treeSprites = [0, 1, 2, 3].map(createTreeSprite);
+const treeSprites = [0, 1, 2].map(createPineTreeSprite);
 const pebbleSprites = [0, 1, 2].map(createPebbleSprite);
 
 function ensurePatterns(ctx) {
@@ -21,7 +28,7 @@ function ensurePatterns(ctx) {
   patterns = {
     water: ctx.createPattern(createWaterTile(), 'repeat'),
     grass: ctx.createPattern(createGrassTile(), 'repeat'),
-    cliff: ctx.createPattern(createCliffTile(), 'repeat'),
+    bank: ctx.createPattern(createBankTile(), 'repeat'),
     sand: ctx.createPattern(createSandTile(), 'repeat'),
   };
   return patterns;
@@ -48,7 +55,7 @@ function pathBetween(ctx, leftXAt, rightXAt) {
   ctx.closePath();
 }
 
-// Draws grass/cliff/sand/pebbles/trees — everything except the water
+// Draws grass/bank/sand/pebbles/trees — everything except the water
 // surface itself. The water is left as a transparent hole in this canvas so
 // the WebGL shader layer underneath (waterGL.js) shows through it; when
 // that's unavailable, drawWaterFallback() below fills the same hole with a
@@ -63,9 +70,9 @@ export function drawBanks(ctx, worldDistance, canoeWorldX) {
     const d = dAtScreenY(y, worldDistance);
     return toScreenX(centerX(d) + side * widthAt(d) / 2, canoeWorldX);
   };
-  const cliffOuterX = (y, side) => {
+  const bankOuterX = (y, side) => {
     const d = dAtScreenY(y, worldDistance);
-    return toScreenX(centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH + CLIFF_WIDTH), canoeWorldX);
+    return toScreenX(centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH + BANK_ROCK_WIDTH), canoeWorldX);
   };
   const sandOuterX = (y, side) => {
     const d = dAtScreenY(y, worldDistance);
@@ -73,9 +80,9 @@ export function drawBanks(ctx, worldDistance, canoeWorldX) {
   };
 
   for (const side of [-1, 1]) {
-    const outer = (y) => cliffOuterX(y, side);
+    const outer = (y) => bankOuterX(y, side);
     const inner = (y) => riverEdgeX(y, side);
-    ctx.fillStyle = pat.cliff;
+    ctx.fillStyle = pat.bank;
     if (side < 0) pathBetween(ctx, outer, inner); else pathBetween(ctx, inner, outer);
     ctx.fill();
 
@@ -137,25 +144,43 @@ function drawShorelineStones(ctx, worldDistance, canoeWorldX, riverEdgeX) {
   }
 }
 
+// A dense boreal forest covering the bank, not just a treeline at the
+// water's edge: trees scatter across a 2D grid — along the river (d) and
+// back into the bank (depth) — with per-cell jitter so it doesn't read as a
+// grid. Candidates are collected and painter's-algorithm sorted by z before
+// drawing, since at this density trees regularly overlap and need nearer
+// ones (larger z) to cover farther ones, not just whichever drew last.
 function drawTrees(ctx, worldDistance, canoeWorldX) {
   const dNear = worldDistance - (CANVAS_HEIGHT - CANOE_SCREEN_Y) / PIXELS_PER_UNIT - 2;
   const dFar = worldDistance + CANOE_SCREEN_Y / PIXELS_PER_UNIT + 2;
-  const slotLo = Math.floor(dNear / TREE_SLOT_SPACING);
-  const slotHi = Math.ceil(dFar / TREE_SLOT_SPACING);
+  const dSlotLo = Math.floor(dNear / TREE_D_SPACING);
+  const dSlotHi = Math.ceil(dFar / TREE_D_SPACING);
+  const depthSlotMax = Math.ceil(TREE_DEPTH_MAX / TREE_DEPTH_SPACING);
+
+  const candidates = [];
 
   for (const side of [-1, 1]) {
-    for (let slot = slotLo; slot <= slotHi; slot++) {
-      const salt = side < 0 ? 11 : 97;
-      if (hash(slot * 3 + salt) > TREE_CHANCE) continue;
-      const d = slot * TREE_SLOT_SPACING + hashRange(slot, salt + 1, -0.5, 0.5);
-      const z = worldDistance - d;
-      const y = CANOE_SCREEN_Y + z * PIXELS_PER_UNIT;
-      const outerX = centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH + CLIFF_WIDTH);
-      const jitter = hashRange(slot, salt + 2, 0.15, 1.6) * side;
-      const worldX = outerX + jitter;
-      const screenX = toScreenX(worldX, canoeWorldX);
-      const sprite = treeSprites[Math.floor(hashRange(slot, salt + 3, 0, treeSprites.length))];
-      ctx.drawImage(sprite, screenX - sprite.width / 2, y - sprite.height * 0.7);
+    const sideSalt = side < 0 ? 11 : 97;
+    for (let dSlot = dSlotLo; dSlot <= dSlotHi; dSlot++) {
+      for (let depthSlot = 0; depthSlot <= depthSlotMax; depthSlot++) {
+        const cell = dSlot * 4001 + depthSlot * 17 + sideSalt;
+        if (hash(cell) > TREE_CHANCE) continue;
+
+        const d = dSlot * TREE_D_SPACING + hashRange(cell, 1, -0.35, 0.35);
+        const depth = Math.max(0, depthSlot * TREE_DEPTH_SPACING + hashRange(cell, 2, -0.4, 0.4));
+        const z = worldDistance - d;
+        const worldX = centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH + BANK_ROCK_WIDTH + depth);
+        const sprite = treeSprites[Math.floor(hashRange(cell, 3, 0, treeSprites.length))];
+        candidates.push({ z, worldX, sprite });
+      }
     }
+  }
+
+  candidates.sort((a, b) => a.z - b.z);
+
+  for (const c of candidates) {
+    const y = CANOE_SCREEN_Y + c.z * PIXELS_PER_UNIT;
+    const screenX = toScreenX(c.worldX, canoeWorldX);
+    ctx.drawImage(c.sprite, screenX - c.sprite.width / 2, y - c.sprite.height * 0.72);
   }
 }

@@ -34,26 +34,41 @@ export function createGrassTile() {
   });
 }
 
-export function createCliffTile() {
+// A natural rocky/earthy riverbank — irregular patches at odd angles, never
+// a straight edge running the width of the tile, since that's exactly what
+// reads as laid brick/pavement once it repeats along a curve. Skews a bit
+// mossy near the grass side and a bit stonier near the water.
+export function createBankTile() {
   return makeTile(16, (ctx, s) => {
-    ctx.fillStyle = '#6b6a63';
+    ctx.fillStyle = '#7d7264';
     ctx.fillRect(0, 0, s, s);
-    ctx.fillStyle = '#54534c';
-    ctx.fillRect(0, 7, s, 1);
-    ctx.fillRect(0, 15, s, 1);
-    ctx.fillRect(7, 0, 1, 7);
-    ctx.fillRect(4, 8, 1, 8);
-    ctx.fillRect(12, 8, 1, 8);
-    ctx.fillStyle = '#87867a';
-    ctx.fillRect(1, 1, 5, 1);
-    ctx.fillRect(9, 1, 6, 1);
-    ctx.fillRect(1, 9, 2, 1);
-    ctx.fillRect(5, 9, 6, 1);
-    ctx.fillRect(13, 9, 2, 1);
-    ctx.fillStyle = '#38372f';
-    ctx.fillRect(3, 4, 1, 1);
-    ctx.fillRect(11, 3, 1, 1);
-    ctx.fillRect(9, 12, 1, 1);
+
+    const patch = (x, y, rx, ry, rot, color) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    patch(3, 3, 2.6, 1.8, 0.4, '#655a4a');
+    patch(12, 5, 3, 2, -0.3, '#655a4a');
+    patch(6, 12, 2.8, 1.9, 0.9, '#655a4a');
+    patch(14, 13, 2.2, 1.6, -0.6, '#655a4a');
+
+    patch(8, 2, 1.8, 1.2, -0.2, '#948a76');
+    patch(2, 9, 1.9, 1.3, 0.6, '#948a76');
+    patch(11, 10, 1.6, 1.1, 0.3, '#948a76');
+
+    ctx.fillStyle = '#4a4437';
+    ctx.fillRect(5, 6, 1, 1);
+    ctx.fillRect(13, 2, 1, 1);
+    ctx.fillRect(9, 14, 1, 1);
+    ctx.fillRect(1, 4, 1, 1);
+
+    // a little moss creeping in, mostly harmless flecks of green
+    ctx.fillStyle = '#526b34';
+    ctx.fillRect(4, 10, 1, 1);
+    ctx.fillRect(10, 4, 1, 1);
   });
 }
 

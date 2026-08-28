@@ -96,7 +96,7 @@ src/
     hash.js              deterministic "distance bucket" pseudo-randomness
                          for stateless scenery placement
     tiles.js              small repeating noise-pattern tiles: water,
-                         grass, cliff rock, sand
+                         grass, rocky riverbank, sand
     sprites.js            hand-drawn pixel-art sprites for every discrete
                          object (canoe, rocks, logs, islands, pelts,
                          whales, trees)
