@@ -107,8 +107,15 @@ muteBtn.addEventListener('click', () => {
   const muted = music.toggleMute();
   muteBtn.classList.toggle('muted', muted);
 });
-window.addEventListener('keydown', () => music.start(), { once: true });
-window.addEventListener('pointerdown', () => music.start(), { once: true });
+// Mobile Safari in particular is picky about exactly which gesture type
+// counts as "real" user activation for unlocking audio — pointerdown alone
+// (which worked fine in every desktop/emulated test) isn't a safe bet
+// across every mobile browser. Listening broadly costs nothing: start()
+// is idempotent (guarded by its own `started` flag), and each of these
+// self-removes after firing once.
+for (const evt of ['pointerdown', 'touchend', 'keydown', 'click']) {
+  window.addEventListener(evt, () => music.start(), { once: true });
+}
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
