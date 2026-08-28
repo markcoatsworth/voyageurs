@@ -4,6 +4,8 @@ import { drawBanks, drawWaterFallback } from './twod/terrain.js';
 import { drawWhales } from './twod/whales.js';
 import { createCanoeSprites } from './twod/canoe.js';
 import { playCapsizeHorn } from './twod/sfx.js';
+import { getDockHit, DOCK_HIT_Z } from './twod/villages.js';
+import { createVillageScene } from './twod/villageScene.js';
 
 const MIN_SPEED = 5;
 const MAX_SPEED = 16;
@@ -69,6 +71,14 @@ export class Game {
     this.ui = ui;
     this.music = music;
     this.canoeSprites = createCanoeSprites();
+    this.villageScene = createVillageScene();
+
+    // 'river' (paddling) or 'village' (on foot, ashore at a dock) — see
+    // enterVillage()/leaveVillage(). Separate from this.state, which is
+    // still just 'playing' | 'gameover'; a capsize can't happen mid-village
+    // visit since river collision checks don't run in that mode.
+    this.mode = 'river';
+    this.currentVillage = null;
 
     this.time = 0;
     this.flowDistance = 0;
@@ -101,6 +111,8 @@ export class Game {
     this.tilt = 0;
     this.paused = false;
     this.ui.pauseScreen?.classList.add('hidden');
+    this.mode = 'river';
+    this.currentVillage = null;
   }
 
   togglePause() {
@@ -142,6 +154,29 @@ export class Game {
     this.ui.gameoverScreen.classList.remove('hidden');
     playCapsizeHorn();
     this.music?.stop();
+  }
+
+  // Ashore mechanics are intentionally minimal for now: walk around, walk
+  // back onto the dock to re-board. Shops (sell furs, repair the hull) are
+  // the planned next step once this loop is solid.
+  enterVillage(village) {
+    this.mode = 'village';
+    this.currentVillage = village;
+    this.villageScene.enter();
+    this.ui.hud.classList.add('hidden');
+    this.showBanner(`Arriving at ${village.name}`);
+  }
+
+  leaveVillage() {
+    this.mode = 'river';
+    // Push just past the dock's own trigger zone — otherwise the instant
+    // control returns to the canoe, it's still sitting in the exact spot
+    // that triggered docking, and the very next frame docks it again.
+    this.flowDistance = this.currentVillage.flowDistance + DOCK_HIT_Z + 0.5;
+    this.world.distance = this.flowDistance;
+    this.currentVillage = null;
+    this.ui.hud.classList.remove('hidden');
+    this.showBanner('Casting off');
   }
 
   handleHit(entry) {
@@ -188,6 +223,13 @@ export class Game {
       return;
     }
 
+    if (this.mode === 'village') {
+      const reboarded = this.villageScene.update(dt, this.input.state);
+      this.villageScene.draw(this.ctx);
+      if (reboarded) this.leaveVillage();
+      return;
+    }
+
     const keys = this.input.state;
 
     if (keys.up) this.speed = Math.min(MAX_SPEED, this.speed + ACCEL * dt);
@@ -231,6 +273,14 @@ export class Game {
     this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
     this.cameraWorldX = lerp(this.cameraWorldX, centerX(this.flowDistance), CAMERA_SMOOTH);
     this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
+
+    // Docking takes priority over everything else this frame — running
+    // into a dock is the one collision that isn't damage.
+    const dockHit = getDockHit(this.flowDistance, this.canoeWorldX);
+    if (dockHit) {
+      this.enterVillage(dockHit);
+      return;
+    }
 
     // Braided-channel islands sit mid-water, not at a fixed edge, so unlike
     // the bank they can't be handled with a position clamp — the canoe must

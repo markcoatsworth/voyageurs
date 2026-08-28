@@ -377,3 +377,102 @@ export function createCanoeSprite(paddleSide = 1) {
     ctx.fillRect(px - 1.8, h / 2 - 12.4, 3.6, 2.8);
   });
 }
+
+// Squared-log trading-post buildings, viewed top-down: a roof rectangle
+// drawn wider than the wall footprint beneath it (the standard top-down
+// trick for reading as a peaked roof rather than a flat tile), with a log
+// wall course, a door on the side facing the viewer, and a stone chimney.
+// variant 0 is the larger "post" building; 1/2 are smaller outbuildings.
+const CABIN_PALETTES = [
+  { roof: '#5a3624', roofDark: '#3f2617', roofLight: '#7a4b32', wall: '#8a6a45', wallDark: '#6b4f30', wallLight: '#a5825a' },
+  { roof: '#4a3a2a', roofDark: '#33281c', roofLight: '#68533c', wall: '#7d6248', wallDark: '#5f4a35', wallLight: '#977757' },
+  { roof: '#5f4020', roofDark: '#432c16', roofLight: '#7f5a30', wall: '#8f7350', wallDark: '#70583c', wallLight: '#ab8c64' },
+];
+
+export function createCabinSprite(variant = 0) {
+  const big = variant === 0;
+  const w = big ? 34 : 26;
+  const h = big ? 38 : 30;
+  const pal = CABIN_PALETTES[variant % CABIN_PALETTES.length];
+
+  return makeSprite(w, h, (ctx) => {
+    const cx = w / 2;
+    const wallW = big ? 22 : 16;
+    const wallH = big ? 20 : 15;
+    const wallTop = h - wallH - 4;
+
+    groundShadow(ctx, cx, h - 4, wallW / 2 + 2, 4);
+
+    // log wall, outlined
+    ctx.fillStyle = pal.wallDark;
+    ctx.fillRect(cx - wallW / 2 - 1, wallTop - 1, wallW + 2, wallH + 2);
+    ctx.fillStyle = pal.wall;
+    ctx.fillRect(cx - wallW / 2, wallTop, wallW, wallH);
+    ctx.strokeStyle = pal.wallDark;
+    ctx.lineWidth = 1;
+    for (let ly = wallTop + 3; ly < wallTop + wallH; ly += 3.5) {
+      ctx.beginPath();
+      ctx.moveTo(cx - wallW / 2, ly);
+      ctx.lineTo(cx + wallW / 2, ly);
+      ctx.stroke();
+    }
+    ctx.fillStyle = pal.wallLight;
+    ctx.fillRect(cx - wallW / 2, wallTop, 2, wallH);
+
+    // door, centered on the wall facing the viewer
+    ctx.fillStyle = '#241a10';
+    ctx.fillRect(cx - 3, wallTop + wallH - 8, 6, 8);
+
+    // roof — a wider peaked rectangle overlapping the top of the wall, with
+    // a ridge highlight down the middle and a triangular gable peeking
+    // above it
+    const roofW = wallW + 8;
+    const roofH = big ? 20 : 16;
+    const roofTop = wallTop - roofH + 6;
+    triangle(ctx, cx, roofTop - 5, roofTop + 2, roofW / 2 - 2, pal.roofDark);
+    ctx.fillStyle = pal.roofDark;
+    ctx.fillRect(cx - roofW / 2, roofTop, roofW, roofH);
+    ctx.fillStyle = pal.roof;
+    ctx.fillRect(cx - roofW / 2 + 1, roofTop + 1, roofW - 2, roofH - 2);
+    ctx.fillStyle = pal.roofLight;
+    ctx.fillRect(cx - 1, roofTop + 1, 2, roofH - 2);
+
+    // stone chimney through the roof
+    ctx.fillStyle = '#6b6a63';
+    ctx.fillRect(cx + roofW / 2 - 7, roofTop - 2, 4, 6);
+    ctx.fillStyle = '#8a887c';
+    ctx.fillRect(cx + roofW / 2 - 7, roofTop - 2, 1.5, 6);
+  });
+}
+
+// The player's own figure, walking around a village on foot — same tan
+// skin / cream shirt / red sash palette as the canoe's paddler, so it
+// reads as the same voyageur. A single sprite; game.js mirrors it
+// horizontally for left/right facing rather than drawing separate frames.
+export function createWalkerSprite(strideLeft = false) {
+  const w = 14, h = 20;
+  return makeSprite(w, h, (ctx) => {
+    const cx = w / 2;
+    groundShadow(ctx, cx, h - 3, 4, 2);
+
+    // legs, alternating stride
+    ctx.fillStyle = '#3f2b1a';
+    const strideOffset = strideLeft ? 1 : -1;
+    ctx.fillRect(cx - 3, h - 8 + Math.max(0, strideOffset), 2.4, 6 - Math.max(0, strideOffset));
+    ctx.fillRect(cx + 1, h - 8 + Math.max(0, -strideOffset), 2.4, 6 - Math.max(0, -strideOffset));
+
+    // torso, outlined
+    ctx.fillStyle = '#c9bb98';
+    ctx.fillRect(cx - 5, 6, 10, 10);
+    ctx.fillStyle = '#e8dcc0';
+    ctx.fillRect(cx - 4, 7, 8, 8);
+    ctx.fillStyle = '#b5322f';
+    ctx.fillRect(cx - 4, 10, 8, 2.6);
+
+    // head
+    ctx.fillStyle = '#4a2f18';
+    ctx.fillRect(cx - 3.5, 0.5, 7, 6.5);
+    ctx.fillStyle = '#c98a5e';
+    ctx.fillRect(cx - 3, 2, 6, 5);
+  });
+}

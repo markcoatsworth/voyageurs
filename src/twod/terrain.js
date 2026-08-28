@@ -3,6 +3,7 @@ import { centerX, widthAt, braidAt, BRAID_PERIOD } from '../river/path.js';
 import { createWaterTile, createGrassTile, createBankTile, createSandTile } from './tiles.js';
 import { createPineTreeSprite, createPebbleSprite } from './sprites.js';
 import { hash, hashRange } from '../river/hash.js';
+import { isNearVillage, drawVillages } from './villages.js';
 
 // Sample every 2px down the screen when building curve outlines. Braid
 // islands taper from zero width in as little as ~2 world units (32px) —
@@ -109,6 +110,7 @@ export function drawBanks(ctx, worldDistance, cameraWorldX) {
   drawBraidIslands(ctx, worldDistance, cameraWorldX);
   drawShorelineStones(ctx, worldDistance, cameraWorldX, riverEdgeX);
   drawTrees(ctx, worldDistance, cameraWorldX);
+  drawVillages(ctx, worldDistance, cameraWorldX);
 }
 
 // The mid-channel islands that split the river into two short passages
@@ -221,6 +223,7 @@ function drawTrees(ctx, worldDistance, cameraWorldX) {
         if (hash(cell) > TREE_CHANCE) continue;
 
         const d = dSlot * TREE_D_SPACING + hashRange(cell, 1, -0.35, 0.35);
+        if (isNearVillage(d, side)) continue;
         const depth = Math.max(0, depthSlot * TREE_DEPTH_SPACING + hashRange(cell, 2, -0.4, 0.4));
         const z = worldDistance - d;
         const worldX = centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH + BANK_ROCK_WIDTH + depth);
