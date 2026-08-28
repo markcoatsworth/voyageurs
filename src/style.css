@@ -229,6 +229,43 @@ button:hover {
   color: #8a8272;
 }
 
+/* The real-world locator map (twod/minimap.js) — deliberately outside the
+   game canvas/HUD, always visible, never intercepting clicks. */
+#minimap {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: 190px;
+  background: rgba(10, 14, 20, 0.72);
+  border: 3px solid #f4ead2;
+  box-shadow: 4px 4px 0 #000;
+  padding: 8px 10px 10px;
+  pointer-events: none;
+}
+
+#minimap-title {
+  font-size: 8px;
+  color: #bcae94;
+  text-shadow: 2px 2px 0 #000;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+#minimap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+#minimap-marker {
+  animation: minimap-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes minimap-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 button:active {
   transform: translate(2px, 2px);
   box-shadow: 2px 2px 0 #000;
