@@ -1,4 +1,4 @@
-import { centerX, widthAt } from '../river/path.js';
+import { centerX, widthAt, braidAt } from '../river/path.js';
 import { createRockSprite, createLogSprite, createIslandSprite, createPeltSprite } from './sprites.js';
 import { AHEAD_UNITS, BEHIND_UNITS } from './config.js';
 
@@ -23,11 +23,14 @@ const sprites = {
   [PELT]: createPeltSprite(),
 };
 
-function pickType() {
+// A braided-channel island (river/path.js) is a real geography feature, not
+// a random obstacle — skip spawning the (unrelated) floating island prop
+// during a braid so there's never a confusing second island stacked on it.
+function pickType(hasBraid) {
   const roll = Math.random();
   if (roll < 0.35) return ROCK;
   if (roll < 0.6) return LOG;
-  if (roll < 0.7) return ISLAND;
+  if (roll < 0.7 && !hasBraid) return ISLAND;
   return PELT;
 }
 
@@ -39,8 +42,21 @@ function hitRadiusFor(type) {
 
 // Picks a world X for an obstacle at downstream distance d, staying clear of
 // the banks. Islands bias toward mid-channel so they force a real left/right
-// choice; everything else scatters across the navigable width.
+// choice; everything else scatters across the navigable width. During a
+// braid, obstacles are confined to whichever single side channel they land
+// in, so they never spawn on top of the island itself.
 function pickX(type, d) {
+  const braid = braidAt(d);
+  if (braid) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const outerEdge = centerX(d) + side * (widthAt(d) / 2 - EDGE_MARGIN);
+    const islandEdge = braid.centerX + side * (braid.halfWidth + EDGE_MARGIN);
+    const lo = Math.min(outerEdge, islandEdge);
+    const hi = Math.max(outerEdge, islandEdge);
+    if (hi - lo < 0.3) return null; // that side channel is too tight here
+    return lo + Math.random() * (hi - lo);
+  }
+
   const half = widthAt(d) / 2 - EDGE_MARGIN;
   if (type === ISLAND) {
     const clearance = half - 1.3;
@@ -57,9 +73,11 @@ function gapFor(distance) {
 
 function place(world, z) {
   const d = world.distance - z;
-  let type = pickType();
+  const hasBraid = braidAt(d) !== null;
+  let type = pickType(hasBraid);
   let x = pickX(type, d);
   if (x === null) { type = ROCK; x = pickX(type, d); }
+  if (x === null) x = centerX(d); // last-resort safe default, shouldn't normally hit
   return { type, x, z, active: true, spinPhase: Math.random() * Math.PI * 2 };
 }
 
@@ -108,9 +126,9 @@ export function createObstacleField(world) {
         if (entry.z > RECYCLE_Z) respawn(entry);
       }
     },
-    draw(ctx, time, canoeWorldX, worldToScreen) {
+    draw(ctx, time, cameraWorldX, worldToScreen) {
       for (const entry of pool) {
-        const { x: sx, y: sy } = worldToScreen(entry.x, entry.z, canoeWorldX);
+        const { x: sx, y: sy } = worldToScreen(entry.x, entry.z, cameraWorldX);
         const sprite = sprites[entry.type];
         if (entry.type === PELT) {
           const bob = Math.sin(time * 3 + entry.spinPhase) * 2;

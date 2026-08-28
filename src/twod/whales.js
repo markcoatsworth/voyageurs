@@ -1,6 +1,6 @@
 import { CANOE_SCREEN_Y, PIXELS_PER_UNIT } from './config.js';
-import { centerX, widthAt, ESTUARY_WIDTH_THRESHOLD } from '../river/path.js';
-import { hash, hashRange } from './hash.js';
+import { centerX, widthAt, braidAt, ESTUARY_WIDTH_THRESHOLD } from '../river/path.js';
+import { hash, hashRange } from '../river/hash.js';
 import { createWhaleSprite } from './sprites.js';
 
 const SLOT_SPACING = 9;
@@ -8,7 +8,7 @@ const SPAWN_CHANCE = 0.6;
 
 const whaleSprite = createWhaleSprite();
 
-export function drawWhales(ctx, time, worldDistance, canoeWorldX, worldToScreen) {
+export function drawWhales(ctx, time, worldDistance, cameraWorldX, worldToScreen) {
   const dNear = worldDistance - 6;
   const dFar = worldDistance + CANOE_SCREEN_Y / PIXELS_PER_UNIT + 4;
   const slotLo = Math.floor(dNear / SLOT_SPACING);
@@ -22,8 +22,10 @@ export function drawWhales(ctx, time, worldDistance, canoeWorldX, worldToScreen)
 
     const lateralFrac = hashRange(slot, 2, -0.7, 0.7);
     const worldX = centerX(d) + lateralFrac * (width / 2);
+    const braid = braidAt(d);
+    if (braid && Math.abs(worldX - braid.centerX) < braid.halfWidth + 0.5) continue; // don't swim through the island
     const z = worldDistance - d;
-    const { x, y } = worldToScreen(worldX, z, canoeWorldX);
+    const { x, y } = worldToScreen(worldX, z, cameraWorldX);
 
     const phase = hash(slot * 13 + 5) * Math.PI * 2;
     const bob = Math.sin(time * 0.6 + phase);

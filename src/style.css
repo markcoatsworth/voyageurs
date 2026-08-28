@@ -53,23 +53,79 @@ html, body {
   right: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 10px;
-  text-shadow: 2px 2px 0 #000;
+  gap: 10px;
 }
 
-#hud-speed-wrap {
-  width: 160px;
-  height: 8px;
-  border: 2px solid #f4ead2;
+#hud-score,
+#hud-distance {
+  font-size: 22px;
+  color: #ffd23f;
+  text-shadow: 3px 3px 0 #000, -1px -1px 0 #7a4a00;
+  letter-spacing: 1px;
+}
+
+#hud-speed-label,
+#hud-health-label {
+  font-size: 9px;
+  color: #bcae94;
+  text-shadow: 2px 2px 0 #000;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+#hud-speed-wrap,
+#hud-health-wrap {
+  width: 220px;
+  height: 14px;
+  border: 3px solid #f4ead2;
   background: rgba(0,0,0,0.4);
+  box-shadow: 3px 3px 0 #000;
 }
 
 #hud-speed-fill {
   height: 100%;
   width: 30%;
   background: #e0a458;
-  transition: width 0.15s linear;
+  transition: width 0.15s linear, background-color 0.3s ease;
+}
+
+#hud-health-fill {
+  height: 100%;
+  width: 100%;
+  background: #5cae4c;
+  transition: width 0.25s ease-out, background-color 0.3s ease;
+}
+
+#hud-health-fill.warn {
+  background: #e0c458;
+}
+
+#hud-health-fill.critical {
+  background: #d64545;
+  animation: health-pulse 0.6s ease-in-out infinite;
+}
+
+@keyframes health-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+#damage-flash {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(200, 30, 20, 0) 35%, rgba(200, 30, 20, 0.5) 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease-out;
+}
+
+#damage-flash.show {
+  opacity: 1;
+  transition: opacity 0.03s ease-in;
+}
+
+#hud-speed-fill.rapids {
+  background: #bfe6f2;
 }
 
 #milestone-banner {

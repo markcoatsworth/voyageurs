@@ -67,6 +67,8 @@ const ui = {
   hudScore: document.getElementById('hud-score'),
   hudDistance: document.getElementById('hud-distance'),
   hudSpeedFill: document.getElementById('hud-speed-fill'),
+  hudHealthFill: document.getElementById('hud-health-fill'),
+  damageFlash: document.getElementById('damage-flash'),
   titleScreen: document.getElementById('title-screen'),
   gameoverScreen: document.getElementById('gameover-screen'),
   finalStats: document.getElementById('final-stats'),

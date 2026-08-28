@@ -17,9 +17,9 @@ export const CANOE_SCREEN_Y = CANVAS_HEIGHT - 55;
 export const AHEAD_UNITS = (CANOE_SCREEN_Y / PIXELS_PER_UNIT) + 3;
 export const BEHIND_UNITS = ((CANVAS_HEIGHT - CANOE_SCREEN_Y) / PIXELS_PER_UNIT) + 3;
 
-export function worldToScreen(worldX, z, canoeWorldX) {
+export function worldToScreen(worldX, z, cameraWorldX) {
   return {
-    x: CANOE_SCREEN_X + (worldX - canoeWorldX) * PIXELS_PER_UNIT,
+    x: CANOE_SCREEN_X + (worldX - cameraWorldX) * PIXELS_PER_UNIT,
     y: CANOE_SCREEN_Y + z * PIXELS_PER_UNIT,
   };
 }

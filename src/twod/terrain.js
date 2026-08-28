@@ -1,10 +1,15 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } from './config.js';
-import { centerX, widthAt } from '../river/path.js';
+import { centerX, widthAt, braidAt, BRAID_PERIOD } from '../river/path.js';
 import { createWaterTile, createGrassTile, createBankTile, createSandTile } from './tiles.js';
 import { createPineTreeSprite, createPebbleSprite } from './sprites.js';
-import { hash, hashRange } from './hash.js';
+import { hash, hashRange } from '../river/hash.js';
 
-const STEP = 4; // sample every 4px down the screen when building curve outlines
+// Sample every 2px down the screen when building curve outlines. Braid
+// islands taper from zero width in as little as ~2 world units (32px) —
+// coarser sampling left a visible gap between this polygon and the water
+// shader's per-pixel-exact edge right at the tip, where the curve is
+// changing fastest.
+const STEP = 2;
 const SHORE_WIDTH = 0.4;
 const BANK_ROCK_WIDTH = 1.8;
 
@@ -38,8 +43,8 @@ function dAtScreenY(y, worldDistance) {
   return worldDistance - (y - CANOE_SCREEN_Y) / PIXELS_PER_UNIT;
 }
 
-function toScreenX(worldX, canoeWorldX) {
-  return CANOE_SCREEN_X + (worldX - canoeWorldX) * PIXELS_PER_UNIT;
+function toScreenX(worldX, cameraWorldX) {
+  return CANOE_SCREEN_X + (worldX - cameraWorldX) * PIXELS_PER_UNIT;
 }
 
 function pathBetween(ctx, leftXAt, rightXAt) {
@@ -60,7 +65,7 @@ function pathBetween(ctx, leftXAt, rightXAt) {
 // the WebGL shader layer underneath (waterGL.js) shows through it; when
 // that's unavailable, drawWaterFallback() below fills the same hole with a
 // flat animated pattern instead.
-export function drawBanks(ctx, worldDistance, canoeWorldX) {
+export function drawBanks(ctx, worldDistance, cameraWorldX) {
   const pat = ensurePatterns(ctx);
 
   ctx.fillStyle = pat.grass;
@@ -68,15 +73,15 @@ export function drawBanks(ctx, worldDistance, canoeWorldX) {
 
   const riverEdgeX = (y, side) => {
     const d = dAtScreenY(y, worldDistance);
-    return toScreenX(centerX(d) + side * widthAt(d) / 2, canoeWorldX);
+    return toScreenX(centerX(d) + side * widthAt(d) / 2, cameraWorldX);
   };
   const bankOuterX = (y, side) => {
     const d = dAtScreenY(y, worldDistance);
-    return toScreenX(centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH + BANK_ROCK_WIDTH), canoeWorldX);
+    return toScreenX(centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH + BANK_ROCK_WIDTH), cameraWorldX);
   };
   const sandOuterX = (y, side) => {
     const d = dAtScreenY(y, worldDistance);
-    return toScreenX(centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH), canoeWorldX);
+    return toScreenX(centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH), cameraWorldX);
   };
 
   for (const side of [-1, 1]) {
@@ -101,28 +106,77 @@ export function drawBanks(ctx, worldDistance, canoeWorldX) {
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   ctx.restore();
 
-  drawShorelineStones(ctx, worldDistance, canoeWorldX, riverEdgeX);
-  drawTrees(ctx, worldDistance, canoeWorldX);
+  drawBraidIslands(ctx, worldDistance, cameraWorldX);
+  drawShorelineStones(ctx, worldDistance, cameraWorldX, riverEdgeX);
+  drawTrees(ctx, worldDistance, cameraWorldX);
+}
+
+// The mid-channel islands that split the river into two short passages
+// (river/path.js's braidAt). Drawn as a lens-shaped bank fill — the same
+// texture as the outer shore — right on top of the water hole punched
+// above, so it reads as solid land sitting between two open channels.
+function drawBraidIslands(ctx, worldDistance, cameraWorldX) {
+  const pat = ensurePatterns(ctx);
+
+  const islandX = (y, edge) => {
+    const d = dAtScreenY(y, worldDistance);
+    const braid = braidAt(d);
+    const cx = braid ? braid.centerX + edge * braid.halfWidth : centerX(d);
+    return toScreenX(cx, cameraWorldX);
+  };
+
+  ctx.fillStyle = pat.bank;
+  pathBetween(ctx, (y) => islandX(y, -1), (y) => islandX(y, 1));
+  ctx.fill();
+
+  // One tree near the widest point of each island currently in view —
+  // these are small, a full forest scatter would swallow them.
+  const dNear = worldDistance - (CANVAS_HEIGHT - CANOE_SCREEN_Y) / PIXELS_PER_UNIT - 2;
+  const dFar = worldDistance + CANOE_SCREEN_Y / PIXELS_PER_UNIT + 2;
+  const cycleLo = Math.floor(dNear / BRAID_PERIOD) - 1;
+  const cycleHi = Math.ceil(dFar / BRAID_PERIOD) + 1;
+  for (let cycle = cycleLo; cycle <= cycleHi; cycle++) {
+    const braidCenterD = cycle * BRAID_PERIOD + BRAID_PERIOD / 2;
+    const braid = braidAt(braidCenterD);
+    if (!braid) continue;
+    const z = worldDistance - braidCenterD;
+    const y = CANOE_SCREEN_Y + z * PIXELS_PER_UNIT;
+    const screenX = toScreenX(braid.centerX, cameraWorldX);
+    const sprite = treeSprites[Math.floor(hashRange(cycle, 501, 0, treeSprites.length))];
+    ctx.drawImage(sprite, screenX - sprite.width / 2, y - sprite.height * 0.72);
+  }
 }
 
 // CPU fallback for browsers without WebGL — same river-shaped hole, filled
-// with the old flat animated pattern instead of the shader.
-export function drawWaterFallback(ctx, worldDistance, canoeWorldX) {
+// with the old flat animated pattern instead of the shader. Drawn as two
+// passes (each side out to the island, or the full channel when there's no
+// island at that row) so it doesn't paint water back over an island that
+// drawBanks() already filled in as solid land.
+export function drawWaterFallback(ctx, worldDistance, cameraWorldX) {
   const pat = ensurePatterns(ctx);
-  const riverEdgeX = (y, side) => {
+  const edgeX = (y, side) => {
     const d = dAtScreenY(y, worldDistance);
-    return toScreenX(centerX(d) + side * widthAt(d) / 2, canoeWorldX);
+    return toScreenX(centerX(d) + side * widthAt(d) / 2, cameraWorldX);
   };
+  const islandX = (y, side) => {
+    const d = dAtScreenY(y, worldDistance);
+    const braid = braidAt(d);
+    const cx = braid ? braid.centerX + side * braid.halfWidth : centerX(d) + side * widthAt(d) / 2;
+    return toScreenX(cx, cameraWorldX);
+  };
+
   const scroll = (worldDistance * PIXELS_PER_UNIT * 0.6) % 16;
   if (pat.water.setTransform) pat.water.setTransform(new DOMMatrix().translate(0, scroll));
   ctx.fillStyle = pat.water;
-  pathBetween(ctx, (y) => riverEdgeX(y, -1), (y) => riverEdgeX(y, 1));
+  pathBetween(ctx, (y) => edgeX(y, -1), (y) => islandX(y, -1));
+  ctx.fill();
+  pathBetween(ctx, (y) => islandX(y, 1), (y) => edgeX(y, 1));
   ctx.fill();
 }
 
 // A chain of small stones right at the waterline, so the shore reads as a
 // defined edge rather than a flat color change.
-function drawShorelineStones(ctx, worldDistance, canoeWorldX, riverEdgeX) {
+function drawShorelineStones(ctx, worldDistance, cameraWorldX, riverEdgeX) {
   const dNear = worldDistance - (CANVAS_HEIGHT - CANOE_SCREEN_Y) / PIXELS_PER_UNIT - 1;
   const dFar = worldDistance + CANOE_SCREEN_Y / PIXELS_PER_UNIT + 1;
   const slotLo = Math.floor(dNear / PEBBLE_SPACING);
@@ -137,7 +191,7 @@ function drawShorelineStones(ctx, worldDistance, canoeWorldX, riverEdgeX) {
       const y = CANOE_SCREEN_Y + z * PIXELS_PER_UNIT;
       const wobble = hashRange(slot, salt + 1, -0.12, 0.18);
       const worldX = centerX(d) + side * (widthAt(d) / 2 + SHORE_WIDTH * 0.5 + wobble);
-      const screenX = toScreenX(worldX, canoeWorldX);
+      const screenX = toScreenX(worldX, cameraWorldX);
       const sprite = pebbleSprites[Math.floor(hashRange(slot, salt + 2, 0, pebbleSprites.length))];
       ctx.drawImage(sprite, screenX - sprite.width / 2, y - sprite.height / 2);
     }
@@ -150,7 +204,7 @@ function drawShorelineStones(ctx, worldDistance, canoeWorldX, riverEdgeX) {
 // grid. Candidates are collected and painter's-algorithm sorted by z before
 // drawing, since at this density trees regularly overlap and need nearer
 // ones (larger z) to cover farther ones, not just whichever drew last.
-function drawTrees(ctx, worldDistance, canoeWorldX) {
+function drawTrees(ctx, worldDistance, cameraWorldX) {
   const dNear = worldDistance - (CANVAS_HEIGHT - CANOE_SCREEN_Y) / PIXELS_PER_UNIT - 2;
   const dFar = worldDistance + CANOE_SCREEN_Y / PIXELS_PER_UNIT + 2;
   const dSlotLo = Math.floor(dNear / TREE_D_SPACING);
@@ -180,7 +234,7 @@ function drawTrees(ctx, worldDistance, canoeWorldX) {
 
   for (const c of candidates) {
     const y = CANOE_SCREEN_Y + c.z * PIXELS_PER_UNIT;
-    const screenX = toScreenX(c.worldX, canoeWorldX);
+    const screenX = toScreenX(c.worldX, cameraWorldX);
     ctx.drawImage(c.sprite, screenX - c.sprite.width / 2, y - c.sprite.height * 0.72);
   }
 }
