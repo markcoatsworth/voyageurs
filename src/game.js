@@ -1,38 +1,45 @@
-import * as THREE from 'three';
-import { centerX, widthAt, MOUTH_DISTANCE } from './scene/riverPath.js';
+import { centerX, widthAt, MOUTH_DISTANCE } from './river/path.js';
+import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT } from './twod/config.js';
+import { drawBanks, drawWaterFallback } from './twod/terrain.js';
+import { drawWhales } from './twod/whales.js';
+import { createCanoeSprites } from './twod/canoe.js';
 
-const MIN_SPEED = 7;
-const MAX_SPEED = 24;
-const BASE_SPEED = 12;
-const ACCEL = 10;
-const DECEL_DRIFT = 2.5;
-const STEER_ACCEL = 26;
-const STEER_MAX = 9;
+const MIN_SPEED = 5;
+const MAX_SPEED = 16;
+const BASE_SPEED = 8;
+const ACCEL = 7;
+const DECEL_DRIFT = 1.8;
+const STEER_ACCEL = 20;
+const STEER_MAX = 7;
 const STEER_DAMPING = 6;
 const EDGE_MARGIN = 0.55;
-const LOG_PENALTY_SPEED = 6;
-const BANK_PENALTY_SPEED = 4;
+const LOG_PENALTY_SPEED = 4;
+const BANK_PENALTY_SPEED = 2.6;
 const INVULN_TIME = 1.2;
 const BANK_INVULN_TIME = 0.7;
-const LOOKAHEAD = 9;
+
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
 
 export class Game {
-  constructor({ canoe, camera, input, river, terrain, obstacles, whales, hills, world, ui }) {
-    this.canoe = canoe;
-    this.camera = camera;
+  constructor({ ctx, water, input, obstacles, world, ui }) {
+    this.ctx = ctx;
+    this.water = water; // null falls back to a 2D-drawn water fill
     this.input = input;
-    this.river = river;
-    this.terrain = terrain;
     this.obstacles = obstacles;
-    this.whales = whales;
-    this.hills = hills;
     this.world = world;
     this.ui = ui;
+    this.canoeSprites = createCanoeSprites();
 
     this.time = 0;
-    // world.distance is the persistent river "clock" driving the curve —
-    // it never resets, even across a game over, so scenery never jumps.
     this.flowDistance = 0;
+    this.paddleSide = 1;
+    this.paddleTimer = 0;
 
     ui.restartBtn.addEventListener('click', () => this.start());
 
@@ -50,7 +57,7 @@ export class Game {
     this.furs = 0;
     this.invulnTimer = 0;
     this.mouthAnnounced = false;
-    this.canoe.rotation.set(0, 0, 0);
+    this.tilt = 0;
   }
 
   showBanner(text) {
@@ -84,10 +91,10 @@ export class Game {
     if (entry.type === 'rock' || entry.type === 'island') {
       this.gameOver();
     } else if (entry.type === 'bank') {
-      this.speed = Math.max(MIN_SPEED - 2, this.speed - BANK_PENALTY_SPEED);
+      this.speed = Math.max(MIN_SPEED - 1, this.speed - BANK_PENALTY_SPEED);
       this.invulnTimer = BANK_INVULN_TIME;
     } else {
-      this.speed = Math.max(MIN_SPEED - 2, this.speed - LOG_PENALTY_SPEED);
+      this.speed = Math.max(MIN_SPEED - 1, this.speed - LOG_PENALTY_SPEED);
       this.invulnTimer = INVULN_TIME;
     }
   }
@@ -100,13 +107,10 @@ export class Game {
     this.time += dt;
 
     if (this.state !== 'playing') {
-      const flowSpeed = BASE_SPEED * 0.4;
-      this.flowDistance += flowSpeed * dt;
-      this.world.distance = this.flowDistance;
-      this.river.update(this.time, dt, flowSpeed);
-      this.terrain.update(dt, flowSpeed);
-      this.whales.update(this.time, dt, flowSpeed);
-      this.updateCanoeAndCamera(dt);
+      // Capsizing is a hard freeze — the last frame drawn before gameOver()
+      // fired (still inside the 'playing' branch below) stays on screen
+      // untouched. Nothing here advances the river clock or redraws, so the
+      // canoe and whatever it hit stop exactly where they were.
       return;
     }
 
@@ -117,7 +121,7 @@ export class Game {
     else this.speed = Math.max(MIN_SPEED, this.speed - DECEL_DRIFT * dt * 0.3);
 
     // Advance the shared river clock using this frame's just-updated speed —
-    // the same value handed to river/terrain/obstacles below — so the baked
+    // the same value obstacles/terrain sample below — so the baked
     // downstream distance (d = world.distance - z) stays exactly invariant.
     this.flowDistance += this.speed * dt;
     this.world.distance = this.flowDistance;
@@ -128,12 +132,12 @@ export class Game {
 
     this.lateralVX += steerInput * STEER_ACCEL * dt;
     this.lateralVX -= this.lateralVX * STEER_DAMPING * dt;
-    this.lateralVX = THREE.MathUtils.clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
+    this.lateralVX = clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
 
     const half = widthAt(this.flowDistance) / 2 - EDGE_MARGIN;
     const proposed = this.lateralOffset + this.lateralVX * dt;
     if (proposed > half || proposed < -half) {
-      this.lateralOffset = THREE.MathUtils.clamp(proposed, -half, half);
+      this.lateralOffset = clamp(proposed, -half, half);
       this.lateralVX *= -0.2;
       this.handleHit({ type: 'bank' });
     } else {
@@ -141,21 +145,19 @@ export class Game {
     }
 
     this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
-    this.canoe.position.x = this.canoeWorldX;
-    this.canoe.rotation.z = THREE.MathUtils.lerp(this.canoe.rotation.z, -this.lateralVX * 0.05, 0.15);
-    this.canoe.rotation.y = THREE.MathUtils.lerp(this.canoe.rotation.y, -this.lateralVX * 0.04, 0.15);
-    this.canoe.position.y = Math.sin(this.time * 2.2) * 0.03;
+    this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
 
-    const paddle = this.canoe.userData.paddle;
-    if (paddle) {
-      paddle.rotation.x = 0.3 + Math.sin(this.time * this.speed * 0.5) * 0.5;
+    this.paddleTimer += dt * this.speed;
+    if (this.paddleTimer > 2.2) {
+      this.paddleTimer = 0;
+      this.paddleSide *= -1;
     }
 
     if (this.invulnTimer > 0) {
       this.invulnTimer -= dt;
-      this.canoe.visible = Math.floor(this.time * 12) % 2 === 0;
+      this.canoeVisible = Math.floor(this.time * 12) % 2 === 0;
     } else {
-      this.canoe.visible = true;
+      this.canoeVisible = true;
     }
 
     this.distance += this.speed * dt;
@@ -165,35 +167,37 @@ export class Game {
       this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");
     }
 
-    this.river.update(this.time, dt, this.speed);
-    this.terrain.update(dt, this.speed);
-    this.whales.update(this.time, dt, this.speed);
     this.obstacles.update(
       this.time, dt, this.speed, this.canoeWorldX,
       (entry) => this.handleHit(entry),
       (entry) => this.handleCollect(entry)
     );
 
-    this.updateCanoeAndCamera(dt);
+    this.render(this.speed);
     this.updateHud();
   }
 
-  updateCanoeAndCamera(dt) {
-    const worldX = centerX(this.flowDistance) + this.lateralOffset;
-    if (this.state !== 'playing') this.canoe.position.x = worldX;
+  render(flowSpeed) {
+    const ctx = this.ctx;
+    const canoeWorldX = this.canoeWorldX ?? centerX(this.flowDistance);
 
-    const aheadX = centerX(this.flowDistance + LOOKAHEAD);
-    const lookX = THREE.MathUtils.lerp(worldX, aheadX, 0.4);
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawBanks(ctx, this.flowDistance, canoeWorldX);
+    if (this.water) {
+      this.water.render(this.time, this.flowDistance, canoeWorldX);
+    } else {
+      drawWaterFallback(ctx, this.flowDistance, canoeWorldX);
+    }
+    drawWhales(ctx, this.time, this.flowDistance, canoeWorldX, worldToScreen);
+    this.obstacles.draw(ctx, this.time, canoeWorldX, worldToScreen);
 
-    const camTargetX = THREE.MathUtils.lerp(worldX, lookX, 0.3);
-    const followRate = 1 - Math.pow(0.001, dt);
-    this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, camTargetX, followRate);
-    this.camera.position.y = 3.4;
-    this.camera.position.z = 6.5;
-    this.camera.lookAt(lookX, 0.6, -10);
-
-    if (this.hills) {
-      this.hills.position.x = THREE.MathUtils.lerp(this.hills.position.x, centerX(this.flowDistance) * 0.5, followRate);
+    if (this.canoeVisible !== false) {
+      const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;
+      ctx.save();
+      ctx.translate(CANOE_SCREEN_X, CANOE_SCREEN_Y);
+      ctx.rotate(this.tilt || 0);
+      ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
+      ctx.restore();
     }
   }
 
@@ -201,6 +205,6 @@ export class Game {
     this.ui.hudScore.textContent = `FURS: ${this.furs}`;
     this.ui.hudDistance.textContent = `DISTANCE: ${Math.round(this.distance)}m`;
     const speedPct = ((this.speed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)) * 100;
-    this.ui.hudSpeedFill.style.width = `${THREE.MathUtils.clamp(speedPct, 0, 100)}%`;
+    this.ui.hudSpeedFill.style.width = `${clamp(speedPct, 0, 100)}%`;
   }
 }

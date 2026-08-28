@@ -1,45 +1,64 @@
-import * as THREE from 'three';
-import { PixelationController } from './scene/pixelation.js';
-import { createSky } from './scene/sky.js';
-import { createRiver } from './scene/river.js';
-import { createTerrain } from './scene/terrain.js';
-import { createCanoe } from './scene/canoe.js';
-import { createObstacleField } from './scene/obstacles.js';
-import { createWhalePod } from './scene/whales.js';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from './twod/config.js';
+import { createObstacleField } from './twod/obstacles.js';
+import { createWaterRenderer } from './twod/waterGL.js';
 import { Input } from './utils/input.js';
 import { Game } from './game.js';
 
 const app = document.getElementById('app');
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
-camera.position.set(0, 3.4, 6.5);
+// A positioned wrapper so the WebGL water layer and the 2D sprite/terrain
+// layer stack exactly on top of each other and scale together. The water
+// canvas sits below; the 2D canvas is cleared to transparent each frame and
+// leaves a river-shaped hole (see twod/terrain.js) for it to show through.
+const screen = document.createElement('div');
+screen.style.position = 'relative';
+app.appendChild(screen);
 
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-app.appendChild(renderer.domElement);
-new PixelationController(renderer, camera);
+// <canvas> is a replaced element (like <img>) — `inset:0` alone doesn't
+// stretch a replaced element's auto width/height the way it would a <div>,
+// so width/height:100% has to be explicit or these stay at native 320x220.
+function layerStyle(el) {
+  el.style.position = 'absolute';
+  el.style.inset = '0';
+  el.style.width = '100%';
+  el.style.height = '100%';
+  el.style.imageRendering = 'pixelated';
+}
 
-// Lighting: a warm low sun plus soft ambient fill, both flat-shading friendly.
-const sun = new THREE.DirectionalLight(0xfff1d6, 1.4);
-sun.position.set(-8, 12, 6);
-scene.add(sun);
-const ambient = new THREE.HemisphereLight(0xbfe0e6, 0x2e5228, 0.7);
-scene.add(ambient);
+const waterCanvas = document.createElement('canvas');
+waterCanvas.width = CANVAS_WIDTH;
+waterCanvas.height = CANVAS_HEIGHT;
+layerStyle(waterCanvas);
+screen.appendChild(waterCanvas);
+
+const canvas = document.createElement('canvas');
+canvas.width = CANVAS_WIDTH;
+canvas.height = CANVAS_HEIGHT;
+layerStyle(canvas);
+screen.appendChild(canvas);
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// Falls back to null (handled in game.js as a 2D-drawn water fill) if this
+// browser/environment has no WebGL.
+const water = createWaterRenderer(waterCanvas);
+
+function resize() {
+  const scale = Math.max(1, Math.floor(Math.min(
+    window.innerWidth / CANVAS_WIDTH,
+    window.innerHeight / CANVAS_HEIGHT
+  )));
+  screen.style.width = `${CANVAS_WIDTH * scale}px`;
+  screen.style.height = `${CANVAS_HEIGHT * scale}px`;
+}
+window.addEventListener('resize', resize);
+resize();
 
 // Shared downstream-distance clock: written by Game each frame, read by
-// river/terrain/obstacles whenever they (re)spawn a piece of geometry so
-// everything samples the same river-course curve at the same point.
+// obstacles/terrain/whales whenever they need "what's here right now?"
 const world = { distance: 0 };
 
-const hills = createSky(scene);
-const river = createRiver(scene, world);
-const terrain = createTerrain(scene, world);
-const obstacles = createObstacleField(scene, world);
-const whales = createWhalePod(scene, world);
-
-const canoe = createCanoe();
-scene.add(canoe);
-
+const obstacles = createObstacleField(world);
 const input = new Input();
 
 const ui = {
@@ -54,15 +73,21 @@ const ui = {
   milestoneBanner: document.getElementById('milestone-banner'),
 };
 
-const game = new Game({ canoe, camera, input, river, terrain, obstacles, whales, hills, world, ui });
+const game = new Game({ ctx, water, input, obstacles, world, ui });
 
 // The canoe launches immediately — this intro caption is just a fading
 // overlay, not a gate, so it disappears on its own after a few seconds.
 setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
 
-const clock = new THREE.Clock();
-renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 1 / 20);
+let lastTime = performance.now();
+function loop(now) {
+  // rAF's timestamp can occasionally predate the performance.now() call
+  // above (most noticeably on the very first frame), so clamp dt to
+  // non-negative — a negative dt would tick every timer in the game
+  // backwards for a frame.
+  const dt = Math.max(0, Math.min((now - lastTime) / 1000, 1 / 20));
+  lastTime = now;
   game.update(dt);
-  renderer.render(scene, camera);
-});
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);

@@ -25,7 +25,7 @@ export const MOUTH_DISTANCE = 900;
 export const ESTUARY_WIDTH_THRESHOLD = 11.5;
 
 export function centerX(d) {
-  return Math.sin(d * 0.02) * 3.4 + Math.sin(d * 0.052 + 1.7) * 1.6;
+  return Math.sin(d * 0.09) * 3 + Math.sin(d * 0.21 + 1.7) * 1.5;
 }
 
 export function estuaryProgress(d) {
@@ -34,6 +34,6 @@ export function estuaryProgress(d) {
 
 export function widthAt(d) {
   const trend = FJORD_WIDTH + (ESTUARY_WIDTH - FJORD_WIDTH) * estuaryProgress(d);
-  const wobble = Math.sin(d * 0.011 + 4) * 1.8 + Math.sin(d * 0.031) * 0.7;
+  const wobble = Math.sin(d * 0.05 + 4) * 1.8 + Math.sin(d * 0.12) * 0.7;
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + wobble));
 }
