@@ -16,6 +16,18 @@ const PLAYLIST = [
 
 const DEFAULT_VOLUME = 0.35;
 
+// TEMPORARY diagnostic — this can't be tested on real iOS hardware from
+// here, and two blind fix attempts (broader gesture-unlock events, then
+// Web Audio routing) haven't resolved a real device report of "no music."
+// Rather than guess a third time, surface exactly what the browser says is
+// happening directly on-screen. Remove this + #audio-debug once actual
+// music playback is confirmed working on the reporting device.
+function debug(text) {
+  console.log('[music]', text);
+  const el = document.getElementById('audio-debug');
+  if (el) el.textContent = text;
+}
+
 // Fisher-Yates — used once at startup so the play order isn't the same
 // every session, and again each time the shuffled order is exhausted so it
 // doesn't just repeat the same cycle forever.
@@ -41,39 +53,33 @@ export function createMusic() {
   let order = shuffled(PLAYLIST);
   let index = 0;
 
-  // A real, well-documented iOS quirk: <audio>/<video> elements respect the
-  // phone's hardware silent/ring switch, but Web Audio API–generated sound
-  // (see sfx.js's capsize horn) does not. On a phone with the switch set to
-  // silent, that means the horn plays but this music never would — unless
-  // it's routed the same way the horn already is. Piping the element
-  // through a MediaElementAudioSourceNode into an AudioContext makes its
-  // output subject to the same (non-switch-respecting) behavior. The
-  // element's own .volume/.muted still apply — they affect the signal
-  // before it reaches this graph, per spec.
-  let audioCtx = null;
-  function ensureRoutedThroughWebAudio() {
-    if (audioCtx) return;
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioCtx.createMediaElementSource(audio);
-      source.connect(audioCtx.destination);
-    } catch {
-      // Worst case this browser can't/won't route it (e.g. an unusual
-      // embedding context) — playback still proceeds through the
-      // element's own normal output, just then subject to the silent
-      // switch again.
-    }
-  }
-
+  // Tried routing this through a MediaElementAudioSourceNode + AudioContext
+  // (to sidestep the phone's silent switch, which <audio> elements respect
+  // but Web Audio-generated sound doesn't) — reverted. That API has a long,
+  // specific history of being unreliable on iOS Safari in exactly this
+  // configuration (element -> WebAudio graph), to the point of sometimes
+  // silently preventing playback rather than fixing anything, and it didn't
+  // resolve the actual report. Back to the plain, well-supported path while
+  // debug() below narrows down what's really happening on-device.
   function playCurrent() {
     audio.src = order[index];
-    ensureRoutedThroughWebAudio();
-    if (audioCtx?.state === 'suspended') audioCtx.resume().catch(() => {});
-    // play() returns a rejected promise if the browser still refuses (e.g.
-    // the gesture didn't count) — that's fine, just stay silent rather than
-    // throwing into the game loop over background music.
-    audio.play().catch(() => {});
+    audio.play().then(
+      () => debug(`playing ${order[index].split('/').pop()}`),
+      (e) => {
+        // Benign and expected whenever stop()'s pause() lands while a
+        // play() from this same track is still pending — not a real
+        // failure, and showing it would look like "the bug" to whoever's
+        // reading this diagnostic mid-test.
+        if (e.name === 'AbortError') return;
+        debug(`play() rejected: ${e.name}: ${e.message}`);
+      }
+    );
   }
+
+  audio.addEventListener('error', () => {
+    const err = audio.error;
+    debug(`audio error ${err?.code ?? '?'}: ${err?.message || '(no message)'}`);
+  });
 
   // Advance to the next track when one ends, instead of looping the same
   // one — reshuffle once the whole list has played through.
@@ -95,6 +101,7 @@ export function createMusic() {
     start() {
       if (started) return;
       started = true;
+      debug('start() called');
       playCurrent();
     },
     // Pauses playback in place (capsizing) — resume() picks back up from
@@ -107,8 +114,13 @@ export function createMusic() {
     // it safe to call unconditionally from Game.start()).
     resume() {
       if (!started) return;
-      if (audioCtx?.state === 'suspended') audioCtx.resume().catch(() => {});
-      audio.play().catch(() => {});
+      audio.play().then(
+        () => debug(`resumed ${order[index].split('/').pop()}`),
+        (e) => {
+          if (e.name === 'AbortError') return;
+          debug(`resume play() rejected: ${e.name}: ${e.message}`);
+        }
+      );
     },
     toggleMute() {
       muted = !muted;
