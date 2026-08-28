@@ -41,8 +41,34 @@ export function createMusic() {
   let order = shuffled(PLAYLIST);
   let index = 0;
 
+  // A real, well-documented iOS quirk: <audio>/<video> elements respect the
+  // phone's hardware silent/ring switch, but Web Audio API–generated sound
+  // (see sfx.js's capsize horn) does not. On a phone with the switch set to
+  // silent, that means the horn plays but this music never would — unless
+  // it's routed the same way the horn already is. Piping the element
+  // through a MediaElementAudioSourceNode into an AudioContext makes its
+  // output subject to the same (non-switch-respecting) behavior. The
+  // element's own .volume/.muted still apply — they affect the signal
+  // before it reaches this graph, per spec.
+  let audioCtx = null;
+  function ensureRoutedThroughWebAudio() {
+    if (audioCtx) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaElementSource(audio);
+      source.connect(audioCtx.destination);
+    } catch {
+      // Worst case this browser can't/won't route it (e.g. an unusual
+      // embedding context) — playback still proceeds through the
+      // element's own normal output, just then subject to the silent
+      // switch again.
+    }
+  }
+
   function playCurrent() {
     audio.src = order[index];
+    ensureRoutedThroughWebAudio();
+    if (audioCtx?.state === 'suspended') audioCtx.resume().catch(() => {});
     // play() returns a rejected promise if the browser still refuses (e.g.
     // the gesture didn't count) — that's fine, just stay silent rather than
     // throwing into the game loop over background music.
@@ -81,6 +107,7 @@ export function createMusic() {
     // it safe to call unconditionally from Game.start()).
     resume() {
       if (!started) return;
+      if (audioCtx?.state === 'suspended') audioCtx.resume().catch(() => {});
       audio.play().catch(() => {});
     },
     toggleMute() {
