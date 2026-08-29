@@ -66,6 +66,32 @@ const SPAWN_INVULN_TIME = 1.5;
 // it actually follows the curve — which is what makes it read as "the boat
 // is turning" rather than "the world is sliding."
 const CAMERA_SMOOTH = 0.025;
+// The Saint Lawrence stretch (river/path.js's ESTUARY_WIDTH) is far wider
+// than the screen, so lateralOffset alone — the *only* thing that used to
+// move the canoe off the centerline visually, since the camera above only
+// ever tracks the curve, never the player's own steering — can no longer
+// just be handed straight to the canoe's screen position: a canoe camped
+// out mid-crossing could steer itself yards past the edge of the canvas,
+// and it'd render there, or not at all. CAMERA_DEAD_ZONE is how far the
+// canoe can drift from the *tracked* centerline before the camera starts
+// easing sideways to keep up, in world units — set to what a fully-loaded
+// old-width channel already allowed (its max half-width was ~8.7), so nothing
+// changes in the fjord, where lateralOffset never gets close to it. Past
+// that, CAMERA_LATERAL_PULL — tracked as its own lerp, separate from and
+// faster than CAMERA_SMOOTH above — reels the camera toward the canoe, same
+// "world stays planted, the boat visibly moves" logic as the curve-tracking
+// camera, just triggered by a steering choice instead of a bend in the
+// river.
+const CAMERA_DEAD_ZONE = 8.5;
+const CAMERA_LATERAL_SMOOTH = 0.12;
+// A hard backstop under the canvas's actual half-width (CANVAS_WIDTH / 2 /
+// PIXELS_PER_UNIT = 10 units) so a fast or sustained steering input can't
+// outrun CAMERA_LATERAL_SMOOTH's catch-up and momentarily push the canoe
+// (which itself has width) off the edge of the canvas while the lerp is
+// still closing the gap. The soft dead zone above handles the normal case;
+// this only ever engages during unusually hard/sustained steering, and even
+// then just holds the canoe at this offset instead of letting it go further.
+const CAMERA_MAX_ONSCREEN_OFFSET = 9;
 const RAPIDS_BOOST = 7 * speedScale; // extra units/s the current adds at peak whitewater
 const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 
@@ -101,9 +127,13 @@ export class Game {
     this.paddleSide = 1;
     this.paddleTimer = 0;
     // The camera's own persistent state — deliberately not reset on restart
-    // (see the flowDistance comment below), and deliberately never exactly
-    // equal to centerX(flowDistance) — see updateCamera().
-    this.cameraWorldX = centerX(0);
+    // (see the flowDistance comment below). Tracked as two separate lerps
+    // (curve-following + lateral-pull, see CAMERA_DEAD_ZONE above) that get
+    // summed into cameraWorldX each frame in update(); cameraWorldX itself
+    // is what render() and everything it calls actually reads.
+    this.cameraCenterX = centerX(0);
+    this.cameraLateralPull = 0;
+    this.cameraWorldX = this.cameraCenterX;
 
     ui.restartBtn.addEventListener('click', () => this.start());
 
@@ -313,7 +343,17 @@ export class Game {
     }
 
     this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
-    this.cameraWorldX = lerp(this.cameraWorldX, centerX(this.flowDistance), CAMERA_SMOOTH);
+    this.cameraCenterX = lerp(this.cameraCenterX, centerX(this.flowDistance), CAMERA_SMOOTH);
+    // Zero inside the dead zone, so on the (still much narrower) fjord this
+    // never engages and the camera behaves exactly as it always did.
+    const lateralExcess = this.lateralOffset - clamp(this.lateralOffset, -CAMERA_DEAD_ZONE, CAMERA_DEAD_ZONE);
+    this.cameraLateralPull = lerp(this.cameraLateralPull, lateralExcess, CAMERA_LATERAL_SMOOTH);
+    this.cameraWorldX = this.cameraCenterX + this.cameraLateralPull;
+    // The hard backstop (see its comment above) — clamps how far the canoe's
+    // final on-screen position can end up from center, independent of
+    // whatever the two lerps above are still catching up on.
+    const onscreenOffset = clamp(this.canoeWorldX - this.cameraWorldX, -CAMERA_MAX_ONSCREEN_OFFSET, CAMERA_MAX_ONSCREEN_OFFSET);
+    this.cameraWorldX = this.canoeWorldX - onscreenOffset;
     this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
 
     // Docking takes priority over everything else this frame — running

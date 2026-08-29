@@ -14,17 +14,35 @@
 import { hashRange } from './hash.js';
 
 export const FJORD_WIDTH = 8;
-export const ESTUARY_WIDTH = 17;
+// The real Saint Lawrence off Tadoussac dwarfs the fjord — this is what
+// actually makes the estuary wider than the screen (CANVAS_WIDTH/
+// PIXELS_PER_UNIT = 20 world units across at once; see game.js's camera for
+// how steering across something this much wider than that stays on screen).
+export const ESTUARY_WIDTH = 48;
 export const MIN_WIDTH = 6.5;
-export const MAX_WIDTH = 18.5;
+// Enough headroom above ESTUARY_WIDTH for the amplified pinch/wobble below
+// to swing without getting clipped flat.
+export const MAX_WIDTH = 62;
 
 // Roughly how far downstream (in meters travelled) the fjord opens out into
 // the Saint Lawrence — the game's version of arriving at Tadoussac.
 export const MOUTH_DISTANCE = 900;
 
-// Past this width the water reads as open estuary rather than fjord —
-// used to decide when belugas start showing up.
-export const ESTUARY_WIDTH_THRESHOLD = 11.5;
+// Past this width the water reads as open estuary rather than fjord — used
+// to decide when belugas start showing up. Corresponds to roughly the last
+// fifth of the approach to Tadoussac, once the cubic ease-in below has
+// actually started opening the channel up — not a fixed fraction of the old,
+// much narrower ESTUARY_WIDTH, which would now trigger the moment the fjord
+// starts easing open at all, long before the water actually looks estuarial.
+export const ESTUARY_WIDTH_THRESHOLD = 30;
+
+// How much more the pinch/wobble terms below swing in the estuary than in
+// the fjord, ramped by the same estuaryProgress() as the trend width itself.
+// Without this, the +/-5ish unit variation that reads as a real "wide pool
+// vs. narrow rapids" texture against a 17-unit fjord mouth would barely
+// register against a 48-unit river — the big Saint Lawrence stretch would
+// look like a flat, characterless pipe instead of a real river.
+const ESTUARY_AMP_SCALE = 2.8;
 
 export function centerX(d) {
   return Math.sin(d * 0.09) * 3 + Math.sin(d * 0.21 + 1.7) * 1.5;
@@ -35,12 +53,22 @@ export function estuaryProgress(d) {
 }
 
 export function widthAt(d) {
-  const trend = FJORD_WIDTH + (ESTUARY_WIDTH - FJORD_WIDTH) * estuaryProgress(d);
+  // Cubic ease-in, not the raw linear progress — the fjord should stay
+  // close to its own width for most of the approach and only really open up
+  // right near the mouth ("until the walls fall away and the Saint Lawrence
+  // opens wide," per the intro caption), not visibly turn into a kilometre-
+  // wide river a third of the way down what's supposed to read as a narrow
+  // fjord. A linear ramp all the way to a target this much bigger than the
+  // old ESTUARY_WIDTH would do exactly that.
+  const t = estuaryProgress(d);
+  const eased = t * t * t;
+  const trend = FJORD_WIDTH + (ESTUARY_WIDTH - FJORD_WIDTH) * eased;
   // A slow, wide-swinging term for real wide-pool/narrow-rapids stretches,
   // layered under the finer wobble — this is what makes the width change
   // read as deliberate rather than a faint texture on top of the trend.
-  const pinch = Math.sin(d * 0.023 + 1.2) * 2.6;
-  const wobble = Math.sin(d * 0.05 + 4) * 1.6 + Math.sin(d * 0.12) * 0.6;
+  const ampScale = 1 + (ESTUARY_AMP_SCALE - 1) * eased;
+  const pinch = Math.sin(d * 0.023 + 1.2) * 2.6 * ampScale;
+  const wobble = (Math.sin(d * 0.05 + 4) * 1.6 + Math.sin(d * 0.12) * 0.6) * ampScale;
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + pinch + wobble));
 }
 

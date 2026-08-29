@@ -57,10 +57,15 @@ float estuaryProgress(float d) {
   return clamp(d / 900.0, 0.0, 1.0);
 }
 float widthAt(float d) {
-  float trend = 8.0 + (17.0 - 8.0) * estuaryProgress(d);
-  float pinch = sin(d * 0.023 + 1.2) * 2.6;
-  float wobble = sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.12) * 0.6;
-  return clamp(trend + pinch + wobble, 6.5, 18.5);
+  // Cubic ease-in, mirroring river/path.js's widthAt() — see its comment
+  // for why this isn't just a linear ramp to ESTUARY_WIDTH.
+  float t = estuaryProgress(d);
+  float eased = t * t * t;
+  float trend = 8.0 + (48.0 - 8.0) * eased;
+  float ampScale = 1.0 + (2.8 - 1.0) * eased;
+  float pinch = sin(d * 0.023 + 1.2) * 2.6 * ampScale;
+  float wobble = (sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.12) * 0.6) * ampScale;
+  return clamp(trend + pinch + wobble, 6.5, 62.0);
 }
 
 // Looks up the CPU-computed offset for whichever of the two candidate
