@@ -16,7 +16,10 @@ import { isTouchPrimary } from './twod/touchControls.js';
 const MOBILE_SPEED_SCALE = 0.6;
 const speedScale = isTouchPrimary() ? MOBILE_SPEED_SCALE : 1;
 
-const MIN_SPEED = 5 * speedScale;
+// MIN_SPEED is the drifting-with-no-input floor (holding Down, or just
+// letting off Up, settles here) — deliberately well under BASE_SPEED now
+// for an actual "chill" slow speed, not just a mild step down from medium.
+const MIN_SPEED = 2.5 * speedScale;
 const MAX_SPEED = 16 * speedScale;
 const BASE_SPEED = 8 * speedScale;
 const ACCEL = 7 * speedScale;
