@@ -1,18 +1,19 @@
 // A small always-on-screen locator map, fixed outside the game canvas, that
-// shows the canoe's position on the *real* Saguenay Fjord and (once past
-// Tadoussac) the real Saint Lawrence North Shore — not a schematic invented
-// shape. The route (waypoints, projection, cumulative distance) lives in
-// river/route.js, shared with the in-game villages so the two agree on
-// where everything is.
+// shows the canoe's position on the *real* geography — not a schematic
+// invented shape. The route (waypoints, projection, cumulative distance)
+// lives in river/route.js, shared with the in-game villages so the two
+// agree on where everything is.
 //
-// The route now runs the fjord plus ~400km of Côte-Nord coastline out to
-// Sept-Îles — far too much ground to show at a legible scale all at once in
-// a small corner widget. So unlike the old design (the whole route drawn
-// once, a marker crawling along it), this is a *moving* map: a fixed-size
-// square window that stays centered on the canoe, panning across a route
-// drawn once in absolute map-projection coordinates. Panning is just moving
-// the SVG viewBox — the route/label markup itself never needs rebuilding.
-import { FJORD_WAYPOINTS, points, pointAtCumulative, cumulativeForFlowDistance } from '../river/route.js';
+// The river is a real three-way junction at Tadoussac (the Saguenay Fjord,
+// the Saint Lawrence east to Sept-Îles, the Saint Lawrence west to Québec
+// City — see route.js's module comment), covering far too much ground to
+// show at a legible scale all at once in a small corner widget. So this is
+// a *moving* map: a fixed-size square window that stays centered on the
+// canoe, panning across all three branches drawn once in absolute
+// map-projection coordinates. Panning is just moving the SVG viewBox — the
+// route/label markup itself never needs rebuilding, only which segment's
+// cumulative-distance math update() uses to place the marker changes.
+import { SEGMENTS, ALL_POINTS } from '../river/route.js';
 
 // Width/height of the visible window, in the same km-equivalent units as
 // the projected route points. Picked against the real gaps between
@@ -28,6 +29,21 @@ function svgEl(tag, attrs) {
   return el;
 }
 
+// One outline+fill color pair per segment — modeled on how Google Maps
+// renders water (a wide fill over a slightly wider outline, not a hairline)
+// — so the three branches read as distinct arms of the same junction rather
+// than blurring into one line. lawrenceWest gets its own hue (rather than
+// reusing lawrenceEast's) specifically because they meet at the same point
+// on screen; two arms of a fork in the same color would be hard to tell
+// apart right at the junction.
+const SEGMENT_STYLE = {
+  fjord: { outline: '#245a78', fill: '#5fa8d9', outlineWidth: 2.6, fillWidth: 1.7 },
+  lawrenceEast: { outline: '#1e4f6e', fill: '#3d84b8', outlineWidth: 3.2, fillWidth: 2.2 },
+  lawrenceWest: { outline: '#3a1e6e', fill: '#7d5fd9', outlineWidth: 3.2, fillWidth: 2.2 },
+};
+
+const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+
 export function createMinimap() {
   const wrap = document.createElement('div');
   wrap.id = 'minimap';
@@ -41,32 +57,34 @@ export function createMinimap() {
     viewBox: `0 0 ${VIEW_SIZE} ${VIEW_SIZE}`,
   });
 
-  // The route itself, drawn as a proper river ribbon (a wide fill over a
-  // slightly wider outline) rather than a hairline — modeled on how Google
-  // Maps renders water, which is what gives the deep-green-land/blue-water
-  // look its texture instead of just being a flat color swap. The estuary
-  // segment is drawn a little wider and a shade deeper, both because the
-  // real Saint Lawrence dwarfs the fjord and so the difference reads as
-  // "you've left the fjord" without needing a dash pattern (rivers on a
-  // real map are never dashed).
-  const fjordPts = points.slice(0, FJORD_WAYPOINTS.length);
-  const estuaryPts = points.slice(FJORD_WAYPOINTS.length - 1);
-  const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
-
-  // Outlines drawn first for *both* segments, then both fills on top, so
-  // the fjord's outline doesn't cut across the wider estuary fill right at
-  // the Tadoussac join.
-  svg.appendChild(svgEl('path', { d: toPath(fjordPts), fill: 'none', stroke: '#245a78', 'stroke-width': 2.6, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
-  svg.appendChild(svgEl('path', { d: toPath(estuaryPts), fill: 'none', stroke: '#1e4f6e', 'stroke-width': 3.2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
-  svg.appendChild(svgEl('path', { d: toPath(fjordPts), fill: 'none', stroke: '#5fa8d9', 'stroke-width': 1.7, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
-  svg.appendChild(svgEl('path', { d: toPath(estuaryPts), fill: 'none', stroke: '#3d84b8', 'stroke-width': 2.2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  // Outlines drawn first for *every* segment, then all fills on top, so no
+  // segment's outline cuts across another's fill right at the Tadoussac
+  // junction where all three meet.
+  const segmentList = Object.values(SEGMENTS);
+  for (const seg of segmentList) {
+    const style = SEGMENT_STYLE[seg.id];
+    svg.appendChild(svgEl('path', {
+      d: toPath(seg.points), fill: 'none', stroke: style.outline, 'stroke-width': style.outlineWidth,
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+    }));
+  }
+  for (const seg of segmentList) {
+    const style = SEGMENT_STYLE[seg.id];
+    svg.appendChild(svgEl('path', {
+      d: toPath(seg.points), fill: 'none', stroke: style.fill, 'stroke-width': style.fillWidth,
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+    }));
+  }
 
   // Waypoint dots, every one labeled with its real name, in absolute
   // projection coordinates — the panning viewBox brings each into view as
   // the canoe approaches it. Light fill with a dark halo on both the dots
   // and the label text, since either can land on the deep green land or
-  // right on top of the blue river.
-  for (const p of points) {
+  // right on top of the blue river. Tadoussac appears at the end of the
+  // fjord's own point list and again as the start of both Saint Lawrence
+  // segments' — drawing it three times over is harmless (same position,
+  // same label, just redundant paint).
+  for (const p of ALL_POINTS) {
     svg.appendChild(svgEl('circle', {
       cx: p.x, cy: p.y, r: 0.9, fill: '#f4ead2', stroke: '#16240f', 'stroke-width': 0.4,
     }));
@@ -95,8 +113,16 @@ export function createMinimap() {
 
   return {
     el: wrap,
-    update(flowDistance) {
-      const p = pointAtCumulative(cumulativeForFlowDistance(flowDistance));
+    // segmentId + flowDistance, not a single flowDistance — flowDistance
+    // alone no longer says where the canoe is on the *real* map now that
+    // three segments share the same underlying shape-math number line (see
+    // river/path.js's SEGMENT_SHAPE_OFFSET); it takes knowing which segment
+    // that number belongs to as well.
+    update(segmentId, flowDistance) {
+      const seg = SEGMENTS[segmentId];
+      const localFlowDistance = flowDistance - seg.shapeOffset;
+      const cum = seg.cumulativeForLocalFlowDistance(localFlowDistance);
+      const p = seg.pointAtCumulative(cum);
       marker.setAttribute('cx', p.x.toFixed(2));
       marker.setAttribute('cy', p.y.toFixed(2));
       const half = VIEW_SIZE / 2;

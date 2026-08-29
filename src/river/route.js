@@ -1,30 +1,49 @@
-// Shared geography for the river's real waypoints — the Saguenay Fjord from
-// La Baie down to Tadoussac, then the Saint Lawrence's North Shore (Côte-
-// Nord) all the way out to Sept-Îles. Used by both the minimap (drawing the
-// route + marker) and the village system (placing villages at the exact
-// same real-world points along the actual playable river), so "you're at
-// Tadoussac" means the same thing on the minimap and in the game world.
+// Real geography for a three-way river system, meeting at Tadoussac:
+//   - the Saguenay Fjord, La Baie (the put-in) down to Tadoussac
+//   - the Saint Lawrence east of Tadoussac, hugging the North Shore
+//     (Côte-Nord) out to Sept-Îles
+//   - the Saint Lawrence west of Tadoussac, hugging the North Shore
+//     (Charlevoix) back to Québec City
+// A single flowDistance number line can only ever represent two directions
+// from a point (forward/backward) — Tadoussac is a real three-way junction,
+// so it can't be "the fjord continues into the estuary" the way earlier
+// versions of this file modeled it. Each of the three above is its own
+// SEGMENT with its own local geography; every village's flowDistance below
+// already has its segment's river/path.js SEGMENT_SHAPE_OFFSET baked in
+// (see that file's comment), so this module's output plugs directly into
+// villages.js/game.js exactly the way one flat, non-branching route used
+// to — the branching is entirely game.js's segment state machine deciding
+// *which* of these numbers is currently meaningful, not anything villages.js
+// or terrain.js/obstacles.js/whales.js need to know about.
+//
+// The one thing every segment *does* share is this file's coordinate space
+// and cumulative-distance math (so the minimap can plot all three, and the
+// player's position on whichever is active, in one consistent picture) and
+// river/path.js's centerX/widthAt/etc (so all three look and feel like the
+// same river) — see makeSegment() below.
+//
 // Coordinates and their sources:
-//   La Baie              48°25′42″N 71°03′44″W  https://en.wikipedia.org/wiki/La_Baie
-//   Sainte-Rose-du-Nord   48°23′N   70°35′W      https://en.wikipedia.org/wiki/Sainte-Rose-du-Nord,_Quebec
-//   Rivière-Éternité      48°15′20″N 70°24′50″W  https://en.wikipedia.org/wiki/Rivi%C3%A8re-%C3%89ternit%C3%A9
-//   L'Anse-Saint-Jean     48°14′N   70°12′W      https://en.wikipedia.org/wiki/L%27Anse-Saint-Jean,_Quebec
-//   Petit-Saguenay        48°13′N   70°04′W      https://en.wikipedia.org/wiki/Petit-Saguenay
-//   Tadoussac             48°09′N   69°43′W      https://en.wikipedia.org/wiki/Tadoussac
-//   Les Escoumins         48°21′05″N 69°24′27″W  https://en.wikipedia.org/wiki/Les_Escoumins
-//   Forestville           48°44′33″N 69°05′24″W  https://en.wikipedia.org/wiki/Forestville,_Quebec
-//   Baie-Comeau           49°13′12″N 68°09′00″W  https://en.wikipedia.org/wiki/Baie-Comeau
-//   Godbout               49°17′24″N 67°35′24″W  https://en.wikipedia.org/wiki/Godbout,_Quebec
-//   Baie-Trinité          49°25′12″N 67°20′24″W  https://en.wikipedia.org/wiki/Baie-Trinit%C3%A9
-//   Port-Cartier          50°01′48″N 66°52′12″W  https://en.wikipedia.org/wiki/Port-Cartier,_Quebec
-//   Sept-Îles             50°12′00″N 66°22′48″W  https://en.wikipedia.org/wiki/Sept-%C3%8Eles,_Quebec
-import { MOUTH_DISTANCE } from './path.js';
+//   La Baie               48°25′42″N 71°03′44″W  https://en.wikipedia.org/wiki/La_Baie
+//   Sainte-Rose-du-Nord   48°23′N   70°35′W       https://en.wikipedia.org/wiki/Sainte-Rose-du-Nord,_Quebec
+//   Rivière-Éternité      48°15′20″N 70°24′50″W   https://en.wikipedia.org/wiki/Rivi%C3%A8re-%C3%89ternit%C3%A9
+//   L'Anse-Saint-Jean     48°14′N   70°12′W       https://en.wikipedia.org/wiki/L%27Anse-Saint-Jean,_Quebec
+//   Petit-Saguenay        48°13′N   70°04′W       https://en.wikipedia.org/wiki/Petit-Saguenay
+//   Tadoussac             48°09′N   69°43′W       https://en.wikipedia.org/wiki/Tadoussac
+//   Les Escoumins         48°21′05″N 69°24′27″W   https://en.wikipedia.org/wiki/Les_Escoumins
+//   Forestville           48°44′33″N 69°05′24″W   https://en.wikipedia.org/wiki/Forestville,_Quebec
+//   Baie-Comeau           49°13′12″N 68°09′00″W   https://en.wikipedia.org/wiki/Baie-Comeau
+//   Godbout               49°17′24″N 67°35′24″W   https://en.wikipedia.org/wiki/Godbout,_Quebec
+//   Baie-Trinité          49°25′12″N 67°20′24″W   https://en.wikipedia.org/wiki/Baie-Trinit%C3%A9
+//   Port-Cartier          50°01′48″N 66°52′12″W   https://en.wikipedia.org/wiki/Port-Cartier,_Quebec
+//   Sept-Îles             50°12′00″N 66°22′48″W   https://en.wikipedia.org/wiki/Sept-%C3%8Eles,_Quebec
+//   La Malbaie            47°39′N   70°09′W       https://en.wikipedia.org/wiki/La_Malbaie
+//   Baie-Saint-Paul       47°26′N   70°30′W       https://en.wikipedia.org/wiki/Baie-Saint-Paul
+//   Québec City           46°48′30″N 71°12′29″W   https://en.wikipedia.org/wiki/Quebec_City
+import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
 
 // labelPos hand-places each minimap label clear of the route line and the
-// widget's edges — the route zigzags enough (and doubles back north near
-// the mouth) that a single default offset overlaps the line or another
-// label somewhere. Unused outside minimap.js.
-export const FJORD_WAYPOINTS = [
+// widget's edges. Unused outside minimap.js.
+const FJORD_WAYPOINTS = [
   { name: 'La Baie', lat: 48.4283, lon: -71.0622, label: 'Put-in', labelPos: { dx: 1.4, dy: -2.4, anchor: 'start' } },
   { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   { name: 'Rivière-Éternité', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
@@ -32,13 +51,13 @@ export const FJORD_WAYPOINTS = [
   { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
   { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, label: 'Tadoussac', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
 ];
-// The game world has no fixed "end" the way the fjord has Tadoussac — past
-// the mouth it's the open Saint Lawrence, hugging the North Shore all the
-// way out to Sept-Îles. These are real Côte-Nord towns strung along that
-// coast (roughly Route 138), each placed by its real lat/lon same as the
-// fjord waypoints above, just spaced much further apart in reality — see
-// ESTUARY_SPAN_DISTANCE below for how that maps onto game-world distance.
-export const ESTUARY_WAYPOINTS = [
+// Each Saint Lawrence segment starts from Tadoussac itself (index 0 — its
+// own local d=0, same role FJORD_WAYPOINTS[0]/La Baie plays for the fjord)
+// rather than sharing FJORD_WAYPOINTS' single copy of it — every segment
+// needs its own independent cumulative-distance math starting from wherever
+// *it* begins.
+const LAWRENCE_EAST_WAYPOINTS = [
+  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170 },
   { name: 'Les Escoumins', lat: 48.3514, lon: -69.4075, labelPos: { dx: -1.4, dy: 0.9, anchor: 'end' } },
   { name: 'Forestville', lat: 48.7425, lon: -69.0900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   { name: 'Baie-Comeau', lat: 49.2200, lon: -68.1500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
@@ -47,88 +66,117 @@ export const ESTUARY_WAYPOINTS = [
   { name: 'Port-Cartier', lat: 50.0300, lon: -66.8700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   { name: 'Sept-Îles', lat: 50.2000, lon: -66.3800, label: 'Sept-Îles', labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
 ];
-// How much further downstream (game world units) it takes to cross the
-// whole drawn Côte-Nord stretch after the mouth, before the minimap marker
-// holds at its end. The real coastline this now covers (Tadoussac to
-// Sept-Îles, ~400km) is roughly 7x the length of the whole fjord run, but
-// this deliberately isn't scaled up 1:1 with that — cumulativeForFlowDistance
-// below reparametrizes real distance onto this fixed span, so waypoints stay
-// correctly spaced *relative to each other* regardless of what this number
-// is; it only controls how long the stretch takes to paddle. 2400 (~2.7x
-// the fjord's 900) makes it the clearly bigger part of the journey without
-// turning a play session into an hour of open water. Tune freely.
-export const ESTUARY_SPAN_DISTANCE = 2400;
+const LAWRENCE_WEST_WAYPOINTS = [
+  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170 },
+  { name: 'La Malbaie', lat: 47.6500, lon: -70.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Baie-Saint-Paul', lat: 47.4400, lon: -70.5000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Québec City', lat: 46.8083, lon: -71.2080, label: 'Québec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
+];
 
-export const ROUTE = [...FJORD_WAYPOINTS, ...ESTUARY_WAYPOINTS];
+// How far (game-world units) each segment takes to cross, end to end. Real
+// distance isn't scaled 1:1 into these — cumulativeForLocalFlowDistance
+// below reparametrizes real distance onto whatever span is picked here, so
+// waypoints stay correctly spaced *relative to each other* regardless of
+// the number; it only controls how long the segment takes to paddle.
+export const ESTUARY_SPAN_DISTANCE = 2400; // Tadoussac -> Sept-Îles, ~400km real
+export const LAWRENCE_WEST_SPAN_DISTANCE = 1300; // Tadoussac -> Québec City, ~205km real
 
-// Equirectangular projection, longitude compressed by cos(latitude) — the
-// whole route spans well under a degree of latitude, so this is accurate to
-// well within a pixel at minimap scale. Reference point is the
-// northwesternmost waypoint purely so every projected coordinate is >= 0;
-// it doesn't affect the shape.
+// Equirectangular projection, longitude compressed by cos(latitude) — every
+// waypoint across all three segments spans well under a degree of latitude,
+// so this is accurate to well within a pixel at minimap scale. One shared
+// reference point (rather than one per segment) is what lets the minimap
+// plot all three segments in a single consistent picture.
 const LAT_REF = FJORD_WAYPOINTS[0].lat;
 const LON_REF = FJORD_WAYPOINTS[0].lon;
 const KM_PER_LAT = 111.0;
 const KM_PER_LON = 111.0 * Math.cos((LAT_REF * Math.PI) / 180);
 
-export const points = ROUTE.map((w) => ({
-  ...w,
-  x: (w.lon - LON_REF) * KM_PER_LON,
-  y: -(w.lat - LAT_REF) * KM_PER_LAT, // north is up
-}));
-
-// Cumulative straight-line distance (km) along the route.
-export const cumulative = [0];
-for (let i = 1; i < points.length; i++) {
-  const a = points[i - 1], b = points[i];
-  cumulative.push(cumulative[i - 1] + Math.hypot(b.x - a.x, b.y - a.y));
+function project(w) {
+  return { ...w, x: (w.lon - LON_REF) * KM_PER_LON, y: -(w.lat - LAT_REF) * KM_PER_LAT };
 }
-export const fjordEndCumulative = cumulative[FJORD_WAYPOINTS.length - 1];
-export const totalCumulative = cumulative[cumulative.length - 1];
 
-export function pointAtCumulative(target) {
-  const c = Math.max(0, Math.min(totalCumulative, target));
+// Builds one segment's worth of shared machinery — projection, cumulative
+// real distance, and local-flowDistance <-> real-position conversion — from
+// just its waypoint list, how long it takes to paddle end to end, and its
+// river/path.js shape offset. Every segment uses the exact same math (this
+// used to be hand-duplicated once for the fjord and once for the estuary; a
+// third copy for the new Québec City stretch is what finally made a shared
+// factory worth it).
+function makeSegment(id, waypoints, spanDistance) {
+  const shapeOffset = SEGMENT_SHAPE_OFFSET[id];
+  const points = waypoints.map(project);
+  const cumulative = [0];
   for (let i = 1; i < points.length; i++) {
-    if (c <= cumulative[i] || i === points.length - 1) {
-      const segLen = cumulative[i] - cumulative[i - 1];
-      const t = segLen > 0 ? (c - cumulative[i - 1]) / segLen : 0;
-      const a = points[i - 1], b = points[i];
-      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    const a = points[i - 1], b = points[i];
+    cumulative.push(cumulative[i - 1] + Math.hypot(b.x - a.x, b.y - a.y));
+  }
+  const totalCumulative = cumulative[cumulative.length - 1];
+
+  function pointAtCumulative(target) {
+    const c = Math.max(0, Math.min(totalCumulative, target));
+    for (let i = 1; i < points.length; i++) {
+      if (c <= cumulative[i] || i === points.length - 1) {
+        const segLen = cumulative[i] - cumulative[i - 1];
+        const t = segLen > 0 ? (c - cumulative[i - 1]) / segLen : 0;
+        const a = points[i - 1], b = points[i];
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      }
     }
+    return points[points.length - 1];
   }
-  return points[points.length - 1];
+
+  // local, i.e. relative to this segment's own start (0) — never the
+  // game-wide flowDistance number game.js actually steers with, which also
+  // has shapeOffset added (see VILLAGES below and game.js's segment state).
+  function cumulativeForLocalFlowDistance(localFlowDistance) {
+    const frac = Math.min(1, Math.max(0, localFlowDistance) / spanDistance);
+    return frac * totalCumulative;
+  }
+
+  function localFlowDistanceForCumulative(cum) {
+    return Math.min(1, Math.max(0, cum) / totalCumulative) * spanDistance;
+  }
+
+  // Every named stop except this segment's own start (you begin there, you
+  // don't arrive at it) as an in-game village. flowDistance already has
+  // this segment's shapeOffset baked in, so it's directly comparable
+  // against game.js's own flowDistance whenever this segment is active,
+  // exactly like the old single-line VILLAGES list used to be.
+  const villages = waypoints.slice(1).map((w, i) => ({
+    name: w.label || w.name,
+    segment: id,
+    flowDistance: shapeOffset + localFlowDistanceForCumulative(cumulative[i + 1]),
+    side: i % 2 === 0 ? -1 : 1,
+  }));
+
+  return {
+    id, waypoints, points, spanDistance, shapeOffset,
+    pointAtCumulative, cumulativeForLocalFlowDistance, villages,
+  };
 }
 
-export function cumulativeForFlowDistance(flowDistance) {
-  if (flowDistance <= MOUTH_DISTANCE) {
-    return (flowDistance / MOUTH_DISTANCE) * fjordEndCumulative;
-  }
-  const frac = Math.min(1, (flowDistance - MOUTH_DISTANCE) / ESTUARY_SPAN_DISTANCE);
-  return fjordEndCumulative + frac * (totalCumulative - fjordEndCumulative);
-}
+export const SEGMENTS = {
+  fjord: makeSegment('fjord', FJORD_WAYPOINTS, MOUTH_DISTANCE),
+  lawrenceEast: makeSegment('lawrenceEast', LAWRENCE_EAST_WAYPOINTS, ESTUARY_SPAN_DISTANCE),
+  lawrenceWest: makeSegment('lawrenceWest', LAWRENCE_WEST_WAYPOINTS, LAWRENCE_WEST_SPAN_DISTANCE),
+};
 
-// The inverse of cumulativeForFlowDistance — how far downstream (game world
-// units) a canoe has to travel to reach a given point along the real route.
-function flowDistanceForCumulative(cum) {
-  if (cum <= fjordEndCumulative) {
-    return (cum / fjordEndCumulative) * MOUTH_DISTANCE;
-  }
-  const frac = (cum - fjordEndCumulative) / (totalCumulative - fjordEndCumulative);
-  return MOUTH_DISTANCE + frac * ESTUARY_SPAN_DISTANCE;
-}
+// Every real point across all three segments, for the minimap to draw as
+// one continuous picture regardless of which segment is actually active.
+export const ALL_POINTS = [
+  ...SEGMENTS.fjord.points,
+  ...SEGMENTS.lawrenceEast.points,
+  ...SEGMENTS.lawrenceWest.points,
+];
 
-// Every named stop except the put-in (you start there, you don't arrive at
-// it) as an in-game village, each tagged with the exact flowDistance a
-// canoe reaches it. `side` (-1 left, +1 right) has no real-world meaning —
-// the game's river isn't a literal trace of the real one — it's just
-// alternated for visual variety.
-export const VILLAGES = ROUTE.slice(1).map((w, i) => ({
-  name: w.label || w.name,
-  flowDistance: flowDistanceForCumulative(cumulative[i + 1]),
-  side: i % 2 === 0 ? -1 : 1,
-  // Stable per-village number: seeds the procedural building/dock layout
-  // (twod/villages.js villageLayout) so every village is laid out
-  // differently but a given one looks identical every time it's drawn or
-  // walked around.
-  seed: i + 1,
-}));
+// Flat, cross-segment village list — villages.js/game.js iterate this
+// exactly like the old non-branching route's single VILLAGES array, since
+// every entry's flowDistance already lives in a disjoint numeric range per
+// segment (see river/path.js's SEGMENT_SHAPE_OFFSET) and carries which
+// segment it's actually on. `seed` is assigned globally across all three so
+// no two villages anywhere share a procedural layout.
+export const VILLAGES = [
+  ...SEGMENTS.fjord.villages,
+  ...SEGMENTS.lawrenceEast.villages,
+  ...SEGMENTS.lawrenceWest.villages,
+].map((v, i) => ({ ...v, seed: i + 1 }));

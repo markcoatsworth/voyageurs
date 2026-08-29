@@ -54,13 +54,20 @@ float centerX(float d) {
   return sin(d * 0.09) * 3.0 + sin(d * 0.21 + 1.7) * 1.5;
 }
 float estuaryProgress(float d) {
-  return clamp(d / 900.0, 0.0, 1.0);
+  // 1700.0 (WIDTH_EASE_DISTANCE), not 900.0 (MOUTH_DISTANCE/where Tadoussac
+  // itself sits) — see river/path.js's comment on why those are different.
+  return clamp(d / 1700.0, 0.0, 1.0);
 }
 float widthAt(float d) {
-  float trend = 8.0 + (17.0 - 8.0) * estuaryProgress(d);
-  float pinch = sin(d * 0.023 + 1.2) * 2.6;
-  float wobble = sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.12) * 0.6;
-  return clamp(trend + pinch + wobble, 6.5, 18.5);
+  // Cubic ease-in, mirroring river/path.js's widthAt() — see its comment
+  // for why this isn't just a linear ramp to ESTUARY_WIDTH.
+  float t = estuaryProgress(d);
+  float eased = t * t * t;
+  float trend = 8.0 + (48.0 - 8.0) * eased;
+  float ampScale = 1.0 + (2.8 - 1.0) * eased;
+  float pinch = sin(d * 0.023 + 1.2) * 2.6 * ampScale;
+  float wobble = (sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.12) * 0.6) * ampScale;
+  return clamp(trend + pinch + wobble, 6.5, 62.0);
 }
 
 // Looks up the CPU-computed offset for whichever of the two candidate

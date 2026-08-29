@@ -1,10 +1,10 @@
-import { centerX, widthAt, braidAt, rapidsStrength, MOUTH_DISTANCE } from './river/path.js';
+import { centerX, widthAt, braidAt, rapidsStrength, MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './river/path.js';
 import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIXELS_PER_UNIT } from './twod/config.js';
 import { drawBanks, drawWaterFallback } from './twod/terrain.js';
 import { drawWhales } from './twod/whales.js';
 import { createCanoeSprites } from './twod/canoe.js';
 import { playCapsizeHorn, playPeltChime, playDamageBoop } from './twod/sfx.js';
-import { getDockHit, DOCK_HIT_Z } from './twod/villages.js';
+import { getDockHit, DOCK_HIT_Z, VILLAGES } from './twod/villages.js';
 import { createVillageScene } from './twod/villageScene.js';
 import { isTouchPrimary } from './twod/touchControls.js';
 
@@ -16,11 +16,20 @@ import { isTouchPrimary } from './twod/touchControls.js';
 const MOBILE_SPEED_SCALE = 0.6;
 const speedScale = isTouchPrimary() ? MOBILE_SPEED_SCALE : 1;
 
-// MIN_SPEED is the drifting-with-no-input floor (holding Down, or just
-// letting off Up, settles here) — deliberately well under BASE_SPEED now
-// for an actual "chill" slow speed, not just a mild step down from medium.
+// MIN_SPEED is really the ambient current's own speed — holding Down long
+// enough now overcomes it and actually paddles upstream (negative
+// effectiveSpeed, flowDistance decreasing), rather than just coasting down
+// to this as a floor; letting off Up/Down drifts back toward it from
+// *either* side, same as a real current eventually winning again once you
+// stop fighting it. Deliberately well under BASE_SPEED so drifting forward
+// reads as an actual "chill" slow speed, not just a mild step down from
+// medium.
 const MIN_SPEED = 2.5 * speedScale;
 const MAX_SPEED = 16 * speedScale;
+// Paddling against the current is harder than going with it — capped well
+// under MAX_SPEED's magnitude, so upstream is a real but slow slog, not a
+// second forward gear pointed the other way.
+const MAX_REVERSE_SPEED = -6 * speedScale;
 const BASE_SPEED = 8 * speedScale;
 const ACCEL = 7 * speedScale;
 const DECEL_DRIFT = 1.8 * speedScale;
@@ -66,8 +75,88 @@ const SPAWN_INVULN_TIME = 1.5;
 // it actually follows the curve — which is what makes it read as "the boat
 // is turning" rather than "the world is sliding."
 const CAMERA_SMOOTH = 0.025;
+// The Saint Lawrence stretch (river/path.js's ESTUARY_WIDTH) is far wider
+// than the screen, so lateralOffset alone — the *only* thing that used to
+// move the canoe off the centerline visually, since the camera above only
+// ever tracks the curve, never the player's own steering — can no longer
+// just be handed straight to the canoe's screen position: a canoe camped
+// out mid-crossing could steer itself yards past the edge of the canvas,
+// and it'd render there, or not at all. CAMERA_DEAD_ZONE is how far the
+// canoe can drift from the *tracked* centerline before the camera starts
+// easing sideways to keep up, in world units — set to what a fully-loaded
+// old-width channel already allowed (its max half-width was ~8.7), so nothing
+// changes in the fjord, where lateralOffset never gets close to it. Past
+// that, CAMERA_LATERAL_PULL — tracked as its own lerp, separate from and
+// faster than CAMERA_SMOOTH above — reels the camera toward the canoe, same
+// "world stays planted, the boat visibly moves" logic as the curve-tracking
+// camera, just triggered by a steering choice instead of a bend in the
+// river.
+const CAMERA_DEAD_ZONE = 8.5;
+const CAMERA_LATERAL_SMOOTH = 0.12;
+// A hard backstop under the canvas's actual half-width (CANVAS_WIDTH / 2 /
+// PIXELS_PER_UNIT = 10 units) so a fast or sustained steering input can't
+// outrun CAMERA_LATERAL_SMOOTH's catch-up and momentarily push the canoe
+// (which itself has width) off the edge of the canvas while the lerp is
+// still closing the gap. The soft dead zone above handles the normal case;
+// this only ever engages during unusually hard/sustained steering, and even
+// then just holds the canoe at this offset instead of letting it go further.
+const CAMERA_MAX_ONSCREEN_OFFSET = 9;
 const RAPIDS_BOOST = 7 * speedScale; // extra units/s the current adds at peak whitewater
 const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
+
+// lawrenceWest (river/route.js's third segment, toward Québec City) is the
+// only one with a real floor: its numbering (SEGMENT_SHAPE_OFFSET) sits far
+// away on purpose, so paddling back past its own start would just be
+// paddling into an unrelated stretch of the shape functions' number line —
+// not an actual place. fjord and lawrenceEast, by contrast, are *not*
+// separately bounded — they share one open range (see update()'s
+// re-derivation of this.segment right after the position update below).
+// An earlier version of this also ceilinged the fjord at Tadoussac, forcing
+// a dock-or-else stop right at the junction; that's exactly what caused a
+// string of stuck-at-Tadoussac bugs (nowhere to go if you weren't already
+// lined up with the dock, worst of all right where main.js's ?start= cheat
+// can drop you with zero approach). Paddling through without docking is
+// completely fine now — see the fork logic further down in update() for how
+// which Saint Lawrence branch you end up on is decided by steering alone,
+// the same as every other choice on the river, rather than requiring you to
+// stop, walk into Tadoussac, and re-board from a specific end of its dock.
+const SEGMENT_FLOOR = {
+  fjord: 0,
+  lawrenceWest: SEGMENT_SHAPE_OFFSET.lawrenceWest,
+};
+
+// How the Tadoussac fork works if you never actually dock there (see the
+// crossing check in update()): lean far enough toward Tadoussac's own side
+// of the channel as you cross the mouth and you carry on toward Québec
+// City; anywhere else (centered, or leaning the other way) continues
+// toward Sept-Îles, same as the river always did before Québec City existed
+// as an option. FORK_LEAN_UNITS needs a real, deliberate lean — the channel
+// here is only ~13 units wide (see river/path.js's WIDTH_EASE_DISTANCE), so
+// this is roughly 40% of the way to the actual bank, well past incidental
+// centerline wobble but nowhere near as far as actually reaching the dock.
+const TADOUSSAC_WEST_SIDE = VILLAGES.find((v) => v.name === 'Tadoussac').side;
+const FORK_LEAN_UNITS = 2.5;
+
+// The fork has to be decided *before* Tadoussac's dock physically exists —
+// the dock's own reach only extends to within DOCK_HIT_Z (villages.js) of
+// MOUTH_DISTANCE, so checking the lean starting this far upstream of it
+// means a real, sustained lean the whole way in gets you forked into
+// lawrenceWest long before the canoe is ever close enough for the dock to
+// have a say. Without this, holding a hard lean the entire approach (the
+// most natural way to "steer toward Québec City") drifts into the bank by
+// the time it reaches the mouth and the dock claims it instead — the fork
+// threshold and the dock's own reach zone used to sit at the same distance,
+// so there was no way to lean that far without eventually also touching the
+// dock. 15 units of lead-in is comfortably more than DOCK_HIT_Z away.
+const FORK_CHECKPOINT_DISTANCE = MOUTH_DISTANCE - 15;
+
+// How far past the mouth the fork window stays open before defaulting to
+// Sept-Îles. Steering has inertia (STEER_ACCEL/STEER_DAMPING below), so a
+// lean that only starts right at the mouth needs real distance to actually
+// build past FORK_LEAN_UNITS — without this, a player who decides to go
+// west late gets defaulted east out from under them before their lean ever
+// had the chance to register.
+const FORK_DECISION_END = MOUTH_DISTANCE + 20;
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -78,7 +167,14 @@ function lerp(a, b, t) {
 }
 
 export class Game {
-  constructor({ ctx, water, input, obstacles, world, ui, music }) {
+  // startFlowDistance/startSegment: where the river clock begins instead of
+  // the put-in (fjord, 0) — see main.js's ?start= URL cheat. Threaded
+  // through the same constructor state that flowDistance/segment/the
+  // camera normally start from, so there's no special-cased "cheat mode":
+  // everything downstream (village arrival banners, mouthAnnounced, the
+  // camera's own curve tracking) behaves exactly as if the player had
+  // actually paddled here from 0.
+  constructor({ ctx, water, input, obstacles, world, ui, music, startFlowDistance = 0, startSegment = 'fjord' }) {
     this.ctx = ctx;
     this.water = water; // null falls back to a 2D-drawn water fill
     this.input = input;
@@ -95,15 +191,30 @@ export class Game {
     // visit since river collision checks don't run in that mode.
     this.mode = 'river';
     this.currentVillage = null;
+    // Which of river/route.js's SEGMENTS is active — see SEGMENT_FLOOR and
+    // leaveVillage()'s Tadoussac branch for the junction itself. Persists
+    // across restarts exactly like flowDistance below (a capsize shouldn't
+    // un-choose which branch of the river you were on).
+    this.segment = startSegment;
 
     this.time = 0;
-    this.flowDistance = 0;
+    this.flowDistance = startFlowDistance;
+    // obstacles.reset() (called from start() below) seeds its pool by
+    // reading world.distance directly, before update() has ever run to set
+    // it from flowDistance the normal way — without this, a non-zero
+    // startFlowDistance would seed every obstacle back near the put-in
+    // instead of near wherever the player actually starts.
+    this.world.distance = startFlowDistance;
     this.paddleSide = 1;
     this.paddleTimer = 0;
     // The camera's own persistent state — deliberately not reset on restart
-    // (see the flowDistance comment below), and deliberately never exactly
-    // equal to centerX(flowDistance) — see updateCamera().
-    this.cameraWorldX = centerX(0);
+    // (see the flowDistance comment below). Tracked as two separate lerps
+    // (curve-following + lateral-pull, see CAMERA_DEAD_ZONE above) that get
+    // summed into cameraWorldX each frame in update(); cameraWorldX itself
+    // is what render() and everything it calls actually reads.
+    this.cameraCenterX = centerX(startFlowDistance);
+    this.cameraLateralPull = 0;
+    this.cameraWorldX = this.cameraCenterX;
 
     ui.restartBtn.addEventListener('click', () => this.start());
 
@@ -119,7 +230,6 @@ export class Game {
     this.speed = BASE_SPEED;
     this.effectiveSpeed = BASE_SPEED;
     this.rapids = 0;
-    this.distance = 0;
     this.furs = 0;
     this.health = MAX_HEALTH;
     this.invulnTimer = SPAWN_INVULN_TIME;
@@ -165,8 +275,7 @@ export class Game {
   gameOver() {
     this.state = 'gameover';
     this.ui.hud.classList.add('hidden');
-    this.ui.finalStats.innerHTML =
-      `FURS COLLECTED: ${this.furs}<br/>DISTANCE: ${Math.round(this.distance)}m`;
+    this.ui.finalStats.innerHTML = `FURS COLLECTED: ${this.furs}`;
     this.ui.gameoverScreen.classList.remove('hidden');
     playCapsizeHorn();
     this.music?.stop();
@@ -180,19 +289,55 @@ export class Game {
     this.currentVillage = village;
     this.villageScene.enter(village);
     this.ui.hud.classList.add('hidden');
-    this.showBanner(`Arriving at ${village.name}`);
+    // Tadoussac is the one place in the game where casting off isn't just
+    // resuming the same segment — it's a real three-way junction (see
+    // river/route.js's module comment) — so it gets its own arrival banner
+    // spelling out the choice villageScene.js's reboard-side split is about
+    // to offer, rather than the generic "Arriving at X" every other village
+    // uses.
+    if (village.name === 'Tadoussac') {
+      this.showBanner('Arriving at Tadoussac — walk to the left end of the dock for Québec City, the right end for Sept-Îles');
+    } else {
+      this.showBanner(`Arriving at ${village.name}`);
+    }
+  }
+
+  // Resets everything that's meaningless carried over from one segment into
+  // another — the camera's own curve-tracking state (centerX(d) can jump to
+  // an unrelated value between segments, see SEGMENT_SHAPE_OFFSET) and the
+  // obstacle pool (it seeds itself from world.distance — see the
+  // constructor's comment on startFlowDistance — so without a reset here
+  // it'd stay full of obstacles positioned for the segment you just left).
+  enterSegment(segmentId, flowDistance) {
+    this.segment = segmentId;
+    this.flowDistance = flowDistance;
+    this.world.distance = flowDistance;
+    this.lateralOffset = 0;
+    this.lateralVX = 0;
+    this.cameraCenterX = centerX(flowDistance);
+    this.cameraLateralPull = 0;
+    this.cameraWorldX = this.cameraCenterX;
+    this.obstacles.reset();
   }
 
   leaveVillage() {
     this.mode = 'river';
-    // Push just past the dock's own trigger zone — otherwise the instant
-    // control returns to the canoe, it's still sitting in the exact spot
-    // that triggered docking, and the very next frame docks it again.
-    this.flowDistance = this.currentVillage.flowDistance + DOCK_HIT_Z + 0.5;
-    this.world.distance = this.flowDistance;
+    if (this.currentVillage.name === 'Tadoussac') {
+      // pendingJunctionChoice is set by update()'s village-mode branch from
+      // villageScene.js's reboardSide the instant reboard fires — see there.
+      const nextSegment = this.pendingJunctionChoice === 'west' ? 'lawrenceWest' : 'lawrenceEast';
+      this.enterSegment(nextSegment, SEGMENT_SHAPE_OFFSET[nextSegment] + 0.5);
+      this.showBanner(nextSegment === 'lawrenceWest' ? 'Paddling toward Québec City' : 'Paddling toward Sept-Îles');
+    } else {
+      // Push just past the dock's own trigger zone — otherwise the instant
+      // control returns to the canoe, it's still sitting in the exact spot
+      // that triggered docking, and the very next frame docks it again.
+      this.flowDistance = this.currentVillage.flowDistance + DOCK_HIT_Z + 0.5;
+      this.world.distance = this.flowDistance;
+      this.showBanner('Casting off');
+    }
     this.currentVillage = null;
     this.ui.hud.classList.remove('hidden');
-    this.showBanner('Casting off');
   }
 
   handleHit(entry) {
@@ -265,18 +410,28 @@ export class Game {
     }
 
     if (this.mode === 'village') {
-      const { reboard, tradeRequested } = this.villageScene.update(dt, this.input.state);
+      const { reboard, tradeRequested, reboardSide } = this.villageScene.update(dt, this.input.state);
       if (tradeRequested) this.tryRepairTrade();
       this.villageScene.draw(this.ctx);
-      if (reboard) this.leaveVillage();
+      if (reboard) {
+        // Only meaningful at Tadoussac (see leaveVillage()'s branch) — every
+        // other village ignores it and just resumes its own segment.
+        this.pendingJunctionChoice = reboardSide;
+        this.leaveVillage();
+      }
       return;
     }
 
     const keys = this.input.state;
 
     if (keys.up) this.speed = Math.min(MAX_SPEED, this.speed + ACCEL * dt);
-    else if (keys.down) this.speed = Math.max(MIN_SPEED, this.speed - ACCEL * dt);
-    else this.speed = Math.max(MIN_SPEED, this.speed - DECEL_DRIFT * dt * 0.3);
+    else if (keys.down) this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - ACCEL * dt);
+    // No input: drift back toward the current's own speed from whichever
+    // side you're currently on — this is what makes upstream paddling a
+    // deliberate, sustained effort rather than a one-way switch: stop
+    // paddling and the river carries you forward again.
+    else if (this.speed > MIN_SPEED) this.speed = Math.max(MIN_SPEED, this.speed - DECEL_DRIFT * dt * 0.3);
+    else this.speed = Math.min(MIN_SPEED, this.speed + DECEL_DRIFT * dt * 0.3);
 
     // Rapids strength at where the canoe currently is (i.e. before this
     // frame's advance) — the current adds its own push on top of whatever
@@ -288,8 +443,10 @@ export class Game {
 
     // Advance the shared river clock using this frame's effective speed —
     // the same value obstacles sample below — so the baked downstream
-    // distance (d = world.distance - z) stays exactly invariant.
-    this.flowDistance += effectiveSpeed * dt;
+    // distance (d = world.distance - z) stays exactly invariant. Floored
+    // per SEGMENT_FLOOR's comment — no ceiling at all, on any segment.
+    const floor = SEGMENT_FLOOR[this.segment] ?? 0;
+    this.flowDistance = Math.max(floor, this.flowDistance + effectiveSpeed * dt);
     this.world.distance = this.flowDistance;
 
     let steerInput = 0;
@@ -313,15 +470,58 @@ export class Game {
     }
 
     this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
-    this.cameraWorldX = lerp(this.cameraWorldX, centerX(this.flowDistance), CAMERA_SMOOTH);
+    this.cameraCenterX = lerp(this.cameraCenterX, centerX(this.flowDistance), CAMERA_SMOOTH);
+    // Zero inside the dead zone, so on the (still much narrower) fjord this
+    // never engages and the camera behaves exactly as it always did.
+    const lateralExcess = this.lateralOffset - clamp(this.lateralOffset, -CAMERA_DEAD_ZONE, CAMERA_DEAD_ZONE);
+    this.cameraLateralPull = lerp(this.cameraLateralPull, lateralExcess, CAMERA_LATERAL_SMOOTH);
+    this.cameraWorldX = this.cameraCenterX + this.cameraLateralPull;
+    // The hard backstop (see its comment above) — clamps how far the canoe's
+    // final on-screen position can end up from center, independent of
+    // whatever the two lerps above are still catching up on.
+    const onscreenOffset = clamp(this.canoeWorldX - this.cameraWorldX, -CAMERA_MAX_ONSCREEN_OFFSET, CAMERA_MAX_ONSCREEN_OFFSET);
+    this.cameraWorldX = this.canoeWorldX - onscreenOffset;
     this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
 
     // Docking takes priority over everything else this frame — running
-    // into a dock is the one collision that isn't damage.
+    // into a dock is the one collision that isn't damage. Unchanged,
+    // original priority: still checked first, every frame, regardless of
+    // the fork window below.
     const dockHit = getDockHit(this.flowDistance, this.canoeWorldX);
     if (dockHit) {
       this.enterVillage(dockHit);
       return;
+    }
+
+    // The Tadoussac fork: not a single instant but a stretch of river, from
+    // FORK_CHECKPOINT_DISTANCE (see its comment — well before the dock
+    // exists) to FORK_DECISION_END, a bit past the mouth. Checked every
+    // frame across that whole stretch, not just once: the moment a real
+    // lean toward Québec City's side crosses FORK_LEAN_UNITS, the fork fires
+    // right then, however early or late that happens to be. Only once the
+    // canoe is past the end of the window with no such lean does it default
+    // to Sept-Îles — a lean that starts late still needs real time to build
+    // up (steering has inertia), and locking in the default the instant
+    // flowDistance first reached MOUTH_DISTANCE (the old behavior) could cut
+    // a still-developing lean off before it ever got the chance.
+    // Since lean grows continuously from zero, it always passes through
+    // FORK_LEAN_UNITS before it could ever reach the dock's own (larger)
+    // reach zone — so a sustained lean forks well before the dock is ever
+    // touched, while dock-check above still wins for a sharp, late turn
+    // aimed right at the dock itself.
+    if (this.segment === 'fjord' && this.flowDistance >= MOUTH_DISTANCE && !this.mouthAnnounced) {
+      this.mouthAnnounced = true;
+      this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");
+    }
+    if (this.segment === 'fjord' && this.flowDistance >= FORK_CHECKPOINT_DISTANCE) {
+      if (this.lateralOffset * TADOUSSAC_WEST_SIDE > FORK_LEAN_UNITS) {
+        this.enterSegment('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
+        this.showBanner('Paddling toward Québec City');
+      } else if (this.flowDistance >= FORK_DECISION_END) {
+        this.segment = 'lawrenceEast'; // same numbering as the fjord — no reset needed
+      }
+    } else if (this.segment === 'lawrenceEast' && this.flowDistance < MOUTH_DISTANCE) {
+      this.segment = 'fjord'; // paddled back upstream past the mouth
     }
 
     // Braided-channel islands sit mid-water, not at a fixed edge, so unlike
@@ -346,11 +546,19 @@ export class Game {
       this.canoeVisible = true;
     }
 
-    this.distance += effectiveSpeed * dt;
     this.rapids = rapids;
     this.effectiveSpeed = effectiveSpeed;
 
-    if (!this.mouthAnnounced && this.distance >= MOUTH_DISTANCE) {
+    // Fallback for a run that starts already in lawrenceEast (a restart
+    // after death, or main.js's ?start= cheat targeting a village past the
+    // mouth) — the fork block above already handles a *live* crossing from
+    // the fjord (including a westward fork, which still counts as having
+    // reached Tadoussac), but a run that begins in lawrenceEast never passes
+    // through that block at all. Deliberately not "segment !== lawrenceWest"
+    // here: a run starting in lawrenceWest (e.g. ?start=quebec-city) never
+    // actually reached Tadoussac either, just a numeric coincidence of
+    // SEGMENT_SHAPE_OFFSET putting it past MOUTH_DISTANCE too.
+    if (this.segment === 'lawrenceEast' && !this.mouthAnnounced) {
       this.mouthAnnounced = true;
       this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");
     }
@@ -401,7 +609,6 @@ export class Game {
 
   updateHud() {
     this.ui.hudScore.textContent = `FURS: ${this.furs}`;
-    this.ui.hudDistance.textContent = `DISTANCE: ${Math.round(this.distance)}m`;
 
     const healthPct = clamp((this.health / MAX_HEALTH) * 100, 0, 100);
     this.ui.hudHealthFill.style.width = `${healthPct}%`;
@@ -414,10 +621,11 @@ export class Game {
     this.ui.hudSpeedFill.style.width = `${clamp(speedPct, 0, 100)}%`;
     this.ui.hudSpeedFill.classList.toggle('rapids', this.rapids > 0.15);
 
-    // flowDistance (not this.distance) — it's the persistent world
-    // position that never resets on restart, so the map marker holds its
-    // real place on the river across a capsize+retry instead of jumping
-    // back to the put-in.
-    this.ui.minimap.update(this.flowDistance);
+    // flowDistance is the persistent world position that never resets on
+    // restart, so the map marker holds its real place on the river across a
+    // capsize+retry instead of jumping back to the put-in; segment is
+    // needed alongside it since flowDistance alone doesn't say which of the
+    // three branches that number belongs to (see minimap.js's update()).
+    this.ui.minimap.update(this.segment, this.flowDistance);
   }
 }

@@ -6,8 +6,45 @@ import { createMinimap } from './twod/minimap.js';
 import { createTouchControls } from './twod/touchControls.js';
 import { Input } from './utils/input.js';
 import { Game } from './game.js';
+import { VILLAGES } from './river/route.js';
+import { SEGMENT_SHAPE_OFFSET } from './river/path.js';
 
 const app = document.getElementById('app');
+
+// Dev/testing cheat: ?start=<village name> drops the canoe there instead of
+// the put-in — e.g. ?start=tadoussac, ?start=sept-iles, ?start=quebec-city.
+// Matched case-insensitively and with accents stripped (typing "iles" for
+// "Îles" is the whole point of a URL you type by hand). Each village
+// already knows which of the three river segments (see river/route.js's
+// module comment) it's actually on, so starting on the Québec City stretch
+// works the same way as anywhere else — no separate handling needed here.
+// Unrecognized or absent falls back to the real start (the put-in, fjord).
+//
+// Deliberately lands a bit *before* the village's own flowDistance, not
+// exactly on it: arriving at a dock normally means steering into position
+// over some real distance of approach, and starting with zero of that
+// runway is its own bug for the fjord's own last stop specifically —
+// Tadoussac's flowDistance is also exactly where the fjord segment's hard
+// ceiling sits (game.js's SEGMENT_BOUNDS), so landing precisely on it left
+// no room to steer into the dock before already being jammed against it.
+const START_APPROACH_BUFFER = 25;
+function stripAccents(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function parseStartLocation() {
+  const raw = new URLSearchParams(window.location.search).get('start');
+  if (!raw) return { flowDistance: 0, segment: 'fjord' };
+  const wanted = stripAccents(raw.trim().toLowerCase());
+  const match = VILLAGES.find((v) => wanted === stripAccents(v.name.toLowerCase()));
+  if (!match) {
+    if (raw.trim()) console.warn(`?start=${raw}: no matching village, starting from the put-in instead.`);
+    return { flowDistance: 0, segment: 'fjord' };
+  }
+  const segmentStart = SEGMENT_SHAPE_OFFSET[match.segment];
+  const flowDistance = Math.max(segmentStart, match.flowDistance - START_APPROACH_BUFFER);
+  return { flowDistance, segment: match.segment };
+}
+const { flowDistance: startFlowDistance, segment: startSegment } = parseStartLocation();
 
 // A positioned wrapper so the WebGL water layer and the 2D sprite/terrain
 // layer stack exactly on top of each other and scale together. The water
@@ -101,7 +138,6 @@ createTouchControls(input);
 const ui = {
   hud: document.getElementById('hud'),
   hudScore: document.getElementById('hud-score'),
-  hudDistance: document.getElementById('hud-distance'),
   hudSpeedFill: document.getElementById('hud-speed-fill'),
   hudHealthFill: document.getElementById('hud-health-fill'),
   damageFlash: document.getElementById('damage-flash'),
@@ -118,7 +154,7 @@ const ui = {
 // this starts on the player's first keypress or click rather than on load.
 const music = createMusic();
 
-const game = new Game({ ctx, water, input, obstacles, world, ui, music });
+const game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance, startSegment });
 
 // The canoe launches immediately — this intro caption is just a fading
 // overlay, not a gate, so it disappears on its own after a few seconds.
