@@ -43,29 +43,14 @@ html, body {
   display: none !important;
 }
 
-/* Shares the top-left corner with the minimap (twod/minimap.js, appended
-   here in main.js) — a flex row that wraps to a column on a narrow/portrait
-   screen, so the two sit side by side where there's width for it and stack
-   instead of overflowing off-screen where there isn't. Like the stats text
-   and the mute/pause buttons, this floats *over* the game canvas rather
-   than reserving space from it — the canvas is always full size. */
-#corner-panel {
+#hud {
   position: absolute;
   top: 16px;
   left: 16px;
-  /* No `right`/width — this must shrink-to-fit its content instead of
-     stretching full-width, or it wraps to a column unconditionally. */
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 14px;
-}
-
-#hud {
+  right: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex: 0 0 auto;
 }
 
 #hud-score,
@@ -262,10 +247,27 @@ button:hover {
   display: none;
 }
 
-#mute-btn {
+/* Top-right corner: mute/pause in a row, with the minimap (appended below
+   #right-buttons by main.js) stacked underneath, right-aligned — a square
+   minimap is wider than the two buttons, so right-aligning (rather than
+   stretching everything to match) is what keeps this reading as one
+   tidy column instead of the buttons looking randomly offset from it. */
+#right-panel {
   position: absolute;
   top: 16px;
   right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+#right-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+#mute-btn {
   padding: 8px 10px;
   font-size: 14px;
   line-height: 1;
@@ -281,13 +283,7 @@ button:hover {
   text-decoration: line-through;
 }
 
-/* Sits beside mute-btn (top-right), not the opposite top-left corner —
-   the HUD's FURS/DISTANCE text starts flush at top-left too (see #hud),
-   so a top-left button sits right on top of it. */
 #pause-btn {
-  position: absolute;
-  top: 16px;
-  right: 62px;
   padding: 8px 10px;
   font-size: 12px;
   line-height: 1;

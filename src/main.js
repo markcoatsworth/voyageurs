@@ -69,13 +69,18 @@ const obstacles = createObstacleField(world);
 const input = new Input();
 createTouchControls(input);
 
-// Floats in the top-left corner alongside the stats HUD (#corner-panel in
-// index.html/style.css), over the game canvas rather than reserving space
-// from it — same overlay treatment as the stats text and the mute/pause
-// buttons. See twod/minimap.js for why it's a real, geographically-placed
-// route rather than an invented shape.
+// Sits in the top-right corner below the mute/pause buttons (#right-panel
+// in index.html/style.css). This doesn't reserve any space from the game
+// canvas — the canvas keeps rendering at full size — it just relies on the
+// same fixed-to-viewport corner positioning the buttons already use. On a
+// wide/short-ish window the canvas doesn't reach the corner anyway (there's
+// empty background on either side once it's scaled to an integer
+// multiple), so nothing ends up under it there; on a narrow phone where the
+// canvas does reach every edge, this floats over it the same way the
+// buttons already do. See twod/minimap.js for why it's a real,
+// geographically-placed route rather than an invented shape.
 const minimap = createMinimap();
-document.getElementById('corner-panel').appendChild(minimap.el);
+document.getElementById('right-panel').appendChild(minimap.el);
 
 const ui = {
   hud: document.getElementById('hud'),

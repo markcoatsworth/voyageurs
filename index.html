@@ -13,8 +13,16 @@
   <div id="app"></div>
 
   <div id="ui">
-    <button id="mute-btn" title="Mute music">&#9835;</button>
-    <button id="pause-btn" title="Pause">II</button>
+    <!-- Mute/pause and the minimap (appended below the buttons by main.js)
+         share the top-right corner: a column, right-aligned, so a square
+         minimap wider than the two buttons still lines up sensibly under
+         them. -->
+    <div id="right-panel">
+      <div id="right-buttons">
+        <button id="mute-btn" title="Mute music">&#9835;</button>
+        <button id="pause-btn" title="Pause">II</button>
+      </div>
+    </div>
 
     <!-- TEMPORARY diagnostic — see the comment at the top of twod/music.js.
          Remove this element once music is confirmed working on-device. -->
@@ -27,18 +35,13 @@
       <button type="button" id="dpad-down" class="dpad-btn dpad-down" title="Down">&#9660;</button>
     </div>
 
-    <!-- The stats block and the minimap (appended here by main.js) share
-         this corner: a flex row that wraps to a column on a narrow/portrait
-         screen instead of the two overlapping. -->
-    <div id="corner-panel">
-      <div id="hud" class="hidden">
-        <div id="hud-score">FURS: 0</div>
-        <div id="hud-distance">DISTANCE: 0m</div>
-        <div id="hud-health-label">HULL HEALTH</div>
-        <div id="hud-health-wrap"><div id="hud-health-fill"></div></div>
-        <div id="hud-speed-label">CURRENT SPEED</div>
-        <div id="hud-speed-wrap"><div id="hud-speed-fill"></div></div>
-      </div>
+    <div id="hud" class="hidden">
+      <div id="hud-score">FURS: 0</div>
+      <div id="hud-distance">DISTANCE: 0m</div>
+      <div id="hud-health-label">HULL HEALTH</div>
+      <div id="hud-health-wrap"><div id="hud-health-fill"></div></div>
+      <div id="hud-speed-label">CURRENT SPEED</div>
+      <div id="hud-speed-wrap"><div id="hud-speed-fill"></div></div>
     </div>
 
     <div id="damage-flash"></div>
