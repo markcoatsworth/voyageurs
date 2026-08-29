@@ -114,9 +114,11 @@ export function drawBanks(ctx, worldDistance, cameraWorldX) {
 }
 
 // The mid-channel islands that split the river into two short passages
-// (river/path.js's braidAt). Drawn as a lens-shaped bank fill — the same
-// texture as the outer shore — right on top of the water hole punched
-// above, so it reads as solid land sitting between two open channels.
+// (river/path.js's braidAt). Drawn as a lens-shaped sand fill — plain small
+// land, not the same rocky/cliff-like texture as the outer shore (that one
+// reads as the fjord wall, which a mid-river island obviously isn't) —
+// right on top of the water hole punched above, so it reads as solid land
+// sitting between two open channels.
 function drawBraidIslands(ctx, worldDistance, cameraWorldX) {
   const pat = ensurePatterns(ctx);
 
@@ -127,7 +129,7 @@ function drawBraidIslands(ctx, worldDistance, cameraWorldX) {
     return toScreenX(cx, cameraWorldX);
   };
 
-  ctx.fillStyle = pat.bank;
+  ctx.fillStyle = pat.sand;
   pathBetween(ctx, (y) => islandX(y, -1), (y) => islandX(y, 1));
   ctx.fill();
 

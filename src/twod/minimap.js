@@ -32,11 +32,6 @@ export function createMinimap() {
   const wrap = document.createElement('div');
   wrap.id = 'minimap';
 
-  const title = document.createElement('div');
-  title.id = 'minimap-title';
-  title.textContent = 'MAP';
-  wrap.appendChild(title);
-
   // width/height are set in CSS (#minimap svg), not here — SVG's own
   // width/height attributes don't accept "auto"/percentages the way CSS
   // does. The viewBox itself is set per-frame in update() below, since it's
@@ -46,42 +41,44 @@ export function createMinimap() {
     viewBox: `0 0 ${VIEW_SIZE} ${VIEW_SIZE}`,
   });
 
-  // The route itself, fjord and estuary as one continuous line (a subtly
-  // different color past Tadoussac reads as "you've left the fjord"),
-  // drawn once in absolute map-projection coordinates.
+  // The route itself, drawn as a proper river ribbon (a wide fill over a
+  // slightly wider outline) rather than a hairline — modeled on how Google
+  // Maps renders water, which is what gives the deep-green-land/blue-water
+  // look its texture instead of just being a flat color swap. The estuary
+  // segment is drawn a little wider and a shade deeper, both because the
+  // real Saint Lawrence dwarfs the fjord and so the difference reads as
+  // "you've left the fjord" without needing a dash pattern (rivers on a
+  // real map are never dashed).
   const fjordPts = points.slice(0, FJORD_WAYPOINTS.length);
   const estuaryPts = points.slice(FJORD_WAYPOINTS.length - 1);
   const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
 
-  svg.appendChild(svgEl('path', {
-    d: toPath(fjordPts),
-    fill: 'none',
-    stroke: '#4fa8d8',
-    'stroke-width': 0.8,
-    'stroke-linejoin': 'round',
-    'stroke-linecap': 'round',
-  }));
-  svg.appendChild(svgEl('path', {
-    d: toPath(estuaryPts),
-    fill: 'none',
-    stroke: '#2a6f8f',
-    'stroke-width': 0.8,
-    'stroke-linejoin': 'round',
-    'stroke-linecap': 'round',
-    'stroke-dasharray': '2,1.5',
-  }));
+  // Outlines drawn first for *both* segments, then both fills on top, so
+  // the fjord's outline doesn't cut across the wider estuary fill right at
+  // the Tadoussac join.
+  svg.appendChild(svgEl('path', { d: toPath(fjordPts), fill: 'none', stroke: '#245a78', 'stroke-width': 2.6, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  svg.appendChild(svgEl('path', { d: toPath(estuaryPts), fill: 'none', stroke: '#1e4f6e', 'stroke-width': 3.2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  svg.appendChild(svgEl('path', { d: toPath(fjordPts), fill: 'none', stroke: '#5fa8d9', 'stroke-width': 1.7, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  svg.appendChild(svgEl('path', { d: toPath(estuaryPts), fill: 'none', stroke: '#3d84b8', 'stroke-width': 2.2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
 
   // Waypoint dots, every one labeled with its real name, in absolute
   // projection coordinates — the panning viewBox brings each into view as
-  // the canoe approaches it.
+  // the canoe approaches it. Light fill with a dark halo on both the dots
+  // and the label text, since either can land on the deep green land or
+  // right on top of the blue river.
   for (const p of points) {
-    svg.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 0.9, fill: '#f4ead2' }));
+    svg.appendChild(svgEl('circle', {
+      cx: p.x, cy: p.y, r: 0.9, fill: '#f4ead2', stroke: '#16240f', 'stroke-width': 0.4,
+    }));
     const label = p.label || p.name;
     const pos = p.labelPos || { dx: 1.4, dy: -2.2, anchor: 'start' };
     const text = svgEl('text', {
       x: p.x + pos.dx,
       y: p.y + pos.dy,
       fill: p.label ? '#ffd23f' : '#f4ead2',
+      stroke: p.label ? '#1a1208' : '#16240f',
+      'stroke-width': 0.6,
+      'paint-order': 'stroke',
       'font-size': 3.6,
       'font-weight': p.label ? 700 : 400,
       'text-anchor': pos.anchor,

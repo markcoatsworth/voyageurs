@@ -351,30 +351,25 @@ button:hover {
    game canvas/HUD, always visible, never intercepting clicks. Square (not
    the old wide rectangle) since it's now a fixed-size window that pans
    with the canoe instead of showing the whole route at once — see
-   minimap.js. aspect-ratio, not a hard-coded height, so the clamp() below
-   is the only place its size is chosen. */
+   minimap.js. aspect-ratio, not a hard-coded height, so its width is the
+   only dimension that needs setting. The width below is just the
+   before-JS-runs fallback — main.js's resize() sets an inline width
+   sized to fill whatever empty margin is actually beside the canvas,
+   which is the real source of truth. */
 #minimap {
   position: relative;
-  width: clamp(120px, 20vw, 190px);
+  width: 190px;
   aspect-ratio: 1 / 1;
   flex: 0 0 auto;
-  background: rgba(10, 14, 20, 0.72);
+  /* A deep green "land" tone with a blue river ribbon drawn on top (see
+     minimap.js) — modeled after Google Maps' terrain style rather than a
+     flat single-color background, and dark enough that dots/labels need a
+     light fill with a dark halo (also in minimap.js) to stay legible on
+     both the land and the water. */
+  background: #274d26;
   border: 3px solid #f4ead2;
   box-shadow: 4px 4px 0 #000;
   pointer-events: none;
-}
-
-/* Floats over the map itself (rather than sitting above it in normal flow)
-   so adding it doesn't grow the box past a true square. */
-#minimap-title {
-  position: absolute;
-  top: 5px;
-  left: 7px;
-  font-size: 9px;
-  color: #bcae94;
-  text-shadow: 2px 2px 0 #000;
-  letter-spacing: 1px;
-  z-index: 1;
 }
 
 #minimap svg {

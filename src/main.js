@@ -46,29 +46,6 @@ ctx.imageSmoothingEnabled = false;
 // browser/environment has no WebGL.
 const water = createWaterRenderer(waterCanvas);
 
-function resize() {
-  const rawScale = Math.min(window.innerWidth / CANVAS_WIDTH, window.innerHeight / CANVAS_HEIGHT);
-  const flooredScale = Math.floor(rawScale);
-  // An integer multiple keeps pixel-art edges crisp, but on a small/mobile
-  // screen that floors all the way down to 1x, leaving most of the
-  // viewport empty — better to fill the screen at a fractional scale
-  // (image-rendering: pixelated still looks fine, just not perfectly even)
-  // than to render a postage stamp in the corner.
-  const scale = flooredScale >= 2 ? flooredScale : Math.max(rawScale, 1);
-  screen.style.width = `${CANVAS_WIDTH * scale}px`;
-  screen.style.height = `${CANVAS_HEIGHT * scale}px`;
-}
-window.addEventListener('resize', resize);
-resize();
-
-// Shared downstream-distance clock: written by Game each frame, read by
-// obstacles/terrain/whales whenever they need "what's here right now?"
-const world = { distance: 0 };
-
-const obstacles = createObstacleField(world);
-const input = new Input();
-createTouchControls(input);
-
 // Sits in the top-right corner below the mute/pause buttons (#right-panel
 // in index.html/style.css). This doesn't reserve any space from the game
 // canvas — the canvas keeps rendering at full size — it just relies on the
@@ -81,6 +58,45 @@ createTouchControls(input);
 // geographically-placed route rather than an invented shape.
 const minimap = createMinimap();
 document.getElementById('right-panel').appendChild(minimap.el);
+
+// How big that empty margin needs to be judged, in px: small enough that a
+// narrow/phone-width window (no margin at all) still gets a usable
+// minimum, capped so a huge ultrawide monitor doesn't blow it up past a
+// sensible size relative to the game view.
+const MINIMAP_MIN = 110;
+const MINIMAP_MAX = 280;
+
+function resize() {
+  const rawScale = Math.min(window.innerWidth / CANVAS_WIDTH, window.innerHeight / CANVAS_HEIGHT);
+  const flooredScale = Math.floor(rawScale);
+  // An integer multiple keeps pixel-art edges crisp, but on a small/mobile
+  // screen that floors all the way down to 1x, leaving most of the
+  // viewport empty — better to fill the screen at a fractional scale
+  // (image-rendering: pixelated still looks fine, just not perfectly even)
+  // than to render a postage stamp in the corner.
+  const scale = flooredScale >= 2 ? flooredScale : Math.max(rawScale, 1);
+  const canvasWidth = CANVAS_WIDTH * scale;
+  screen.style.width = `${canvasWidth}px`;
+  screen.style.height = `${CANVAS_HEIGHT * scale}px`;
+
+  // #app centers the canvas in the full viewport, so each side gets an
+  // equal share of whatever width is left over. The minimap fills that
+  // margin (minus its own edge gaps) instead of sitting at a fixed size
+  // that's lost in a much bigger sidebar on a wide window.
+  const sidebarWidth = (window.innerWidth - canvasWidth) / 2;
+  const size = Math.round(Math.max(MINIMAP_MIN, Math.min(MINIMAP_MAX, sidebarWidth - 32)));
+  minimap.el.style.width = `${size}px`;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Shared downstream-distance clock: written by Game each frame, read by
+// obstacles/terrain/whales whenever they need "what's here right now?"
+const world = { distance: 0 };
+
+const obstacles = createObstacleField(world);
+const input = new Input();
+createTouchControls(input);
 
 const ui = {
   hud: document.getElementById('hud'),
