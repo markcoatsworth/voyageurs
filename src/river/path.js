@@ -25,8 +25,51 @@ export const MIN_WIDTH = 6.5;
 export const MAX_WIDTH = 62;
 
 // Roughly how far downstream (in meters travelled) the fjord opens out into
-// the Saint Lawrence — the game's version of arriving at Tadoussac.
+// the Saint Lawrence — the game's version of arriving at Tadoussac. This is
+// where Tadoussac itself sits (river/route.js) and where the fjord segment
+// ceilings (game.js) — not where the channel actually reaches full width;
+// see WIDTH_EASE_DISTANCE below for why those are two different numbers.
 export const MOUTH_DISTANCE = 900;
+
+// How far it actually takes the channel to fully open up, vs. MOUTH_DISTANCE
+// above (where Tadoussac itself sits). These used to be the same number, and
+// that was the bug behind getting stuck right at Tadoussac's dock: at
+// d=MOUTH_DISTANCE the old curve was *already* at full ESTUARY_WIDTH
+// (~46 units), while the dock only reaches ~6 units in from the bank — a
+// blind 15-20+ unit crossing, through reduced-steering-authority rapids that
+// happen to sit right there, capped by a hard ceiling that (unlike every
+// other wide-river dock past this point) leaves nowhere to go if you don't
+// make it in time. Stretching the ease-in past Tadoussac keeps its own
+// stretch of channel dockable like every other fjord village — the width
+// then keeps opening up into lawrenceEast's own early stretch, reaching full
+// width around the gap between Les Escoumins and Forestville instead.
+const WIDTH_EASE_DISTANCE = 1700;
+
+// centerX/widthAt/braidAt/rapidsStrength below are pure functions of one
+// shared number line — fine when the whole river was one continuous line,
+// not so fine now that Tadoussac is a real three-way junction (the fjord in,
+// the Saint Lawrence east to Sept-Îles, the Saint Lawrence west to Québec
+// City — see river/route.js's module comment). Rather than teach every one
+// of these functions about "segments," each segment just gets its own slice
+// of the same shared number line: game.js tracks *which* segment is active
+// and adds its offset before ever calling into this file, so nothing here
+// or in terrain.js/obstacles.js/whales.js/waterGL.js needs to change at
+// all — they just see a d value, exactly as before.
+//
+// lawrenceEast's offset (MOUTH_DISTANCE) is exactly how the estuary already
+// worked before segments existed — d simply kept increasing past the mouth.
+// lawrenceWest's offset is an arbitrary distant point on the same periodic
+// curves, picked (by scanning a few candidates) to be far from
+// lawrenceEast's own range — so the two don't visually echo each other
+// along their first couple thousand units — *and* to land somewhere calm
+// on rapidsStrength() right at its own start, rather than dropping the
+// player into near-peak whitewater the instant they commit to this branch
+// at Tadoussac's dock.
+export const SEGMENT_SHAPE_OFFSET = {
+  fjord: 0,
+  lawrenceEast: MOUTH_DISTANCE,
+  lawrenceWest: 60000,
+};
 
 // Past this width the water reads as open estuary rather than fjord — used
 // to decide when belugas start showing up. Corresponds to roughly the last
@@ -49,7 +92,7 @@ export function centerX(d) {
 }
 
 export function estuaryProgress(d) {
-  return Math.min(1, Math.max(0, d) / MOUTH_DISTANCE);
+  return Math.min(1, Math.max(0, d) / WIDTH_EASE_DISTANCE);
 }
 
 export function widthAt(d) {

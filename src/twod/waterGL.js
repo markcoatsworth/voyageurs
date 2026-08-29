@@ -54,7 +54,9 @@ float centerX(float d) {
   return sin(d * 0.09) * 3.0 + sin(d * 0.21 + 1.7) * 1.5;
 }
 float estuaryProgress(float d) {
-  return clamp(d / 900.0, 0.0, 1.0);
+  // 1700.0 (WIDTH_EASE_DISTANCE), not 900.0 (MOUTH_DISTANCE/where Tadoussac
+  // itself sits) — see river/path.js's comment on why those are different.
+  return clamp(d / 1700.0, 0.0, 1.0);
 }
 float widthAt(float d) {
   // Cubic ease-in, mirroring river/path.js's widthAt() — see its comment
