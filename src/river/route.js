@@ -103,4 +103,9 @@ export const VILLAGES = ROUTE.slice(1).map((w, i) => ({
   name: w.label || w.name,
   flowDistance: flowDistanceForCumulative(cumulative[i + 1]),
   side: i % 2 === 0 ? -1 : 1,
+  // Stable per-village number: seeds the procedural building/dock layout
+  // (twod/villages.js villageLayout) so every village is laid out
+  // differently but a given one looks identical every time it's drawn or
+  // walked around.
+  seed: i + 1,
 }));

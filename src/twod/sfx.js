@@ -43,3 +43,32 @@ export function playCapsizeHorn() {
   wah(c, t0 + 0.24, 185.0, 0.22);        // F#3
   wah(c, t0 + 0.48, 164.8, 0.9, 116.5);  // E3 sliding down to A#2
 }
+
+// One short bell-ish "bling" note — a sine with a hint of its octave on top
+// for sparkle, fast attack and a ringing exponential decay.
+function ding(c, startTime, freq, duration) {
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.25, startTime + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  gain.connect(c.destination);
+
+  for (const [mult, level] of [[1, 1], [2, 0.35]]) {
+    const osc = c.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq * mult;
+    const partial = c.createGain();
+    partial.gain.value = level;
+    osc.connect(partial).connect(gain);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.02);
+  }
+}
+
+export function playPeltChime() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  // A quick rising two-note ping — E6 then B6 — that reads as "got it!"
+  ding(c, t0 + 0.00, 1318.5, 0.18);
+  ding(c, t0 + 0.07, 1975.5, 0.28);
+}

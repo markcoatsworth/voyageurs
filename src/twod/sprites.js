@@ -445,6 +445,77 @@ export function createCabinSprite(variant = 0) {
   });
 }
 
+// The one building every village guarantees right beside its dock (see
+// twod/villages.js) — where the canoe eventually gets repaired. Built from
+// the same log-cabin construction as createCabinSprite, but a warm rust
+// roof (every ordinary cabin uses browns) and a crossed-paddles sign over
+// the door are the two cues that mark it as different at a glance, from
+// across the water, before it does anything yet.
+const REPAIR_SHOP_PALETTE = { roof: '#8a3a2a', roofDark: '#5f2418', roofLight: '#b0563a', wall: '#8a6a45', wallDark: '#6b4f30', wallLight: '#a5825a' };
+
+export function createRepairShopSprite() {
+  const w = 34, h = 38;
+  const pal = REPAIR_SHOP_PALETTE;
+
+  return makeSprite(w, h, (ctx) => {
+    const cx = w / 2;
+    const wallW = 22;
+    const wallH = 20;
+    const wallTop = h - wallH - 4;
+
+    groundShadow(ctx, cx, h - 4, wallW / 2 + 2, 4);
+
+    ctx.fillStyle = pal.wallDark;
+    ctx.fillRect(cx - wallW / 2 - 1, wallTop - 1, wallW + 2, wallH + 2);
+    ctx.fillStyle = pal.wall;
+    ctx.fillRect(cx - wallW / 2, wallTop, wallW, wallH);
+    ctx.strokeStyle = pal.wallDark;
+    ctx.lineWidth = 1;
+    for (let ly = wallTop + 3; ly < wallTop + wallH; ly += 3.5) {
+      ctx.beginPath();
+      ctx.moveTo(cx - wallW / 2, ly);
+      ctx.lineTo(cx + wallW / 2, ly);
+      ctx.stroke();
+    }
+    ctx.fillStyle = pal.wallLight;
+    ctx.fillRect(cx - wallW / 2, wallTop, 2, wallH);
+
+    ctx.fillStyle = '#241a10';
+    ctx.fillRect(cx - 3, wallTop + wallH - 8, 6, 8);
+
+    // sign board over the door: crossed paddles, the universal "canoe
+    // business happens here" mark
+    ctx.fillStyle = '#3f2b1a';
+    ctx.fillRect(cx - 6, wallTop + 5, 12, 7);
+    ctx.fillStyle = '#c9a86a';
+    ctx.fillRect(cx - 5, wallTop + 6, 10, 5);
+    ctx.strokeStyle = '#5a3d24';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(cx - 4, wallTop + 6.5);
+    ctx.lineTo(cx + 4, wallTop + 10.5);
+    ctx.moveTo(cx + 4, wallTop + 6.5);
+    ctx.lineTo(cx - 4, wallTop + 10.5);
+    ctx.stroke();
+
+    const roofW = wallW + 8;
+    const roofH = 20;
+    const roofTop = wallTop - roofH + 6;
+    triangle(ctx, cx, roofTop - 5, roofTop + 2, roofW / 2 - 2, pal.roofDark);
+    ctx.fillStyle = pal.roofDark;
+    ctx.fillRect(cx - roofW / 2, roofTop, roofW, roofH);
+    ctx.fillStyle = pal.roof;
+    ctx.fillRect(cx - roofW / 2 + 1, roofTop + 1, roofW - 2, roofH - 2);
+    ctx.fillStyle = pal.roofLight;
+    ctx.fillRect(cx - 1, roofTop + 1, 2, roofH - 2);
+
+    ctx.fillStyle = '#6b6a63';
+    ctx.fillRect(cx + roofW / 2 - 7, roofTop - 2, 4, 6);
+    ctx.fillStyle = '#8a887c';
+    ctx.fillRect(cx + roofW / 2 - 7, roofTop - 2, 1.5, 6);
+  });
+}
+
 // The player's own figure, walking around a village on foot — same tan
 // skin / cream shirt / red sash palette as the canoe's paddler, so it
 // reads as the same voyageur. A single sprite; game.js mirrors it

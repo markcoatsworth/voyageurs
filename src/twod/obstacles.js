@@ -128,6 +128,11 @@ export function createObstacleField(world) {
     },
     draw(ctx, time, cameraWorldX, worldToScreen) {
       for (const entry of pool) {
+        // A collected pelt is gone — hide it immediately rather than letting
+        // it keep bobbing in the water until it recycles offscreen. (Hit
+        // rocks/logs are also inactive but stay drawn: you still paddle past
+        // the rock you clipped.)
+        if (entry.type === PELT && !entry.active) continue;
         const { x: sx, y: sy } = worldToScreen(entry.x, entry.z, cameraWorldX);
         const sprite = sprites[entry.type];
         if (entry.type === PELT) {

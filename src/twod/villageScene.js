@@ -4,7 +4,9 @@
 // yet (see the module comment in game.js for the planned shops).
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './config.js';
 import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
-import { createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite } from './sprites.js';
+import { createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite } from './sprites.js';
+import { villageLayout } from './villages.js';
+import { hashRange } from '../river/hash.js';
 
 const WALK_SPEED = 62; // px/sec, in this scene's own fixed pixel space
 
@@ -14,28 +16,67 @@ const DOCK_X0 = CANVAS_WIDTH / 2 - DOCK_HALF_W;
 const DOCK_X1 = CANVAS_WIDTH / 2 + DOCK_HALF_W;
 const DOCK_TOP = WATER_TOP - 12;
 
+const REBOARD_ZONE = { x0: DOCK_X0 + 5, x1: DOCK_X1 - 5, y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
+
 // Anchor is the point where each building's front (door) sits; the
 // collision box is a simplified footprint under the sprite's walls, not
-// its wider overhanging roof.
-const BUILDINGS = [
-  { variant: 0, anchorX: CANVAS_WIDTH / 2, anchorY: 96, footHalfW: 12, footHeight: 22 },
-  { variant: 1, anchorX: CANVAS_WIDTH / 2 - 86, anchorY: 128, footHalfW: 9, footHeight: 17 },
-  { variant: 2, anchorX: CANVAS_WIDTH / 2 + 90, anchorY: 120, footHalfW: 9, footHeight: 17 },
-];
-
-const REBOARD_ZONE = { x0: DOCK_X0 + 5, x1: DOCK_X1 - 5, y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
+// its wider overhanging roof. The cluster is generated from the same
+// per-village descriptors the river view uses (villages.js villageLayout),
+// mapped into this scene's fixed pixel space, so the layout you walk
+// around matches the one you saw from the water.
+function buildingsFor(seed) {
+  return villageLayout(seed).buildings.map((b) => {
+    const big = b.variant === 0;
+    // Keep every building at least 20px off the vertical centre line so the
+    // dock lane out of the scene is never walled off.
+    const dir = b.along >= 0 ? 1 : -1;
+    const anchorX = Math.round(
+      Math.max(52, Math.min(CANVAS_WIDTH - 52, CANVAS_WIDTH / 2 + dir * (20 + Math.abs(b.along) * 82))),
+    );
+    return {
+      variant: b.variant,
+      mirror: b.mirror,
+      anchorX,
+      anchorY: Math.round(82 + b.inland * 54), // 82..136
+      footHalfW: big ? 12 : 9,
+      footHeight: big ? 22 : 17,
+    };
+  });
+}
 
 // Purely decorative — drawn behind the buildings/player, clear of the
 // walkable area and the dock — so the clearing reads as cut out of the
-// same forest seen from the river, not a bare field.
-const TREES = [
-  { x: 36, y: 16, variant: 0 }, { x: 118, y: 10, variant: 1 }, { x: 292, y: 14, variant: 2 },
-  { x: 12, y: 64, variant: 2 }, { x: 10, y: 150, variant: 0 },
-  { x: 308, y: 58, variant: 1 }, { x: 312, y: 158, variant: 2 },
-  { x: 44, y: 156, variant: 1 }, { x: 40, y: 96, variant: 0 },
-  { x: 262, y: 150, variant: 0 }, { x: 276, y: 92, variant: 2 },
-  { x: 196, y: 96, variant: 1 },
+// same forest seen from the river, not a bare field. Positions are fixed;
+// only the per-tree species is seeded, for a little colour variety.
+const TREE_SPOTS = [
+  { x: 36, y: 16 }, { x: 118, y: 10 }, { x: 292, y: 14 },
+  { x: 12, y: 64 }, { x: 10, y: 150 },
+  { x: 308, y: 58 }, { x: 312, y: 158 },
+  { x: 44, y: 156 }, { x: 40, y: 96 },
+  { x: 262, y: 150 }, { x: 276, y: 92 },
+  { x: 196, y: 96 },
 ];
+function treesFor(seed) {
+  return TREE_SPOTS.map((t, i) => ({
+    ...t,
+    variant: Math.floor(hashRange(seed, 700 + i, 0, 2.999)),
+  }));
+}
+
+// The repair shop — always present, in the exact same spot regardless of
+// seed, so it's a landmark you can count on finding beside the dock every
+// time you step ashore (see the matching fixed placement in villages.js's
+// river view). Kept clear of the dock lane and low/close to shore, in a
+// different anchorY band than the procedural cluster above, so it never
+// fights with a randomly-placed cabin for the same footprint.
+const REPAIR_SHOP = {
+  isRepairShop: true,
+  mirror: false,
+  anchorX: DOCK_X0 - 25,
+  anchorY: WATER_TOP - 20,
+  footHalfW: 12,
+  footHeight: 22,
+};
 
 const PLAYER_START = { x: CANVAS_WIDTH / 2, y: WATER_TOP - 10 };
 const PLAYER_HALF = 4; // simple circular-ish collision radius against buildings
@@ -51,7 +92,8 @@ function ensurePatterns(ctx) {
   return patterns;
 }
 
-const cabinSprites = BUILDINGS.map((b) => createCabinSprite(b.variant));
+const cabinSprites = [0, 1, 2].map(createCabinSprite);
+const repairShopSprite = createRepairShopSprite();
 const walkerFrames = [createWalkerSprite(false), createWalkerSprite(true)];
 const parkedCanoeSprite = createCanoeSprite(1);
 const treeSprites = [0, 1, 2].map(createPineTreeSprite);
@@ -65,8 +107,8 @@ function buildingBox(b) {
   };
 }
 
-function overlapsBuilding(x, y) {
-  for (const b of BUILDINGS) {
+function overlapsBuilding(buildings, x, y) {
+  for (const b of buildings) {
     const box = buildingBox(b);
     if (x + PLAYER_HALF > box.x0 && x - PLAYER_HALF < box.x1 && y + PLAYER_HALF > box.y0 && y - PLAYER_HALF < box.y1) {
       return true;
@@ -78,20 +120,25 @@ function overlapsBuilding(x, y) {
 // On land the player can walk anywhere within the scene margins; over the
 // water band they're restricted to the dock's width, i.e. walking the
 // plank back out to the boat rather than into the river.
-function isWalkable(x, y) {
+function isWalkable(buildings, x, y) {
   if (x < 10 || x > CANVAS_WIDTH - 10 || y < 10 || y > CANVAS_HEIGHT - 4) return false;
   if (y > WATER_TOP && (x < DOCK_X0 || x > DOCK_X1)) return false;
-  return !overlapsBuilding(x, y);
+  return !overlapsBuilding(buildings, x, y);
 }
 
 export function createVillageScene() {
   let strideTimer = 0;
   let strideFrame = 0;
   let facingLeft = false;
+  let buildings = [...buildingsFor(0), REPAIR_SHOP];
+  let trees = treesFor(0);
   const player = { x: PLAYER_START.x, y: PLAYER_START.y };
 
   return {
-    enter() {
+    enter(village) {
+      const seed = village ? village.seed : 0;
+      buildings = [...buildingsFor(seed), REPAIR_SHOP];
+      trees = treesFor(seed);
       player.x = PLAYER_START.x;
       player.y = PLAYER_START.y;
       strideTimer = 0;
@@ -117,8 +164,8 @@ export function createVillageScene() {
         const ny = player.y + dy * step;
         // Resolve each axis separately so sliding along a wall/edge works
         // instead of a diagonal move being blocked entirely by one axis.
-        if (isWalkable(nx, player.y)) player.x = nx;
-        if (isWalkable(player.x, ny)) player.y = ny;
+        if (isWalkable(buildings, nx, player.y)) player.x = nx;
+        if (isWalkable(buildings, player.x, ny)) player.y = ny;
 
         strideTimer += dt;
         if (strideTimer > 0.28) {
@@ -161,7 +208,7 @@ export function createVillageScene() {
 
       // treeline framing the clearing — behind everything else, so it never
       // occludes a building or the player
-      for (const t of TREES) {
+      for (const t of trees) {
         const sprite = treeSprites[t.variant];
         ctx.drawImage(sprite, t.x - sprite.width / 2, t.y - sprite.height * 0.72);
       }
@@ -170,9 +217,20 @@ export function createVillageScene() {
       ctx.drawImage(parkedCanoeSprite, CANVAS_WIDTH / 2 - parkedCanoeSprite.width / 2, CANVAS_HEIGHT - parkedCanoeSprite.height + 6);
 
       // buildings, painter's-algorithm by anchor Y
-      const order = BUILDINGS.map((b, i) => ({ b, sprite: cabinSprites[i] })).sort((a, c) => a.b.anchorY - c.b.anchorY);
+      const order = buildings
+        .map((b) => ({ b, sprite: b.isRepairShop ? repairShopSprite : cabinSprites[b.variant % cabinSprites.length] }))
+        .sort((a, c) => a.b.anchorY - c.b.anchorY);
       for (const { b, sprite } of order) {
-        ctx.drawImage(sprite, b.anchorX - sprite.width / 2, b.anchorY - sprite.height + 6);
+        const top = b.anchorY - sprite.height + 6;
+        if (b.mirror) {
+          ctx.save();
+          ctx.translate(b.anchorX, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(sprite, -sprite.width / 2, top);
+          ctx.restore();
+        } else {
+          ctx.drawImage(sprite, b.anchorX - sprite.width / 2, top);
+        }
       }
 
       // player, mirrored horizontally for facing rather than separate frames

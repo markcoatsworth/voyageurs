@@ -3,7 +3,7 @@ import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEI
 import { drawBanks, drawWaterFallback } from './twod/terrain.js';
 import { drawWhales } from './twod/whales.js';
 import { createCanoeSprites } from './twod/canoe.js';
-import { playCapsizeHorn } from './twod/sfx.js';
+import { playCapsizeHorn, playPeltChime } from './twod/sfx.js';
 import { getDockHit, DOCK_HIT_Z } from './twod/villages.js';
 import { createVillageScene } from './twod/villageScene.js';
 import { isTouchPrimary } from './twod/touchControls.js';
@@ -171,7 +171,7 @@ export class Game {
   enterVillage(village) {
     this.mode = 'village';
     this.currentVillage = village;
-    this.villageScene.enter();
+    this.villageScene.enter(village);
     this.ui.hud.classList.add('hidden');
     this.showBanner(`Arriving at ${village.name}`);
   }
@@ -217,6 +217,7 @@ export class Game {
 
   handleCollect() {
     this.furs += 1;
+    playPeltChime();
   }
 
   update(dt) {
