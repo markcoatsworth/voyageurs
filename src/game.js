@@ -44,6 +44,10 @@ const ROCK_DAMAGE = 32;
 const LOG_DAMAGE = 12;
 const BANK_DAMAGE = 8;
 const DAMAGE_FLASH_TIME = 0.28;
+// How much hull a single fur buys at the repair shop's trader — a full
+// repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
+// only ever spends as many as are actually needed to top off.
+const REPAIR_HP_PER_FUR = 15;
 // flowDistance (world position) deliberately never resets on restart — the
 // river shouldn't jump — but the canoe always respawns dead-center. If a
 // capsize happens to freeze the world with a braid island sitting right on
@@ -226,6 +230,27 @@ export class Game {
     playPeltChime();
   }
 
+  // Triggered by villageScene.js the moment the player walks up to the
+  // trader outside the repair shop (see TRADER_POS there) — spends just
+  // enough furs to close the gap to a full hull, or as many as the player
+  // has if that's not enough, rather than always spending everything.
+  tryRepairTrade() {
+    if (this.health >= MAX_HEALTH) {
+      this.showBanner('Hull is already sound');
+      return;
+    }
+    if (this.furs <= 0) {
+      this.showBanner('No furs to trade');
+      return;
+    }
+    const missing = MAX_HEALTH - this.health;
+    const needed = Math.ceil(missing / REPAIR_HP_PER_FUR);
+    const spend = Math.min(this.furs, needed);
+    this.furs -= spend;
+    this.health = Math.min(MAX_HEALTH, this.health + spend * REPAIR_HP_PER_FUR);
+    this.showBanner(`Traded ${spend} fur${spend === 1 ? '' : 's'} for repairs`);
+  }
+
   update(dt) {
     if (this.paused) return; // hard freeze, same as gameover below — see togglePause()
 
@@ -240,9 +265,10 @@ export class Game {
     }
 
     if (this.mode === 'village') {
-      const reboarded = this.villageScene.update(dt, this.input.state);
+      const { reboard, tradeRequested } = this.villageScene.update(dt, this.input.state);
+      if (tradeRequested) this.tryRepairTrade();
       this.villageScene.draw(this.ctx);
-      if (reboarded) this.leaveVillage();
+      if (reboard) this.leaveVillage();
       return;
     }
 

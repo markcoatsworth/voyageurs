@@ -4,7 +4,7 @@
 // yet (see the module comment in game.js for the planned shops).
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './config.js';
 import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
-import { createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite } from './sprites.js';
+import { createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite } from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../river/hash.js';
 
@@ -78,6 +78,16 @@ const REPAIR_SHOP = {
   footHeight: 22,
 };
 
+// The trader who runs the repair shop — standing just outside its door,
+// clear of the shop's own footprint and the dock lane, so walking up to
+// them is unambiguous. Fixed alongside REPAIR_SHOP for the same reason:
+// always in the same spot, not part of the seeded layout. Not a solid
+// obstacle (see isWalkable) — the trade triggers from proximity alone, so
+// blocking movement would just make lining up with them more fiddly for
+// no benefit.
+const TRADER_POS = { x: REPAIR_SHOP.anchorX + 19, y: REPAIR_SHOP.anchorY + 5 };
+const TRADER_TRIGGER_RADIUS = 16;
+
 const PLAYER_START = { x: CANVAS_WIDTH / 2, y: WATER_TOP - 10 };
 const PLAYER_HALF = 4; // simple circular-ish collision radius against buildings
 
@@ -94,6 +104,7 @@ function ensurePatterns(ctx) {
 
 const cabinSprites = [0, 1, 2].map(createCabinSprite);
 const repairShopSprite = createRepairShopSprite();
+const traderSprite = createTraderSprite();
 const walkerFrames = [createWalkerSprite(false), createWalkerSprite(true)];
 const parkedCanoeSprite = createCanoeSprite(1);
 const treeSprites = [0, 1, 2].map(createPineTreeSprite);
@@ -132,6 +143,7 @@ export function createVillageScene() {
   let facingLeft = false;
   let buildings = [...buildingsFor(0), REPAIR_SHOP];
   let trees = treesFor(0);
+  let wasNearTrader = false;
   const player = { x: PLAYER_START.x, y: PLAYER_START.y };
 
   return {
@@ -143,9 +155,19 @@ export function createVillageScene() {
       player.y = PLAYER_START.y;
       strideTimer = 0;
       strideFrame = 0;
+      // Arriving right on top of the trigger radius (unlikely given
+      // PLAYER_START is up by the dock, but not impossible on a small
+      // screen) shouldn't count as "just walked up" — only an actual
+      // approach during this visit should.
+      wasNearTrader = false;
     },
 
-    // Returns true the moment the player steps into the reboard zone.
+    // Returns { reboard, tradeRequested }: reboard is true the moment the
+    // player steps into the reboard zone; tradeRequested is true for one
+    // frame, the moment the player comes within range of the trader (not
+    // held true the whole time they stand there, so game.js can treat it
+    // as a single trade action per approach rather than repeating it every
+    // frame).
     update(dt, keys) {
       let dx = 0, dy = 0;
       if (keys.left) dx -= 1;
@@ -176,10 +198,16 @@ export function createVillageScene() {
         strideTimer = 0;
       }
 
-      return (
+      const reboard = (
         player.x >= REBOARD_ZONE.x0 && player.x <= REBOARD_ZONE.x1 &&
         player.y >= REBOARD_ZONE.y0 && player.y <= REBOARD_ZONE.y1
       );
+
+      const nearTrader = Math.hypot(player.x - TRADER_POS.x, player.y - TRADER_POS.y) < TRADER_TRIGGER_RADIUS;
+      const tradeRequested = nearTrader && !wasNearTrader;
+      wasNearTrader = nearTrader;
+
+      return { reboard, tradeRequested };
     },
 
     draw(ctx) {
@@ -232,6 +260,11 @@ export function createVillageScene() {
           ctx.drawImage(sprite, b.anchorX - sprite.width / 2, top);
         }
       }
+
+      // the trader, standing outside the repair shop — drawn after the
+      // building pass (TRADER_POS.y sits below every building's anchorY,
+      // i.e. nearer the camera, so this is already correct painter's-order)
+      ctx.drawImage(traderSprite, TRADER_POS.x - traderSprite.width / 2, TRADER_POS.y - traderSprite.height + 2);
 
       // player, mirrored horizontally for facing rather than separate frames
       const sprite = walkerFrames[strideFrame];

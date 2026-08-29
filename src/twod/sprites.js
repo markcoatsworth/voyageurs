@@ -547,3 +547,41 @@ export function createWalkerSprite(strideLeft = false) {
     ctx.fillRect(cx - 3, 2, 6, 5);
   });
 }
+
+// The repair shop's keeper — standing outside the door, same build as the
+// player's walker but a leather apron and a brimmed hat in place of the
+// cream shirt/bare head, so a glance tells you this is someone to trade
+// with, not the player's own figure. Always this one static pose; it never
+// moves, so there's no stride animation to draw. A couple pixels taller
+// than the walker sprite to leave headroom for the hat.
+export function createTraderSprite() {
+  const w = 14, h = 22;
+  return makeSprite(w, h, (ctx) => {
+    const cx = w / 2;
+    groundShadow(ctx, cx, h - 1, 4, 2);
+
+    // legs, standing still
+    ctx.fillStyle = '#3f2b1a';
+    ctx.fillRect(cx - 3, 16, 2.4, 5);
+    ctx.fillRect(cx + 1, 16, 2.4, 5);
+
+    // torso: a grey work shirt with a leather apron over it
+    ctx.fillStyle = '#5a6570';
+    ctx.fillRect(cx - 5, 6, 10, 10);
+    ctx.fillStyle = '#727f8c';
+    ctx.fillRect(cx - 4, 7, 8, 8);
+    ctx.fillStyle = '#6b4a2f';
+    ctx.fillRect(cx - 3.5, 9, 7, 7);
+    ctx.fillStyle = '#5a3d24';
+    ctx.fillRect(cx - 3.5, 9, 7, 1.4);
+
+    // head, with a brimmed hat instead of the player's bare head
+    ctx.fillStyle = '#4a2f18';
+    ctx.fillRect(cx - 3.5, 3.5, 7, 5.5);
+    ctx.fillStyle = '#c98a5e';
+    ctx.fillRect(cx - 3, 5, 6, 4);
+    ctx.fillStyle = '#3f2b1a';
+    ctx.fillRect(cx - 5, 2, 10, 1.6);
+    ctx.fillRect(cx - 3, 0, 6, 2);
+  });
+}
