@@ -72,3 +72,37 @@ export function playPeltChime() {
   ding(c, t0 + 0.00, 1318.5, 0.18);
   ding(c, t0 + 0.07, 1975.5, 0.28);
 }
+
+// A short, dull downward blip for a glancing hit — a triangle wave through
+// a low-pass filter reads as duller/rounder than the horn's brassy
+// sawtooth, and two quick descending notes (rather than the horn's drawn-
+// out three) keep it a small "aw, hit something" cue rather than a
+// dramatic one. Reserved for hits that don't sink the canoe — gameOver()
+// plays the capsize horn instead, and playing both on the same fatal hit
+// would just be noise on top of noise.
+function boop(c, startTime, freq, duration) {
+  const osc = c.createOscillator();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(freq, startTime);
+
+  const filter = c.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 900;
+
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.26, startTime + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  osc.connect(filter).connect(gain).connect(c.destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.02);
+}
+
+export function playDamageBoop() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  // "boop, oop" — a falling minor third, A3 down to F3.
+  boop(c, t0 + 0.00, 220.0, 0.11);
+  boop(c, t0 + 0.09, 174.6, 0.16);
+}

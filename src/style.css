@@ -43,14 +43,29 @@ html, body {
   display: none !important;
 }
 
-#hud {
+/* Shares the top-left corner with the minimap (twod/minimap.js, appended
+   here in main.js) — a flex row that wraps to a column on a narrow/portrait
+   screen, so the two sit side by side where there's width for it and stack
+   instead of overflowing off-screen where there isn't. Like the stats text
+   and the mute/pause buttons, this floats *over* the game canvas rather
+   than reserving space from it — the canvas is always full size. */
+#corner-panel {
   position: absolute;
   top: 16px;
   left: 16px;
-  right: 16px;
+  /* No `right`/width — this must shrink-to-fit its content instead of
+     stretching full-width, or it wraps to a column unconditionally. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+#hud {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 0 0 auto;
 }
 
 #hud-score,
@@ -286,9 +301,9 @@ button:hover {
 /* An arrow D-pad for touch devices — hidden on anything with a precise
    pointer (mouse/trackpad), shown only where hover:none + pointer:coarse
    both hold, which reliably means "touch is the primary input" rather than
-   just "the screen happens to be small." Bottom-right so it never overlaps
-   the minimap's bottom-left corner. Four independent buttons rather than a
-   drag stick — see touchControls.js for why. */
+   just "the screen happens to be small." Bottom-right, opposite the
+   top-left corner panel (stats + minimap). Four independent buttons rather
+   than a drag stick — see touchControls.js for why. */
 #touch-dpad {
   display: none;
   position: fixed;
@@ -337,31 +352,39 @@ button:hover {
 }
 
 /* The real-world locator map (twod/minimap.js) — deliberately outside the
-   game canvas/HUD, always visible, never intercepting clicks. */
+   game canvas/HUD, always visible, never intercepting clicks. Square (not
+   the old wide rectangle) since it's now a fixed-size window that pans
+   with the canoe instead of showing the whole route at once — see
+   minimap.js. aspect-ratio, not a hard-coded height, so the clamp() below
+   is the only place its size is chosen. */
 #minimap {
-  position: fixed;
-  left: 16px;
-  bottom: 16px;
-  width: min(400px, calc(100vw - 32px));
+  position: relative;
+  width: clamp(120px, 20vw, 190px);
+  aspect-ratio: 1 / 1;
+  flex: 0 0 auto;
   background: rgba(10, 14, 20, 0.72);
   border: 3px solid #f4ead2;
   box-shadow: 4px 4px 0 #000;
-  padding: 8px 10px 10px;
   pointer-events: none;
 }
 
+/* Floats over the map itself (rather than sitting above it in normal flow)
+   so adding it doesn't grow the box past a true square. */
 #minimap-title {
-  font-size: 10px;
+  position: absolute;
+  top: 5px;
+  left: 7px;
+  font-size: 9px;
   color: #bcae94;
   text-shadow: 2px 2px 0 #000;
   letter-spacing: 1px;
-  margin-bottom: 6px;
+  z-index: 1;
 }
 
 #minimap svg {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
 }
 
 #minimap-marker {
@@ -371,15 +394,6 @@ button:hover {
 @keyframes minimap-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
-}
-
-/* Placed after the base #minimap rule (same specificity, later wins) so
-   this actually overrides it on touch devices — leaves clear room for the
-   joystick in the opposite corner instead of overlapping it. */
-@media (hover: none) and (pointer: coarse) {
-  #minimap {
-    width: min(220px, 42vw);
-  }
 }
 
 button:active {

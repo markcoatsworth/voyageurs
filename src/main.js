@@ -69,11 +69,13 @@ const obstacles = createObstacleField(world);
 const input = new Input();
 createTouchControls(input);
 
-// Outside the game canvas entirely (fixed to the viewport, not #screen) —
-// see twod/minimap.js for why it's a real, geographically-placed route
-// rather than an invented shape.
+// Floats in the top-left corner alongside the stats HUD (#corner-panel in
+// index.html/style.css), over the game canvas rather than reserving space
+// from it — same overlay treatment as the stats text and the mute/pause
+// buttons. See twod/minimap.js for why it's a real, geographically-placed
+// route rather than an invented shape.
 const minimap = createMinimap();
-document.body.appendChild(minimap.el);
+document.getElementById('corner-panel').appendChild(minimap.el);
 
 const ui = {
   hud: document.getElementById('hud'),

@@ -1,9 +1,10 @@
 // Shared geography for the river's real waypoints — the Saguenay Fjord from
-// La Baie down to Tadoussac, then into the Saint Lawrence estuary. Used by
-// both the minimap (drawing the route + marker) and the village system
-// (placing villages at the exact same real-world points along the actual
-// playable river), so "you're at Tadoussac" means the same thing on the
-// minimap and in the game world. Coordinates and their sources:
+// La Baie down to Tadoussac, then the Saint Lawrence's North Shore (Côte-
+// Nord) all the way out to Sept-Îles. Used by both the minimap (drawing the
+// route + marker) and the village system (placing villages at the exact
+// same real-world points along the actual playable river), so "you're at
+// Tadoussac" means the same thing on the minimap and in the game world.
+// Coordinates and their sources:
 //   La Baie              48°25′42″N 71°03′44″W  https://en.wikipedia.org/wiki/La_Baie
 //   Sainte-Rose-du-Nord   48°23′N   70°35′W      https://en.wikipedia.org/wiki/Sainte-Rose-du-Nord,_Quebec
 //   Rivière-Éternité      48°15′20″N 70°24′50″W  https://en.wikipedia.org/wiki/Rivi%C3%A8re-%C3%89ternit%C3%A9
@@ -11,6 +12,12 @@
 //   Petit-Saguenay        48°13′N   70°04′W      https://en.wikipedia.org/wiki/Petit-Saguenay
 //   Tadoussac             48°09′N   69°43′W      https://en.wikipedia.org/wiki/Tadoussac
 //   Les Escoumins         48°21′05″N 69°24′27″W  https://en.wikipedia.org/wiki/Les_Escoumins
+//   Forestville           48°44′33″N 69°05′24″W  https://en.wikipedia.org/wiki/Forestville,_Quebec
+//   Baie-Comeau           49°13′12″N 68°09′00″W  https://en.wikipedia.org/wiki/Baie-Comeau
+//   Godbout               49°17′24″N 67°35′24″W  https://en.wikipedia.org/wiki/Godbout,_Quebec
+//   Baie-Trinité          49°25′12″N 67°20′24″W  https://en.wikipedia.org/wiki/Baie-Trinit%C3%A9
+//   Port-Cartier          50°01′48″N 66°52′12″W  https://en.wikipedia.org/wiki/Port-Cartier,_Quebec
+//   Sept-Îles             50°12′00″N 66°22′48″W  https://en.wikipedia.org/wiki/Sept-%C3%8Eles,_Quebec
 import { MOUTH_DISTANCE } from './path.js';
 
 // labelPos hand-places each minimap label clear of the route line and the
@@ -26,15 +33,31 @@ export const FJORD_WAYPOINTS = [
   { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, label: 'Tadoussac', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
 ];
 // The game world has no fixed "end" the way the fjord has Tadoussac — past
-// the mouth it's open-ended estuary. This is just the real next stretch of
-// coast to place a village/draw the marker continuing onto.
+// the mouth it's the open Saint Lawrence, hugging the North Shore all the
+// way out to Sept-Îles. These are real Côte-Nord towns strung along that
+// coast (roughly Route 138), each placed by its real lat/lon same as the
+// fjord waypoints above, just spaced much further apart in reality — see
+// ESTUARY_SPAN_DISTANCE below for how that maps onto game-world distance.
 export const ESTUARY_WAYPOINTS = [
   { name: 'Les Escoumins', lat: 48.3514, lon: -69.4075, labelPos: { dx: -1.4, dy: 0.9, anchor: 'end' } },
+  { name: 'Forestville', lat: 48.7425, lon: -69.0900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Baie-Comeau', lat: 49.2200, lon: -68.1500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Godbout', lat: 49.2900, lon: -67.5900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Baie-Trinité', lat: 49.4200, lon: -67.3400, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Port-Cartier', lat: 50.0300, lon: -66.8700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Sept-Îles', lat: 50.2000, lon: -66.3800, label: 'Sept-Îles', labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
 ];
 // How much further downstream (game world units) it takes to cross the
-// drawn estuary stretch after the mouth, before the minimap marker holds at
-// its end.
-export const ESTUARY_SPAN_DISTANCE = 400;
+// whole drawn Côte-Nord stretch after the mouth, before the minimap marker
+// holds at its end. The real coastline this now covers (Tadoussac to
+// Sept-Îles, ~400km) is roughly 7x the length of the whole fjord run, but
+// this deliberately isn't scaled up 1:1 with that — cumulativeForFlowDistance
+// below reparametrizes real distance onto this fixed span, so waypoints stay
+// correctly spaced *relative to each other* regardless of what this number
+// is; it only controls how long the stretch takes to paddle. 2400 (~2.7x
+// the fjord's 900) makes it the clearly bigger part of the journey without
+// turning a play session into an hour of open water. Tune freely.
+export const ESTUARY_SPAN_DISTANCE = 2400;
 
 export const ROUTE = [...FJORD_WAYPOINTS, ...ESTUARY_WAYPOINTS];
 

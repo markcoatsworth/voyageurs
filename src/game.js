@@ -3,7 +3,7 @@ import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEI
 import { drawBanks, drawWaterFallback } from './twod/terrain.js';
 import { drawWhales } from './twod/whales.js';
 import { createCanoeSprites } from './twod/canoe.js';
-import { playCapsizeHorn, playPeltChime } from './twod/sfx.js';
+import { playCapsizeHorn, playPeltChime, playDamageBoop } from './twod/sfx.js';
 import { getDockHit, DOCK_HIT_Z } from './twod/villages.js';
 import { createVillageScene } from './twod/villageScene.js';
 import { isTouchPrimary } from './twod/touchControls.js';
@@ -212,6 +212,9 @@ export class Game {
       () => this.ui.damageFlash.classList.remove('show'),
       DAMAGE_FLASH_TIME * 1000
     );
+    // The capsize horn (gameOver, below) already covers the fatal hit —
+    // playing this too would just stack a second cue on top of it.
+    if (this.health > 0) playDamageBoop();
     if (this.health <= 0) this.gameOver();
   }
 
