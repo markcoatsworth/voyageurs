@@ -293,32 +293,37 @@ button:hover {
   opacity: 1;
 }
 
-/* An arrow D-pad for touch devices — hidden on anything with a precise
-   pointer (mouse/trackpad), shown only where hover:none + pointer:coarse
-   both hold, which reliably means "touch is the primary input" rather than
-   just "the screen happens to be small." Bottom-right, opposite the
-   top-left corner panel (stats + minimap). Four independent buttons rather
-   than a drag stick — see touchControls.js for why. */
+/* Big, obvious arrow controls, always visible (not gated to touch devices
+   — a clickable directional control is just as reasonable to want with a
+   mouse as the mute/pause buttons are). A single row, not the old 2D
+   plus-shaped grid, in the order up/left/right/down. Four independent
+   buttons rather than a drag stick — see touchControls.js for why.
+   Pinned to the screen's actual bottom-right corner — `right` here is the
+   real, permanent value (same convention #right-panel uses up top), not
+   just a pre-JS fallback. `top` is the one dynamic piece: main.js's
+   resize() overrides it every time the window changes, computed from the
+   game canvas's own actual rendered bottom edge so this row sits just below
+   it rather than on top of it — `bottom` below is only the pre-JS fallback
+   for the very first paint, before that override runs. */
 #touch-dpad {
-  display: none;
+  display: flex;
+  flex-direction: row;
   position: fixed;
   right: 20px;
   bottom: 20px;
-  width: 164px;
-  height: 164px;
-  grid-template-columns: 52px 52px 52px;
-  grid-template-rows: 52px 52px 52px;
-  gap: 4px;
+  gap: 10px;
   z-index: 5;
 }
 
 .dpad-btn {
   padding: 0;
   margin: 0;
+  width: 58px;
+  height: 58px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 26px;
   background: rgba(10, 14, 20, 0.55);
   color: #f4ead2;
   border: 3px solid rgba(244, 234, 210, 0.65);
@@ -329,21 +334,15 @@ button:hover {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Lights up red the instant a button is pressed — driven explicitly via
+   .pressed (see touchControls.js) rather than relying on :active alone,
+   which doesn't reliably fire for touch input on every browser; :active
+   stays too so a mouse click still gets the same feedback outside of
+   touchControls.js's own pointer tracking. */
 .dpad-btn:active,
 .dpad-btn.pressed {
-  background: rgba(224, 164, 88, 0.7);
-  border-color: #e0a458;
-}
-
-.dpad-up { grid-column: 2; grid-row: 1; }
-.dpad-left { grid-column: 1; grid-row: 2; }
-.dpad-right { grid-column: 3; grid-row: 2; }
-.dpad-down { grid-column: 2; grid-row: 3; }
-
-@media (hover: none) and (pointer: coarse) {
-  #touch-dpad {
-    display: grid;
-  }
+  background: rgba(214, 69, 69, 0.85);
+  border-color: #ff6b6b;
 }
 
 /* The real-world locator map (twod/minimap.js) — deliberately outside the
