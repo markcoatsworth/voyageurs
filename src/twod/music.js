@@ -13,7 +13,16 @@ const PLAYLIST = [
   '/audio/reel-des-montagnes.mp3',
   '/audio/valse-des-laboureurs.mp3',
   '/audio/le-violon-en-discorde.mp3',
+  '/audio/reel-des-forets.mp3',
 ];
+
+// Always the opening track — every time the play order is (re)built, not
+// just once at the very start of the session, so it's still what leads
+// after the rest of the playlist has cycled through and reshuffles too.
+// Everything else about it is an ordinary PLAYLIST entry (normalized to
+// the same loudness target, eligible for the shuffle like any other track
+// once it's not sitting in this opening slot).
+const OPENING_TRACK = '/audio/reel-des-forets.mp3';
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -41,6 +50,13 @@ function shuffled(list) {
   return arr;
 }
 
+// OPENING_TRACK pinned to the front, everything else shuffled behind it —
+// used for both the very first order and every reshuffle after, so it
+// always leads.
+function buildOrder() {
+  return [OPENING_TRACK, ...shuffled(PLAYLIST.filter((t) => t !== OPENING_TRACK))];
+}
+
 export function createMusic() {
   const audio = new Audio();
   audio.volume = DEFAULT_VOLUME;
@@ -51,7 +67,7 @@ export function createMusic() {
   // one-off mute click look like "the music broke" days later).
   let muted = false;
 
-  let order = shuffled(PLAYLIST);
+  let order = buildOrder();
   let index = 0;
 
   // Tried routing this through a MediaElementAudioSourceNode + AudioContext
@@ -91,7 +107,7 @@ export function createMusic() {
   audio.addEventListener('ended', () => {
     index++;
     if (index >= order.length) {
-      order = shuffled(PLAYLIST);
+      order = buildOrder();
       index = 0;
     }
     playCurrent();
