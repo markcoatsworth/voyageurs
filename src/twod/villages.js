@@ -132,18 +132,7 @@ export function isNearVillage(d, side) {
   return false;
 }
 
-// Every other village is a dead end, so a dock generous enough to cover
-// most of the channel (see the comment up top) only ever makes it easier to
-// land. Tadoussac isn't a dead end — the river forks there, and reaching
-// Québec City means steering toward that bank and sailing *past* the dock
-// into the west channel, not landing at it. A reach this size would leave no
-// lane to sail through, so Tadoussac keeps a normal, pier-sized reach
-// instead of the wide one, fixed rather than randomized like every other
-// village's so the fork lane it leaves behind is always the same width.
-const TADOUSSAC_DOCK_REACH = 2;
-
 function dockReach(v) {
-  if (v.name === 'Tadoussac') return TADOUSSAC_DOCK_REACH;
   return DOCK_LENGTH * villageLayout(v.seed).dock.lengthScale;
 }
 

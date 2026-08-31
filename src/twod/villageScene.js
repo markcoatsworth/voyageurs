@@ -19,9 +19,8 @@ const DOCK_TOP = WATER_TOP - 12;
 // x0/x1 match the dock's own walkable width (DOCK_X0/DOCK_X1) exactly, not
 // inset inside it — isWalkable() already clamps movement to that same
 // range, so an inset here used to pin a player walking to either literal
-// edge of the dock (as the Tadoussac arrival banner tells them to) just
-// outside the zone that would actually register their reboard, leaving
-// them stuck and unable to ever choose that side.
+// edge of the dock just outside the zone that would actually register
+// their reboard, leaving them stuck right at the edge unable to leave.
 const REBOARD_ZONE = { x0: DOCK_X0, x1: DOCK_X1, y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
 
 // Anchor is the point where each building's front (door) sits; the
@@ -213,13 +212,7 @@ export function createVillageScene() {
       const tradeRequested = nearTrader && !wasNearTrader;
       wasNearTrader = nearTrader;
 
-      // Only meaningful at Tadoussac (game.js's leaveVillage() only reads it
-      // for that one village) — which half of the dock you reboard from is
-      // the actual junction choice there, per the arrival banner. Every
-      // other village computes this too, harmlessly, and game.js ignores it.
-      const reboardSide = player.x < CANVAS_WIDTH / 2 ? 'west' : 'east';
-
-      return { reboard, tradeRequested, reboardSide };
+      return { reboard, tradeRequested };
     },
 
     draw(ctx) {

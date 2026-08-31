@@ -4,7 +4,7 @@ import { drawBanks, drawWaterFallback } from './twod/terrain.js';
 import { drawWhales } from './twod/whales.js';
 import { createCanoeSprites } from './twod/canoe.js';
 import { playCapsizeHorn, playPeltChime, playDamageBoop } from './twod/sfx.js';
-import { getDockHit, DOCK_HIT_Z, VILLAGES } from './twod/villages.js';
+import { getDockHit, DOCK_HIT_Z } from './twod/villages.js';
 import { createVillageScene } from './twod/villageScene.js';
 import { isTouchPrimary } from './twod/touchControls.js';
 
@@ -42,8 +42,8 @@ const MAX_REVERSE_SPEED = -6 * speedScale;
 // here is a sustained, active effort the whole way, not an occasional
 // correction.
 const UPRIVER_CURRENT = -MIN_SPEED;
-// this.speed carries over unchanged into lawrenceWest — a player forking
-// there mid-paddle keeps whatever forward speed they arrived with, same as
+// this.speed carries over unchanged into lawrenceWest — a player crossing
+// into it mid-paddle keeps whatever forward speed they arrived with, same as
 // every other segment transition. Everywhere else that's fine (the
 // ambient current there is a gentle forward drift, so leftover speed just
 // eases down toward it over several seconds); here it would mean a real
@@ -137,11 +137,11 @@ const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 // a dock-or-else stop right at the junction; that's exactly what caused a
 // string of stuck-at-Tadoussac bugs (nowhere to go if you weren't already
 // lined up with the dock, worst of all right where main.js's ?start= cheat
-// can drop you with zero approach). Paddling through without docking is
-// completely fine now — see the fork logic further down in update() for how
-// which Saint Lawrence branch you end up on is decided by steering alone,
-// the same as every other choice on the river, rather than requiring you to
-// stop, walk into Tadoussac, and re-board from a specific end of its dock.
+// can drop you with zero approach). Paddling through is completely fine —
+// crossing MOUTH_DISTANCE always continues into lawrenceWest now (see the
+// crossing check further down in update()); lawrenceEast still exists as
+// real geography (route.js, the minimap) but is no longer a live gameplay
+// destination — see route.js's own module comment for why.
 const SEGMENT_FLOOR = {
   fjord: 0,
   lawrenceWest: SEGMENT_SHAPE_OFFSET.lawrenceWest,
@@ -156,39 +156,6 @@ const SEGMENT_FLOOR = {
 const AMBIENT_CURRENT = {
   lawrenceWest: UPRIVER_CURRENT,
 };
-
-// How the Tadoussac fork works if you never actually dock there (see the
-// crossing check in update()): lean far enough toward Tadoussac's own side
-// of the channel as you cross the mouth and you carry on toward Québec
-// City; anywhere else (centered, or leaning the other way) continues
-// toward Sept-Îles, same as the river always did before Québec City existed
-// as an option. FORK_LEAN_UNITS needs a real, deliberate lean — the channel
-// here is only ~13 units wide (see river/path.js's WIDTH_EASE_DISTANCE), so
-// this is roughly 40% of the way to the actual bank, well past incidental
-// centerline wobble but nowhere near as far as actually reaching the dock.
-const TADOUSSAC_WEST_SIDE = VILLAGES.find((v) => v.name === 'Tadoussac').side;
-const FORK_LEAN_UNITS = 2.5;
-
-// The fork has to be decided *before* Tadoussac's dock physically exists —
-// the dock's own reach only extends to within DOCK_HIT_Z (villages.js) of
-// MOUTH_DISTANCE, so checking the lean starting this far upstream of it
-// means a real, sustained lean the whole way in gets you forked into
-// lawrenceWest long before the canoe is ever close enough for the dock to
-// have a say. Without this, holding a hard lean the entire approach (the
-// most natural way to "steer toward Québec City") drifts into the bank by
-// the time it reaches the mouth and the dock claims it instead — the fork
-// threshold and the dock's own reach zone used to sit at the same distance,
-// so there was no way to lean that far without eventually also touching the
-// dock. 15 units of lead-in is comfortably more than DOCK_HIT_Z away.
-const FORK_CHECKPOINT_DISTANCE = MOUTH_DISTANCE - 15;
-
-// How far past the mouth the fork window stays open before defaulting to
-// Sept-Îles. Steering has inertia (STEER_ACCEL/STEER_DAMPING below), so a
-// lean that only starts right at the mouth needs real distance to actually
-// build past FORK_LEAN_UNITS — without this, a player who decides to go
-// west late gets defaulted east out from under them before their lean ever
-// had the chance to register.
-const FORK_DECISION_END = MOUTH_DISTANCE + 20;
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -322,13 +289,12 @@ export class Game {
     this.villageScene.enter(village);
     this.ui.hud.classList.add('hidden');
     // Tadoussac is the one place in the game where casting off isn't just
-    // resuming the same segment — it's a real three-way junction (see
-    // river/route.js's module comment) — so it gets its own arrival banner
-    // spelling out the choice villageScene.js's reboard-side split is about
-    // to offer, rather than the generic "Arriving at X" every other village
-    // uses.
+    // resuming the same segment — leaving here jumps into lawrenceWest's
+    // entirely different numbering (see leaveVillage()) — so it gets its
+    // own arrival banner, though there's no choice to spell out any more:
+    // every departure from here continues the same way, upriver.
     if (village.name === 'Tadoussac') {
-      this.showBanner('Arriving at Tadoussac — walk to the left end of the dock for Québec City, the right end for Sept-Îles');
+      this.showBanner('Arriving at Tadoussac — the Saguenay meets the Saint Lawrence');
     } else {
       this.showBanner(`Arriving at ${village.name}`);
     }
@@ -355,11 +321,12 @@ export class Game {
   leaveVillage() {
     this.mode = 'river';
     if (this.currentVillage.name === 'Tadoussac') {
-      // pendingJunctionChoice is set by update()'s village-mode branch from
-      // villageScene.js's reboardSide the instant reboard fires — see there.
-      const nextSegment = this.pendingJunctionChoice === 'west' ? 'lawrenceWest' : 'lawrenceEast';
-      this.enterSegment(nextSegment, SEGMENT_SHAPE_OFFSET[nextSegment] + 0.5);
-      this.showBanner(nextSegment === 'lawrenceWest' ? 'Paddling upriver toward Québec City — fight the current' : 'Paddling toward Sept-Îles');
+      // Always continues upriver toward Québec City — no choice any more,
+      // just a real segment jump (fjord and lawrenceWest don't share a
+      // number line the way fjord and lawrenceEast do, so this can't just
+      // resume in place like every other village's cast-off below).
+      this.enterSegment('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
+      this.showBanner('Paddling upriver toward Québec City — fight the current');
     } else {
       // Push just past the dock's own trigger zone — otherwise the instant
       // control returns to the canoe, it's still sitting in the exact spot
@@ -442,15 +409,10 @@ export class Game {
     }
 
     if (this.mode === 'village') {
-      const { reboard, tradeRequested, reboardSide } = this.villageScene.update(dt, this.input.state);
+      const { reboard, tradeRequested } = this.villageScene.update(dt, this.input.state);
       if (tradeRequested) this.tryRepairTrade();
       this.villageScene.draw(this.ctx);
-      if (reboard) {
-        // Only meaningful at Tadoussac (see leaveVillage()'s branch) — every
-        // other village ignores it and just resumes its own segment.
-        this.pendingJunctionChoice = reboardSide;
-        this.leaveVillage();
-      }
+      if (reboard) this.leaveVillage();
       return;
     }
 
@@ -528,44 +490,34 @@ export class Game {
     this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
 
     // Docking takes priority over everything else this frame — running
-    // into a dock is the one collision that isn't damage. Unchanged,
-    // original priority: still checked first, every frame, regardless of
-    // the fork window below.
+    // into a dock is the one collision that isn't damage. Still checked
+    // first, every frame, ahead of the mouth-crossing check below (so
+    // docking at Tadoussac itself, if the player happens to steer into its
+    // reach on the way past, still works exactly like every other village).
     const dockHit = getDockHit(this.flowDistance, this.canoeWorldX);
     if (dockHit) {
       this.enterVillage(dockHit);
       return;
     }
 
-    // The Tadoussac fork: not a single instant but a stretch of river, from
-    // FORK_CHECKPOINT_DISTANCE (see its comment — well before the dock
-    // exists) to FORK_DECISION_END, a bit past the mouth. Checked every
-    // frame across that whole stretch, not just once: the moment a real
-    // lean toward Québec City's side crosses FORK_LEAN_UNITS, the fork fires
-    // right then, however early or late that happens to be. Only once the
-    // canoe is past the end of the window with no such lean does it default
-    // to Sept-Îles — a lean that starts late still needs real time to build
-    // up (steering has inertia), and locking in the default the instant
-    // flowDistance first reached MOUTH_DISTANCE (the old behavior) could cut
-    // a still-developing lean off before it ever got the chance.
-    // Since lean grows continuously from zero, it always passes through
-    // FORK_LEAN_UNITS before it could ever reach the dock's own (larger)
-    // reach zone — so a sustained lean forks well before the dock is ever
-    // touched, while dock-check above still wins for a sharp, late turn
-    // aimed right at the dock itself.
-    if (this.segment === 'fjord' && this.flowDistance >= MOUTH_DISTANCE && !this.mouthAnnounced) {
-      this.mouthAnnounced = true;
-      this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");
-    }
-    if (this.segment === 'fjord' && this.flowDistance >= FORK_CHECKPOINT_DISTANCE) {
-      if (this.lateralOffset * TADOUSSAC_WEST_SIDE > FORK_LEAN_UNITS) {
-        this.enterSegment('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
-        this.showBanner('Paddling upriver toward Québec City — fight the current');
-      } else if (this.flowDistance >= FORK_DECISION_END) {
-        this.segment = 'lawrenceEast'; // same numbering as the fjord — no reset needed
-      }
+    // Crossing the mouth always continues upriver toward Québec City now —
+    // no fork, no choice, no lean or dock-based branch selection. There
+    // used to be one (lean toward Tadoussac's own bank to peel off west,
+    // otherwise default east toward Sept-Îles); this game is a one-way trip
+    // now, and lawrenceEast survives only as real geography for the minimap
+    // to draw (see route.js's module comment) — a fun three-way junction to
+    // look at, not a live gameplay destination.
+    if (this.segment === 'fjord' && this.flowDistance >= MOUTH_DISTANCE) {
+      if (!this.mouthAnnounced) this.mouthAnnounced = true;
+      this.enterSegment('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
+      this.showBanner('Paddling upriver toward Québec City — fight the current');
     } else if (this.segment === 'lawrenceEast' && this.flowDistance < MOUTH_DISTANCE) {
-      this.segment = 'fjord'; // paddled back upstream past the mouth
+      // Only reachable via main.js's ?start= cheat now (e.g. ?start=sept-
+      // iles) — normal play never sets segment to lawrenceEast any more.
+      // Kept so paddling backward from a cheat-started position still
+      // relabels correctly instead of leaving the minimap's local-distance
+      // math clamped at 0, stuck on Tadoussac's own point.
+      this.segment = 'fjord';
     }
 
     // Braided-channel islands sit mid-water, not at a fixed edge, so unlike
@@ -593,15 +545,15 @@ export class Game {
     this.rapids = rapids;
     this.effectiveSpeed = effectiveSpeed;
 
-    // Fallback for a run that starts already in lawrenceEast (a restart
-    // after death, or main.js's ?start= cheat targeting a village past the
-    // mouth) — the fork block above already handles a *live* crossing from
-    // the fjord (including a westward fork, which still counts as having
-    // reached Tadoussac), but a run that begins in lawrenceEast never passes
-    // through that block at all. Deliberately not "segment !== lawrenceWest"
-    // here: a run starting in lawrenceWest (e.g. ?start=quebec-city) never
-    // actually reached Tadoussac either, just a numeric coincidence of
-    // SEGMENT_SHAPE_OFFSET putting it past MOUTH_DISTANCE too.
+    // Fallback for a run that starts already in lawrenceEast — only
+    // reachable via main.js's ?start= cheat now (e.g. ?start=sept-iles),
+    // since normal play never branches there any more. The mouth-crossing
+    // check above already handles a *live* crossing from the fjord, but a
+    // run that begins in lawrenceEast never passes through that at all.
+    // Deliberately not "segment !== lawrenceWest" here: a run starting in
+    // lawrenceWest (e.g. ?start=quebec-city) never actually reached
+    // Tadoussac either, just a numeric coincidence of SEGMENT_SHAPE_OFFSET
+    // putting it past MOUTH_DISTANCE too.
     if (this.segment === 'lawrenceEast' && !this.mouthAnnounced) {
       this.mouthAnnounced = true;
       this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");

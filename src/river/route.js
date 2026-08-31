@@ -5,16 +5,19 @@
 //   - the Saint Lawrence west of Tadoussac, hugging the North Shore
 //     (Charlevoix) back to Québec City
 // A single flowDistance number line can only ever represent two directions
-// from a point (forward/backward) — Tadoussac is a real three-way junction,
-// so it can't be "the fjord continues into the estuary" the way earlier
-// versions of this file modeled it. Each of the three above is its own
-// SEGMENT with its own local geography; every village's flowDistance below
-// already has its segment's river/path.js SEGMENT_SHAPE_OFFSET baked in
-// (see that file's comment), so this module's output plugs directly into
+// from a point (forward/backward), so each of the three above is still its
+// own SEGMENT with its own local geography here and on the minimap — a real
+// three-way junction is worth seeing at Tadoussac even though game.js
+// doesn't actually offer a choice there any more (crossing the mouth always
+// continues into lawrenceWest; lawrenceEast/Sept-Îles is real geography for
+// the map to draw, not a live destination — see game.js's own comment on
+// its mouth-crossing check). Every village's flowDistance below already has
+// its segment's river/path.js SEGMENT_SHAPE_OFFSET baked in (see that
+// file's comment), so this module's output plugs directly into
 // villages.js/game.js exactly the way one flat, non-branching route used
-// to — the branching is entirely game.js's segment state machine deciding
-// *which* of these numbers is currently meaningful, not anything villages.js
-// or terrain.js/obstacles.js/whales.js need to know about.
+// to — which of these numbers is currently meaningful is entirely game.js's
+// own state, not anything villages.js or terrain.js/obstacles.js/whales.js
+// need to know about.
 //
 // The one thing every segment *does* share is this file's coordinate space
 // and cumulative-distance math (so the minimap can plot all three, and the
