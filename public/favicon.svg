@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Background matches the game's own page background (#0a0e14) so the
+       icon blends naturally into a browser tab, light or dark. -->
+  <rect width="64" height="64" rx="10" fill="#0a0e14"/>
+
+  <!-- The V: doubles as the Voyageurs initial and the fjord's own V-shaped
+       valley walls (see route.js/path.js — this game is literally set in
+       one), rather than an arbitrary letterform bolted onto a boat.
+       Color matches the title screen's own H1 accent (#e0a458). -->
+  <path d="M10,9 L30,46 L34,46 L54,9"
+        fill="none" stroke="#e0a458" stroke-width="9"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- A hint of river in the V's notch, right where the canoe sits. -->
+  <ellipse cx="32" cy="47.5" rx="11" ry="4" fill="#5fa8d9"/>
+
+  <!-- Canoe, side profile, nestled in the valley — same hull colors as the
+       in-game sprite (twod/sprites.js's createCanoeSprite): #4a2f18
+       outline, #a3672f base, #c98a4b gunwale highlight. -->
+  <path d="M15,47 Q32,38 49,47 Q32,54 15,47 Z" fill="#4a2f18"/>
+  <path d="M17,47 Q32,40 47,47 Q32,52 17,47 Z" fill="#a3672f"/>
+  <path d="M20,45.5 Q32,42 44,45.5" fill="none" stroke="#c98a4b" stroke-width="1.2" stroke-linecap="round"/>
+</svg>
