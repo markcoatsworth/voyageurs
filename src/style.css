@@ -11,6 +11,12 @@ html, body {
   background: #0a0e14;
   font-family: 'Press Start 2P', monospace;
   color: #f4ead2;
+  /* Everything here is game UI, not readable content — without this, a
+     long-press on any HUD label or banner text can trigger the mobile
+     browser's text-selection/copy popup mid-game. */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
 }
 
 #app {
@@ -179,6 +185,14 @@ html, body {
   overflow-y: auto;
 }
 
+/* Narrow phones get less horizontal padding eaten by the box itself, so
+   there's more room left for the headline before it needs to shrink. */
+@media (max-width: 480px) {
+  .screen {
+    padding: 24px 16px;
+  }
+}
+
 .screen h1 {
   font-size: 28px;
   color: #e0a458;
@@ -193,7 +207,12 @@ html, body {
    nothing below it to space away from. */
 #title-screen h1,
 #pause-screen h1 {
-  font-size: 48px;
+  /* Fluid, not fixed — "Press Start 2P" is a wide, blocky font, and
+     VOYAGEURS at a flat 48px overflows clean off a phone-width screen
+     (confirmed on a Pixel 9's actual 412px viewport — text rendered past
+     the box and off the edge of the screen entirely). Scales down on
+     narrow viewports, caps at the original 48px once there's room for it. */
+  font-size: clamp(26px, 9vw, 48px);
   margin: 0;
 }
 

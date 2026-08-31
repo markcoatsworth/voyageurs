@@ -1,8 +1,17 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- lang="en" above isn't enough on its own — Chrome's translate feature
+       runs its own content-based language model rather than fully trusting
+       the declared lang, and this page is genuinely dense with French
+       (village names, song titles, in-game banner text), enough to trip
+       that model into offering to translate from French. translate="no"
+       plus this meta tag are the two standard, Chrome-specific signals
+       that actually suppress the offer rather than just declaring a
+       language it can second-guess. -->
+  <meta name="google" content="notranslate" />
   <title>Voyageurs</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
