@@ -1,5 +1,5 @@
 // Real geography for a three-way river system, meeting at Tadoussac:
-//   - the Saguenay Fjord, La Baie (the put-in) down to Tadoussac
+//   - the Saguenay Fjord, Lac Saint-Jean (the put-in) down to Tadoussac
 //   - the Saint Lawrence east of Tadoussac, hugging the North Shore
 //     (Côte-Nord) out to Sept-Îles
 //   - the Saint Lawrence west of Tadoussac, hugging the North Shore
@@ -23,7 +23,11 @@
 // same river) — see makeSegment() below.
 //
 // Coordinates and their sources:
-//   La Baie               48°25′42″N 71°03′44″W  https://en.wikipedia.org/wiki/La_Baie
+//   Lac Saint-Jean        48°25′42″N 71°03′44″W  actually La Baie's coordinates —
+//                                                see the comment on FJORD_WAYPOINTS[0]
+//                                                for why this one's deliberately not
+//                                                Lac Saint-Jean's own real position
+//                                                https://en.wikipedia.org/wiki/La_Baie
 //   Sainte-Rose-du-Nord   48°23′N   70°35′W       https://en.wikipedia.org/wiki/Sainte-Rose-du-Nord,_Quebec
 //   Rivière-Éternité      48°15′20″N 70°24′50″W   https://en.wikipedia.org/wiki/Rivi%C3%A8re-%C3%89ternit%C3%A9
 //   L'Anse-Saint-Jean     48°14′N   70°12′W       https://en.wikipedia.org/wiki/L%27Anse-Saint-Jean,_Quebec
@@ -44,7 +48,17 @@ import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
 // labelPos hand-places each minimap label clear of the route line and the
 // widget's edges. Unused outside minimap.js.
 const FJORD_WAYPOINTS = [
-  { name: 'La Baie', lat: 48.4283, lon: -71.0622, label: 'Put-in', labelPos: { dx: 1.4, dy: -2.4, anchor: 'start' } },
+  // Really La Baie's own coordinates, kept as-is rather than moved to Lac
+  // Saint-Jean's actual location — this point is index 0 of makeSegment()'s
+  // cumulative real-distance math, which every other fjord waypoint's
+  // spacing along the 0-900 flowDistance range is a fraction of; moving it
+  // would reflow all of that pacing for a purely cosmetic rename. Labeled
+  // as the lake instead (a reasonable liberty: the Saguenay really does
+  // begin there, just a bit further upstream than this exact point), with
+  // LAC_SAINT_JEAN_SHAPE below drawn as an offset from this same anchor so
+  // the lake the player launches onto reads as sitting right where they
+  // start, without touching the real-distance math at all.
+  { name: 'Lac Saint-Jean', lat: 48.4283, lon: -71.0622, label: 'Lac Saint-Jean', labelPos: { dx: -15, dy: -3, anchor: 'middle' } },
   { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   { name: 'Rivière-Éternité', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
   { name: "L'Anse-Saint-Jean", lat: 48.2330, lon: -70.2000, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
@@ -160,6 +174,30 @@ export const SEGMENTS = {
   lawrenceEast: makeSegment('lawrenceEast', LAWRENCE_EAST_WAYPOINTS, ESTUARY_SPAN_DISTANCE),
   lawrenceWest: makeSegment('lawrenceWest', LAWRENCE_WEST_WAYPOINTS, LAWRENCE_WEST_SPAN_DISTANCE),
 };
+
+// A decorative lake shape for the minimap only — never touched by any
+// gameplay math, unlike every other point in this file. Offsets (km) from
+// the put-in itself rather than an independent lat/lon, both so it's
+// guaranteed to sit right where the player launches regardless of that
+// point's own real coordinates (see the comment on FJORD_WAYPOINTS[0]), and
+// because it's a loose, roughly-lake-shaped blob for the map to look
+// pretty with, not a surveyed coastline. Real Lac Saint-Jean is genuinely
+// upstream/west of here, hence the shape trending that direction — closed
+// loop, first/last point identical, smoothed into a curve by minimap.js
+// rather than drawn as a hard-edged polygon.
+const LAKE_ANCHOR = SEGMENTS.fjord.points[0];
+const LAKE_OFFSETS = [
+  { dx: 3, dy: 3 },
+  { dx: -5, dy: 12 },
+  { dx: -20, dy: 17 },
+  { dx: -38, dy: 11 },
+  { dx: -47, dy: -3 },
+  { dx: -41, dy: -19 },
+  { dx: -24, dy: -25 },
+  { dx: -8, dy: -16 },
+  { dx: 3, dy: 3 },
+];
+export const LAC_SAINT_JEAN_SHAPE = LAKE_OFFSETS.map((o) => ({ x: LAKE_ANCHOR.x + o.dx, y: LAKE_ANCHOR.y + o.dy }));
 
 // Every real point across all three segments, for the minimap to draw as
 // one continuous picture regardless of which segment is actually active.

@@ -13,7 +13,7 @@
 // map-projection coordinates. Panning is just moving the SVG viewBox — the
 // route/label markup itself never needs rebuilding, only which segment's
 // cumulative-distance math update() uses to place the marker changes.
-import { SEGMENTS, ALL_POINTS } from '../river/route.js';
+import { SEGMENTS, ALL_POINTS, LAC_SAINT_JEAN_SHAPE } from '../river/route.js';
 
 // Width/height of the visible window, in the same km-equivalent units as
 // the projected route points. Picked against the real gaps between
@@ -44,6 +44,24 @@ const SEGMENT_STYLE = {
 
 const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
 
+// Turns a closed loop of points into a smooth, rounded outline instead of a
+// hard-edged polygon — quadratic curves through each edge's midpoint, using
+// the original points as control points, a standard cheap way to round off
+// a shape defined by only a handful of points (see LAC_SAINT_JEAN_SHAPE's
+// own comment for why it's loose rather than a surveyed coastline).
+function smoothClosedPath(pts) {
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const start = mid(pts[pts.length - 1], pts[0]);
+  let d = `M${start.x.toFixed(2)},${start.y.toFixed(2)} `;
+  for (let i = 0; i < pts.length; i++) {
+    const curr = pts[i];
+    const next = pts[(i + 1) % pts.length];
+    const m = mid(curr, next);
+    d += `Q${curr.x.toFixed(2)},${curr.y.toFixed(2)} ${m.x.toFixed(2)},${m.y.toFixed(2)} `;
+  }
+  return d + 'Z';
+}
+
 export function createMinimap() {
   const wrap = document.createElement('div');
   wrap.id = 'minimap';
@@ -56,6 +74,15 @@ export function createMinimap() {
   const svg = svgEl('svg', {
     viewBox: `0 0 ${VIEW_SIZE} ${VIEW_SIZE}`,
   });
+
+  // Lac Saint-Jean, drawn first so the fjord's own outline/fill paint over
+  // its edge right where the river leaves it — reads as the route flowing
+  // out of the lake rather than the lake sitting on top of the route. A
+  // plain single outline+fill (not the double-stroke river treatment
+  // below) since a lake this size doesn't need it to read as water.
+  svg.appendChild(svgEl('path', {
+    d: smoothClosedPath(LAC_SAINT_JEAN_SHAPE), fill: '#5fa8d9', stroke: '#245a78', 'stroke-width': 1.4,
+  }));
 
   // Outlines drawn first for *every* segment, then all fills on top, so no
   // segment's outline cuts across another's fill right at the Tadoussac
