@@ -3,7 +3,9 @@
 //   - the Saint Lawrence east of Tadoussac, hugging the North Shore
 //     (Côte-Nord) out to Sept-Îles
 //   - the Saint Lawrence west of Tadoussac, hugging the North Shore
-//     (Charlevoix) back to Québec City
+//     (Charlevoix) up through Québec City and on toward Trois-Rivières —
+//     ultimately headed for Toronto, real geography permitting extending
+//     this segment (or adding more) well past what's plotted so far
 // A single flowDistance number line can only ever represent two directions
 // from a point (forward/backward), so each of the three above is still its
 // own SEGMENT with its own local geography here and on the minimap — a real
@@ -47,6 +49,7 @@
 //   Baie-Saint-Paul       47°26′N   70°30′W       https://en.wikipedia.org/wiki/Baie-Saint-Paul
 //   Beaupré               47°02′35″N 70°53′29″W   https://en.wikipedia.org/wiki/Beaupr%C3%A9,_Quebec
 //   Québec City           46°48′30″N 71°12′29″W   https://en.wikipedia.org/wiki/Quebec_City
+//   Trois-Rivières        46°21′N   72°33′W       https://en.wikipedia.org/wiki/Trois-Rivi%C3%A8res
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
 
 // labelPos hand-places each minimap label clear of the route line and the
@@ -96,6 +99,12 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // alternating pattern — real Québec City sits on the river's north
   // shore, and its dock/fortifications are hand-authored to that side.
   { name: 'Québec City', lat: 46.8083, lon: -71.2080, label: 'Québec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+  // First stop past Québec City — the river continues on from here rather
+  // than ending at the capital (this segment's real destination is much
+  // further upriver; see LAWRENCE_WEST_SPAN_DISTANCE's own comment). Also
+  // on the north shore, so pinned to side: 1 like Québec City itself rather
+  // than left to the alternating pattern.
+  { name: 'Trois-Rivières', lat: 46.3500, lon: -72.5500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
 ];
 
 // How far (game-world units) each segment takes to cross, end to end. Real
@@ -104,7 +113,15 @@ const LAWRENCE_WEST_WAYPOINTS = [
 // waypoints stay correctly spaced *relative to each other* regardless of
 // the number; it only controls how long the segment takes to paddle.
 export const ESTUARY_SPAN_DISTANCE = 2400; // Tadoussac -> Sept-Îles, ~400km real
-export const LAWRENCE_WEST_SPAN_DISTANCE = 1300; // Tadoussac -> Québec City, ~205km real
+// Tadoussac -> Trois-Rivières, ~300km real. Scaled up from the old
+// Tadoussac -> Québec City-only span (1300) by the same real-distance ratio
+// (297.6 / 186.4 km) so Québec City's own flowDistance — and everything
+// already tuned around it (its dock, the boss fight, etc.) — doesn't move
+// at all; the added length is purely the new Québec City -> Trois-Rivières
+// stretch. The river continues past Trois-Rivières too (see route.js's own
+// module comment) — this is just how far real, named geography reaches for
+// now.
+export const LAWRENCE_WEST_SPAN_DISTANCE = 2075;
 
 // Equirectangular projection, longitude compressed by cos(latitude) — every
 // waypoint across all three segments spans well under a degree of latitude,
