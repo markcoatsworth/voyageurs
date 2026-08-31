@@ -70,6 +70,18 @@ export function createMusic() {
   let order = buildOrder();
   let index = 0;
 
+  // Set immediately, well before the first gesture that actually calls
+  // start() — preload="auto" above has nothing to act on until src points
+  // somewhere, so without this the browser doesn't begin fetching the
+  // opening track until the exact moment the player is already waiting to
+  // hear it. Assigning src doesn't play anything (no autoplay violation,
+  // no gesture needed for that part) — it just gives the browser the
+  // whole time between page load and that first tap to actually buffer
+  // the file, instead of starting that fetch from zero right when it's
+  // most noticeable.
+  audio.src = order[index];
+  audio.load();
+
   // Tried routing this through a MediaElementAudioSourceNode + AudioContext
   // (to sidestep the phone's silent switch, which <audio> elements respect
   // but Web Audio-generated sound doesn't) — reverted. That API has a long,
