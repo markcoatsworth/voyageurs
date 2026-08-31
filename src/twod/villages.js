@@ -128,21 +128,23 @@ const villageTreeSprites = [0, 1, 2].map(createPineTreeSprite);
 
 // Québec City — a real 1790s colonial capital, not another fur-trade
 // village, so it gets its own hand-authored layout instead of
-// villageLayout()'s small random cluster: a lot more buildings, spread
-// over a much wider stretch of riverbank, in stone rather than log, with a
-// church spire rising over the town and a run of fortification wall along
-// the water — three cues that (unlike a bigger pile of the same cabins)
-// actually read as "this is a real city" from the water. Functionally
-// still just scenery for now (see the module comment) — the dock/repair
-// shop below works exactly the same as every other village; only what's
-// drawn behind it changes.
+// villageLayout()'s small random cluster — shaped after an actual 1790
+// map of the city (Lower Town hugging the waterfront, Upper Town set back
+// on the bluff behind it, the fortification wall further back still, and a
+// fortified point at one end standing in for Cape Diamond's citadel) rather
+// than a single undifferentiated row. Real Québec City's walls ran along
+// the *landward* side, guarding the plains approach — the riverfront itself
+// was open, unwalled Lower Town — so the wall here sits behind the whole
+// town, not along the water's edge. Functionally still just scenery for now
+// (see the module comment) — the dock/repair shop below works exactly the
+// same as every other village; only what's drawn behind it changes.
 const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
 const churchSprite = createChurchSprite();
 const rampartSprite = createRampartSprite();
 
 const QUEBEC_CITY_SPAN = 24; // half-width of the town along the riverbank, world units
-const QUEBEC_CITY_STONE_COUNT = 14; // vs. villageLayout()'s usual 3-5
 const QUEBEC_CITY_RAMPART_SPACING = 4.2; // ≈ the rampart sprite's own drawn width, so segments tile edge to edge
+const QUEBEC_CITY_RAMPART_DEPTH = 9.5; // set back behind every building — a skyline backdrop, not a waterfront wall
 
 // Positions are given directly in world units (dOffset along the river,
 // depth inland from the bank) rather than villageLayout()'s -1..1
@@ -150,32 +152,58 @@ const QUEBEC_CITY_RAMPART_SPACING = 4.2; // ≈ the rampart sprite's own drawn w
 // jittered within a few units of the dock, nowhere near the spread a real
 // town needs. The sine-based depth/offset variation is deliberate, fixed
 // texture (every load looks the same, matching how villageLayout() is
-// itself seeded/deterministic), not true randomness.
+// itself seeded/deterministic), not true randomness. Two bands, each
+// spanning the full riverfront independently, are what give the skyline its
+// two-tier read (Lower Town close in front of Upper Town) instead of one
+// flat row of buildings at a single depth.
+const QUEBEC_CITY_BANDS = [
+  { count: 7, depthMin: 1.8, depthMax: 3.2, salt: 0 }, // Lower Town, right at the water
+  { count: 7, depthMin: 4.8, depthMax: 6.8, salt: 100 }, // Upper Town, back on the bluff
+];
 function buildQuebecCityBuildings() {
   const buildings = [];
-  for (let i = 0; i < QUEBEC_CITY_STONE_COUNT; i++) {
-    const t = QUEBEC_CITY_STONE_COUNT > 1 ? (i / (QUEBEC_CITY_STONE_COUNT - 1)) * 2 - 1 : 0;
-    const dOffset = t * QUEBEC_CITY_SPAN + Math.sin(i * 2.4) * 1.7;
-    const depth = 2.0 + ((Math.sin(i * 1.7) + 1) / 2) * 3.4;
-    buildings.push({ dOffset, depth, variant: i % stoneSprites.length, mirror: i % 2 === 0 });
+  for (const band of QUEBEC_CITY_BANDS) {
+    for (let i = 0; i < band.count; i++) {
+      const t = band.count > 1 ? (i / (band.count - 1)) * 2 - 1 : 0;
+      const salted = i + band.salt;
+      const dOffset = t * QUEBEC_CITY_SPAN + Math.sin(salted * 2.4) * 1.7;
+      const depth = band.depthMin + ((Math.sin(salted * 1.7) + 1) / 2) * (band.depthMax - band.depthMin);
+      buildings.push({ dOffset, depth, variant: salted % stoneSprites.length, mirror: i % 2 === 0 });
+    }
   }
   return buildings;
 }
 const QUEBEC_CITY_BUILDINGS = buildQuebecCityBuildings();
 
-// The church sits deeper inland than the row of houses in front of it —
-// this game has no real elevation, so "set back and much taller" is what
-// stands in for "up on the bluff, visible over the rooftops."
-const QUEBEC_CITY_CHURCH = { dOffset: -3, depth: 6.2 };
+// The church sits deeper than Upper Town's own row, but still well in front
+// of the wall behind it — this game has no real elevation, so "set back and
+// much taller" is what stands in for "up on the bluff, visible over the
+// rooftops."
+const QUEBEC_CITY_CHURCH = { dOffset: -3, depth: 7.6 };
 
 function buildQuebecCityRamparts() {
   const ramparts = [];
   for (let d = -QUEBEC_CITY_SPAN - 2; d <= QUEBEC_CITY_SPAN + 2; d += QUEBEC_CITY_RAMPART_SPACING) {
-    ramparts.push({ dOffset: d });
+    ramparts.push({ dOffset: d, depth: QUEBEC_CITY_RAMPART_DEPTH });
   }
   return ramparts;
 }
 const QUEBEC_CITY_RAMPARTS = buildQuebecCityRamparts();
+
+// Cape Diamond's fortified point, at the upstream end of town — a small
+// cluster of wall jutting out much closer to the water than the main wall
+// behind it, reading as a distinct bastion rather than another stretch of
+// the same backdrop. The 1790 map's whole western tip is exactly this: a
+// citadel standing apart from the long landward curtain wall.
+function buildQuebecCityCitadel() {
+  const tip = -QUEBEC_CITY_SPAN;
+  return [
+    { dOffset: tip - 1.4, depth: 1.6 },
+    { dOffset: tip, depth: 2.4 },
+    { dOffset: tip + 1.4, depth: 1.8 },
+  ];
+}
+const QUEBEC_CITY_CITADEL = buildQuebecCityCitadel();
 
 function bankEdge(d, side) {
   return centerX(d) + side * widthAt(d) / 2;
@@ -314,21 +342,22 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
   }
 
   if (isQuebecCity) {
-    // The church — set back deeper than the row of houses so it reads as
-    // rising over them (see QUEBEC_CITY_CHURCH's own comment), and the
-    // fortification wall running along the whole river frontage instead of
-    // the usual pine-tree treeline — Québec's walls, not a wilderness edge,
-    // are what a real 1790s approach would actually show first.
+    // The church — set back deeper than Upper Town's own row so it reads as
+    // rising over the whole town (see QUEBEC_CITY_CHURCH's own comment) —
+    // and the fortification wall as a backdrop further back still, plus
+    // Cape Diamond's citadel standing apart from it at the upstream end,
+    // instead of the usual pine-tree treeline. Québec's walls, not a
+    // wilderness edge, are what a real 1790s approach would actually show.
     {
       const d = v.flowDistance + QUEBEC_CITY_CHURCH.dOffset;
       const z = worldDistance - d;
       const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + QUEBEC_CITY_CHURCH.depth);
       scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
     }
-    QUEBEC_CITY_RAMPARTS.forEach((r) => {
+    [...QUEBEC_CITY_RAMPARTS, ...QUEBEC_CITY_CITADEL].forEach((r) => {
       const d = v.flowDistance + r.dOffset;
       const z = worldDistance - d;
-      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + 0.6);
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + r.depth);
       scenery.push({ z, worldX, sprite: rampartSprite, mirror: false, anchor: 0.95 });
     });
   } else {

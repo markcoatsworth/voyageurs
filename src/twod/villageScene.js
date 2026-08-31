@@ -6,7 +6,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from './config.js';
 import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
 import {
   createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
-  createStoneBuildingSprite, createChurchSprite,
+  createStoneBuildingSprite, createChurchSprite, createRampartSprite,
 } from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../river/hash.js';
@@ -76,6 +76,16 @@ const QUEBEC_CITY_ONFOOT_BUILDINGS = [
   // same "rises over the row in front of it" effect as the river view
   { kind: 'church', x: 160, y: 112, mirror: false },
 ];
+
+// The landward fortification wall, as a fixed backdrop strip along the very
+// top of the scene — behind the back row of buildings, same "wall set back
+// behind the town, not along the water" read as the river view's own
+// QUEBEC_CITY_RAMPART_DEPTH. Tiled edge to edge across the fixed 320px
+// scene width using the sprite's own drawn width, same tiling approach as
+// villages.js's river-view wall.
+const WALL_TILE_W = 64;
+const QUEBEC_CITY_WALL_Y = 6;
+const QUEBEC_CITY_WALL_TILES = Math.ceil(CANVAS_WIDTH / WALL_TILE_W) + 1;
 
 function buildingsForQuebecCity() {
   return QUEBEC_CITY_ONFOOT_BUILDINGS.map((b) => ({
@@ -150,6 +160,7 @@ function ensurePatterns(ctx) {
 const cabinSprites = [0, 1, 2].map(createCabinSprite);
 const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
 const churchSprite = createChurchSprite();
+const rampartSprite = createRampartSprite();
 const repairShopSprite = createRepairShopSprite();
 const traderSprite = createTraderSprite();
 const walkerFrames = [createWalkerSprite(false), createWalkerSprite(true)];
@@ -190,13 +201,15 @@ export function createVillageScene() {
   let facingLeft = false;
   let buildings = [...buildingsFor(0), REPAIR_SHOP];
   let trees = treesFor(0);
+  let isQuebecCity = false;
   let wasNearTrader = false;
   const player = { x: PLAYER_START.x, y: PLAYER_START.y };
 
   return {
     enter(village) {
       const seed = village ? village.seed : 0;
-      buildings = village && village.name === 'Québec City'
+      isQuebecCity = village && village.name === 'Québec City';
+      buildings = isQuebecCity
         ? [...buildingsForQuebecCity(), REPAIR_SHOP]
         : [...buildingsFor(seed), REPAIR_SHOP];
       trees = treesFor(seed);
@@ -283,11 +296,19 @@ export function createVillageScene() {
         ctx.stroke();
       }
 
-      // treeline framing the clearing — behind everything else, so it never
-      // occludes a building or the player
-      for (const t of trees) {
-        const sprite = treeSprites[t.variant];
-        ctx.drawImage(sprite, t.x - sprite.width / 2, t.y - sprite.height * 0.72);
+      // Québec City gets the landward fortification wall as its backdrop
+      // instead of the usual treeline framing every other village's
+      // clearing — a walled capital doesn't back onto open forest. Behind
+      // everything else, so it never occludes a building or the player.
+      if (isQuebecCity) {
+        for (let i = 0; i < QUEBEC_CITY_WALL_TILES; i++) {
+          ctx.drawImage(rampartSprite, i * WALL_TILE_W, QUEBEC_CITY_WALL_Y);
+        }
+      } else {
+        for (const t of trees) {
+          const sprite = treeSprites[t.variant];
+          ctx.drawImage(sprite, t.x - sprite.width / 2, t.y - sprite.height * 0.72);
+        }
       }
 
       // the canoe, parked at the water end of the dock
