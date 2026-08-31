@@ -3,7 +3,7 @@ import { createObstacleField } from './twod/obstacles.js';
 import { createWaterRenderer } from './twod/waterGL.js';
 import { createMusic } from './twod/music.js';
 import { createMinimap } from './twod/minimap.js';
-import { createTouchControls } from './twod/touchControls.js';
+import { createTouchControls, isTouchPrimary } from './twod/touchControls.js';
 import { Input } from './utils/input.js';
 import { Game } from './game.js';
 import { VILLAGES } from './river/route.js';
@@ -101,6 +101,12 @@ document.getElementById('right-panel').appendChild(minimap.el);
 // minimum, capped so a huge ultrawide monitor doesn't blow it up past a
 // sensible size relative to the game view.
 const MINIMAP_MIN = 110;
+// On a real touch device the canvas fills the full viewport width (see
+// resize()'s own comment on scale), so sidebarWidth below is always
+// ~0 and the minimap always ends up sitting right at MINIMAP_MIN,
+// floating over the canvas rather than beside it either way — may as
+// well have that floor be a size actually worth reading on a phone.
+const MOBILE_MINIMAP_MIN = 150;
 const MINIMAP_MAX = 280;
 
 const dpad = document.getElementById('touch-dpad');
@@ -129,7 +135,8 @@ function resize() {
   // margin (minus its own edge gaps) instead of sitting at a fixed size
   // that's lost in a much bigger sidebar on a wide window.
   const sidebarWidth = (window.innerWidth - canvasWidth) / 2;
-  const size = Math.round(Math.max(MINIMAP_MIN, Math.min(MINIMAP_MAX, sidebarWidth - 32)));
+  const minimapMin = isTouchPrimary() ? MOBILE_MINIMAP_MIN : MINIMAP_MIN;
+  const size = Math.round(Math.max(minimapMin, Math.min(MINIMAP_MAX, sidebarWidth - 32)));
   minimap.el.style.width = `${size}px`;
 
   // Which margin actually has room for the dpad varies a lot by window

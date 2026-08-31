@@ -26,16 +26,44 @@ const OPENING_TRACK = '/audio/reel-des-forets.mp3';
 
 const DEFAULT_VOLUME = 0.35;
 
-// TEMPORARY diagnostic — this can't be tested on real iOS hardware from
-// here, and two blind fix attempts (broader gesture-unlock events, then
-// Web Audio routing) haven't resolved a real device report of "no music."
-// Rather than guess a third time, surface exactly what the browser says is
-// happening directly on-screen. Remove this + #audio-debug once actual
-// music playback is confirmed working on the reporting device.
+// Console-only now — this used to also show on-screen (#audio-debug),
+// surfacing exactly what the browser said was happening since this
+// couldn't be tested on real device hardware from here. The on-screen
+// overlay itself was distracting during normal play, so it's gone, but a
+// real mobile playback issue (a startup delay) is still open, so the
+// console trail stays for whoever's chasing that down next.
 function debug(text) {
   console.log('[music]', text);
-  const el = document.getElementById('audio-debug');
-  if (el) el.textContent = text;
+}
+
+// Real fix for the multi-second gap before music starts: mobile browsers
+// generally refuse to let an <audio> element fetch any network data ahead
+// of a real user gesture, no matter how early src is assigned or what
+// preload says (that's a restriction on the *element*, there specifically
+// to stop a page silently burning someone's mobile data) — so the actual
+// network fetch of a multi-megabyte file was always starting from zero at
+// the exact moment start() ran, right when the delay is most noticeable.
+// A plain fetch() has no such restriction; it's just an ordinary network
+// request, allowed to run any time. So every track gets fetched into memory
+// as soon as this module loads and turned into a local blob: URL — by the
+// time a real gesture calls start(), audio.src can point straight at
+// already-downloaded local data with no network fetch left to do at all.
+// Cached forever per URL (not just look-ahead-by-one) since there are only
+// 7 tracks at a few MB each — a session that cycles through the whole
+// playlist ends up with every future transition equally instant, not just
+// the first one.
+const blobCache = new Map();
+function prefetch(url) {
+  if (blobCache.has(url)) return blobCache.get(url);
+  const promise = fetch(url)
+    .then((r) => r.blob())
+    .then((blob) => URL.createObjectURL(blob))
+    .catch((e) => {
+      debug(`prefetch failed for ${url.split('/').pop()}: ${e.message}`);
+      return url; // falls back to fetching it the normal (slower) way
+    });
+  blobCache.set(url, promise);
+  return promise;
 }
 
 // Fisher-Yates — used once at startup so the play order isn't the same
@@ -69,18 +97,17 @@ export function createMusic() {
 
   let order = buildOrder();
   let index = 0;
+  // Bumped by stop() — playCurrent() is async now (it awaits prefetch()),
+  // so a capsize could in principle land while a fetch is still resolving;
+  // without this, the play() that fires right after would immediately
+  // undo the pause stop() just made.
+  let generation = 0;
 
-  // Set immediately, well before the first gesture that actually calls
-  // start() — preload="auto" above has nothing to act on until src points
-  // somewhere, so without this the browser doesn't begin fetching the
-  // opening track until the exact moment the player is already waiting to
-  // hear it. Assigning src doesn't play anything (no autoplay violation,
-  // no gesture needed for that part) — it just gives the browser the
-  // whole time between page load and that first tap to actually buffer
-  // the file, instead of starting that fetch from zero right when it's
-  // most noticeable.
-  audio.src = order[index];
-  audio.load();
+  // Kick off every track's prefetch immediately — see prefetch()'s own
+  // comment for why this, not audio.src/preload, is what actually gets a
+  // real head start on mobile. Fire-and-forget: playCurrent() awaits
+  // whichever of these promises it needs, whenever it needs it.
+  for (const track of PLAYLIST) prefetch(track);
 
   // Tried routing this through a MediaElementAudioSourceNode + AudioContext
   // (to sidestep the phone's silent switch, which <audio> elements respect
@@ -90,8 +117,16 @@ export function createMusic() {
   // silently preventing playback rather than fixing anything, and it didn't
   // resolve the actual report. Back to the plain, well-supported path while
   // debug() below narrows down what's really happening on-device.
-  function playCurrent() {
-    audio.src = order[index];
+  async function playCurrent() {
+    const requestedIndex = index;
+    const requestedGeneration = generation;
+    const src = await prefetch(order[requestedIndex]);
+    // Either index moved on (a later 'ended' fired while this fetch was
+    // still in flight — the newer playCurrent() already has its own src
+    // assignment) or stop() was called mid-fetch — either way, this call
+    // is stale and must not touch audio.src/play() at all.
+    if (index !== requestedIndex || generation !== requestedGeneration) return;
+    audio.src = src;
     audio.play().then(
       () => {
         started = true;
@@ -149,6 +184,7 @@ export function createMusic() {
     // Pauses playback in place (capsizing) — resume() picks back up from
     // the same spot rather than restarting the track.
     stop() {
+      generation++;
       audio.pause();
     },
     // No-ops if start() was never called (e.g. capsizing before the player
