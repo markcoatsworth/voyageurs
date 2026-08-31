@@ -30,6 +30,28 @@ const MAX_SPEED = 16 * speedScale;
 // under MAX_SPEED's magnitude, so upstream is a real but slow slog, not a
 // second forward gear pointed the other way.
 const MAX_REVERSE_SPEED = -6 * speedScale;
+// lawrenceWest (toward Québec City) is the one stretch that's genuinely
+// upstream in reality — see river/route.js's module comment — and this is
+// what actually makes it feel that way, rather than just a cosmetic label
+// on another normal downstream segment: its ambient current is negative,
+// not positive, so it's the same "drift back to this from either side when
+// you let off" behavior every other segment already has (see MIN_SPEED
+// above), just aimed backward. Stop paddling here and the river doesn't
+// just slow you down to a chill drift — it actively carries you back the
+// way you came, same magnitude as MIN_SPEED but flipped, so holding Up
+// here is a sustained, active effort the whole way, not an occasional
+// correction.
+const UPRIVER_CURRENT = -MIN_SPEED;
+// this.speed carries over unchanged into lawrenceWest — a player forking
+// there mid-paddle keeps whatever forward speed they arrived with, same as
+// every other segment transition. Everywhere else that's fine (the
+// ambient current there is a gentle forward drift, so leftover speed just
+// eases down toward it over several seconds); here it would mean a real
+// current only actually asserting itself well after the player has
+// noticed nothing pushed back. A strong current overpowers momentum fast,
+// not gradually, so lawrenceWest gets its own much quicker decay toward
+// UPRIVER_CURRENT instead of reusing DECEL_DRIFT's gentle one.
+const UPRIVER_DECEL = 6 * speedScale;
 const BASE_SPEED = 8 * speedScale;
 const ACCEL = 7 * speedScale;
 const DECEL_DRIFT = 1.8 * speedScale;
@@ -123,6 +145,16 @@ const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 const SEGMENT_FLOOR = {
   fjord: 0,
   lawrenceWest: SEGMENT_SHAPE_OFFSET.lawrenceWest,
+};
+
+// What this.speed drifts back toward with no Up/Down input (see
+// UPRIVER_CURRENT's comment) — MIN_SPEED everywhere except the one
+// genuinely-upstream stretch. Letting go completely on lawrenceWest and
+// never paddling again just settles the canoe at this segment's own floor
+// above, same as drifting backward anywhere else eventually hits a wall —
+// there's nowhere further back to go than where this branch started.
+const AMBIENT_CURRENT = {
+  lawrenceWest: UPRIVER_CURRENT,
 };
 
 // How the Tadoussac fork works if you never actually dock there (see the
@@ -327,7 +359,7 @@ export class Game {
       // villageScene.js's reboardSide the instant reboard fires — see there.
       const nextSegment = this.pendingJunctionChoice === 'west' ? 'lawrenceWest' : 'lawrenceEast';
       this.enterSegment(nextSegment, SEGMENT_SHAPE_OFFSET[nextSegment] + 0.5);
-      this.showBanner(nextSegment === 'lawrenceWest' ? 'Paddling toward Québec City' : 'Paddling toward Sept-Îles');
+      this.showBanner(nextSegment === 'lawrenceWest' ? 'Paddling upriver toward Québec City — fight the current' : 'Paddling toward Sept-Îles');
     } else {
       // Push just past the dock's own trigger zone — otherwise the instant
       // control returns to the canoe, it's still sitting in the exact spot
@@ -424,22 +456,34 @@ export class Game {
 
     const keys = this.input.state;
 
+    // Which speed this.speed drifts back toward with no input, and how fast
+    // — MIN_SPEED/a gentle decay everywhere except lawrenceWest, where the
+    // target is negative and the decay is much quicker (see
+    // UPRIVER_CURRENT/UPRIVER_DECEL/AMBIENT_CURRENT's comments).
+    const ambientCurrent = AMBIENT_CURRENT[this.segment] ?? MIN_SPEED;
+    const ambientDecel = this.segment === 'lawrenceWest' ? UPRIVER_DECEL : DECEL_DRIFT * 0.3;
+
     if (keys.up) this.speed = Math.min(MAX_SPEED, this.speed + ACCEL * dt);
     else if (keys.down) this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - ACCEL * dt);
     // No input: drift back toward the current's own speed from whichever
     // side you're currently on — this is what makes upstream paddling a
     // deliberate, sustained effort rather than a one-way switch: stop
-    // paddling and the river carries you forward again.
-    else if (this.speed > MIN_SPEED) this.speed = Math.max(MIN_SPEED, this.speed - DECEL_DRIFT * dt * 0.3);
-    else this.speed = Math.min(MIN_SPEED, this.speed + DECEL_DRIFT * dt * 0.3);
+    // paddling and the river carries you forward again (or, on
+    // lawrenceWest, backward — same drift, aimed the other way).
+    else if (this.speed > ambientCurrent) this.speed = Math.max(ambientCurrent, this.speed - ambientDecel * dt);
+    else this.speed = Math.min(ambientCurrent, this.speed + ambientDecel * dt);
 
     // Rapids strength at where the canoe currently is (i.e. before this
     // frame's advance) — the current adds its own push on top of whatever
     // the player is doing with the paddle, rather than replacing it, so
     // "up" still matters even mid-rapids. this.speed stays the player's own
     // paddling stat; effectiveSpeed is what actually moves the world.
+    // Rapids push *with* the current, so on lawrenceWest — where the
+    // current itself runs backward — hitting whitewater means fighting a
+    // stronger current, not getting a boost: same magnitude, flipped sign.
     const rapids = rapidsStrength(this.flowDistance);
-    const effectiveSpeed = this.speed + rapids * RAPIDS_BOOST;
+    const rapidsDirection = this.segment === 'lawrenceWest' ? -1 : 1;
+    const effectiveSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
 
     // Advance the shared river clock using this frame's effective speed —
     // the same value obstacles sample below — so the baked downstream
@@ -516,7 +560,7 @@ export class Game {
     if (this.segment === 'fjord' && this.flowDistance >= FORK_CHECKPOINT_DISTANCE) {
       if (this.lateralOffset * TADOUSSAC_WEST_SIDE > FORK_LEAN_UNITS) {
         this.enterSegment('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
-        this.showBanner('Paddling toward Québec City');
+        this.showBanner('Paddling upriver toward Québec City — fight the current');
       } else if (this.flowDistance >= FORK_DECISION_END) {
         this.segment = 'lawrenceEast'; // same numbering as the fjord — no reset needed
       }
