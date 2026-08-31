@@ -26,18 +26,15 @@ const DOCK_LENGTH = 6; // world units the dock reaches from shore into the chann
 const DOCK_WIDTH_Z = 2.2; // dock's own extent along the river's flow axis
 const DOCK_HIT_Z = 1.3; // how close (in flowDistance) counts as "touching" the dock
 
-// Québec City's dock is deliberately much bigger than every other
-// village's. The formula above was calibrated against the narrow fjord
-// (DOCK_LENGTH covers most of a ~13-unit-wide channel there) and was never
-// rescaled for the Saint Lawrence proper — on Québec City's ~44-unit-wide
-// stretch that same reach only covered ~27% of the crossing, which is why
-// the dock was so hard to hit despite being the game's one mandatory
-// destination. Rather than quietly rescale every wide-river village (a
-// bigger, separate change), Québec City gets its own oversized dock: a long
-// stone quay befitting the capital, easy to spot and easy to land.
-const QUEBEC_CITY_DOCK_REACH = 15; // vs. ~6 everywhere else
-const QUEBEC_CITY_DOCK_WIDTH_Z = 3.6; // vs. 2.2 everywhere else
-const QUEBEC_CITY_DOCK_HIT_Z = 2.1; // vs. 1.3 everywhere else
+// Québec City's dock isn't a village pier at all — it's the King's Wharf, a
+// working port for the capital, and it's drawn to match: a genuinely huge
+// stone quay reaching deep across the channel (well past the centerline,
+// per an explicit request to make it "so big I cannot miss" after a more
+// modest oversizing still wasn't visible/findable enough), wide along the
+// shore to match, easy to spot from the moment Québec City comes into view.
+const QUEBEC_CITY_DOCK_REACH = 32; // ~72% of the full ~44-unit channel width, vs. ~6 everywhere else
+const QUEBEC_CITY_DOCK_WIDTH_Z = 12; // vs. 2.2 everywhere else
+const QUEBEC_CITY_DOCK_HIT_Z = 7; // vs. 1.3 everywhere else
 
 // Buildings sit past the rocky shoreline (terrain.js's shore+bank-rock bands
 // are ~2.2 units deep), each offset slightly along the flow axis (dOffset)

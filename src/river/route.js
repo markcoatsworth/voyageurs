@@ -45,6 +45,7 @@
 //   Sept-Îles             50°12′00″N 66°22′48″W   https://en.wikipedia.org/wiki/Sept-%C3%8Eles,_Quebec
 //   La Malbaie            47°39′N   70°09′W       https://en.wikipedia.org/wiki/La_Malbaie
 //   Baie-Saint-Paul       47°26′N   70°30′W       https://en.wikipedia.org/wiki/Baie-Saint-Paul
+//   Beaupré               47°02′35″N 70°53′29″W   https://en.wikipedia.org/wiki/Beaupr%C3%A9,_Quebec
 //   Québec City           46°48′30″N 71°12′29″W   https://en.wikipedia.org/wiki/Quebec_City
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
 
@@ -87,7 +88,14 @@ const LAWRENCE_WEST_WAYPOINTS = [
   { name: 'Tadoussac', lat: 48.1500, lon: -69.7170 },
   { name: 'La Malbaie', lat: 47.6500, lon: -70.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   { name: 'Baie-Saint-Paul', lat: 47.4400, lon: -70.5000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Québec City', lat: 46.8083, lon: -71.2080, label: 'Québec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
+  // A short hop downriver of Québec City itself — mainly here to give
+  // testers (and anyone who capsizes right at the capital) a closer
+  // ?start= point than doubling all the way back to Baie-Saint-Paul.
+  { name: 'Beaupré', lat: 47.0431, lon: -70.8914, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  // Pinned to the right/north bank (side: 1) rather than left to the
+  // alternating pattern — real Québec City sits on the river's north
+  // shore, and its dock/fortifications are hand-authored to that side.
+  { name: 'Québec City', lat: 46.8083, lon: -71.2080, label: 'Québec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
 ];
 
 // How far (game-world units) each segment takes to cross, end to end. Real
@@ -163,7 +171,11 @@ function makeSegment(id, waypoints, spanDistance) {
     name: w.label || w.name,
     segment: id,
     flowDistance: shapeOffset + localFlowDistanceForCumulative(cumulative[i + 1]),
-    side: i % 2 === 0 ? -1 : 1,
+    // A waypoint can pin its own side (see Québec City below) instead of
+    // taking whatever the alternating pattern lands on — otherwise
+    // inserting a new stop earlier in the same list (as Beaupré just was)
+    // silently flips every later village's bank.
+    side: w.side ?? (i % 2 === 0 ? -1 : 1),
   }));
 
   return {

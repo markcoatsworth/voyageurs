@@ -105,15 +105,25 @@ const CAMERA_SMOOTH = 0.025;
 // out mid-crossing could steer itself yards past the edge of the canvas,
 // and it'd render there, or not at all. CAMERA_DEAD_ZONE is how far the
 // canoe can drift from the *tracked* centerline before the camera starts
-// easing sideways to keep up, in world units — set to what a fully-loaded
-// old-width channel already allowed (its max half-width was ~8.7), so nothing
-// changes in the fjord, where lateralOffset never gets close to it. Past
-// that, CAMERA_LATERAL_PULL — tracked as its own lerp, separate from and
-// faster than CAMERA_SMOOTH above — reels the camera toward the canoe, same
-// "world stays planted, the boat visibly moves" logic as the curve-tracking
-// camera, just triggered by a steering choice instead of a bend in the
-// river.
-const CAMERA_DEAD_ZONE = 8.5;
+// easing sideways to keep up, in world units. Past that, CAMERA_LATERAL_PULL
+// — tracked as its own lerp, separate from and faster than CAMERA_SMOOTH
+// above — reels the camera toward the canoe, same "world stays planted, the
+// boat visibly moves" logic as the curve-tracking camera, just triggered by
+// a steering choice instead of a bend in the river.
+//
+// This used to be 8.5 (a fully-loaded old-width channel's own max
+// half-width, ~8.7 — chosen so the fjord never engaged this at all) plus a
+// CAMERA_MAX_ONSCREEN_OFFSET of 9, which together meant the canoe visually
+// drifted almost the entire way to the canvas edge — within about a canoe's
+// width of it — before the camera did anything to help, then only barely
+// caught up in what was left. Reported as needing to steer right up against
+// the edge of the screen before the viewport would budge at all. Both
+// numbers are shrunk a lot here instead: the camera now starts easing over
+// well before the canoe gets anywhere near the edge, and never lets it
+// travel more than half the canvas's half-width from center on screen — a
+// deliberate, general change to how the camera feels everywhere (the fjord
+// included), not just a wide-river tweak.
+const CAMERA_DEAD_ZONE = 2;
 const CAMERA_LATERAL_SMOOTH = 0.12;
 // A hard backstop under the canvas's actual half-width (CANVAS_WIDTH / 2 /
 // PIXELS_PER_UNIT = 10 units) so a fast or sustained steering input can't
@@ -122,7 +132,7 @@ const CAMERA_LATERAL_SMOOTH = 0.12;
 // still closing the gap. The soft dead zone above handles the normal case;
 // this only ever engages during unusually hard/sustained steering, and even
 // then just holds the canoe at this offset instead of letting it go further.
-const CAMERA_MAX_ONSCREEN_OFFSET = 9;
+const CAMERA_MAX_ONSCREEN_OFFSET = 5;
 const RAPIDS_BOOST = 7 * speedScale; // extra units/s the current adds at peak whitewater
 const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 
@@ -477,8 +487,9 @@ export class Game {
 
     this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
     this.cameraCenterX = lerp(this.cameraCenterX, centerX(this.flowDistance), CAMERA_SMOOTH);
-    // Zero inside the dead zone, so on the (still much narrower) fjord this
-    // never engages and the camera behaves exactly as it always did.
+    // Zero inside the dead zone; positive/negative beyond it, so any real
+    // steering swings the camera into motion well before the canoe visually
+    // nears the edge of the canvas (see CAMERA_DEAD_ZONE's own comment).
     const lateralExcess = this.lateralOffset - clamp(this.lateralOffset, -CAMERA_DEAD_ZONE, CAMERA_DEAD_ZONE);
     this.cameraLateralPull = lerp(this.cameraLateralPull, lateralExcess, CAMERA_LATERAL_SMOOTH);
     this.cameraWorldX = this.cameraCenterX + this.cameraLateralPull;
