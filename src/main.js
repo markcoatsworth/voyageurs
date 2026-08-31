@@ -104,8 +104,7 @@ const MINIMAP_MIN = 110;
 const MINIMAP_MAX = 280;
 
 const dpad = document.getElementById('touch-dpad');
-const DPAD_GAP = 12; // breathing room between the canvas and the dpad row
-const DPAD_HEIGHT = 58; // matches .dpad-btn's height in style.css
+const DPAD_GAP = 4; // breathing room between the canvas and the dpad row
 
 function resize() {
   // The canvas's own size is unaffected by the dpad — it's picked exactly
@@ -133,25 +132,44 @@ function resize() {
   const size = Math.round(Math.max(MINIMAP_MIN, Math.min(MINIMAP_MAX, sidebarWidth - 32)));
   minimap.el.style.width = `${size}px`;
 
-  // Pinned to the screen's own bottom-right corner horizontally — style.css
-  // sets the fixed `right` value, same convention #right-panel already
-  // uses, so this only needs to control *vertical* position: just below
-  // the canvas's own actual rendered bottom edge (read back via
-  // getBoundingClientRect, not re-derived from the centering math above, so
-  // this holds even if #app's own centering logic ever changes), in
-  // whatever margin the chosen scale happens to leave there. The canvas's
-  // own size always wins, so on a window shaped so tightly that no margin
-  // exists below it (canvas flush with the viewport's own bottom edge), the
-  // ideal position would push the dpad off the bottom of the screen
-  // entirely — clamped here to the last row that still fits on-screen
-  // instead, which means overlapping the canvas slightly in that one edge
-  // case. A dpad you can still see and press beats one that's technically
-  // clear of the canvas but invisible.
+  // Which margin actually has room for the dpad varies a lot by window
+  // shape, and picking the wrong one is exactly what went wrong before: on
+  // a typical wide desktop window the strip *beside* the canvas is huge
+  // (hundreds of px) while the strip *below* it is often under 40px — an
+  // integer-scale canvas height rarely leaves much vertical slack once it's
+  // already claimed most of the width. So check the side margin first
+  // (cheap and static — that whole column never overlaps the canvas at any
+  // vertical position, so no dynamic top is even needed there), and only
+  // fall back to positioning below the canvas — computed from its actual
+  // rendered bottom edge via getBoundingClientRect, not re-derived from the
+  // centering math above — when the window is narrow enough that the side
+  // margin can't fit it but a bottom margin can. Real dpad dimensions (not
+  // hardcoded copies of style.css's numbers) so this can't drift out of
+  // sync with the CSS.
   const screenRect = screen.getBoundingClientRect();
-  const idealTop = screenRect.bottom + DPAD_GAP;
-  const top = Math.min(idealTop, window.innerHeight - DPAD_HEIGHT);
-  dpad.style.top = `${Math.round(top)}px`;
-  dpad.style.bottom = 'auto';
+  const dpadRect = dpad.getBoundingClientRect();
+  const rightMargin = window.innerWidth - screenRect.right;
+  const bottomMargin = window.innerHeight - screenRect.bottom;
+
+  if (rightMargin >= dpadRect.width + DPAD_GAP) {
+    dpad.style.right = '20px';
+    dpad.style.top = 'auto';
+    dpad.style.bottom = '20px';
+  } else if (bottomMargin >= dpadRect.height + DPAD_GAP) {
+    dpad.style.right = '20px';
+    dpad.style.bottom = 'auto';
+    dpad.style.top = `${Math.round(screenRect.bottom + DPAD_GAP)}px`;
+  } else {
+    // Neither margin fits it — a window shaped so tightly that avoiding the
+    // canvas entirely isn't possible without shrinking it, which the canvas
+    // never does. Clamp to the lowest fully on-screen row instead of
+    // pushing the dpad off the bottom of the screen: a dpad you can still
+    // see and press, overlapping the canvas slightly, beats one that's
+    // technically clear of it but invisible.
+    dpad.style.right = '20px';
+    dpad.style.bottom = 'auto';
+    dpad.style.top = `${Math.round(window.innerHeight - dpadRect.height)}px`;
+  }
 }
 window.addEventListener('resize', resize);
 resize();

@@ -12,6 +12,7 @@ const PLAYLIST = [
   '/audio/reel-des-laurentides.mp3',
   '/audio/reel-des-montagnes.mp3',
   '/audio/valse-des-laboureurs.mp3',
+  '/audio/le-violon-en-discorde.mp3',
 ];
 
 const DEFAULT_VOLUME = 0.35;
