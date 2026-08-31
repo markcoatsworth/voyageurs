@@ -626,7 +626,12 @@ export function createStoneBuildingSprite(variant = 0) {
 // skyline's obvious focal point from a distance, the way a real steeple
 // does over a river approach.
 export function createChurchSprite() {
-  const w = 34, h = 92;
+  // h was 92 — too short for its own spire+finial math (wallTop/towerTop/
+  // spireTopY all derive from h), which put the spire's tip and the whole
+  // finial/cross above y=0: silently clipped off the top of the canvas,
+  // the real reason the cross wasn't visible at all rather than just faint.
+  // 124 gives the cross a few pixels of headroom above the canvas edge.
+  const w = 34, h = 124;
   const wallColor = '#c9c2ac', wallDark = '#a89f86', wallLight = '#e4ddc4';
   const roofColor = '#5c6570', roofDark = '#3f4650';
 
@@ -708,14 +713,29 @@ export function createChurchSprite() {
     ctx.fillStyle = roofColor;
     triangle(ctx, cx - 1, spireTopY + 1, spireBaseY - 1, towerW / 2 - 1, roofColor);
 
-    // finial + cross at the very top — the highest point of the whole town
-    ctx.strokeStyle = '#3f4038';
-    ctx.lineWidth = 1;
+    // Finial + cross at the very top — the highest point of the whole town,
+    // and deliberately the highest-contrast thing on the whole sprite: a
+    // gilded gold cross with a dark outline behind it, not a thin stroke,
+    // so it actually reads as a cross rather than disappearing against the
+    // sky at this pixel scale.
+    const crossX = cx;
+    const crossTopY = spireTopY - 13;
+    const crossBarY = spireTopY - 9;
+    ctx.strokeStyle = '#241a10';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(cx, spireTopY);
-    ctx.lineTo(cx, spireTopY - 7);
-    ctx.moveTo(cx - 2.5, spireTopY - 5);
-    ctx.lineTo(cx + 2.5, spireTopY - 5);
+    ctx.moveTo(crossX, spireTopY + 1);
+    ctx.lineTo(crossX, crossTopY);
+    ctx.moveTo(crossX - 4, crossBarY);
+    ctx.lineTo(crossX + 4, crossBarY);
+    ctx.stroke();
+    ctx.strokeStyle = '#f0c93d';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(crossX, spireTopY + 1);
+    ctx.lineTo(crossX, crossTopY);
+    ctx.moveTo(crossX - 4, crossBarY);
+    ctx.lineTo(crossX + 4, crossBarY);
     ctx.stroke();
   });
 }
