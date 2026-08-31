@@ -6,7 +6,10 @@ import { CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '
 import { centerX, widthAt } from '../river/path.js';
 import { hashRange } from '../river/hash.js';
 import { VILLAGES } from '../river/route.js';
-import { createCabinSprite, createPineTreeSprite, createRepairShopSprite } from './sprites.js';
+import {
+  createCabinSprite, createPineTreeSprite, createRepairShopSprite,
+  createStoneBuildingSprite, createChurchSprite, createRampartSprite,
+} from './sprites.js';
 
 export { VILLAGES };
 
@@ -21,7 +24,20 @@ export { VILLAGES };
 // the correct half of the river."
 const DOCK_LENGTH = 6; // world units the dock reaches from shore into the channel
 const DOCK_WIDTH_Z = 2.2; // dock's own extent along the river's flow axis
-export const DOCK_HIT_Z = 1.3; // how close (in flowDistance) counts as "touching" the dock
+const DOCK_HIT_Z = 1.3; // how close (in flowDistance) counts as "touching" the dock
+
+// Québec City's dock is deliberately much bigger than every other
+// village's. The formula above was calibrated against the narrow fjord
+// (DOCK_LENGTH covers most of a ~13-unit-wide channel there) and was never
+// rescaled for the Saint Lawrence proper — on Québec City's ~44-unit-wide
+// stretch that same reach only covered ~27% of the crossing, which is why
+// the dock was so hard to hit despite being the game's one mandatory
+// destination. Rather than quietly rescale every wide-river village (a
+// bigger, separate change), Québec City gets its own oversized dock: a long
+// stone quay befitting the capital, easy to spot and easy to land.
+const QUEBEC_CITY_DOCK_REACH = 15; // vs. ~6 everywhere else
+const QUEBEC_CITY_DOCK_WIDTH_Z = 3.6; // vs. 2.2 everywhere else
+const QUEBEC_CITY_DOCK_HIT_Z = 2.1; // vs. 1.3 everywhere else
 
 // Buildings sit past the rocky shoreline (terrain.js's shore+bank-rock bands
 // are ~2.2 units deep), each offset slightly along the flow axis (dOffset)
@@ -113,6 +129,57 @@ const VILLAGE_TREE_LAYOUT = [
 const cabinSprites = [0, 1, 2].map(createCabinSprite);
 const villageTreeSprites = [0, 1, 2].map(createPineTreeSprite);
 
+// Québec City — a real 1790s colonial capital, not another fur-trade
+// village, so it gets its own hand-authored layout instead of
+// villageLayout()'s small random cluster: a lot more buildings, spread
+// over a much wider stretch of riverbank, in stone rather than log, with a
+// church spire rising over the town and a run of fortification wall along
+// the water — three cues that (unlike a bigger pile of the same cabins)
+// actually read as "this is a real city" from the water. Functionally
+// still just scenery for now (see the module comment) — the dock/repair
+// shop below works exactly the same as every other village; only what's
+// drawn behind it changes.
+const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
+const churchSprite = createChurchSprite();
+const rampartSprite = createRampartSprite();
+
+const QUEBEC_CITY_SPAN = 24; // half-width of the town along the riverbank, world units
+const QUEBEC_CITY_STONE_COUNT = 14; // vs. villageLayout()'s usual 3-5
+const QUEBEC_CITY_RAMPART_SPACING = 4.2; // ≈ the rampart sprite's own drawn width, so segments tile edge to edge
+
+// Positions are given directly in world units (dOffset along the river,
+// depth inland from the bank) rather than villageLayout()'s -1..1
+// normalized scheme — that scheme assumes a small handful of buildings
+// jittered within a few units of the dock, nowhere near the spread a real
+// town needs. The sine-based depth/offset variation is deliberate, fixed
+// texture (every load looks the same, matching how villageLayout() is
+// itself seeded/deterministic), not true randomness.
+function buildQuebecCityBuildings() {
+  const buildings = [];
+  for (let i = 0; i < QUEBEC_CITY_STONE_COUNT; i++) {
+    const t = QUEBEC_CITY_STONE_COUNT > 1 ? (i / (QUEBEC_CITY_STONE_COUNT - 1)) * 2 - 1 : 0;
+    const dOffset = t * QUEBEC_CITY_SPAN + Math.sin(i * 2.4) * 1.7;
+    const depth = 2.0 + ((Math.sin(i * 1.7) + 1) / 2) * 3.4;
+    buildings.push({ dOffset, depth, variant: i % stoneSprites.length, mirror: i % 2 === 0 });
+  }
+  return buildings;
+}
+const QUEBEC_CITY_BUILDINGS = buildQuebecCityBuildings();
+
+// The church sits deeper inland than the row of houses in front of it —
+// this game has no real elevation, so "set back and much taller" is what
+// stands in for "up on the bluff, visible over the rooftops."
+const QUEBEC_CITY_CHURCH = { dOffset: -3, depth: 6.2 };
+
+function buildQuebecCityRamparts() {
+  const ramparts = [];
+  for (let d = -QUEBEC_CITY_SPAN - 2; d <= QUEBEC_CITY_SPAN + 2; d += QUEBEC_CITY_RAMPART_SPACING) {
+    ramparts.push({ dOffset: d });
+  }
+  return ramparts;
+}
+const QUEBEC_CITY_RAMPARTS = buildQuebecCityRamparts();
+
 function bankEdge(d, side) {
   return centerX(d) + side * widthAt(d) / 2;
 }
@@ -127,19 +194,36 @@ function toScreen(worldX, z, cameraWorldX) {
 // Used by terrain.js to keep the forest scatter from covering a village.
 export function isNearVillage(d, side) {
   for (const v of VILLAGES) {
-    if (v.side === side && Math.abs(d - v.flowDistance) < CLEARING_HALF_D) return true;
+    // Québec City's own clearing has to cover its whole hand-authored
+    // spread (QUEBEC_CITY_SPAN, plus the ramparts' own margin past it) —
+    // the wilderness forest scatter showing up between rampart segments
+    // would rather defeat "walled city," which every other village's much
+    // smaller CLEARING_HALF_D was never built to cover.
+    const halfD = v.name === 'Québec City' ? QUEBEC_CITY_SPAN + 4 : CLEARING_HALF_D;
+    if (v.side === side && Math.abs(d - v.flowDistance) < halfD) return true;
   }
   return false;
 }
 
 function dockReach(v) {
+  if (v.name === 'Québec City') return QUEBEC_CITY_DOCK_REACH;
   return DOCK_LENGTH * villageLayout(v.seed).dock.lengthScale;
+}
+
+function dockWidthZ(v) {
+  return v.name === 'Québec City' ? QUEBEC_CITY_DOCK_WIDTH_Z : DOCK_WIDTH_Z;
+}
+
+// Exported so game.js can push the canoe back out past the dock's own
+// (village-specific) trigger zone when casting off.
+export function dockHitZ(v) {
+  return v.name === 'Québec City' ? QUEBEC_CITY_DOCK_HIT_Z : DOCK_HIT_Z;
 }
 
 // Returns the village whose dock the canoe is currently touching, or null.
 export function getDockHit(flowDistance, canoeWorldX) {
   for (const v of VILLAGES) {
-    if (Math.abs(flowDistance - v.flowDistance) > DOCK_HIT_Z) continue;
+    if (Math.abs(flowDistance - v.flowDistance) > dockHitZ(v)) continue;
     const edge = bankEdge(v.flowDistance, v.side);
     const inner = edge - v.side * dockReach(v);
     const lo = Math.min(edge, inner);
@@ -168,11 +252,12 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
   // Dock: a plank deck with pilings, drawn as an axis-aligned rectangle in
   // world space — valid here because x and z scale to screen independently
   // (no rotation), unlike a real oblique-angle pier.
+  const dockWZ = dockWidthZ(v);
   const corners = [
-    toScreen(edge, z0 - DOCK_WIDTH_Z / 2, cameraWorldX),
-    toScreen(inner, z0 - DOCK_WIDTH_Z / 2, cameraWorldX),
-    toScreen(inner, z0 + DOCK_WIDTH_Z / 2, cameraWorldX),
-    toScreen(edge, z0 + DOCK_WIDTH_Z / 2, cameraWorldX),
+    toScreen(edge, z0 - dockWZ / 2, cameraWorldX),
+    toScreen(inner, z0 - dockWZ / 2, cameraWorldX),
+    toScreen(inner, z0 + dockWZ / 2, cameraWorldX),
+    toScreen(edge, z0 + dockWZ / 2, cameraWorldX),
   ];
   const left = Math.min(...corners.map((c) => c.x));
   const right = Math.max(...corners.map((c) => c.x));
@@ -197,19 +282,28 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
   const pilingX = v.side > 0 ? left : right;
   ctx.fillRect(pilingX - 1, top - 1, 2, bottom - top + 2);
 
+  const isQuebecCity = v.name === 'Québec City';
+
   // Buildings and their surrounding trees, merged into one painter's-
   // algorithm pass (sorted so the nearer thing — larger z — draws last, on
   // top) so a tree in front of a cabin actually overlaps it correctly
   // instead of every building drawing over every tree regardless of depth.
-  const scenery = layout.buildings.map((b) => {
-    // along (-1..1) spreads buildings ~±3.4 units along the flow axis;
-    // inland (0..1) sets depth from the bank between 1.4 and 4.2 units.
-    const d = v.flowDistance + b.along * 3.4;
-    const depth = 1.4 + b.inland * 2.8;
-    const z = worldDistance - d;
-    const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + depth);
-    return { z, worldX, sprite: cabinSprites[b.variant % cabinSprites.length], mirror: b.mirror, anchor: 0.85 };
-  });
+  const scenery = isQuebecCity
+    ? QUEBEC_CITY_BUILDINGS.map((b) => {
+        const d = v.flowDistance + b.dOffset;
+        const z = worldDistance - d;
+        const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
+        return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
+      })
+    : layout.buildings.map((b) => {
+        // along (-1..1) spreads buildings ~±3.4 units along the flow axis;
+        // inland (0..1) sets depth from the bank between 1.4 and 4.2 units.
+        const d = v.flowDistance + b.along * 3.4;
+        const depth = 1.4 + b.inland * 2.8;
+        const z = worldDistance - d;
+        const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + depth);
+        return { z, worldX, sprite: cabinSprites[b.variant % cabinSprites.length], mirror: b.mirror, anchor: 0.85 };
+      });
 
   // The repair shop — always present, always right at the shoreline beside
   // the dock, regardless of the seed above. Same fixed look and position
@@ -222,15 +316,35 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
     scenery.push({ z, worldX, sprite: repairShopSprite, mirror: false, anchor: 0.85 });
   }
 
-  VILLAGE_TREE_LAYOUT.slice(0, layout.treeCount).forEach((t, i) => {
-    const jitterD = hashRange(vIndex * 41 + i, 601, -0.35, 0.35);
-    const jitterDepth = hashRange(vIndex * 41 + i, 602, -0.3, 0.3);
-    const d = v.flowDistance + t.dOffset + jitterD;
-    const z = worldDistance - d;
-    const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + t.depth + jitterDepth);
-    const sprite = villageTreeSprites[Math.floor(hashRange(vIndex * 41 + i, 603, 0, villageTreeSprites.length))];
-    scenery.push({ z, worldX, sprite, anchor: 0.72 });
-  });
+  if (isQuebecCity) {
+    // The church — set back deeper than the row of houses so it reads as
+    // rising over them (see QUEBEC_CITY_CHURCH's own comment), and the
+    // fortification wall running along the whole river frontage instead of
+    // the usual pine-tree treeline — Québec's walls, not a wilderness edge,
+    // are what a real 1790s approach would actually show first.
+    {
+      const d = v.flowDistance + QUEBEC_CITY_CHURCH.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + QUEBEC_CITY_CHURCH.depth);
+      scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
+    }
+    QUEBEC_CITY_RAMPARTS.forEach((r) => {
+      const d = v.flowDistance + r.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + 0.6);
+      scenery.push({ z, worldX, sprite: rampartSprite, mirror: false, anchor: 0.95 });
+    });
+  } else {
+    VILLAGE_TREE_LAYOUT.slice(0, layout.treeCount).forEach((t, i) => {
+      const jitterD = hashRange(vIndex * 41 + i, 601, -0.35, 0.35);
+      const jitterDepth = hashRange(vIndex * 41 + i, 602, -0.3, 0.3);
+      const d = v.flowDistance + t.dOffset + jitterD;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + t.depth + jitterDepth);
+      const sprite = villageTreeSprites[Math.floor(hashRange(vIndex * 41 + i, 603, 0, villageTreeSprites.length))];
+      scenery.push({ z, worldX, sprite, anchor: 0.72 });
+    });
+  }
 
   scenery.sort((a, b) => a.z - b.z);
 

@@ -4,7 +4,7 @@ import { drawBanks, drawWaterFallback } from './twod/terrain.js';
 import { drawWhales } from './twod/whales.js';
 import { createCanoeSprites } from './twod/canoe.js';
 import { playCapsizeHorn, playPeltChime, playDamageBoop } from './twod/sfx.js';
-import { getDockHit, DOCK_HIT_Z } from './twod/villages.js';
+import { getDockHit, dockHitZ } from './twod/villages.js';
 import { createVillageScene } from './twod/villageScene.js';
 import { isTouchPrimary } from './twod/touchControls.js';
 
@@ -331,7 +331,7 @@ export class Game {
       // Push just past the dock's own trigger zone — otherwise the instant
       // control returns to the canoe, it's still sitting in the exact spot
       // that triggered docking, and the very next frame docks it again.
-      this.flowDistance = this.currentVillage.flowDistance + DOCK_HIT_Z + 0.5;
+      this.flowDistance = this.currentVillage.flowDistance + dockHitZ(this.currentVillage) + 0.5;
       this.world.distance = this.flowDistance;
       this.showBanner('Casting off');
     }

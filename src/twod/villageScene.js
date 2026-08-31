@@ -4,7 +4,10 @@
 // yet (see the module comment in game.js for the planned shops).
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './config.js';
 import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
-import { createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite } from './sprites.js';
+import {
+  createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
+  createStoneBuildingSprite, createChurchSprite,
+} from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../river/hash.js';
 
@@ -47,6 +50,43 @@ function buildingsFor(seed) {
       footHeight: big ? 22 : 17,
     };
   });
+}
+
+// Québec City's own on-foot layout — hand-placed, not generated from
+// villageLayout() like every other village, since a real 1790s colonial
+// capital needs a lot more buildings than that small procedural cluster
+// ever produces, in stone rather than log (see sprites.js). Two rows
+// (kind: 'stone') plus one church (kind: 'church') set back between them,
+// laid out to leave the dock lane (DOCK_X0..DOCK_X1) and the repair
+// shop/trader's own spot clear, same as buildingsFor()'s cluster has to.
+const QUEBEC_CITY_ONFOOT_BUILDINGS = [
+  // back row
+  { kind: 'stone', x: 34, y: 88, variant: 0, mirror: false },
+  { kind: 'stone', x: 78, y: 92, variant: 1, mirror: true },
+  { kind: 'stone', x: 122, y: 86, variant: 2, mirror: false },
+  { kind: 'stone', x: 198, y: 90, variant: 0, mirror: true },
+  { kind: 'stone', x: 242, y: 94, variant: 1, mirror: false },
+  { kind: 'stone', x: 286, y: 88, variant: 2, mirror: true },
+  // front row, closer to shore
+  { kind: 'stone', x: 34, y: 150, variant: 1, mirror: false },
+  { kind: 'stone', x: 78, y: 154, variant: 2, mirror: true },
+  { kind: 'stone', x: 222, y: 150, variant: 0, mirror: false },
+  { kind: 'stone', x: 266, y: 148, variant: 1, mirror: true },
+  // the church, set back behind the dock — the tallest thing in the scene,
+  // same "rises over the row in front of it" effect as the river view
+  { kind: 'church', x: 160, y: 112, mirror: false },
+];
+
+function buildingsForQuebecCity() {
+  return QUEBEC_CITY_ONFOOT_BUILDINGS.map((b) => ({
+    kind: b.kind,
+    variant: b.variant ?? 0,
+    mirror: b.mirror,
+    anchorX: b.x,
+    anchorY: b.y,
+    footHalfW: b.kind === 'church' ? 12 : 13,
+    footHeight: b.kind === 'church' ? 26 : 24,
+  }));
 }
 
 // Purely decorative — drawn behind the buildings/player, clear of the
@@ -108,6 +148,8 @@ function ensurePatterns(ctx) {
 }
 
 const cabinSprites = [0, 1, 2].map(createCabinSprite);
+const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
+const churchSprite = createChurchSprite();
 const repairShopSprite = createRepairShopSprite();
 const traderSprite = createTraderSprite();
 const walkerFrames = [createWalkerSprite(false), createWalkerSprite(true)];
@@ -154,7 +196,9 @@ export function createVillageScene() {
   return {
     enter(village) {
       const seed = village ? village.seed : 0;
-      buildings = [...buildingsFor(seed), REPAIR_SHOP];
+      buildings = village && village.name === 'Québec City'
+        ? [...buildingsForQuebecCity(), REPAIR_SHOP]
+        : [...buildingsFor(seed), REPAIR_SHOP];
       trees = treesFor(seed);
       player.x = PLAYER_START.x;
       player.y = PLAYER_START.y;
@@ -251,7 +295,14 @@ export function createVillageScene() {
 
       // buildings, painter's-algorithm by anchor Y
       const order = buildings
-        .map((b) => ({ b, sprite: b.isRepairShop ? repairShopSprite : cabinSprites[b.variant % cabinSprites.length] }))
+        .map((b) => {
+          let sprite;
+          if (b.isRepairShop) sprite = repairShopSprite;
+          else if (b.kind === 'church') sprite = churchSprite;
+          else if (b.kind === 'stone') sprite = stoneSprites[b.variant % stoneSprites.length];
+          else sprite = cabinSprites[b.variant % cabinSprites.length];
+          return { b, sprite };
+        })
         .sort((a, c) => a.b.anchorY - c.b.anchorY);
       for (const { b, sprite } of order) {
         const top = b.anchorY - sprite.height + 6;
