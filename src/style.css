@@ -187,17 +187,14 @@ html, body {
   letter-spacing: 2px;
 }
 
-.screen .subtitle {
-  font-size: 10px;
-  color: #9fc0a8;
-  margin: 0 0 24px;
-}
-
-.screen .instructions {
-  font-size: 9px;
-  line-height: 2;
-  color: #f4ead2;
-  margin: 0 0 28px;
+/* #title-screen and #pause-screen's h1 is each screen's only content (see
+   index.html — the subtitle/controls rundown were dropped from both, just
+   the headline) — bigger and with no trailing margin, since there's
+   nothing below it to space away from. */
+#title-screen h1,
+#pause-screen h1 {
+  font-size: 48px;
+  margin: 0;
 }
 
 #final-stats {
