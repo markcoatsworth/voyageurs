@@ -50,7 +50,7 @@ const CLEAR_MARGIN = 3; // how far past the ship counts as "in the clear"
 
 const VOLLEY_INTERVAL_FAR = 2.6;
 const VOLLEY_INTERVAL_NEAR = 0.85;
-const SPLASH_WARN_TIME = 0.5; // telegraph before it's dangerous
+const SPLASH_WARN_TIME = 0.65; // telegraph before it's dangerous
 const SPLASH_HOT_TIME = 0.3; // the actual damaging window
 const SPLASH_FADE_TIME = 0.15;
 const SPLASH_HIT_RADIUS = 1.3;
@@ -285,12 +285,37 @@ function drawHazard(ctx, h, z, cameraWorldX) {
     ctx.arc(p.x, p.y, SPLASH_HIT_RADIUS * PIXELS_PER_UNIT * (1 + fadeT * 0.6), 0, Math.PI * 2);
     ctx.stroke();
   } else {
-    // Warning telegraph: a thin red ring growing to the actual hit radius,
-    // giving a real, readable moment to react before it becomes dangerous.
-    ctx.strokeStyle = `rgba(220, 60, 50, ${0.35 + warnProgress * 0.45})`;
-    ctx.lineWidth = 1.5;
+    // Warning telegraph. This used to be a ring that grew from 30% up to
+    // the real hit radius, which is exactly backwards for "helping the
+    // player avoid it": it understated the true danger area for most of
+    // the warning window and only showed its actual size right at the end
+    // — reported as shots feeling random/patternless, which tracks, since
+    // the one honest piece of information (how big is this really going to
+    // be) was being hidden until it was almost too late to use it. Now the
+    // true hit-radius outline is drawn at full size from the very first
+    // frame — "will I be in that circle" is answerable immediately — while
+    // a shrinking shadow (the standard "something's about to land here"
+    // game-visual language) contracts down onto it as a countdown, and a
+    // center mark pulses faster as impact nears for a clear last-second cue.
+    const hitPx = SPLASH_HIT_RADIUS * PIXELS_PER_UNIT;
+
+    const shadowR = hitPx * (2.6 - warnProgress * 1.6); // 2.6x down to 1x
+    ctx.fillStyle = `rgba(10, 12, 10, ${0.16 + warnProgress * 0.14})`;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, SPLASH_HIT_RADIUS * PIXELS_PER_UNIT * (0.3 + warnProgress * 0.7), 0, Math.PI * 2);
+    ctx.ellipse(p.x, p.y, shadowR, shadowR * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(230, 70, 60, ${0.4 + warnProgress * 0.5})`;
+    ctx.lineWidth = 1.5 + warnProgress * 1.5;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, hitPx, 0, Math.PI * 2);
     ctx.stroke();
+
+    const pulseHz = 5 + warnProgress * 10; // pulses faster as impact nears
+    const pulse = 0.5 + 0.5 * Math.sin(h.t * pulseHz * Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 210, 90, ${0.5 + pulse * 0.4})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 2 + pulse * 1.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
