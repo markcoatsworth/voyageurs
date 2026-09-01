@@ -194,6 +194,8 @@ const ui = {
   hudScore: document.getElementById('hud-score'),
   hudSpeedFill: document.getElementById('hud-speed-fill'),
   hudHealthFill: document.getElementById('hud-health-fill'),
+  hudBlockade: document.getElementById('hud-blockade'),
+  hudBlockadeFill: document.getElementById('hud-blockade-fill'),
   damageFlash: document.getElementById('damage-flash'),
   titleScreen: document.getElementById('title-screen'),
   gameoverScreen: document.getElementById('gameover-screen'),

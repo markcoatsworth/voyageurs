@@ -142,6 +142,40 @@ html, body {
   background: #bfe6f2;
 }
 
+/* Only shown during the Château Gauntlet (twod/blockade.js) — a red readout
+   so it reads as an alert/combat status, distinct from the neutral speed
+   and health bars above it. Same wrap/fill structure as those on purpose:
+   one consistent HUD-bar language, not a bespoke widget. */
+#hud-blockade-label {
+  font-size: 9px;
+  color: #e6a0a0;
+  text-shadow: 2px 2px 0 #000;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+#hud-blockade-wrap {
+  width: 220px;
+  height: 14px;
+  border: 3px solid #f4ead2;
+  background: rgba(0,0,0,0.4);
+  box-shadow: 3px 3px 0 #000;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  #hud-blockade-wrap {
+    width: 150px;
+    height: 10px;
+  }
+}
+
+#hud-blockade-fill {
+  height: 100%;
+  width: 0%;
+  background: #c73a3a;
+  transition: width 0.15s linear;
+}
+
 #milestone-banner {
   position: absolute;
   top: 60px;

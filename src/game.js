@@ -6,6 +6,7 @@ import { createCanoeSprites } from './twod/canoe.js';
 import { playCapsizeHorn, playPeltChime, playDamageBoop } from './twod/sfx.js';
 import { getDockHit, dockHitZ } from './twod/villages.js';
 import { createVillageScene } from './twod/villageScene.js';
+import { createBlockade } from './twod/blockade.js';
 import { isTouchPrimary } from './twod/touchControls.js';
 
 // A D-pad's discrete taps are less precise than a keyboard's held keys, and
@@ -74,6 +75,15 @@ const MAX_HEALTH = 100;
 const ROCK_DAMAGE = 32;
 const LOG_DAMAGE = 12;
 const BANK_DAMAGE = 8;
+// The Château Gauntlet (twod/blockade.js) — a cannon splash costs about as
+// much as a rock (dodging it is the same skill), while actually clipping
+// the frigate's hull is the single hardest hit in the game: you had a
+// whole channel's width of clear water to find and missed it entirely.
+// Neither is fatal alone (roughly 3 splashes, or 2-3 hull clips, from a
+// full hull), matching every other hazard's "expensive, not a one-hit kill"
+// rule — see that constant's own comment above.
+const CANNON_DAMAGE = 30;
+const SHIP_HULL_DAMAGE = 40;
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
@@ -193,6 +203,8 @@ export class Game {
     this.music = music;
     this.canoeSprites = createCanoeSprites();
     this.villageScene = createVillageScene();
+    this.blockade = createBlockade();
+    this.blockadePct = null; // null hides the HUD bar; set by update() while the fight is active
 
     // 'river' (paddling) or 'village' (on foot, ashore at a dock) — see
     // enterVillage()/leaveVillage(). Separate from this.state, which is
@@ -269,6 +281,8 @@ export class Game {
   start() {
     this.reset();
     this.obstacles.reset();
+    this.blockade.reset();
+    this.blockadePct = null;
     this.state = 'playing';
     clearTimeout(this._bannerTimeout);
     this.ui.milestoneBanner.classList.remove('show');
@@ -358,6 +372,12 @@ export class Game {
       this.speed = Math.max(MIN_SPEED - 1, this.speed - BANK_PENALTY_SPEED);
       this.takeDamage(BANK_DAMAGE);
       this.invulnTimer = BANK_INVULN_TIME;
+    } else if (entry.type === 'cannon') {
+      this.takeDamage(CANNON_DAMAGE);
+      this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'shiphull') {
+      this.takeDamage(SHIP_HULL_DAMAGE);
+      this.invulnTimer = INVULN_TIME;
     } else {
       this.speed = Math.max(MIN_SPEED - 1, this.speed - LOG_PENALTY_SPEED);
       this.takeDamage(LOG_DAMAGE);
@@ -576,6 +596,23 @@ export class Game {
       (entry) => this.handleCollect(entry)
     );
 
+    // Only meaningful on lawrenceWest — SHIP_FLOW_DISTANCE is a number on
+    // that segment's own line, and could coincidentally fall in range of an
+    // unrelated flowDistance on the fjord or lawrenceEast otherwise.
+    if (this.segment === 'lawrenceWest') {
+      const blockade = this.blockade.update(dt, this.flowDistance, this.canoeWorldX, (entry) => this.handleHit(entry));
+      this.blockadePct = blockade.active ? blockade.progressPct : null;
+      if (this.blockade.consumeJustSpotted()) {
+        const side = this.blockade.gapSide() > 0 ? 'right' : 'left';
+        this.showBanner(`A British frigate blocks the channel — clear water to the ${side}!`);
+      }
+      if (this.blockade.consumeJustCleared()) {
+        this.showBanner("You've broken past the British patrol!");
+      }
+    } else {
+      this.blockadePct = null;
+    }
+
     this.render();
     this.updateHud();
   }
@@ -603,6 +640,8 @@ export class Game {
     }
     drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
     this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
+    // Same lawrenceWest-only guard as the update() call above.
+    if (this.segment === 'lawrenceWest') this.blockade.draw(ctx, this.flowDistance, cameraWorldX);
 
     if (this.canoeVisible !== false) {
       const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;
@@ -627,6 +666,14 @@ export class Game {
     const speedPct = ((this.effectiveSpeed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)) * 100;
     this.ui.hudSpeedFill.style.width = `${clamp(speedPct, 0, 100)}%`;
     this.ui.hudSpeedFill.classList.toggle('rapids', this.rapids > 0.15);
+
+    // Only shown while the blockade fight is actually active — see
+    // update()'s own comment. Gives the win condition something concrete to
+    // watch instead of an invisible finish line: you can see yourself
+    // closing the distance on the frigate, not just discover you passed it.
+    const inBlockade = this.blockadePct !== null;
+    this.ui.hudBlockade?.classList.toggle('hidden', !inBlockade);
+    if (inBlockade && this.ui.hudBlockadeFill) this.ui.hudBlockadeFill.style.width = `${clamp(this.blockadePct, 0, 100)}%`;
 
     // flowDistance is the persistent world position that never resets on
     // restart, so the map marker holds its real place on the river across a
