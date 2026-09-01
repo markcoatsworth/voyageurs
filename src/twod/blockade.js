@@ -48,14 +48,29 @@ const GAP_WIDTH = 7; // world units of clear water always left open, at one bank
 const SHIP_DEPTH_Z = 3.4; // hull's own extent along the flow axis
 const CLEAR_MARGIN = 3; // how far past the ship counts as "in the clear"
 
-const VOLLEY_INTERVAL_FAR = 2.6;
-const VOLLEY_INTERVAL_NEAR = 0.85;
+// A first pass at this was cleared with barely a scratch — shots spawned
+// close to the canoe's own position with a small spread, so a player who
+// was already moving at all (even just ambient drift, not a real dodge)
+// had usually cleared the zone by the time it went hot, and one shot at a
+// time never demanded reading more than one danger zone. Reworked to fire
+// real volleys that fan out across a genuine width of the channel — so
+// there's more than one thing to track and a safe gap has to be found, not
+// just "don't stand still" — escalating in count and spread as the ship
+// gets closer, on top of firing faster.
+const VOLLEY_INTERVAL_FAR = 1.9;
+const VOLLEY_INTERVAL_NEAR = 0.55;
 const SPLASH_WARN_TIME = 0.65; // telegraph before it's dangerous
 const SPLASH_HOT_TIME = 0.3; // the actual damaging window
 const SPLASH_FADE_TIME = 0.15;
 const SPLASH_HIT_RADIUS = 1.3;
-const SPLASH_D_TOLERANCE = 1.4;
-const SPLASH_SPREAD = 2.6; // how far a shot can land from the canoe's position when fired
+// Wider than the lateral hit radius on purpose: the lead distance (see the
+// spawn site) is a prediction, not a guarantee, so this absorbs a
+// reasonable amount of speed change between a shot firing and going hot
+// without either being trivially escapable by just tapping the brake or
+// unfairly precise about exactly where the canoe will be.
+const SPLASH_D_TOLERANCE = 2.2;
+const SPLASH_SPREAD_MIN = 3; // how wide a volley fans out early in the approach
+const SPLASH_SPREAD_MAX = 9; // and how wide it fans out right before the ship
 
 const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;
 
@@ -122,8 +137,11 @@ export function createBlockade() {
 
     // onHit(entry) is only ever called with { type: 'cannon' } or
     // { type: 'shiphull' } — game.js's handleHit() gives each its own
-    // damage amount, same pattern as every other hazard type.
-    update(dt, playerFlowDistance, playerWorldX, onHit) {
+    // damage amount, same pattern as every other hazard type. effectiveSpeed
+    // is needed to lead each shot's target ahead of the canoe's current
+    // position (see the spawn site's own comment) — without it, every shot
+    // whiffs by construction, not because it was dodged.
+    update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit) {
       const distToShip = SHIP_FLOW_DISTANCE - playerFlowDistance;
       // Once resolved, stays false forever (only reset() brings it back) —
       // no separate lower bound needed the way an early version had one.
@@ -147,11 +165,27 @@ export function createBlockade() {
           const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
           volleyTimer -= dt;
           if (volleyTimer <= 0) {
-            const shots = progress > 0.6 ? 2 : 1;
+            const shots = progress > 0.7 ? 3 : progress > 0.35 ? 2 : 1;
+            const spread = SPLASH_SPREAD_MIN + (SPLASH_SPREAD_MAX - SPLASH_SPREAD_MIN) * progress;
             for (let i = 0; i < shots; i++) {
+              // Evenly-spaced lanes across the fan, not independent random
+              // jitter — a 3-shot volley always genuinely covers left/
+              // centre/right of where the canoe was when it fired, instead
+              // of sometimes clumping together and leaving an easy gap by
+              // pure chance.
+  const lane = shots > 1 ? (i / (shots - 1)) * 2 - 1 : 0;
+              const jitter = (Math.random() * 2 - 1) * (spread / shots) * 0.4;
               hazards.push({
-                d: playerFlowDistance,
-                x: playerWorldX + (Math.random() * 2 - 1) * SPLASH_SPREAD,
+                // Led ahead by how far the canoe will travel during the
+                // warning window — a shot aimed at "where you are right
+                // now" always misses by construction once you account for
+                // your own forward speed (~16 units/sec against a ~1.4-unit
+                // tolerance and a 0.65s fuse means you're already ~10 units
+                // past it before it even goes hot). This is what an earlier
+                // version got wrong: it looked like every shot was being
+                // dodged when really none of them could ever have landed.
+                d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME,
+                x: playerWorldX + lane * spread + jitter,
                 t: 0,
                 hit: false,
               });
@@ -316,6 +350,22 @@ function drawHazard(ctx, h, z, cameraWorldX) {
     ctx.fillStyle = `rgba(255, 210, 90, ${0.5 + pulse * 0.4})`;
     ctx.beginPath();
     ctx.arc(p.x, p.y, 2 + pulse * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // The actual moving threat — a cannonball visibly falling toward the
+    // target, meeting it exactly at impact. The ring/shadow/pulse above
+    // mark *where*; this is the *something's coming*, which a purely
+    // static telegraph never conveyed.
+    const fallPx = 60 * (1 - warnProgress);
+    const ballY = p.y - fallPx;
+    const ballR = 2 + warnProgress * 2;
+    ctx.fillStyle = 'rgba(28, 24, 18, 0.9)';
+    ctx.beginPath();
+    ctx.arc(p.x, ballY, ballR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(95, 85, 68, 0.6)';
+    ctx.beginPath();
+    ctx.arc(p.x - ballR * 0.3, ballY - ballR * 0.3, ballR * 0.4, 0, Math.PI * 2);
     ctx.fill();
   }
 }

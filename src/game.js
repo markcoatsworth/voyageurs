@@ -600,7 +600,7 @@ export class Game {
     // that segment's own line, and could coincidentally fall in range of an
     // unrelated flowDistance on the fjord or lawrenceEast otherwise.
     if (this.segment === 'lawrenceWest') {
-      const blockade = this.blockade.update(dt, this.flowDistance, this.canoeWorldX, (entry) => this.handleHit(entry));
+      const blockade = this.blockade.update(dt, this.flowDistance, this.canoeWorldX, effectiveSpeed, (entry) => this.handleHit(entry));
       this.blockadePct = blockade.active ? blockade.progressPct : null;
       if (this.blockade.consumeJustSpotted()) {
         const side = this.blockade.gapSide() > 0 ? 'right' : 'left';
