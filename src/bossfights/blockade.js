@@ -146,11 +146,9 @@ export function createBlockade() {
       justCleared = false;
       return v;
     },
-    // Which side the clear lane is on, once decided — lets game.js phrase
-    // the sighting banner with an actual direction instead of "somewhere."
-    gapSide() {
-      return gapSide;
-    },
+    // No gapSide() accessor on purpose — which side is clear is deliberately
+    // never surfaced to game.js; finding it is the point of the fight, not
+    // something to hand the player in a banner.
 
     // onHit(entry) is only ever called with { type: 'cannon' } or
     // { type: 'shiphull' } — game.js's handleHit() gives each its own

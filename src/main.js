@@ -8,6 +8,7 @@ import { Input } from './core/input.js';
 import { Game } from './core/game.js';
 import { VILLAGES } from './world/river/route.js';
 import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
+import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
 
 const app = document.getElementById('app');
 
@@ -42,10 +43,28 @@ function stripAccents(s) {
 function normalizeStartName(s) {
   return stripAccents(s.toLowerCase()).replace(/[-\s]+/g, ' ').trim();
 }
+// Also-recognized, dev-only keywords that aren't real places — not part of
+// VILLAGES, so they never show up on the minimap or anywhere in-game, they
+// just give ?start= a couple more names to jump to for testing. One entry
+// per boss fight (bossfights/blockade.js today; more planned, each landing
+// here the same way as it's built) — normalizeStartName() is applied to
+// these keys too, so "british-blockade", "british blockade", and
+// "british+blockade" all work, same as every real village name already
+// does. "british-blockade" drops the canoe already within firing range of
+// the Château Gauntlet instead of needing to paddle the ~30 units past
+// Québec City's dock it'd normally take to reach it — 90 units short of the
+// ship, comfortably inside APPROACH_RANGE (190) so cannon fire starts
+// immediately, but with real room left to practice finding the gap before
+// the hull itself.
+const START_KEYWORDS = {
+  [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'lawrenceWest' },
+};
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
   if (!raw) return { flowDistance: 0, segment: 'fjord' };
   const wanted = normalizeStartName(raw);
+  const keyword = START_KEYWORDS[wanted];
+  if (keyword) return keyword;
   const match = VILLAGES.find((v) => wanted === normalizeStartName(v.name));
   if (!match) {
     if (raw.trim()) console.warn(`?start=${raw}: no matching village, starting from the put-in instead.`);

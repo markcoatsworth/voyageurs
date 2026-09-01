@@ -643,8 +643,9 @@ export class Game {
       // at once fires this the same number of times in the same frame.
       for (let i = 0; i < blockade.boomCount; i++) playCannonBoom();
       if (this.blockade.consumeJustSpotted()) {
-        const side = this.blockade.gapSide() > 0 ? 'right' : 'left';
-        this.showBanner(`A British frigate blocks the channel — clear water to the ${side}!`);
+        // Deliberately doesn't say which side is clear — finding the gap is
+        // the point, not something to hand the player in a banner.
+        this.showBanner('A British frigate blocks the channel!');
         this.music?.playBossTrack();
       }
       if (this.blockade.consumeJustCleared()) {
