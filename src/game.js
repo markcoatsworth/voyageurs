@@ -213,29 +213,17 @@ export class Game {
     this.mode = 'river';
     this.currentVillage = null;
     // Which of river/route.js's SEGMENTS is active — see SEGMENT_FLOOR and
-    // leaveVillage()'s Tadoussac branch for the junction itself. Persists
-    // across restarts exactly like flowDistance below (a capsize shouldn't
-    // un-choose which branch of the river you were on).
+    // leaveVillage()'s Tadoussac branch for the junction itself.
     this.segment = startSegment;
+    // Remembered so reset() can snap back to it — see that method's own
+    // comment for why a capsize returns here instead of continuing from
+    // wherever it happened.
+    this.startFlowDistance = startFlowDistance;
+    this.startSegment = startSegment;
 
     this.time = 0;
-    this.flowDistance = startFlowDistance;
-    // obstacles.reset() (called from start() below) seeds its pool by
-    // reading world.distance directly, before update() has ever run to set
-    // it from flowDistance the normal way — without this, a non-zero
-    // startFlowDistance would seed every obstacle back near the put-in
-    // instead of near wherever the player actually starts.
-    this.world.distance = startFlowDistance;
     this.paddleSide = 1;
     this.paddleTimer = 0;
-    // The camera's own persistent state — deliberately not reset on restart
-    // (see the flowDistance comment below). Tracked as two separate lerps
-    // (curve-following + lateral-pull, see CAMERA_DEAD_ZONE above) that get
-    // summed into cameraWorldX each frame in update(); cameraWorldX itself
-    // is what render() and everything it calls actually reads.
-    this.cameraCenterX = centerX(startFlowDistance);
-    this.cameraLateralPull = 0;
-    this.cameraWorldX = this.cameraCenterX;
 
     ui.restartBtn.addEventListener('click', () => this.start());
 
@@ -245,6 +233,14 @@ export class Game {
     this.start();
   }
 
+  // A capsize used to leave flowDistance/segment/the camera exactly where
+  // they were and just refill health — "the river shouldn't jump back to
+  // the put-in." Reported as the opposite of what's wanted: dying should
+  // send you back to wherever *this run* actually began (the put-in, or
+  // wherever a ?start= cheat placed you), not restart you in place at the
+  // spot that just killed you. So every restart now snaps flowDistance,
+  // segment, and the camera back to startFlowDistance/startSegment
+  // (captured once in the constructor), same as the very first launch.
   reset() {
     this.lateralOffset = 0;
     this.lateralVX = 0;
@@ -260,6 +256,18 @@ export class Game {
     this.ui.pauseScreen?.classList.add('hidden');
     this.mode = 'river';
     this.currentVillage = null;
+
+    this.segment = this.startSegment;
+    this.flowDistance = this.startFlowDistance;
+    // obstacles.reset() (called right after this from start()) seeds its
+    // pool by reading world.distance directly, before update() has ever run
+    // to set it from flowDistance the normal way — without this, a non-zero
+    // startFlowDistance would seed every obstacle near the death spot
+    // instead of back at the actual start.
+    this.world.distance = this.startFlowDistance;
+    this.cameraCenterX = centerX(this.startFlowDistance);
+    this.cameraLateralPull = 0;
+    this.cameraWorldX = this.cameraCenterX;
   }
 
   togglePause() {
