@@ -1,6 +1,6 @@
-import { CANOE_SCREEN_Y, PIXELS_PER_UNIT } from './config.js';
-import { centerX, widthAt, braidAt, ESTUARY_WIDTH_THRESHOLD } from '../river/path.js';
-import { hash, hashRange } from '../river/hash.js';
+import { CANOE_SCREEN_Y, PIXELS_PER_UNIT } from '../shared/config.js';
+import { centerX, widthAt, braidAt, ESTUARY_WIDTH_THRESHOLD } from './river/path.js';
+import { hash, hashRange } from '../shared/hash.js';
 import { createWhaleSprite } from './sprites.js';
 
 const SLOT_SPACING = 9;

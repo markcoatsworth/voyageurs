@@ -2,14 +2,14 @@
 // a few buildings and a dock back to the water. Deliberately simple for
 // now — free 4-directional walking and building collision, no interaction
 // yet (see the module comment in game.js for the planned shops).
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from './config.js';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../shared/config.js';
 import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
 import {
   createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
   createStoneBuildingSprite, createChurchSprite, createRampartSprite,
 } from './sprites.js';
 import { villageLayout } from './villages.js';
-import { hashRange } from '../river/hash.js';
+import { hashRange } from '../shared/hash.js';
 
 const WALK_SPEED = 62; // px/sec, in this scene's own fixed pixel space
 

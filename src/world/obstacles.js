@@ -1,6 +1,6 @@
-import { centerX, widthAt, braidAt } from '../river/path.js';
+import { centerX, widthAt, braidAt } from './river/path.js';
 import { createRockSprite, createLogSprite, createIslandSprite, createPeltSprite } from './sprites.js';
-import { AHEAD_UNITS, BEHIND_UNITS } from './config.js';
+import { AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
 
 const SPAWN_Z = -AHEAD_UNITS;
 const RECYCLE_Z = BEHIND_UNITS;
@@ -23,7 +23,7 @@ const sprites = {
   [PELT]: createPeltSprite(),
 };
 
-// A braided-channel island (river/path.js) is a real geography feature, not
+// A braided-channel island (world/river/path.js) is a real geography feature, not
 // a random obstacle — skip spawning the (unrelated) floating island prop
 // during a braid so there's never a confusing second island stacked on it.
 function pickType(hasBraid) {

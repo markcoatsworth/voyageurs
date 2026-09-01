@@ -107,7 +107,7 @@ export function playDamageBoop() {
   boop(c, t0 + 0.09, 174.6, 0.16);
 }
 
-// A cannon impact — the Château Gauntlet's (twod/blockade.js) own cue, one
+// A cannon impact — the Château Gauntlet's (bossfights/blockade.js) own cue, one
 // per cannonball landing, hit or miss. Two layers, same "synthesize it,
 // don't ship a sample" approach as everything else here: a low sine
 // "thump" sliding down in pitch for the body of the explosion, and a burst

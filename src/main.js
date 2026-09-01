@@ -1,13 +1,13 @@
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from './twod/config.js';
-import { createObstacleField } from './twod/obstacles.js';
-import { createWaterRenderer } from './twod/waterGL.js';
-import { createMusic } from './twod/music.js';
-import { createMinimap } from './twod/minimap.js';
-import { createTouchControls, isTouchPrimary } from './twod/touchControls.js';
-import { Input } from './utils/input.js';
-import { Game } from './game.js';
-import { VILLAGES } from './river/route.js';
-import { SEGMENT_SHAPE_OFFSET } from './river/path.js';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from './shared/config.js';
+import { createObstacleField } from './world/obstacles.js';
+import { createWaterRenderer } from './world/waterGL.js';
+import { createMusic } from './audio/music.js';
+import { createMinimap } from './world/minimap.js';
+import { createTouchControls, isTouchPrimary } from './core/touchControls.js';
+import { Input } from './core/input.js';
+import { Game } from './core/game.js';
+import { VILLAGES } from './world/river/route.js';
+import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
 
 const app = document.getElementById('app');
 
@@ -15,7 +15,7 @@ const app = document.getElementById('app');
 // the put-in — e.g. ?start=tadoussac, ?start=sept-iles, ?start=quebec-city.
 // Matched case-insensitively and with accents stripped (typing "iles" for
 // "Îles" is the whole point of a URL you type by hand). Each village
-// already knows which of the three river segments (see river/route.js's
+// already knows which of the three river segments (see world/river/route.js's
 // module comment) it's actually on, so starting on the Québec City stretch
 // works the same way as anywhere else — no separate handling needed here.
 // Unrecognized or absent falls back to the real start (the put-in, fjord).
@@ -60,7 +60,7 @@ const { flowDistance: startFlowDistance, segment: startSegment } = parseStartLoc
 // A positioned wrapper so the WebGL water layer and the 2D sprite/terrain
 // layer stack exactly on top of each other and scale together. The water
 // canvas sits below; the 2D canvas is cleared to transparent each frame and
-// leaves a river-shaped hole (see twod/terrain.js) for it to show through.
+// leaves a river-shaped hole (see world/terrain.js) for it to show through.
 const screen = document.createElement('div');
 screen.style.position = 'relative';
 app.appendChild(screen);
@@ -102,7 +102,7 @@ const water = createWaterRenderer(waterCanvas);
 // empty background on either side once it's scaled to an integer
 // multiple), so nothing ends up under it there; on a narrow phone where the
 // canvas does reach every edge, this floats over it the same way the
-// buttons already do. See twod/minimap.js for why it's a real,
+// buttons already do. See world/minimap.js for why it's a real,
 // geographically-placed route rather than an invented shape.
 const minimap = createMinimap();
 document.getElementById('right-panel').appendChild(minimap.el);

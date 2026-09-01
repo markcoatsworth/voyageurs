@@ -11,9 +11,9 @@
 // number, so it automatically follows if that village's position (or the
 // segment's shape offset) ever changes again — one lookup at module load,
 // not duplicated geography.
-import { centerX, widthAt } from '../river/path.js';
-import { worldToScreen, CANVAS_HEIGHT, PIXELS_PER_UNIT } from './config.js';
-import { VILLAGES } from './villages.js';
+import { centerX, widthAt } from '../world/river/path.js';
+import { worldToScreen, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
+import { VILLAGES } from '../world/villages.js';
 
 const QUEBEC_CITY = VILLAGES.find((v) => v.name === 'Québec City');
 // How far past the capital the frigate sits — far enough that casting off

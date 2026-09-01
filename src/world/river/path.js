@@ -11,7 +11,7 @@
 // every curved/width-varying shape be baked once at spawn time instead of
 // re-evaluated every frame.
 
-import { hashRange } from './hash.js';
+import { hashRange } from '../../shared/hash.js';
 
 export const FJORD_WIDTH = 8;
 // The real Saint Lawrence off Tadoussac dwarfs the fjord — this is what

@@ -8,12 +8,12 @@
 // and a depth gradient toward the channel center. All of that needs a
 // fragment shader evaluated per-pixel — a GPU program, not a bitmap pattern.
 //
-// The river's shape (centerX/widthAt from river/path.js) is duplicated here
+// The river's shape (centerX/widthAt from world/river/path.js) is duplicated here
 // in GLSL rather than shared, because there's no practical way to hand a
 // JS function to the GPU — keep the two in sync if you retune the course.
 
-import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT, AHEAD_UNITS, BEHIND_UNITS } from './config.js';
-import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction } from '../river/path.js';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT, AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
+import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction } from './river/path.js';
 
 const VERT_SRC = `
 attribute vec2 a_pos;
@@ -30,7 +30,7 @@ uniform float u_time;
 uniform float u_worldDistance;
 uniform float u_cameraWorldX;
 
-// The braid island's x-offset (see river/path.js's braidOffsetFraction) is
+// The braid island's x-offset (see world/river/path.js's braidOffsetFraction) is
 // computed on the CPU and handed in per-cycle rather than hashed here — see
 // the comment in river/hash.js for why a GPU-side hash can't be trusted to
 // land on the same value as the JS/2D layer. At most two candidate cycles
@@ -49,17 +49,17 @@ const float BRAID_LENGTH = ${BRAID_LENGTH.toFixed(2)};
 const float RAPIDS_PERIOD = ${RAPIDS_PERIOD.toFixed(2)};
 const float RAPIDS_LENGTH = ${RAPIDS_LENGTH.toFixed(2)};
 
-// --- river course, mirrors river/path.js — keep in sync by hand ---
+// --- river course, mirrors world/river/path.js — keep in sync by hand ---
 float centerX(float d) {
   return sin(d * 0.09) * 3.0 + sin(d * 0.21 + 1.7) * 1.5;
 }
 float estuaryProgress(float d) {
   // 1700.0 (WIDTH_EASE_DISTANCE), not 900.0 (MOUTH_DISTANCE/where Tadoussac
-  // itself sits) — see river/path.js's comment on why those are different.
+  // itself sits) — see world/river/path.js's comment on why those are different.
   return clamp(d / 1700.0, 0.0, 1.0);
 }
 float widthAt(float d) {
-  // Cubic ease-in, mirroring river/path.js's widthAt() — see its comment
+  // Cubic ease-in, mirroring world/river/path.js's widthAt() — see its comment
   // for why this isn't just a linear ramp to ESTUARY_WIDTH.
   float t = estuaryProgress(d);
   float eased = t * t * t;
@@ -79,10 +79,10 @@ float braidOffsetForCycle(float cycle) {
   return u_braidOffsetB;
 }
 
-// Mirrors river/path.js's braidAt() — returns (centerX, halfWidth) of the
+// Mirrors world/river/path.js's braidAt() — returns (centerX, halfWidth) of the
 // mid-channel island at this d, with halfWidth <= 0.0 meaning "no island".
 // The two private tuning constants (max island size, min safe passage)
-// aren't exported from river/path.js, so they're hand-copied here too.
+// aren't exported from world/river/path.js, so they're hand-copied here too.
 vec2 braidAt(float d) {
   float cycle = floor(d / BRAID_PERIOD);
   float spanStart = cycle * BRAID_PERIOD + (BRAID_PERIOD - BRAID_LENGTH) * 0.5;
@@ -104,7 +104,7 @@ vec2 braidAt(float d) {
   return vec2(centerX(d) + offsetFraction * maxOffset, halfWidth);
 }
 
-// Mirrors river/path.js's rapidsStrength() — 0 (calm) to 1 (peak whitewater).
+// Mirrors world/river/path.js's rapidsStrength() — 0 (calm) to 1 (peak whitewater).
 float rapidsStrength(float d) {
   float cycle = floor(d / RAPIDS_PERIOD);
   float spanStart = cycle * RAPIDS_PERIOD + (RAPIDS_PERIOD - RAPIDS_LENGTH) * 0.5;

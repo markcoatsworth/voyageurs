@@ -446,7 +446,7 @@ export function createCabinSprite(variant = 0) {
 }
 
 // The one building every village guarantees right beside its dock (see
-// twod/villages.js) — where the canoe eventually gets repaired. Built from
+// villages.js) — where the canoe eventually gets repaired. Built from
 // the same log-cabin construction as createCabinSprite, but a warm rust
 // roof (every ordinary cabin uses browns) and a crossed-paddles sign over
 // the door are the two cues that mark it as different at a glance, from
@@ -516,7 +516,7 @@ export function createRepairShopSprite() {
   });
 }
 
-// Québec City's own building set (twod/villages.js/villageScene.js special-
+// Québec City's own building set (villages.js/villageScene.js special-
 // case it by name) — meant to read as a real 1790s colonial town at a
 // glance, not a bigger version of the fur-trade villages' log cabins.
 // Built-form cues specific to that: cut *stone* walls (a grid of block

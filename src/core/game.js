@@ -1,13 +1,13 @@
-import { centerX, widthAt, braidAt, rapidsStrength, MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './river/path.js';
-import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIXELS_PER_UNIT } from './twod/config.js';
-import { drawBanks, drawWaterFallback } from './twod/terrain.js';
-import { drawWhales } from './twod/whales.js';
-import { createCanoeSprites } from './twod/canoe.js';
-import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom } from './twod/sfx.js';
-import { getDockHit, dockHitZ } from './twod/villages.js';
-import { createVillageScene } from './twod/villageScene.js';
-import { createBlockade } from './twod/blockade.js';
-import { isTouchPrimary } from './twod/touchControls.js';
+import { centerX, widthAt, braidAt, rapidsStrength, MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from '../world/river/path.js';
+import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
+import { drawBanks, drawWaterFallback } from '../world/terrain.js';
+import { drawWhales } from '../world/whales.js';
+import { createCanoeSprites } from '../world/canoe.js';
+import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom } from '../audio/sfx.js';
+import { getDockHit, dockHitZ } from '../world/villages.js';
+import { createVillageScene } from '../world/villageScene.js';
+import { createBlockade } from '../bossfights/blockade.js';
+import { isTouchPrimary } from './touchControls.js';
 
 // A D-pad's discrete taps are less precise than a keyboard's held keys, and
 // the same world speed reads as faster filling more of a small screen — the
@@ -32,7 +32,7 @@ const MAX_SPEED = 16 * speedScale;
 // second forward gear pointed the other way.
 const MAX_REVERSE_SPEED = -6 * speedScale;
 // lawrenceWest (toward Québec City) is the one stretch that's genuinely
-// upstream in reality — see river/route.js's module comment — and this is
+// upstream in reality — see world/river/route.js's module comment — and this is
 // what actually makes it feel that way, rather than just a cosmetic label
 // on another normal downstream segment: its ambient current is negative,
 // not positive, so it's the same "drift back to this from either side when
@@ -75,7 +75,7 @@ const MAX_HEALTH = 100;
 const ROCK_DAMAGE = 32;
 const LOG_DAMAGE = 12;
 const BANK_DAMAGE = 8;
-// The Château Gauntlet (twod/blockade.js) — a cannon splash used to cost as
+// The Château Gauntlet (bossfights/blockade.js) — a cannon splash used to cost as
 // much as a rock (30), but combined with how many volleys a real approach
 // exposes you to, that added up to dying to cannon fire before ever
 // reaching the ship — the fight's actual climax. Dropped so a run of bad
@@ -113,7 +113,7 @@ const SPAWN_INVULN_TIME = 1.5;
 // it actually follows the curve — which is what makes it read as "the boat
 // is turning" rather than "the world is sliding."
 const CAMERA_SMOOTH = 0.025;
-// The Saint Lawrence stretch (river/path.js's ESTUARY_WIDTH) is far wider
+// The Saint Lawrence stretch (world/river/path.js's ESTUARY_WIDTH) is far wider
 // than the screen, so lateralOffset alone — the *only* thing that used to
 // move the canoe off the centerline visually, since the camera above only
 // ever tracks the curve, never the player's own steering — can no longer
@@ -152,7 +152,7 @@ const CAMERA_MAX_ONSCREEN_OFFSET = 5;
 const RAPIDS_BOOST = 7 * speedScale; // extra units/s the current adds at peak whitewater
 const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 
-// lawrenceWest (river/route.js's third segment, toward Québec City) is the
+// lawrenceWest (world/river/route.js's third segment, toward Québec City) is the
 // only one with a real floor: its numbering (SEGMENT_SHAPE_OFFSET) sits far
 // away on purpose, so paddling back past its own start would just be
 // paddling into an unrelated stretch of the shape functions' number line —
@@ -218,7 +218,7 @@ export class Game {
     // visit since river collision checks don't run in that mode.
     this.mode = 'river';
     this.currentVillage = null;
-    // Which of river/route.js's SEGMENTS is active — see SEGMENT_FLOOR and
+    // Which of world/river/route.js's SEGMENTS is active — see SEGMENT_FLOOR and
     // leaveVillage()'s Tadoussac branch for the junction itself.
     this.segment = startSegment;
     // Remembered so reset() can snap back to it — see that method's own

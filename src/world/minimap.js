@@ -1,7 +1,7 @@
 // A small always-on-screen locator map, fixed outside the game canvas, that
 // shows the canoe's position on the *real* geography — not a schematic
 // invented shape. The route (waypoints, projection, cumulative distance)
-// lives in river/route.js, shared with the in-game villages so the two
+// lives in world/river/route.js, shared with the in-game villages so the two
 // agree on where everything is.
 //
 // The river is a real three-way junction at Tadoussac (the Saguenay Fjord,
@@ -13,7 +13,7 @@
 // map-projection coordinates. Panning is just moving the SVG viewBox — the
 // route/label markup itself never needs rebuilding, only which segment's
 // cumulative-distance math update() uses to place the marker changes.
-import { SEGMENTS, ALL_POINTS, LAC_SAINT_JEAN_SHAPE } from '../river/route.js';
+import { SEGMENTS, ALL_POINTS, LAC_SAINT_JEAN_SHAPE } from './river/route.js';
 
 // Width/height of the visible window, in the same km-equivalent units as
 // the projected route points. Picked against the real gaps between
@@ -143,7 +143,7 @@ export function createMinimap() {
     // segmentId + flowDistance, not a single flowDistance — flowDistance
     // alone no longer says where the canoe is on the *real* map now that
     // three segments share the same underlying shape-math number line (see
-    // river/path.js's SEGMENT_SHAPE_OFFSET); it takes knowing which segment
+    // world/river/path.js's SEGMENT_SHAPE_OFFSET); it takes knowing which segment
     // that number belongs to as well.
     update(segmentId, flowDistance) {
       const seg = SEGMENTS[segmentId];

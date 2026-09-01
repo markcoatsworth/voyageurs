@@ -1,11 +1,11 @@
-// Villages along the river, one at each real waypoint from river/route.js
+// Villages along the river, one at each real waypoint from world/river/route.js
 // (except the put-in). Each has a small dock sticking out into the channel
 // — run the canoe into one and game.js sends the player ashore instead of
 // taking damage — plus a handful of log buildings on the bank behind it.
-import { CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_HEIGHT, PIXELS_PER_UNIT } from './config.js';
-import { centerX, widthAt } from '../river/path.js';
-import { hashRange } from '../river/hash.js';
-import { VILLAGES } from '../river/route.js';
+import { CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
+import { centerX, widthAt } from './river/path.js';
+import { hashRange } from '../shared/hash.js';
+import { VILLAGES } from './river/route.js';
 import {
   createCabinSprite, createPineTreeSprite, createRepairShopSprite,
   createStoneBuildingSprite, createChurchSprite, createRampartSprite,

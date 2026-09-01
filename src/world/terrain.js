@@ -1,8 +1,8 @@
-import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } from './config.js';
-import { centerX, widthAt, braidAt, BRAID_PERIOD } from '../river/path.js';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } from '../shared/config.js';
+import { centerX, widthAt, braidAt, BRAID_PERIOD } from './river/path.js';
 import { createWaterTile, createGrassTile, createBankTile, createSandTile } from './tiles.js';
 import { createPineTreeSprite, createPebbleSprite } from './sprites.js';
-import { hash, hashRange } from '../river/hash.js';
+import { hash, hashRange } from '../shared/hash.js';
 import { isNearVillage, drawVillages } from './villages.js';
 
 // Sample every 2px down the screen when building curve outlines. Braid
@@ -114,7 +114,7 @@ export function drawBanks(ctx, worldDistance, cameraWorldX) {
 }
 
 // The mid-channel islands that split the river into two short passages
-// (river/path.js's braidAt). Drawn as a lens-shaped sand fill — plain small
+// (world/river/path.js's braidAt). Drawn as a lens-shaped sand fill — plain small
 // land, not the same rocky/cliff-like texture as the outer shore (that one
 // reads as the fjord wall, which a mid-river island obviously isn't) —
 // right on top of the water hole punched above, so it reads as solid land

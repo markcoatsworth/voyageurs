@@ -142,7 +142,7 @@ html, body {
   background: #bfe6f2;
 }
 
-/* Only shown during the Château Gauntlet (twod/blockade.js) — a red readout
+/* Only shown during the Château Gauntlet (bossfights/blockade.js) — a red readout
    so it reads as an alert/combat status, distinct from the neutral speed
    and health bars above it. Same wrap/fill structure as those on purpose:
    one consistent HUD-bar language, not a bespoke widget. */
@@ -383,7 +383,7 @@ button:hover {
   border-color: #ff6b6b;
 }
 
-/* The real-world locator map (twod/minimap.js) — deliberately outside the
+/* The real-world locator map (world/minimap.js) — deliberately outside the
    game canvas/HUD, always visible, never intercepting clicks. Square (not
    the old wide rectangle) since it's now a fixed-size window that pans
    with the canoe instead of showing the whole route at once — see

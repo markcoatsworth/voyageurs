@@ -18,7 +18,7 @@ const PLAYLIST = [
 ];
 
 // Not part of the shuffle above — this only ever plays on cue, the moment
-// the Château Gauntlet (twod/blockade.js) is spotted, replacing whatever
+// the Château Gauntlet (bossfights/blockade.js) is spotted, replacing whatever
 // track happens to be playing. Once it ends (or the fight resolves first —
 // see endBossTrack()), the normal shuffle picks back up right where it
 // left off, not from scratch.
