@@ -17,6 +17,13 @@ const PLAYLIST = [
   '/audio/reel-canadienne.mp3',
 ];
 
+// Not part of the shuffle above — this only ever plays on cue, the moment
+// the Château Gauntlet (twod/blockade.js) is spotted, replacing whatever
+// track happens to be playing. Once it ends (or the fight resolves first —
+// see endBossTrack()), the normal shuffle picks back up right where it
+// left off, not from scratch.
+const BOSS_TRACK = '/audio/rule-britannia.mp3';
+
 const DEFAULT_VOLUME = 0.35;
 
 // Console-only now — this used to also show on-screen (#audio-debug),
@@ -94,6 +101,15 @@ export function createMusic() {
   // real head start on mobile. Fire-and-forget: playCurrent() awaits
   // whichever of these promises it needs, whenever it needs it.
   for (const track of PLAYLIST) prefetch(track);
+  // The boss track needs the exact same head start — it has to be ready to
+  // cut in the instant the frigate is spotted, not start fetching then.
+  prefetch(BOSS_TRACK);
+
+  // True while BOSS_TRACK is loaded instead of the shuffle — read by the
+  // 'ended' handler (resume the shuffle in place, don't advance it, once
+  // the boss track finishes on its own) and by endBossTrack() (cut it short
+  // early if the fight resolves before the track does).
+  let special = false;
 
   // Tried routing this through a MediaElementAudioSourceNode + AudioContext
   // (to sidestep the phone's silent switch, which <audio> elements respect
@@ -130,14 +146,45 @@ export function createMusic() {
     );
   }
 
+  // Same shape as playCurrent() above, but for a specific one-off track
+  // instead of wherever the shuffle currently points — see BOSS_TRACK's own
+  // comment. Bumps generation so any in-flight normal playCurrent() fetch
+  // (or a previous playSpecial()) can't land after this one and undo it.
+  async function playSpecial(url) {
+    special = true;
+    generation++;
+    const requestedGeneration = generation;
+    const src = await prefetch(url);
+    if (generation !== requestedGeneration) return;
+    audio.src = src;
+    audio.play().then(
+      () => {
+        started = true;
+        debug(`playing special track ${url.split('/').pop()}`);
+      },
+      (e) => {
+        if (e.name === 'AbortError') return;
+        debug(`special play() rejected: ${e.name}: ${e.message}`);
+      }
+    );
+  }
+
   audio.addEventListener('error', () => {
     const err = audio.error;
     debug(`audio error ${err?.code ?? '?'}: ${err?.message || '(no message)'}`);
   });
 
   // Advance to the next track when one ends, instead of looping the same
-  // one — reshuffle once the whole list has played through.
+  // one — reshuffle once the whole list has played through. If the boss
+  // track was what just ended (it ran its full length without the fight
+  // resolving first), drop back into the shuffle at the same spot it was
+  // interrupted rather than skipping a track ahead.
   audio.addEventListener('ended', () => {
+    if (special) {
+      special = false;
+      playCurrent();
+      return;
+    }
     index++;
     if (index >= order.length) {
       order = shuffled(PLAYLIST);
@@ -190,6 +237,25 @@ export function createMusic() {
       muted = !muted;
       audio.muted = muted;
       return muted;
+    },
+    // Cuts in immediately, replacing whatever's currently playing — see
+    // BOSS_TRACK's own comment. Safe to call even before start() (e.g. a
+    // ?start= cheat landing right at the fight) since playSpecial sets
+    // `started` itself.
+    playBossTrack() {
+      playSpecial(BOSS_TRACK);
+    },
+    // Cuts the boss track short and drops back into the normal shuffle —
+    // called the moment the fight resolves, rather than waiting out the
+    // rest of a ~2.5-minute track after a ~15-second fight. A no-op if the
+    // boss track isn't what's currently playing (e.g. game.js's start()
+    // calls this unconditionally on every restart, boss fight or not, to
+    // guarantee a restart never leaves it playing).
+    endBossTrack() {
+      if (!special) return;
+      special = false;
+      generation++;
+      playCurrent();
     },
   };
 }

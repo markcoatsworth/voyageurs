@@ -3,7 +3,7 @@ import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEI
 import { drawBanks, drawWaterFallback } from './twod/terrain.js';
 import { drawWhales } from './twod/whales.js';
 import { createCanoeSprites } from './twod/canoe.js';
-import { playCapsizeHorn, playPeltChime, playDamageBoop } from './twod/sfx.js';
+import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom } from './twod/sfx.js';
 import { getDockHit, dockHitZ } from './twod/villages.js';
 import { createVillageScene } from './twod/villageScene.js';
 import { createBlockade } from './twod/blockade.js';
@@ -75,15 +75,21 @@ const MAX_HEALTH = 100;
 const ROCK_DAMAGE = 32;
 const LOG_DAMAGE = 12;
 const BANK_DAMAGE = 8;
-// The Château Gauntlet (twod/blockade.js) — a cannon splash costs about as
-// much as a rock (dodging it is the same skill), while actually clipping
-// the frigate's hull is the single hardest hit in the game: you had a
-// whole channel's width of clear water to find and missed it entirely.
-// Neither is fatal alone (roughly 3 splashes, or 2-3 hull clips, from a
-// full hull), matching every other hazard's "expensive, not a one-hit kill"
-// rule — see that constant's own comment above.
-const CANNON_DAMAGE = 30;
+// The Château Gauntlet (twod/blockade.js) — a cannon splash used to cost as
+// much as a rock (30), but combined with how many volleys a real approach
+// exposes you to, that added up to dying to cannon fire before ever
+// reaching the ship — the fight's actual climax. Dropped so a run of bad
+// luck during the approach costs real health without being able to end the
+// run on its own before the hull is even reached.
+const CANNON_DAMAGE = 16;
+// The hull itself is a solid wall, not a one-off "you clipped it" penalty
+// (see the isHullBlocking check in update()) — outside the gap you simply
+// can't push through it at all, taking this (the single hardest hit in the
+// game) on repeat every INVULN_TIME while you're pinned against it, plus a
+// heavy speed penalty that keeps sapping your paddling the whole time
+// you're in contact, same shape as BANK_PENALTY_SPEED just harder.
 const SHIP_HULL_DAMAGE = 40;
+const SHIP_HULL_PENALTY_SPEED = 6;
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
@@ -291,6 +297,11 @@ export class Game {
     this.obstacles.reset();
     this.blockade.reset();
     this.blockadePct = null;
+    // Restart now always returns to the run's actual start (see reset()'s
+    // own comment) — if the boss track was playing when the capsize
+    // happened, leaving it running would be paired with a scene nowhere
+    // near the frigate. Unconditional and harmless if it wasn't playing.
+    this.music?.endBossTrack();
     this.state = 'playing';
     clearTimeout(this._bannerTimeout);
     this.ui.milestoneBanner.classList.remove('show');
@@ -490,7 +501,25 @@ export class Game {
     // distance (d = world.distance - z) stays exactly invariant. Floored
     // per SEGMENT_FLOOR's comment — no ceiling at all, on any segment.
     const floor = SEGMENT_FLOOR[this.segment] ?? 0;
-    this.flowDistance = Math.max(floor, this.flowDistance + effectiveSpeed * dt);
+    let proposedFlowDistance = Math.max(floor, this.flowDistance + effectiveSpeed * dt);
+
+    // The frigate's hull is a genuine solid wall, not just a one-off "you
+    // clipped it" penalty — outside the gap, forward progress is simply
+    // held here, same shape as the bank clamp just below but on the flow
+    // axis instead of the lateral one. Using last frame's lateralOffset for
+    // the world-X check (this frame's isn't computed until just below) is a
+    // one-frame-stale approximation, same tradeoff the bank check already
+    // makes implicitly — lateralOffset can't move far in one frame.
+    if (this.segment === 'lawrenceWest') {
+      const tentativeWorldX = centerX(proposedFlowDistance) + this.lateralOffset;
+      if (this.blockade.isHullBlocking(proposedFlowDistance, tentativeWorldX)) {
+        proposedFlowDistance = this.flowDistance; // held in place, not pushed through
+        this.speed = Math.max(MIN_SPEED - 1, this.speed - SHIP_HULL_PENALTY_SPEED);
+        this.handleHit({ type: 'shiphull' });
+      }
+    }
+
+    this.flowDistance = proposedFlowDistance;
     this.world.distance = this.flowDistance;
 
     let steerInput = 0;
@@ -610,12 +639,17 @@ export class Game {
     if (this.segment === 'lawrenceWest') {
       const blockade = this.blockade.update(dt, this.flowDistance, this.canoeWorldX, effectiveSpeed, (entry) => this.handleHit(entry));
       this.blockadePct = blockade.active ? blockade.progressPct : null;
+      // One boom per impact, hit or miss — a volley landing several shots
+      // at once fires this the same number of times in the same frame.
+      for (let i = 0; i < blockade.boomCount; i++) playCannonBoom();
       if (this.blockade.consumeJustSpotted()) {
         const side = this.blockade.gapSide() > 0 ? 'right' : 'left';
         this.showBanner(`A British frigate blocks the channel — clear water to the ${side}!`);
+        this.music?.playBossTrack();
       }
       if (this.blockade.consumeJustCleared()) {
         this.showBanner("You've broken past the British patrol!");
+        this.music?.endBossTrack();
       }
     } else {
       this.blockadePct = null;

@@ -57,8 +57,15 @@ const CLEAR_MARGIN = 3; // how far past the ship counts as "in the clear"
 // there's more than one thing to track and a safe gap has to be found, not
 // just "don't stand still" — escalating in count and spread as the ship
 // gets closer, on top of firing faster.
-const VOLLEY_INTERVAL_FAR = 1.9;
-const VOLLEY_INTERVAL_NEAR = 0.55;
+//
+// That version then turned out to overshoot the other way — reported as
+// dying to cannon fire during the approach, before ever reaching the ship
+// at all. Slower volleys and a later multi-shot escalation (see the shots
+// calculation below) than that first pass, plus less damage per hit (see
+// CANNON_DAMAGE in game.js) — still a real, escalating fight, just not one
+// that can end the run before its actual climax.
+const VOLLEY_INTERVAL_FAR = 2.3;
+const VOLLEY_INTERVAL_NEAR = 0.75;
 const SPLASH_WARN_TIME = 0.65; // telegraph before it's dangerous
 const SPLASH_HOT_TIME = 0.3; // the actual damaging window
 const SPLASH_FADE_TIME = 0.15;
@@ -99,7 +106,6 @@ export function createBlockade() {
   // re-rolled or changed for the rest of the fight.
   let gapSide = null;
   let resolved = false;
-  let hullHitApplied = false;
   let volleyTimer = VOLLEY_INTERVAL_FAR;
   let hazards = [];
   let justCleared = false;
@@ -108,7 +114,6 @@ export function createBlockade() {
   function reset() {
     gapSide = null;
     resolved = false;
-    hullHitApplied = false;
     volleyTimer = VOLLEY_INTERVAL_FAR;
     hazards = [];
     justCleared = false;
@@ -117,6 +122,18 @@ export function createBlockade() {
 
   return {
     reset,
+    // A real physical wall, checked by game.js *before* it commits to
+    // advancing flowDistance — see that call site's own comment. True
+    // whenever (d, worldX) lands inside the hull's own depth range but
+    // outside the gap; always false before the ship's been spotted at all
+    // (gapSide isn't decided yet, so there's nothing to collide with).
+    isHullBlocking(flowDistance, worldX) {
+      if (gapSide === null) return false;
+      const half = SHIP_DEPTH_Z / 2;
+      if (flowDistance < SHIP_FLOW_DISTANCE - half || flowDistance > SHIP_FLOW_DISTANCE + half) return false;
+      const { gapLo, gapHi } = gapBounds(gapSide);
+      return worldX < gapLo || worldX > gapHi;
+    },
     // Consumed once by game.js so each event fires exactly one banner, not
     // one every frame the condition happens to still be true.
     consumeJustSpotted() {
@@ -152,11 +169,10 @@ export function createBlockade() {
           gapSide = Math.random() < 0.5 ? -1 : 1;
           justSpotted = true;
         }
-        if (distToShip <= 0 && !hullHitApplied) {
-          hullHitApplied = true;
-          const { gapLo, gapHi } = gapBounds(gapSide);
-          if (playerWorldX < gapLo || playerWorldX > gapHi) onHit({ type: 'shiphull' });
-        }
+        // No hull check here any more — isHullBlocking() (checked by
+        // game.js before it even commits to advancing flowDistance) is
+        // what actually stops the canoe outside the gap now, so distToShip
+        // can only ever go negative by genuinely passing through it.
         if (distToShip <= -CLEAR_MARGIN) {
           resolved = true;
           justCleared = true;
@@ -165,7 +181,7 @@ export function createBlockade() {
           const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
           volleyTimer -= dt;
           if (volleyTimer <= 0) {
-            const shots = progress > 0.7 ? 3 : progress > 0.35 ? 2 : 1;
+            const shots = progress > 0.85 ? 3 : progress > 0.5 ? 2 : 1;
             const spread = SPLASH_SPREAD_MIN + (SPLASH_SPREAD_MAX - SPLASH_SPREAD_MIN) * progress;
             for (let i = 0; i < shots; i++) {
               // Evenly-spaced lanes across the fan, not independent random
@@ -188,6 +204,7 @@ export function createBlockade() {
                 x: playerWorldX + lane * spread + jitter,
                 t: 0,
                 hit: false,
+                boomed: false,
               });
             }
             volleyTimer = VOLLEY_INTERVAL_FAR - (VOLLEY_INTERVAL_FAR - VOLLEY_INTERVAL_NEAR) * progress;
@@ -199,9 +216,18 @@ export function createBlockade() {
       // `engaged` — a shot fired right before crossing (or right before
       // resolving) must still finish its own lifecycle and get cleaned up,
       // not freeze mid-telegraph forever the moment the fight itself ends.
+      // boomCount is every hazard *newly* turning hot this frame — every
+      // impact gets its sound, hit or miss, not just the ones that actually
+      // land on the canoe (a real broadside sounds like cannon fire whether
+      // or not any particular shot connects).
+      let boomCount = 0;
       for (const h of hazards) {
         h.t += dt;
         const hot = h.t >= SPLASH_WARN_TIME && h.t < SPLASH_WARN_TIME + SPLASH_HOT_TIME;
+        if (hot && !h.boomed) {
+          h.boomed = true;
+          boomCount++;
+        }
         if (hot && !h.hit) {
           if (Math.abs(playerFlowDistance - h.d) < SPLASH_D_TOLERANCE && Math.abs(playerWorldX - h.x) < SPLASH_HIT_RADIUS) {
             h.hit = true;
@@ -211,9 +237,9 @@ export function createBlockade() {
       }
       hazards = hazards.filter((h) => h.t < SPLASH_WARN_TIME + SPLASH_HOT_TIME + SPLASH_FADE_TIME);
 
-      if (!engaged) return { active: false, progressPct: 0 };
+      if (!engaged) return { active: false, progressPct: 0, boomCount };
       const progressPct = distToShip <= 0 ? 100 : (1 - clamp(distToShip / APPROACH_RANGE, 0, 1)) * 100;
-      return { active: true, progressPct };
+      return { active: true, progressPct, boomCount };
     },
 
     // Rendering doesn't care whether the encounter is currently "active" by

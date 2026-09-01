@@ -106,3 +106,58 @@ export function playDamageBoop() {
   boop(c, t0 + 0.00, 220.0, 0.11);
   boop(c, t0 + 0.09, 174.6, 0.16);
 }
+
+// A cannon impact — the Château Gauntlet's (twod/blockade.js) own cue, one
+// per cannonball landing, hit or miss. Two layers, same "synthesize it,
+// don't ship a sample" approach as everything else here: a low sine
+// "thump" sliding down in pitch for the body of the explosion, and a burst
+// of white noise swept from bright down to dull through a lowpass filter
+// for the crack/rumble on top. jitter varies the pitch and timing a little
+// so several in quick succession (a multi-shot volley) don't sound like the
+// exact same sample triggered three times.
+function noiseBurst(c, startTime, duration, startFreq) {
+  const bufferSize = Math.max(1, Math.floor(c.sampleRate * duration));
+  const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+  const noise = c.createBufferSource();
+  noise.buffer = buffer;
+
+  const filter = c.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(startFreq, startTime);
+  filter.frequency.exponentialRampToValueAtTime(90, startTime + duration);
+
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.45, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  noise.connect(filter).connect(gain).connect(c.destination);
+  noise.start(startTime);
+  noise.stop(startTime + duration + 0.02);
+}
+
+function thump(c, startTime, duration, startFreq, endFreq) {
+  const osc = c.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(startFreq, startTime);
+  osc.frequency.exponentialRampToValueAtTime(endFreq, startTime + duration);
+
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.7, startTime + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  osc.connect(gain).connect(c.destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.02);
+}
+
+export function playCannonBoom() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  const jitter = 0.9 + Math.random() * 0.2; // 0.9-1.1x, pitch + duration
+  thump(c, t0, 0.32 * jitter, 130 * jitter, 38 * jitter);
+  noiseBurst(c, t0, 0.42 * jitter, 2200);
+}

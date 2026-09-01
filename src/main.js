@@ -31,11 +31,22 @@ const START_APPROACH_BUFFER = 25;
 function stripAccents(s) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
+// Hyphens and spaces are treated as the same separator on both sides of the
+// comparison \u2014 some village names use a hyphen as part of the real name
+// (Sept-\u00celes, Baie-Saint-Paul), others are two plain words (Qu\u00e9bec City),
+// and there's no way for someone typing a URL by hand to know which is
+// which. Collapsing both to one form before comparing means "quebec-city",
+// "quebec city", and "quebec+city" (a literal space, once the browser
+// decodes it) all match "Qu\u00e9bec City" \u2014 and "sept-iles"/"sept iles" still
+// both match "Sept-\u00celes" too.
+function normalizeStartName(s) {
+  return stripAccents(s.toLowerCase()).replace(/[-\s]+/g, ' ').trim();
+}
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
   if (!raw) return { flowDistance: 0, segment: 'fjord' };
-  const wanted = stripAccents(raw.trim().toLowerCase());
-  const match = VILLAGES.find((v) => wanted === stripAccents(v.name.toLowerCase()));
+  const wanted = normalizeStartName(raw);
+  const match = VILLAGES.find((v) => wanted === normalizeStartName(v.name));
   if (!match) {
     if (raw.trim()) console.warn(`?start=${raw}: no matching village, starting from the put-in instead.`);
     return { flowDistance: 0, segment: 'fjord' };
