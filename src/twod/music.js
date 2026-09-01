@@ -14,6 +14,7 @@ const PLAYLIST = [
   '/audio/valse-des-laboureurs.mp3',
   '/audio/le-violon-en-discorde.mp3',
   '/audio/reel-des-forets.mp3',
+  '/audio/reel-canadienne.mp3',
 ];
 
 const DEFAULT_VOLUME = 0.35;
