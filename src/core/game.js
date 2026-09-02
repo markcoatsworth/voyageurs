@@ -280,8 +280,6 @@ export class Game {
     if (this.state !== 'playing') return; // nothing sensible to pause over the title/gameover screens
     this.paused = !this.paused;
     this.ui.pauseScreen.classList.toggle('hidden', !this.paused);
-    if (this.paused) this.music?.stop();
-    else this.music?.resume();
   }
 
   showBanner(text) {
