@@ -512,7 +512,8 @@ export class Game {
       const tentativeWorldX = centerX(proposedFlowDistance) + this.lateralOffset;
       if (this.blockade.isHullBlocking(proposedFlowDistance, tentativeWorldX)) {
         proposedFlowDistance = this.flowDistance; // held in place, not pushed through
-        this.speed = Math.max(MIN_SPEED - 1, this.speed - SHIP_HULL_PENALTY_SPEED);
+        // Bounce off the hull: strong backward push so you can escape
+        this.speed = -8 * speedScale;
         this.handleHit({ type: 'shiphull' });
       }
     }
