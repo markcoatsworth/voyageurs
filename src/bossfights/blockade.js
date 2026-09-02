@@ -311,10 +311,42 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
     ctx.fillRect(mx - hullH * 0.55, y0 - hullH * 0.85, hullH * 1.1, hullH * 0.12);
   }
   const sternX = gapSide > 0 ? left + 6 : right - 6;
-  ctx.fillStyle = '#b3222c';
-  ctx.fillRect(sternX - 4, y0 - hullH * 1.9, 8, 5);
-  ctx.fillStyle = '#f4ead2';
-  ctx.fillRect(sternX - 4, y0 - hullH * 1.9, 3, 2);
+  const flagX = sternX - 4;
+  const flagY = y0 - hullH * 1.9;
+
+  // Union Jack: blue field
+  ctx.fillStyle = '#012169';
+  ctx.fillRect(flagX, flagY, 8, 5);
+
+  // White diagonal crosses (saltire)
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(flagX, flagY);
+  ctx.lineTo(flagX + 8, flagY + 5);
+  ctx.moveTo(flagX + 8, flagY);
+  ctx.lineTo(flagX, flagY + 5);
+  ctx.stroke();
+
+  // Red diagonal crosses (St. Patrick's saltire)
+  ctx.strokeStyle = '#C8102E';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(flagX, flagY);
+  ctx.lineTo(flagX + 8, flagY + 5);
+  ctx.moveTo(flagX + 8, flagY);
+  ctx.lineTo(flagX, flagY + 5);
+  ctx.stroke();
+
+  // White cross (St. George's cross background)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(flagX + 3, flagY, 2, 5); // vertical
+  ctx.fillRect(flagX, flagY + 2, 8, 1); // horizontal
+
+  // Red cross (St. George's cross)
+  ctx.fillStyle = '#C8102E';
+  ctx.fillRect(flagX + 3.5, flagY, 1, 5); // vertical
+  ctx.fillRect(flagX, flagY + 2, 8, 1); // horizontal
 }
 
 function drawHazard(ctx, h, z, cameraWorldX) {
