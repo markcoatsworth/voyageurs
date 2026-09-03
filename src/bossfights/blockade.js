@@ -101,8 +101,8 @@ function gapBounds(gapSide) {
 }
 
 const CHASE_DISTANCE = 120; // how far you must get ahead to escape
-const CHASE_SHIP_SPEED = 13; // ship chases at ~85% of max player speed
-const CHASE_VOLLEY_INTERVAL = 1.8; // faster than blockade volleys
+const CHASE_SHIP_SPEED = 14; // gunboat chases fast - about 90% of max player speed
+const CHASE_VOLLEY_INTERVAL = 2.2; // bow cannon fires slower than frigate broadside
 
 export function createBlockade() {
   // null until the encounter first activates — decided once, right then
@@ -275,23 +275,19 @@ export function createBlockade() {
           chasePhase = false;
           chaseEscaped = true;
         } else {
-          // Fire volleys from the pursuing ship
+          // Fire single shots from bow cannon
           volleyTimer -= dt;
           if (volleyTimer <= 0) {
-            // Chase volleys: 2-3 shots aimed at player
-            const shots = leadDistance < 40 ? 3 : 2;
-            const spread = Math.min(20, 8 + leadDistance * 0.15);
-            for (let i = 0; i < shots; i++) {
-              const lane = shots > 1 ? (i / (shots - 1)) * 2 - 1 : 0;
-              const jitter = (Math.random() * 2 - 1) * (spread / shots) * 0.4;
-              hazards.push({
-                d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME,
-                x: playerWorldX + lane * spread + jitter,
-                t: 0,
-                hit: false,
-                boomed: false,
-              });
-            }
+            // Single aimed shot from bow cannon with some spread
+            const spread = Math.min(8, 3 + leadDistance * 0.08);
+            const jitter = (Math.random() * 2 - 1) * spread;
+            hazards.push({
+              d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME,
+              x: playerWorldX + jitter,
+              t: 0,
+              hit: false,
+              boomed: false,
+            });
             volleyTimer = CHASE_VOLLEY_INTERVAL;
           }
         }
@@ -440,80 +436,83 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
 }
 
 function drawChaseShip(ctx, cameraWorldX, z0) {
-  // Battleship: larger and more imposing than the frigate
+  // Small gunboat: fast, maneuverable pursuit vessel
   const riverCenter = centerX(SHIP_FLOW_DISTANCE);
-  const riverWidth = widthAt(SHIP_FLOW_DISTANCE);
-  // Ship spans most of the channel
-  const shipWidth = riverWidth * 0.85;
-  const left = worldToScreen(riverCenter - shipWidth / 2, z0 - 4.5, cameraWorldX);
-  const right = worldToScreen(riverCenter + shipWidth / 2, z0 + 4.5, cameraWorldX);
+  // Much smaller than frigate - narrow, agile boat
+  const boatWidth = 4; // world units, roughly canoe-sized but longer
+  const left = worldToScreen(riverCenter - boatWidth / 2, z0 - 1.8, cameraWorldX);
+  const right = worldToScreen(riverCenter + boatWidth / 2, z0 + 1.8, cameraWorldX);
   const top = Math.min(left.y, right.y);
   const bottom = Math.max(left.y, right.y);
   const hullH = bottom - top;
   const hullW = right.x - left.x;
+  const centerX = (left.x + right.x) / 2;
 
-  // Hull: darker, more menacing than frigate
-  ctx.fillStyle = '#0d0805';
-  ctx.fillRect(left.x - 1, top - 1, hullW + 2, hullH + 2);
-  ctx.fillStyle = '#3a2820';
-  ctx.fillRect(left.x, top, hullW, hullH);
+  // Sleek hull - pointed bow, narrow profile
+  ctx.fillStyle = '#1a1208';
+  ctx.beginPath();
+  ctx.moveTo(centerX, top - 3); // pointed bow
+  ctx.lineTo(right.x, top + hullH * 0.3);
+  ctx.lineTo(right.x, bottom);
+  ctx.lineTo(left.x, bottom);
+  ctx.lineTo(left.x, top + hullH * 0.3);
+  ctx.closePath();
+  ctx.fill();
+
+  // Deck planking
+  ctx.fillStyle = '#3a2818';
+  ctx.beginPath();
+  ctx.moveTo(centerX, top);
+  ctx.lineTo(right.x - 2, top + hullH * 0.3);
+  ctx.lineTo(right.x - 2, bottom - 4);
+  ctx.lineTo(left.x + 2, bottom - 4);
+  ctx.lineTo(left.x + 2, top + hullH * 0.3);
+  ctx.closePath();
+  ctx.fill();
+
+  // Small bow cannon
+  ctx.fillStyle = '#0a0805';
+  ctx.fillRect(centerX - 3, top + 2, 6, 4);
   ctx.fillStyle = '#1c1410';
-  ctx.fillRect(left.x, bottom - hullH * 0.3, hullW, hullH * 0.3);
+  ctx.fillRect(centerX - 2, top, 4, 3);
 
-  // More gunports (two rows)
-  const portSize = Math.max(2, hullH * 0.15);
-  const portSpacing = 12;
-  const portCount = Math.max(2, Math.floor(hullW / portSpacing));
-  ctx.fillStyle = '#000000';
-  for (let row = 0; row < 2; row++) {
-    const portY = top + hullH * (0.3 + row * 0.25);
-    for (let i = 0; i < portCount; i++) {
-      const portX = left.x + (i + 0.5) * (hullW / portCount);
-      ctx.fillRect(portX - portSize / 2, portY - portSize / 2, portSize, portSize);
-    }
-  }
+  // Single mast with small sail
+  ctx.strokeStyle = '#2a1a10';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(centerX, top + hullH * 0.4);
+  ctx.lineTo(centerX, top - hullH * 1.2);
+  ctx.stroke();
+  ctx.fillStyle = '#d8d0c0';
+  ctx.fillRect(centerX - hullH * 0.35, top - hullH * 0.9, hullH * 0.7, hullH * 0.4);
 
-  // Three tall masts
-  const mastXs = [left.x + hullW * 0.25, left.x + hullW * 0.5, left.x + hullW * 0.75];
-  for (const mx of mastXs) {
-    ctx.strokeStyle = '#2a1a10';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(mx, top);
-    ctx.lineTo(mx, top - hullH * 2);
-    ctx.stroke();
-    // Furled sails
-    ctx.fillStyle = '#b8b0a0';
-    ctx.fillRect(mx - hullH * 0.6, top - hullH * 1.5, hullH * 1.2, hullH * 0.55);
-  }
-
-  // Large Union Jack at stern
-  const flagX = left.x + hullW / 2 - 6;
-  const flagY = top - hullH * 2.3;
+  // Small Union Jack at stern
+  const flagX = centerX - 3;
+  const flagY = bottom - hullH * 0.8;
   ctx.fillStyle = '#012169';
-  ctx.fillRect(flagX, flagY, 12, 8);
+  ctx.fillRect(flagX, flagY, 6, 4);
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(flagX, flagY);
-  ctx.lineTo(flagX + 12, flagY + 8);
-  ctx.moveTo(flagX + 12, flagY);
-  ctx.lineTo(flagX, flagY + 8);
+  ctx.lineTo(flagX + 6, flagY + 4);
+  ctx.moveTo(flagX + 6, flagY);
+  ctx.lineTo(flagX, flagY + 4);
   ctx.stroke();
   ctx.strokeStyle = '#C8102E';
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 0.5;
   ctx.beginPath();
   ctx.moveTo(flagX, flagY);
-  ctx.lineTo(flagX + 12, flagY + 8);
-  ctx.moveTo(flagX + 12, flagY);
-  ctx.lineTo(flagX, flagY + 8);
+  ctx.lineTo(flagX + 6, flagY + 4);
+  ctx.moveTo(flagX + 6, flagY);
+  ctx.lineTo(flagX, flagY + 4);
   ctx.stroke();
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(flagX + 5, flagY, 2, 8);
-  ctx.fillRect(flagX, flagY + 3, 12, 2);
+  ctx.fillRect(flagX + 2.5, flagY, 1, 4);
+  ctx.fillRect(flagX, flagY + 1.5, 6, 1);
   ctx.fillStyle = '#C8102E';
-  ctx.fillRect(flagX + 5.5, flagY, 1, 8);
-  ctx.fillRect(flagX, flagY + 3.5, 12, 1);
+  ctx.fillRect(flagX + 2.75, flagY, 0.5, 4);
+  ctx.fillRect(flagX, flagY + 1.75, 6, 0.5);
 }
 
 function drawHazard(ctx, h, z, cameraWorldX) {
