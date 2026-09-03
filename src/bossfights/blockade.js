@@ -100,9 +100,9 @@ function gapBounds(gapSide) {
   return { gapLo: leftBank, gapHi: leftBank + GAP_WIDTH, hullLo: leftBank + GAP_WIDTH, hullHi: rightBank };
 }
 
-const CHASE_DISTANCE = 120; // how far you must get ahead to escape
-const CHASE_SHIP_SPEED = 14; // gunboat chases fast - about 90% of max player speed
-const CHASE_VOLLEY_INTERVAL = 2.2; // bow cannon fires slower than frigate broadside
+const CHASE_DISTANCE = 150; // how far you must get ahead to escape
+const CHASE_SHIP_SPEED = 15.5; // gunboat chases FAST - nearly matches max player speed
+const CHASE_VOLLEY_INTERVAL = 1.3; // bow cannon fires rapidly
 
 export function createBlockade() {
   // null until the encounter first activates — decided once, right then
@@ -200,7 +200,7 @@ export function createBlockade() {
           justCleared = true;
           // Start the chase phase
           chasePhase = true;
-          chaseShipDistance = SHIP_FLOW_DISTANCE - 30; // ship starts 30 units behind the frigate
+          chaseShipDistance = playerFlowDistance - 12; // ship starts just 12 units behind player - immediately visible!
           justStartedChase = true;
           volleyTimer = CHASE_VOLLEY_INTERVAL;
           console.log('[BLOCKADE] Chase started. Player:', playerFlowDistance, 'Chase ship:', chaseShipDistance);
@@ -279,19 +279,23 @@ export function createBlockade() {
           chaseEscaped = true;
           console.log('[CHASE] Escaped!');
         } else {
-          // Fire single shots from bow cannon
+          // Fire aggressive volleys from bow cannon
           volleyTimer -= dt;
           if (volleyTimer <= 0) {
-            // Single aimed shot from bow cannon with some spread
-            const spread = Math.min(8, 3 + leadDistance * 0.08);
-            const jitter = (Math.random() * 2 - 1) * spread;
-            hazards.push({
-              d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME,
-              x: playerWorldX + jitter,
-              t: 0,
-              hit: false,
-              boomed: false,
-            });
+            // 2-3 shots per volley - more dangerous as gunboat gets closer
+            const shots = leadDistance < 30 ? 3 : 2;
+            const spread = Math.min(12, 4 + leadDistance * 0.1);
+            for (let i = 0; i < shots; i++) {
+              const lane = shots > 1 ? (i / (shots - 1)) * 2 - 1 : 0;
+              const jitter = (Math.random() * 2 - 1) * (spread / shots) * 0.4;
+              hazards.push({
+                d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME,
+                x: playerWorldX + lane * spread + jitter,
+                t: 0,
+                hit: false,
+                boomed: false,
+              });
+            }
             volleyTimer = CHASE_VOLLEY_INTERVAL;
           }
         }
@@ -452,10 +456,10 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
 }
 
 function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
-  // Small gunboat: fast, maneuverable pursuit vessel
+  // Gunboat: fast, aggressive pursuit vessel
   const riverCenter = centerX(chaseShipDistance);
-  // Much smaller than frigate - narrow, agile boat
-  const boatWidth = 4; // world units, roughly canoe-sized but longer
+  // Visible but agile - bigger than original for visibility
+  const boatWidth = 7; // world units - big enough to see clearly
   const left = worldToScreen(riverCenter - boatWidth / 2, z0 - 1.8, cameraWorldX);
   const right = worldToScreen(riverCenter + boatWidth / 2, z0 + 1.8, cameraWorldX);
   const top = Math.min(left.y, right.y);
