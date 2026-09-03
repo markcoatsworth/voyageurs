@@ -336,11 +336,11 @@ export function createBlockade() {
         drawFog(ctx, distToShip);
       }
 
-      // Chase ship: pursuing battleship
+      // Chase ship: pursuing gunboat
       if (chasePhase) {
         const chaseZ = worldDistance - chaseShipDistance;
         if (Math.abs(chaseZ) < VISIBLE_Z_RANGE) {
-          drawChaseShip(ctx, cameraWorldX, chaseZ);
+          drawChaseShip(ctx, cameraWorldX, chaseZ, chaseShipDistance);
         }
       }
     },
@@ -435,9 +435,9 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
   ctx.fillRect(flagX, flagY + 2, 8, 1); // horizontal
 }
 
-function drawChaseShip(ctx, cameraWorldX, z0) {
+function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
   // Small gunboat: fast, maneuverable pursuit vessel
-  const riverCenter = centerX(SHIP_FLOW_DISTANCE);
+  const riverCenter = centerX(chaseShipDistance);
   // Much smaller than frigate - narrow, agile boat
   const boatWidth = 4; // world units, roughly canoe-sized but longer
   const left = worldToScreen(riverCenter - boatWidth / 2, z0 - 1.8, cameraWorldX);
