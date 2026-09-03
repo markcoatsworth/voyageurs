@@ -655,6 +655,7 @@ export class Game {
         // Deliberately doesn't say which side is clear — finding the gap is
         // the point, not something to hand the player in a banner.
         this.showBanner('BRITISH BLOCKADE');
+        this.music?.start(); // Ensure music system is initialized
         this.music?.playBossTrack();
       }
       if (this.blockade.consumeJustCleared()) {
