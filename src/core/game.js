@@ -654,11 +654,10 @@ export class Game {
       if (this.blockade.consumeJustSpotted()) {
         // Deliberately doesn't say which side is clear — finding the gap is
         // the point, not something to hand the player in a banner.
-        this.showBanner('A British frigate blocks the channel!');
+        this.showBanner('BRITISH BLOCKADE');
         this.music?.playBossTrack();
       }
       if (this.blockade.consumeJustCleared()) {
-        this.showBanner("You've broken past the British patrol!");
         this.music?.endBossTrack();
       }
     } else {
