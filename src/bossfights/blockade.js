@@ -239,7 +239,7 @@ export function createBlockade() {
       const progressPct = distToShip <= 0 ? 100 : (1 - clamp(distToShip / APPROACH_RANGE, 0, 1)) * 100;
       // Cross-current pushes you away from the gap side, getting stronger as you approach
       const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
-      const crossCurrent = -gapSide * progress * 12; // negative gap side means push away from gap
+      const crossCurrent = -gapSide * progress * 7; // negative gap side means push away from gap
       return { active: true, progressPct, boomCount, crossCurrent, gapSide };
     },
 
