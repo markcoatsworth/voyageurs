@@ -330,6 +330,12 @@ export class Game {
     this.currentVillage = village;
     this.villageScene.enter(village);
     this.ui.hud.classList.add('hidden');
+
+    // Update respawn point to this village - if you capsize later, you'll
+    // restart here instead of all the way back at the original put-in
+    this.startFlowDistance = village.flowDistance;
+    this.startSegment = village.segment;
+
     // Tadoussac is the one place in the game where casting off isn't just
     // resuming the same segment — leaving here jumps into lawrenceWest's
     // entirely different numbering (see leaveVillage()) — so it gets its
