@@ -706,11 +706,20 @@ export class Game {
 
     if (this.canoeVisible !== false) {
       const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;
+      const canoeScreenX = CANOE_SCREEN_X + (this.canoeWorldX - cameraWorldX) * PIXELS_PER_UNIT;
+
+      // Debug: log if canoe is rendering off-screen during lawrenceWest
+      if (this.segment === 'lawrenceWest' && this.blockadePct !== null) {
+        console.log('[RENDER] Canoe screen pos:', canoeScreenX.toFixed(1), 'World pos:', this.canoeWorldX.toFixed(1), 'Camera:', cameraWorldX.toFixed(1));
+      }
+
       ctx.save();
-      ctx.translate(CANOE_SCREEN_X + (this.canoeWorldX - cameraWorldX) * PIXELS_PER_UNIT, CANOE_SCREEN_Y);
+      ctx.translate(canoeScreenX, CANOE_SCREEN_Y);
       ctx.rotate(this.tilt || 0);
       ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
       ctx.restore();
+    } else if (this.segment === 'lawrenceWest' && this.blockadePct !== null) {
+      console.log('[RENDER] Canoe NOT visible! canoeVisible:', this.canoeVisible);
     }
   }
 
