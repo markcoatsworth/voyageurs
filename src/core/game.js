@@ -316,7 +316,7 @@ export class Game {
   gameOver() {
     this.state = 'gameover';
     this.ui.hud.classList.add('hidden');
-    this.ui.finalStats.innerHTML = `FURS COLLECTED: ${this.furs}`;
+    this.ui.finalStats.innerHTML = '';
     this.ui.gameoverScreen.classList.remove('hidden');
     playCapsizeHorn();
     this.music?.stop();
