@@ -660,6 +660,13 @@ export class Game {
       if (this.blockade.consumeJustCleared()) {
         this.music?.endBossTrack();
       }
+      if (this.blockade.consumeJustStartedChase()) {
+        this.showBanner('PURSUIT');
+        this.music?.playBossTrack();
+      }
+      if (this.blockade.consumeJustEscaped()) {
+        this.music?.endBossTrack();
+      }
     } else {
       this.blockadePct = null;
       this.blockadeCrossCurrent = 0;

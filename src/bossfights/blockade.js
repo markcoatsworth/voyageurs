@@ -100,6 +100,10 @@ function gapBounds(gapSide) {
   return { gapLo: leftBank, gapHi: leftBank + GAP_WIDTH, hullLo: leftBank + GAP_WIDTH, hullHi: rightBank };
 }
 
+const CHASE_DISTANCE = 120; // how far you must get ahead to escape
+const CHASE_SHIP_SPEED = 13; // ship chases at ~85% of max player speed
+const CHASE_VOLLEY_INTERVAL = 1.8; // faster than blockade volleys
+
 export function createBlockade() {
   // null until the encounter first activates — decided once, right then
   // (see the module comment on why a late swing isn't fair here), not
@@ -111,6 +115,12 @@ export function createBlockade() {
   let justCleared = false;
   let justSpotted = false;
 
+  // Chase phase: after clearing the gap, a battleship pursues
+  let chasePhase = false;
+  let chaseShipDistance = 0; // flowDistance of the pursuing ship
+  let chaseEscaped = false;
+  let justStartedChase = false;
+
   function reset() {
     gapSide = null;
     resolved = false;
@@ -118,6 +128,10 @@ export function createBlockade() {
     hazards = [];
     justCleared = false;
     justSpotted = false;
+    chasePhase = false;
+    chaseShipDistance = 0;
+    chaseEscaped = false;
+    justStartedChase = false;
   }
 
   return {
@@ -144,6 +158,16 @@ export function createBlockade() {
     consumeJustCleared() {
       const v = justCleared;
       justCleared = false;
+      return v;
+    },
+    consumeJustStartedChase() {
+      const v = justStartedChase;
+      justStartedChase = false;
+      return v;
+    },
+    consumeJustEscaped() {
+      const v = chaseEscaped && !chasePhase; // only true for one frame
+      if (v) chaseEscaped = false;
       return v;
     },
     // No gapSide() accessor on purpose — which side is clear is deliberately
@@ -174,6 +198,11 @@ export function createBlockade() {
         if (distToShip <= -CLEAR_MARGIN) {
           resolved = true;
           justCleared = true;
+          // Start the chase phase
+          chasePhase = true;
+          chaseShipDistance = SHIP_FLOW_DISTANCE - 30; // ship starts 30 units behind the frigate
+          justStartedChase = true;
+          volleyTimer = CHASE_VOLLEY_INTERVAL;
         }
         if (distToShip > 0) {
           const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
@@ -235,6 +264,43 @@ export function createBlockade() {
       }
       hazards = hazards.filter((h) => h.t < SPLASH_WARN_TIME + SPLASH_HOT_TIME + SPLASH_FADE_TIME);
 
+      // Chase phase: battleship pursuing from behind
+      if (chasePhase) {
+        // Ship advances at CHASE_SHIP_SPEED
+        chaseShipDistance += CHASE_SHIP_SPEED * dt;
+
+        // Check if player escaped (got far enough ahead)
+        const leadDistance = playerFlowDistance - chaseShipDistance;
+        if (leadDistance > CHASE_DISTANCE) {
+          chasePhase = false;
+          chaseEscaped = true;
+        } else {
+          // Fire volleys from the pursuing ship
+          volleyTimer -= dt;
+          if (volleyTimer <= 0) {
+            // Chase volleys: 2-3 shots aimed at player
+            const shots = leadDistance < 40 ? 3 : 2;
+            const spread = Math.min(20, 8 + leadDistance * 0.15);
+            for (let i = 0; i < shots; i++) {
+              const lane = shots > 1 ? (i / (shots - 1)) * 2 - 1 : 0;
+              const jitter = (Math.random() * 2 - 1) * (spread / shots) * 0.4;
+              hazards.push({
+                d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME,
+                x: playerWorldX + lane * spread + jitter,
+                t: 0,
+                hit: false,
+                boomed: false,
+              });
+            }
+            volleyTimer = CHASE_VOLLEY_INTERVAL;
+          }
+        }
+
+        // Return chase progress (how far ahead you are vs how far needed)
+        const chaseProgressPct = Math.min(100, (leadDistance / CHASE_DISTANCE) * 100);
+        return { active: true, progressPct: chaseProgressPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance };
+      }
+
       if (!engaged) return { active: false, progressPct: 0, boomCount, crossCurrent: 0, gapSide: null };
       const progressPct = distToShip <= 0 ? 100 : (1 - clamp(distToShip / APPROACH_RANGE, 0, 1)) * 100;
       // Cross-current pushes you away from the gap side, getting stronger as you approach
@@ -272,6 +338,14 @@ export function createBlockade() {
       // Fog of war: thicker when farther from ship, reveals as you approach
       if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
         drawFog(ctx, distToShip);
+      }
+
+      // Chase ship: pursuing battleship
+      if (chasePhase) {
+        const chaseZ = worldDistance - chaseShipDistance;
+        if (Math.abs(chaseZ) < VISIBLE_Z_RANGE) {
+          drawChaseShip(ctx, cameraWorldX, chaseZ);
+        }
       }
     },
   };
@@ -363,6 +437,83 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
   ctx.fillStyle = '#C8102E';
   ctx.fillRect(flagX + 3.5, flagY, 1, 5); // vertical
   ctx.fillRect(flagX, flagY + 2, 8, 1); // horizontal
+}
+
+function drawChaseShip(ctx, cameraWorldX, z0) {
+  // Battleship: larger and more imposing than the frigate
+  const riverCenter = centerX(SHIP_FLOW_DISTANCE);
+  const riverWidth = widthAt(SHIP_FLOW_DISTANCE);
+  // Ship spans most of the channel
+  const shipWidth = riverWidth * 0.85;
+  const left = worldToScreen(riverCenter - shipWidth / 2, z0 - 4.5, cameraWorldX);
+  const right = worldToScreen(riverCenter + shipWidth / 2, z0 + 4.5, cameraWorldX);
+  const top = Math.min(left.y, right.y);
+  const bottom = Math.max(left.y, right.y);
+  const hullH = bottom - top;
+  const hullW = right.x - left.x;
+
+  // Hull: darker, more menacing than frigate
+  ctx.fillStyle = '#0d0805';
+  ctx.fillRect(left.x - 1, top - 1, hullW + 2, hullH + 2);
+  ctx.fillStyle = '#3a2820';
+  ctx.fillRect(left.x, top, hullW, hullH);
+  ctx.fillStyle = '#1c1410';
+  ctx.fillRect(left.x, bottom - hullH * 0.3, hullW, hullH * 0.3);
+
+  // More gunports (two rows)
+  const portSize = Math.max(2, hullH * 0.15);
+  const portSpacing = 12;
+  const portCount = Math.max(2, Math.floor(hullW / portSpacing));
+  ctx.fillStyle = '#000000';
+  for (let row = 0; row < 2; row++) {
+    const portY = top + hullH * (0.3 + row * 0.25);
+    for (let i = 0; i < portCount; i++) {
+      const portX = left.x + (i + 0.5) * (hullW / portCount);
+      ctx.fillRect(portX - portSize / 2, portY - portSize / 2, portSize, portSize);
+    }
+  }
+
+  // Three tall masts
+  const mastXs = [left.x + hullW * 0.25, left.x + hullW * 0.5, left.x + hullW * 0.75];
+  for (const mx of mastXs) {
+    ctx.strokeStyle = '#2a1a10';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(mx, top);
+    ctx.lineTo(mx, top - hullH * 2);
+    ctx.stroke();
+    // Furled sails
+    ctx.fillStyle = '#b8b0a0';
+    ctx.fillRect(mx - hullH * 0.6, top - hullH * 1.5, hullH * 1.2, hullH * 0.55);
+  }
+
+  // Large Union Jack at stern
+  const flagX = left.x + hullW / 2 - 6;
+  const flagY = top - hullH * 2.3;
+  ctx.fillStyle = '#012169';
+  ctx.fillRect(flagX, flagY, 12, 8);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(flagX, flagY);
+  ctx.lineTo(flagX + 12, flagY + 8);
+  ctx.moveTo(flagX + 12, flagY);
+  ctx.lineTo(flagX, flagY + 8);
+  ctx.stroke();
+  ctx.strokeStyle = '#C8102E';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(flagX, flagY);
+  ctx.lineTo(flagX + 12, flagY + 8);
+  ctx.moveTo(flagX + 12, flagY);
+  ctx.lineTo(flagX, flagY + 8);
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(flagX + 5, flagY, 2, 8);
+  ctx.fillRect(flagX, flagY + 3, 12, 2);
+  ctx.fillStyle = '#C8102E';
+  ctx.fillRect(flagX + 5.5, flagY, 1, 8);
+  ctx.fillRect(flagX, flagY + 3.5, 12, 1);
 }
 
 function drawHazard(ctx, h, z, cameraWorldX) {
