@@ -203,6 +203,7 @@ export function createBlockade() {
           chaseShipDistance = SHIP_FLOW_DISTANCE - 30; // ship starts 30 units behind the frigate
           justStartedChase = true;
           volleyTimer = CHASE_VOLLEY_INTERVAL;
+          console.log('[BLOCKADE] Chase started. Player:', playerFlowDistance, 'Chase ship:', chaseShipDistance);
         }
         if (distToShip > 0) {
           const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
@@ -271,9 +272,12 @@ export function createBlockade() {
 
         // Check if player escaped (got far enough ahead)
         const leadDistance = playerFlowDistance - chaseShipDistance;
+        console.log('[CHASE] Player:', playerFlowDistance.toFixed(1), 'Chase ship:', chaseShipDistance.toFixed(1), 'Lead:', leadDistance.toFixed(1));
+
         if (leadDistance > CHASE_DISTANCE) {
           chasePhase = false;
           chaseEscaped = true;
+          console.log('[CHASE] Escaped!');
         } else {
           // Fire single shots from bow cannon
           volleyTimer -= dt;

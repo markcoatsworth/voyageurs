@@ -663,6 +663,7 @@ export class Game {
       }
       if (this.blockade.consumeJustStartedChase()) {
         this.showBanner('PURSUIT');
+        console.log('[GAME] Chase phase started. Canoe visible:', this.canoeVisible, 'Position:', this.flowDistance);
         // Music already playing from blockade - don't restart
       }
       if (this.blockade.consumeJustEscaped()) {
