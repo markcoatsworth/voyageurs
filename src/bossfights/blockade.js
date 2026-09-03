@@ -437,27 +437,19 @@ function drawHazard(ctx, h, z, cameraWorldX) {
 }
 
 function drawFog(ctx, distToShip) {
-  // Fog opacity: thick when far (0.7), clears as you approach (0.0)
+  // Fog opacity: thick when far (0.75), clears as you approach (0.0)
   const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
-  const maxOpacity = 0.7;
+  const maxOpacity = 0.75;
   const opacity = maxOpacity * (1 - progress * progress); // quadratic falloff feels more natural
 
   if (opacity < 0.05) return; // skip if basically invisible
 
-  // Multi-layer fog for depth - use darker tones for a menacing atmosphere
-  const layers = [
-    { h: 0.2, alpha: opacity * 0.4 },
-    { h: 0.5, alpha: opacity * 0.5 },
-    { h: 0.8, alpha: opacity * 0.6 },
-  ];
-
-  for (const layer of layers) {
-    const y = CANVAS_HEIGHT * layer.h;
-    const gradient = ctx.createLinearGradient(0, y - 30, 0, y + 30);
-    gradient.addColorStop(0, `rgba(85, 95, 105, 0)`);
-    gradient.addColorStop(0.5, `rgba(85, 95, 105, ${layer.alpha})`);
-    gradient.addColorStop(1, `rgba(85, 95, 105, 0)`);
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, y - 30, CANVAS_WIDTH, 60);
-  }
+  // Full-screen fog overlay with vertical gradient (thicker at top/bottom)
+  const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+  gradient.addColorStop(0, `rgba(95, 105, 115, ${opacity * 0.9})`);
+  gradient.addColorStop(0.3, `rgba(85, 95, 105, ${opacity * 0.7})`);
+  gradient.addColorStop(0.7, `rgba(85, 95, 105, ${opacity * 0.7})`);
+  gradient.addColorStop(1, `rgba(95, 105, 115, ${opacity * 0.9})`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }
