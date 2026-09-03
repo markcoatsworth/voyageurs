@@ -12,7 +12,7 @@
 // segment's shape offset) ever changes again — one lookup at module load,
 // not duplicated geography.
 import { centerX, widthAt } from '../world/river/path.js';
-import { worldToScreen, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
+import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../shared/config.js';
 import { VILLAGES } from '../world/villages.js';
 
 const QUEBEC_CITY = VILLAGES.find((v) => v.name === 'Québec City');
@@ -235,9 +235,12 @@ export function createBlockade() {
       }
       hazards = hazards.filter((h) => h.t < SPLASH_WARN_TIME + SPLASH_HOT_TIME + SPLASH_FADE_TIME);
 
-      if (!engaged) return { active: false, progressPct: 0, boomCount };
+      if (!engaged) return { active: false, progressPct: 0, boomCount, crossCurrent: 0, gapSide: null };
       const progressPct = distToShip <= 0 ? 100 : (1 - clamp(distToShip / APPROACH_RANGE, 0, 1)) * 100;
-      return { active: true, progressPct, boomCount };
+      // Cross-current pushes you away from the gap side, getting stronger as you approach
+      const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
+      const crossCurrent = -gapSide * progress * 12; // negative gap side means push away from gap
+      return { active: true, progressPct, boomCount, crossCurrent, gapSide };
     },
 
     // Rendering doesn't care whether the encounter is currently "active" by
@@ -247,6 +250,8 @@ export function createBlockade() {
     // after it's been passed.
     draw(ctx, worldDistance, cameraWorldX) {
       const z0 = worldDistance - SHIP_FLOW_DISTANCE;
+      const distToShip = SHIP_FLOW_DISTANCE - worldDistance;
+
       // gapSide is null until the encounter first activates (update()'s own
       // gating, at APPROACH_RANGE+5) — practically always well before the
       // ship comes within visible render range anyway, but this guards the
@@ -256,6 +261,11 @@ export function createBlockade() {
       for (const h of hazards) {
         const z = worldDistance - h.d;
         if (Math.abs(z) < VISIBLE_Z_RANGE) drawHazard(ctx, h, z, cameraWorldX);
+      }
+
+      // Fog of war: thicker when farther from ship, reveals as you approach
+      if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
+        drawFog(ctx, distToShip);
       }
     },
   };
@@ -423,5 +433,31 @@ function drawHazard(ctx, h, z, cameraWorldX) {
     ctx.beginPath();
     ctx.arc(p.x - ballR * 0.3, ballY - ballR * 0.3, ballR * 0.4, 0, Math.PI * 2);
     ctx.fill();
+  }
+}
+
+function drawFog(ctx, distToShip) {
+  // Fog opacity: thick when far (0.7), clears as you approach (0.0)
+  const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
+  const maxOpacity = 0.7;
+  const opacity = maxOpacity * (1 - progress * progress); // quadratic falloff feels more natural
+
+  if (opacity < 0.05) return; // skip if basically invisible
+
+  // Multi-layer fog for depth - use darker tones for a menacing atmosphere
+  const layers = [
+    { h: 0.2, alpha: opacity * 0.4 },
+    { h: 0.5, alpha: opacity * 0.5 },
+    { h: 0.8, alpha: opacity * 0.6 },
+  ];
+
+  for (const layer of layers) {
+    const y = CANVAS_HEIGHT * layer.h;
+    const gradient = ctx.createLinearGradient(0, y - 30, 0, y + 30);
+    gradient.addColorStop(0, `rgba(85, 95, 105, 0)`);
+    gradient.addColorStop(0.5, `rgba(85, 95, 105, ${layer.alpha})`);
+    gradient.addColorStop(1, `rgba(85, 95, 105, 0)`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, y - 30, CANVAS_WIDTH, 60);
   }
 }

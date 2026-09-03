@@ -262,6 +262,7 @@ export class Game {
     this.ui.pauseScreen?.classList.add('hidden');
     this.mode = 'river';
     this.currentVillage = null;
+    this.blockadeCrossCurrent = 0;
 
     this.segment = this.startSegment;
     this.flowDistance = this.startFlowDistance;
@@ -529,6 +530,14 @@ export class Game {
     // whitewater is pushing.
     this.lateralVX += steerInput * STEER_ACCEL * (1 - rapids * RAPIDS_STEER_PENALTY) * dt;
     this.lateralVX -= this.lateralVX * STEER_DAMPING * dt;
+
+    // Cross-current from blockade fight: pushes you away from the gap,
+    // getting stronger as you approach the ship. Applied before velocity
+    // clamping so the current is a real force to fight, not just a nudge.
+    if (this.blockadeCrossCurrent) {
+      this.lateralVX += this.blockadeCrossCurrent * dt;
+    }
+
     this.lateralVX = clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
 
     const half = widthAt(this.flowDistance) / 2 - EDGE_MARGIN;
@@ -638,6 +647,7 @@ export class Game {
     if (this.segment === 'lawrenceWest') {
       const blockade = this.blockade.update(dt, this.flowDistance, this.canoeWorldX, effectiveSpeed, (entry) => this.handleHit(entry));
       this.blockadePct = blockade.active ? blockade.progressPct : null;
+      this.blockadeCrossCurrent = blockade.crossCurrent || 0;
       // One boom per impact, hit or miss — a volley landing several shots
       // at once fires this the same number of times in the same frame.
       for (let i = 0; i < blockade.boomCount; i++) playCannonBoom();
@@ -653,6 +663,7 @@ export class Game {
       }
     } else {
       this.blockadePct = null;
+      this.blockadeCrossCurrent = 0;
     }
 
     this.render();
