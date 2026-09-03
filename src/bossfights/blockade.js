@@ -314,30 +314,35 @@ export function createBlockade() {
       const z0 = worldDistance - SHIP_FLOW_DISTANCE;
       const distToShip = SHIP_FLOW_DISTANCE - worldDistance;
 
-      // Cross-current flow visualization: animated streaks showing water movement
-      if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
-        const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
-        drawCurrentFlow(ctx, time, gapSide, progress);
+      // Only draw blockade elements when not in chase phase
+      if (!chasePhase) {
+        // Cross-current flow visualization: animated streaks showing water movement
+        if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
+          const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
+          drawCurrentFlow(ctx, time, gapSide, progress);
+        }
+
+        // gapSide is null until the encounter first activates (update()'s own
+        // gating, at APPROACH_RANGE+5) — practically always well before the
+        // ship comes within visible render range anyway, but this guards the
+        // rare case (e.g. a ?start= cheat dropped right on top of it) where
+        // it wouldn't be.
+        if (gapSide !== null && Math.abs(z0) < VISIBLE_Z_RANGE) drawShip(ctx, cameraWorldX, z0, gapSide);
+
+        // Fog of war: thicker when farther from ship, reveals as you approach
+        if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
+          drawFog(ctx, distToShip);
+        }
       }
 
-      // gapSide is null until the encounter first activates (update()'s own
-      // gating, at APPROACH_RANGE+5) — practically always well before the
-      // ship comes within visible render range anyway, but this guards the
-      // rare case (e.g. a ?start= cheat dropped right on top of it) where
-      // it wouldn't be.
-      if (gapSide !== null && Math.abs(z0) < VISIBLE_Z_RANGE) drawShip(ctx, cameraWorldX, z0, gapSide);
+      // Hazards (cannon shots) - draw in both phases
       for (const h of hazards) {
         const z = worldDistance - h.d;
         if (Math.abs(z) < VISIBLE_Z_RANGE) drawHazard(ctx, h, z, cameraWorldX);
       }
 
-      // Fog of war: thicker when farther from ship, reveals as you approach
-      if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
-        drawFog(ctx, distToShip);
-      }
-
-      // Chase ship: pursuing gunboat
-      if (chasePhase) {
+      // Chase ship: pursuing gunboat (only during chase)
+      if (chasePhase && chaseShipDistance) {
         const chaseZ = worldDistance - chaseShipDistance;
         if (Math.abs(chaseZ) < VISIBLE_Z_RANGE) {
           drawChaseShip(ctx, cameraWorldX, chaseZ, chaseShipDistance);
