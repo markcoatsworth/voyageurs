@@ -248,9 +248,15 @@ export function createBlockade() {
     // same as villages.js's own drawVillages(). The ship stays drawn (and
     // recedes naturally behind the canoe via the usual z depth-sort) well
     // after it's been passed.
-    draw(ctx, worldDistance, cameraWorldX) {
+    draw(ctx, worldDistance, cameraWorldX, time) {
       const z0 = worldDistance - SHIP_FLOW_DISTANCE;
       const distToShip = SHIP_FLOW_DISTANCE - worldDistance;
+
+      // Cross-current flow visualization: animated streaks showing water movement
+      if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
+        const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
+        drawCurrentFlow(ctx, time, gapSide, progress);
+      }
 
       // gapSide is null until the encounter first activates (update()'s own
       // gating, at APPROACH_RANGE+5) — practically always well before the
@@ -434,6 +440,48 @@ function drawHazard(ctx, h, z, cameraWorldX) {
     ctx.arc(p.x - ballR * 0.3, ballY - ballR * 0.3, ballR * 0.4, 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+function drawCurrentFlow(ctx, time, gapSide, progress) {
+  // Animated water flow streaks showing the cross-current pushing away from gap
+  // Flow direction: negative gapSide (if gap is on right, current pushes left)
+  const flowDirection = -gapSide;
+  const flowSpeed = progress * 80; // pixels per second, stronger as you get closer
+
+  // Number of streaks increases with progress
+  const streakCount = Math.floor(8 + progress * 12);
+  const streakSpacing = CANVAS_HEIGHT / streakCount;
+
+  ctx.save();
+  ctx.globalAlpha = 0.3 + progress * 0.3; // more visible as current gets stronger
+
+  for (let i = 0; i < streakCount; i++) {
+    const y = i * streakSpacing + ((time * 20) % streakSpacing);
+    // Animate streaks moving sideways based on flow direction
+    const offset = (time * flowSpeed) % CANVAS_WIDTH;
+    const x = flowDirection > 0 ? offset : CANVAS_WIDTH - offset;
+
+    // Draw diagonal streak (foam/current line)
+    ctx.strokeStyle = 'rgba(200, 220, 235, 0.6)';
+    ctx.lineWidth = 1 + progress * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - flowDirection * 25, y + 8);
+    ctx.stroke();
+
+    // Add some variation with shorter streaks
+    if (i % 2 === 0) {
+      const x2 = flowDirection > 0 ? offset + CANVAS_WIDTH * 0.3 : CANVAS_WIDTH - offset - CANVAS_WIDTH * 0.3;
+      ctx.strokeStyle = 'rgba(180, 200, 215, 0.4)';
+      ctx.lineWidth = 0.8 + progress;
+      ctx.beginPath();
+      ctx.moveTo(x2, y + 4);
+      ctx.lineTo(x2 - flowDirection * 15, y + 10);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
 }
 
 function drawFog(ctx, distToShip) {

@@ -694,7 +694,7 @@ export class Game {
     drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
     this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     // Same lawrenceWest-only guard as the update() call above.
-    if (this.segment === 'lawrenceWest') this.blockade.draw(ctx, this.flowDistance, cameraWorldX);
+    if (this.segment === 'lawrenceWest') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
 
     if (this.canoeVisible !== false) {
       const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;
