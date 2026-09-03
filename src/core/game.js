@@ -658,11 +658,11 @@ export class Game {
         this.music?.playBossTrack();
       }
       if (this.blockade.consumeJustCleared()) {
-        this.music?.endBossTrack();
+        // Music continues through chase - don't stop it here
       }
       if (this.blockade.consumeJustStartedChase()) {
         this.showBanner('PURSUIT');
-        this.music?.playBossTrack();
+        // Music already playing from blockade - don't restart
       }
       if (this.blockade.consumeJustEscaped()) {
         this.music?.endBossTrack();
