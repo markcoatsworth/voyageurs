@@ -188,7 +188,7 @@ export function createBlockade() {
 
       if (engaged) {
         if (gapSide === null) {
-          gapSide = Math.random() < 0.5 ? -1 : 1;
+          gapSide = 1; // always right side - consistent encounter every time
           justSpotted = true;
         }
         // No hull check here any more — isHullBlocking() (checked by
