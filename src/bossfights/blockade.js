@@ -349,7 +349,14 @@ export function createBlockade() {
       if (chasePhase && chaseShipDistance) {
         const chaseZ = worldDistance - chaseShipDistance;
         if (Math.abs(chaseZ) < VISIBLE_Z_RANGE) {
-          drawChaseShip(ctx, cameraWorldX, chaseZ, chaseShipDistance);
+          try {
+            ctx.save();
+            drawChaseShip(ctx, cameraWorldX, chaseZ, chaseShipDistance);
+            ctx.restore();
+          } catch (e) {
+            console.error('[CHASE] Error drawing chase ship:', e);
+            ctx.restore(); // try to restore even if there was an error
+          }
         }
       }
     },
@@ -455,12 +462,12 @@ function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
   const bottom = Math.max(left.y, right.y);
   const hullH = bottom - top;
   const hullW = right.x - left.x;
-  const centerX = (left.x + right.x) / 2;
+  const boatCenterX = (left.x + right.x) / 2;
 
   // Sleek hull - pointed bow, narrow profile
   ctx.fillStyle = '#1a1208';
   ctx.beginPath();
-  ctx.moveTo(centerX, top - 3); // pointed bow
+  ctx.moveTo(boatCenterX, top - 3); // pointed bow
   ctx.lineTo(right.x, top + hullH * 0.3);
   ctx.lineTo(right.x, bottom);
   ctx.lineTo(left.x, bottom);
@@ -471,7 +478,7 @@ function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
   // Deck planking
   ctx.fillStyle = '#3a2818';
   ctx.beginPath();
-  ctx.moveTo(centerX, top);
+  ctx.moveTo(boatCenterX, top);
   ctx.lineTo(right.x - 2, top + hullH * 0.3);
   ctx.lineTo(right.x - 2, bottom - 4);
   ctx.lineTo(left.x + 2, bottom - 4);
@@ -481,22 +488,22 @@ function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
 
   // Small bow cannon
   ctx.fillStyle = '#0a0805';
-  ctx.fillRect(centerX - 3, top + 2, 6, 4);
+  ctx.fillRect(boatCenterX - 3, top + 2, 6, 4);
   ctx.fillStyle = '#1c1410';
-  ctx.fillRect(centerX - 2, top, 4, 3);
+  ctx.fillRect(boatCenterX - 2, top, 4, 3);
 
   // Single mast with small sail
   ctx.strokeStyle = '#2a1a10';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(centerX, top + hullH * 0.4);
-  ctx.lineTo(centerX, top - hullH * 1.2);
+  ctx.moveTo(boatCenterX, top + hullH * 0.4);
+  ctx.lineTo(boatCenterX, top - hullH * 1.2);
   ctx.stroke();
   ctx.fillStyle = '#d8d0c0';
-  ctx.fillRect(centerX - hullH * 0.35, top - hullH * 0.9, hullH * 0.7, hullH * 0.4);
+  ctx.fillRect(boatCenterX - hullH * 0.35, top - hullH * 0.9, hullH * 0.7, hullH * 0.4);
 
   // Small Union Jack at stern
-  const flagX = centerX - 3;
+  const flagX = boatCenterX - 3;
   const flagY = bottom - hullH * 0.8;
   ctx.fillStyle = '#012169';
   ctx.fillRect(flagX, flagY, 6, 4);
