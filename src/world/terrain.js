@@ -219,31 +219,6 @@ export function drawCurrentEffects(ctx, time, worldDistance, rapids) {
     ctx.stroke();
   }
 
-  // Swirls and eddies - slower rotating currents
-  const eddyCount = Math.floor(3 + rapids * 5);
-  for (let i = 0; i < eddyCount; i++) {
-    const eddyPhase = (i * 2.3 + time * 0.3) % CANVAS_HEIGHT;
-    const eddyX = CANVAS_WIDTH / 2 + Math.sin(i * 1.7) * (CANVAS_WIDTH * 0.3);
-    const eddyY = eddyPhase;
-    const eddyRadius = 8 + rapids * 8;
-    const rotation = time * (0.5 + i * 0.2);
-
-    ctx.globalAlpha = baseIntensity * 0.5;
-    ctx.strokeStyle = `rgba(180, 200, 220, ${0.4 + rapids * 0.3})`;
-    ctx.lineWidth = 1.5;
-
-    // Draw spiral
-    ctx.beginPath();
-    for (let angle = 0; angle < Math.PI * 2; angle += 0.3) {
-      const r = eddyRadius * (1 - angle / (Math.PI * 2) * 0.3);
-      const x = eddyX + Math.cos(angle + rotation) * r;
-      const y = eddyY + Math.sin(angle + rotation) * r;
-      if (angle === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  }
-
   ctx.restore();
 }
 
