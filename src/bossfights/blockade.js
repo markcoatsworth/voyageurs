@@ -203,6 +203,8 @@ export function createBlockade() {
           chaseShipDistance = playerFlowDistance - 12; // ship starts just 12 units behind player - immediately visible!
           justStartedChase = true;
           volleyTimer = CHASE_VOLLEY_INTERVAL;
+          // Clear ALL cannonballs - no cannon fire after passing the frigate
+          hazards = [];
           console.log('[BLOCKADE] Chase started. Player:', playerFlowDistance, 'Chase ship:', chaseShipDistance);
         }
         if (distToShip > 0) {
