@@ -257,6 +257,7 @@ export class Game {
     this.health = MAX_HEALTH;
     this.invulnTimer = SPAWN_INVULN_TIME;
     this.mouthAnnounced = false;
+    this.troisRivieresAnnounced = false;
     this.tilt = 0;
     this.paused = false;
     this.ui.pauseScreen?.classList.add('hidden');
@@ -674,6 +675,7 @@ export class Game {
       }
       if (this.blockade.consumeJustEscaped()) {
         this.music?.endBossTrack();
+        this.showBanner('Trois-Rivières Ahead — Safe Waters');
       }
     } else {
       this.blockadePct = null;
