@@ -182,6 +182,18 @@ export function createBlockade() {
     // whiffs by construction, not because it was dodged.
     update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit) {
       const distToShip = SHIP_FLOW_DISTANCE - playerFlowDistance;
+
+      // If player starts well past the entire blockade+chase range (e.g., via
+      // ?start=batiscan), auto-resolve it as if they already escaped cleanly —
+      // prevents chase phase from activating when starting downstream.
+      const wellPastBlockade = playerFlowDistance > SHIP_FLOW_DISTANCE + CHASE_DISTANCE + 50;
+      if (wellPastBlockade && !resolved) {
+        resolved = true;
+        chasePhase = false;
+        chaseEscaped = true;
+        console.log('[BLOCKADE] Auto-resolved (started past blockade)');
+      }
+
       // Once resolved, stays false forever (only reset() brings it back) —
       // no separate lower bound needed the way an early version had one.
       const engaged = !resolved && distToShip < APPROACH_RANGE + 5;
