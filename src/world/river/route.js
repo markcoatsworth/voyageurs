@@ -49,6 +49,7 @@
 //   Baie-Saint-Paul       47°26′N   70°30′W       https://en.wikipedia.org/wiki/Baie-Saint-Paul
 //   Beaupré               47°02′35″N 70°53′29″W   https://en.wikipedia.org/wiki/Beaupr%C3%A9,_Quebec
 //   Québec City           46°48′30″N 71°12′29″W   https://en.wikipedia.org/wiki/Quebec_City
+//   Batiscan              46°30′N   72°15′W       https://en.wikipedia.org/wiki/Batiscan,_Quebec
 //   Trois-Rivières        46°21′N   72°33′W       https://en.wikipedia.org/wiki/Trois-Rivi%C3%A8res
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
 
@@ -99,6 +100,9 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // alternating pattern — real Québec City sits on the river's north
   // shore, and its dock/fortifications are hand-authored to that side.
   { name: 'Québec City', lat: 46.8083, lon: -71.2080, label: 'Québec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+  // Historic trading post between Québec City and Trois-Rivières — gives
+  // players a checkpoint after the British Blockade boss fight.
+  { name: 'Batiscan', lat: 46.5000, lon: -72.2500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
   // First stop past Québec City — the river continues on from here rather
   // than ending at the capital (this segment's real destination is much
   // further upriver; see LAWRENCE_WEST_SPAN_DISTANCE's own comment). Also
