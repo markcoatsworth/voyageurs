@@ -3,9 +3,10 @@
 //   - the Saint Lawrence east of Tadoussac, hugging the North Shore
 //     (Côte-Nord) out to Sept-Îles
 //   - the Saint Lawrence west of Tadoussac, hugging the North Shore
-//     (Charlevoix) up through Québec City and on toward Trois-Rivières —
-//     ultimately headed for Toronto, real geography permitting extending
-//     this segment (or adding more) well past what's plotted so far
+//     (Charlevoix) up through Québec City, Trois-Rivières, and on to
+//     Montréal — ultimately headed for the Great Lakes and beyond, real
+//     geography permitting extending this segment (or adding more) past
+//     what's plotted so far
 // A single flowDistance number line can only ever represent two directions
 // from a point (forward/backward), so each of the three above is still its
 // own SEGMENT with its own local geography here and on the minimap — a real
@@ -51,6 +52,8 @@
 //   Québec City           46°48′30″N 71°12′29″W   https://en.wikipedia.org/wiki/Quebec_City
 //   Batiscan              46°30′N   72°15′W       https://en.wikipedia.org/wiki/Batiscan,_Quebec
 //   Trois-Rivières        46°21′N   72°33′W       https://en.wikipedia.org/wiki/Trois-Rivi%C3%A8res
+//   Sorel-Tracy           46°03′N   73°07′W       https://en.wikipedia.org/wiki/Sorel-Tracy
+//   Montréal              45°30′01″N 73°34′02″W   https://en.wikipedia.org/wiki/Montreal
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
 
 // labelPos hand-places each minimap label clear of the route line and the
@@ -103,12 +106,14 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // Historic trading post between Québec City and Trois-Rivières — gives
   // players a checkpoint after the British Blockade boss fight.
   { name: 'Batiscan', lat: 46.5000, lon: -72.2500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  // First stop past Québec City — the river continues on from here rather
-  // than ending at the capital (this segment's real destination is much
-  // further upriver; see LAWRENCE_WEST_SPAN_DISTANCE's own comment). Also
-  // on the north shore, so pinned to side: 1 like Québec City itself rather
-  // than left to the alternating pattern.
-  { name: 'Trois-Rivières', lat: 46.3500, lon: -72.5500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
+  { name: 'Trois-Rivières', lat: 46.3500, lon: -72.5500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  // Port at the confluence of the Richelieu and St. Lawrence rivers,
+  // strategic location between Trois-Rivières and Montreal.
+  { name: 'Sorel-Tracy', lat: 46.0500, lon: -73.1167, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  // Final destination — New France's commercial heart and the great inland
+  // port. The river continues past Montreal too (ultimately toward the Great
+  // Lakes), but this marks the end of the current journey.
+  { name: 'Montréal', lat: 45.5017, lon: -73.5673, label: 'Montréal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
 ];
 
 // How far (game-world units) each segment takes to cross, end to end. Real
@@ -117,15 +122,14 @@ const LAWRENCE_WEST_WAYPOINTS = [
 // waypoints stay correctly spaced *relative to each other* regardless of
 // the number; it only controls how long the segment takes to paddle.
 export const ESTUARY_SPAN_DISTANCE = 2400; // Tadoussac -> Sept-Îles, ~400km real
-// Tadoussac -> Trois-Rivières, ~300km real. Scaled up from the old
-// Tadoussac -> Québec City-only span (1300) by the same real-distance ratio
-// (297.6 / 186.4 km) so Québec City's own flowDistance — and everything
-// already tuned around it (its dock, the boss fight, etc.) — doesn't move
-// at all; the added length is purely the new Québec City -> Trois-Rivières
-// stretch. The river continues past Trois-Rivières too (see route.js's own
-// module comment) — this is just how far real, named geography reaches for
-// now.
-export const LAWRENCE_WEST_SPAN_DISTANCE = 2075;
+// Tadoussac -> Montréal, ~435km real. Scaled up from the old Tadoussac ->
+// Québec City-only span (1300) by the same real-distance ratio (435 / 186.4
+// km) so Québec City's own flowDistance — and everything already tuned
+// around it (its dock, the boss fight, etc.) — doesn't move at all; the
+// added length is purely the new Québec City -> Trois-Rivières -> Montréal
+// stretch extending the journey to its natural conclusion at New France's
+// commercial capital.
+export const LAWRENCE_WEST_SPAN_DISTANCE = 3035;
 
 // Equirectangular projection, longitude compressed by cos(latitude) — every
 // waypoint across all three segments spans well under a degree of latitude,
