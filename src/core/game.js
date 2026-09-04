@@ -745,14 +745,6 @@ export class Game {
     this.ui.hudSpeedFill.style.width = `${clamp(speedPct, 0, 100)}%`;
     this.ui.hudSpeedFill.classList.toggle('rapids', this.rapids > 0.15);
 
-    // Only shown while the blockade fight is actually active — see
-    // update()'s own comment. Gives the win condition something concrete to
-    // watch instead of an invisible finish line: you can see yourself
-    // closing the distance on the frigate, not just discover you passed it.
-    const inBlockade = this.blockadePct !== null;
-    this.ui.hudBlockade?.classList.toggle('hidden', !inBlockade);
-    if (inBlockade && this.ui.hudBlockadeFill) this.ui.hudBlockadeFill.style.width = `${clamp(this.blockadePct, 0, 100)}%`;
-
     // flowDistance is the persistent world position that never resets on
     // restart, so the map marker holds its real place on the river across a
     // capsize+retry instead of jumping back to the put-in; segment is
