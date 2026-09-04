@@ -278,27 +278,8 @@ export function createBlockade() {
           chasePhase = false;
           chaseEscaped = true;
           console.log('[CHASE] Escaped!');
-        } else {
-          // Fire aggressive volleys from bow cannon
-          volleyTimer -= dt;
-          if (volleyTimer <= 0) {
-            // 2-3 shots per volley - more dangerous as gunboat gets closer
-            const shots = leadDistance < 30 ? 3 : 2;
-            const spread = Math.min(12, 4 + leadDistance * 0.1);
-            for (let i = 0; i < shots; i++) {
-              const lane = shots > 1 ? (i / (shots - 1)) * 2 - 1 : 0;
-              const jitter = (Math.random() * 2 - 1) * (spread / shots) * 0.4;
-              hazards.push({
-                d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME,
-                x: playerWorldX + lane * spread + jitter,
-                t: 0,
-                hit: false,
-                boomed: false,
-              });
-            }
-            volleyTimer = CHASE_VOLLEY_INTERVAL;
-          }
         }
+        // No cannon fire during chase - pure pursuit/escape mechanic
 
         // Return chase progress (how far ahead you are vs how far needed)
         const chaseProgressPct = Math.min(100, (leadDistance / CHASE_DISTANCE) * 100);
