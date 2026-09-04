@@ -178,6 +178,75 @@ export function drawWaterFallback(ctx, worldDistance, cameraWorldX) {
   ctx.fill();
 }
 
+// Visual current flow effects - animated streaks showing St. Lawrence currents
+export function drawCurrentEffects(ctx, time, worldDistance, rapids) {
+  ctx.save();
+
+  // Current intensity varies with rapids and natural river flow
+  const baseIntensity = 0.25 + rapids * 0.4; // stronger in rapids
+  const flowSpeed = 60 + rapids * 80; // pixels per second
+
+  // Flowing streaks moving downstream
+  const streakCount = Math.floor(15 + rapids * 25);
+  const streakSpacing = CANVAS_HEIGHT / streakCount;
+
+  ctx.globalAlpha = baseIntensity;
+
+  for (let i = 0; i < streakCount; i++) {
+    // Vertical movement down the screen (flowing toward player)
+    const baseY = (i * streakSpacing + (time * flowSpeed) % streakSpacing) % CANVAS_HEIGHT;
+
+    // Horizontal wobble simulating turbulent currents
+    const wobbleFreq = 0.8 + (i % 3) * 0.3;
+    const wobbleAmp = 30 + rapids * 40;
+    const wobblePhase = (i * 0.7);
+    const wobbleX = Math.sin(time * wobbleFreq + wobblePhase) * wobbleAmp;
+
+    const x = CANVAS_WIDTH / 2 + wobbleX;
+    const y = baseY;
+
+    // Draw flowing streak
+    const gradient = ctx.createLinearGradient(x, y, x, y + 20);
+    gradient.addColorStop(0, 'rgba(200, 220, 235, 0)');
+    gradient.addColorStop(0.5, `rgba(200, 220, 235, ${0.6 + rapids * 0.3})`);
+    gradient.addColorStop(1, 'rgba(200, 220, 235, 0)');
+
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 1.5 + rapids * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (Math.sin(time * 2 + i) * 5), y + 20);
+    ctx.stroke();
+  }
+
+  // Swirls and eddies - slower rotating currents
+  const eddyCount = Math.floor(3 + rapids * 5);
+  for (let i = 0; i < eddyCount; i++) {
+    const eddyPhase = (i * 2.3 + time * 0.3) % CANVAS_HEIGHT;
+    const eddyX = CANVAS_WIDTH / 2 + Math.sin(i * 1.7) * (CANVAS_WIDTH * 0.3);
+    const eddyY = eddyPhase;
+    const eddyRadius = 8 + rapids * 8;
+    const rotation = time * (0.5 + i * 0.2);
+
+    ctx.globalAlpha = baseIntensity * 0.5;
+    ctx.strokeStyle = `rgba(180, 200, 220, ${0.4 + rapids * 0.3})`;
+    ctx.lineWidth = 1.5;
+
+    // Draw spiral
+    ctx.beginPath();
+    for (let angle = 0; angle < Math.PI * 2; angle += 0.3) {
+      const r = eddyRadius * (1 - angle / (Math.PI * 2) * 0.3);
+      const x = eddyX + Math.cos(angle + rotation) * r;
+      const y = eddyY + Math.sin(angle + rotation) * r;
+      if (angle === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
 // A chain of small stones right at the waterline, so the shore reads as a
 // defined edge rather than a flat color change.
 function drawShorelineStones(ctx, worldDistance, cameraWorldX, riverEdgeX) {

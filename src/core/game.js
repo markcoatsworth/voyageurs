@@ -1,6 +1,6 @@
 import { centerX, widthAt, braidAt, rapidsStrength, MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from '../world/river/path.js';
 import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
-import { drawBanks, drawWaterFallback } from '../world/terrain.js';
+import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
 import { createCanoeSprites } from '../world/canoe.js';
 import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom } from '../audio/sfx.js';
@@ -707,6 +707,7 @@ export class Game {
     } else {
       drawWaterFallback(ctx, this.flowDistance, cameraWorldX);
     }
+    drawCurrentEffects(ctx, this.time, this.flowDistance, this.rapids);
     drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
     this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     // Same lawrenceWest-only guard as the update() call above.
