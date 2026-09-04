@@ -15,6 +15,9 @@ const PLAYLIST = [
   '/audio/le-violon-en-discorde.mp3',
   '/audio/reel-des-forets.mp3',
   '/audio/reel-canadienne.mp3',
+  '/audio/gigue-du-poteau-blanc.mp3',
+  '/audio/quadrille-acadien.mp3',
+  '/audio/quadrille-francais.mp3',
 ];
 
 // Not part of the shuffle above — this only ever plays on cue, the moment
