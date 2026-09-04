@@ -439,85 +439,106 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
 }
 
 function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
-  // Royal Navy sloop: proper naval warship in pursuit
+  // Royal Navy gunboat - clear ship silhouette with pointed bow
   const riverCenter = centerX(chaseShipDistance);
-  const shipWidth = 8; // substantial warship
-  const left = worldToScreen(riverCenter - shipWidth / 2, z0 - 2.2, cameraWorldX);
-  const right = worldToScreen(riverCenter + shipWidth / 2, z0 + 2.2, cameraWorldX);
+  const shipWidth = 9;
+  const left = worldToScreen(riverCenter - shipWidth / 2, z0 - 2.5, cameraWorldX);
+  const right = worldToScreen(riverCenter + shipWidth / 2, z0 + 2.5, cameraWorldX);
   const top = Math.min(left.y, right.y);
   const bottom = Math.max(left.y, right.y);
   const hullH = bottom - top;
   const hullW = right.x - left.x;
   const shipCenterX = (left.x + right.x) / 2;
 
-  // Dark hull outline
-  ctx.fillStyle = '#0d0805';
-  ctx.fillRect(left.x - 1, top - 1, hullW + 2, hullH + 2);
+  // HULL SHAPE - pointed bow, tapered stern
+  // Bow (front, pointing toward player) is at TOP
+  ctx.fillStyle = '#1a1208';
+  ctx.strokeStyle = '#0d0805';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  // Pointed bow
+  ctx.moveTo(shipCenterX, top - 8);
+  // Right side hull
+  ctx.lineTo(right.x, top + hullH * 0.25);
+  ctx.lineTo(right.x - 4, bottom - hullH * 0.15);
+  // Tapered stern (back)
+  ctx.lineTo(shipCenterX + hullW * 0.25, bottom);
+  ctx.lineTo(shipCenterX - hullW * 0.25, bottom);
+  // Left side hull
+  ctx.lineTo(left.x + 4, bottom - hullH * 0.15);
+  ctx.lineTo(left.x, top + hullH * 0.25);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
 
-  // Main hull - military dark wood
-  ctx.fillStyle = '#2a1f16';
-  ctx.fillRect(left.x, top, hullW, hullH);
+  // Deck - lighter wood showing ship interior
+  ctx.fillStyle = '#3a2818';
+  ctx.beginPath();
+  ctx.moveTo(shipCenterX, top - 4);
+  ctx.lineTo(right.x - 6, top + hullH * 0.3);
+  ctx.lineTo(right.x - 8, bottom - hullH * 0.2);
+  ctx.lineTo(shipCenterX + hullW * 0.15, bottom - 4);
+  ctx.lineTo(shipCenterX - hullW * 0.15, bottom - 4);
+  ctx.lineTo(left.x + 8, bottom - hullH * 0.2);
+  ctx.lineTo(left.x + 6, top + hullH * 0.3);
+  ctx.closePath();
+  ctx.fill();
 
-  // Waterline stripe
-  ctx.fillStyle = '#1c140c';
-  ctx.fillRect(left.x, bottom - hullH * 0.25, hullW, hullH * 0.25);
+  // Three masts - clear vertical elements
+  const mastPositions = [
+    shipCenterX,
+    shipCenterX - hullW * 0.2,
+    shipCenterX + hullW * 0.2
+  ];
 
-  // Gunports - two rows for a proper warship
-  ctx.fillStyle = '#000000';
-  const portSize = Math.max(2, hullH * 0.18);
-  const portSpacing = Math.min(10, hullW / 4);
-  for (let row = 0; row < 2; row++) {
-    const portY = top + hullH * (0.25 + row * 0.3);
-    for (let i = 0; i < 3; i++) {
-      const portX = left.x + (i + 1) * portSpacing;
-      ctx.fillRect(portX - portSize / 2, portY - portSize / 2, portSize, portSize);
-    }
-  }
-
-  // Two masts with unfurled sails - ship under full pursuit
-  const mastPositions = [shipCenterX - hullW * 0.2, shipCenterX + hullW * 0.15];
-  for (let i = 0; i < mastPositions.length; i++) {
-    const mx = mastPositions[i];
-    // Mast
+  for (const mx of mastPositions) {
+    // Mast pole
     ctx.strokeStyle = '#2a1a10';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(mx, top + hullH * 0.2);
-    ctx.lineTo(mx, top - hullH * 1.8);
+    ctx.moveTo(mx, top);
+    ctx.lineTo(mx, top - hullH * 2);
     ctx.stroke();
 
-    // Sail - billowing from chase speed
+    // Horizontal sail yard
+    ctx.strokeStyle = '#2a1a10';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(mx - hullH * 0.5, top - hullH);
+    ctx.lineTo(mx + hullH * 0.5, top - hullH);
+    ctx.stroke();
+
+    // Sail
     ctx.fillStyle = '#e8e0d0';
-    const sailW = hullH * 0.8;
-    const sailH = hullH * 0.6;
-    ctx.fillRect(mx - sailW / 2, top - hullH * 1.4, sailW, sailH);
+    ctx.fillRect(mx - hullH * 0.45, top - hullH * 1.3, hullH * 0.9, hullH * 0.6);
 
-    // Sail shadow/depth
-    ctx.fillStyle = '#c8c0b0';
-    ctx.fillRect(mx - sailW / 2, top - hullH * 0.9, sailW, sailH * 0.15);
+    // Sail shading
+    ctx.fillStyle = '#d0c8b8';
+    ctx.fillRect(mx - hullH * 0.45, top - hullH * 0.8, hullH * 0.9, hullH * 0.15);
   }
 
-  // Bow cannon battery - three guns visible
+  // Bow details - make the front clear
   ctx.fillStyle = '#0a0805';
-  const cannonY = top + hullH * 0.45;
-  for (let i = 0; i < 3; i++) {
-    const offsetY = (i - 1) * 3;
-    ctx.fillRect(left.x - 2, cannonY + offsetY, 5, 2);
-  }
+  // Bowsprit (front pole)
+  ctx.fillRect(shipCenterX - 2, top - 12, 4, 8);
 
-  // Union Jack at stern - proper naval ensign
-  const flagW = 10;
-  const flagH = 6;
+  // Union Jack flag at bow
+  const flagW = 12;
+  const flagH = 8;
   const flagX = shipCenterX - flagW / 2;
-  const flagY = top - hullH * 2.2;
+  const flagY = top - hullH * 2.5;
 
-  // Blue field
+  // Flag pole
+  ctx.fillStyle = '#2a1a10';
+  ctx.fillRect(shipCenterX - 1, top - hullH * 2.5, 2, hullH * 0.5);
+
+  // Union Jack
   ctx.fillStyle = '#012169';
   ctx.fillRect(flagX, flagY, flagW, flagH);
 
   // White diagonals
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.moveTo(flagX, flagY);
   ctx.lineTo(flagX + flagW, flagY + flagH);
@@ -527,7 +548,7 @@ function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
 
   // Red diagonals
   ctx.strokeStyle = '#C8102E';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(flagX, flagY);
   ctx.lineTo(flagX + flagW, flagY + flagH);
@@ -537,12 +558,12 @@ function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
 
   // White cross
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(flagX + flagW / 2 - 1, flagY, 2, flagH);
-  ctx.fillRect(flagX, flagY + flagH / 2 - 0.5, flagW, 1);
+  ctx.fillRect(flagX + flagW / 2 - 1.5, flagY, 3, flagH);
+  ctx.fillRect(flagX, flagY + flagH / 2 - 1, flagW, 2);
 
   // Red cross
   ctx.fillStyle = '#C8102E';
-  ctx.fillRect(flagX + flagW / 2 - 0.5, flagY, 1, flagH);
+  ctx.fillRect(flagX + flagW / 2 - 0.75, flagY, 1.5, flagH);
   ctx.fillRect(flagX, flagY + flagH / 2 - 0.5, flagW, 1);
 }
 
