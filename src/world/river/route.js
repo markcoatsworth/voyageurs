@@ -3,8 +3,8 @@
 //   - the Saint Lawrence east of Tadoussac, hugging the North Shore
 //     (Côte-Nord) out to Sept-Îles
 //   - the Saint Lawrence west of Tadoussac, hugging the North Shore
-//     (Charlevoix) up through Québec City, Trois-Rivières, and on to
-//     Montréal — ultimately headed for the Great Lakes and beyond, real
+//     (Charlevoix) up through Quebec City, Trois-Rivières, and on to
+//     Montreal — ultimately headed for the Great Lakes and beyond, real
 //     geography permitting extending this segment (or adding more) past
 //     what's plotted so far
 // A single flowDistance number line can only ever represent two directions
@@ -35,7 +35,7 @@
 //                                                Lac Saint-Jean's own real position
 //                                                https://en.wikipedia.org/wiki/La_Baie
 //   Sainte-Rose-du-Nord   48°23′N   70°35′W       https://en.wikipedia.org/wiki/Sainte-Rose-du-Nord,_Quebec
-//   Rivière-Éternité      48°15′20″N 70°24′50″W   https://en.wikipedia.org/wiki/Rivi%C3%A8re-%C3%89ternit%C3%A9
+//   Riviere-Eternite      48°15′20″N 70°24′50″W   https://en.wikipedia.org/wiki/Rivi%C3%A8re-%C3%89ternit%C3%A9
 //   L'Anse-Saint-Jean     48°14′N   70°12′W       https://en.wikipedia.org/wiki/L%27Anse-Saint-Jean,_Quebec
 //   Petit-Saguenay        48°13′N   70°04′W       https://en.wikipedia.org/wiki/Petit-Saguenay
 //   Tadoussac             48°09′N   69°43′W       https://en.wikipedia.org/wiki/Tadoussac
@@ -43,17 +43,17 @@
 //   Forestville           48°44′33″N 69°05′24″W   https://en.wikipedia.org/wiki/Forestville,_Quebec
 //   Baie-Comeau           49°13′12″N 68°09′00″W   https://en.wikipedia.org/wiki/Baie-Comeau
 //   Godbout               49°17′24″N 67°35′24″W   https://en.wikipedia.org/wiki/Godbout,_Quebec
-//   Baie-Trinité          49°25′12″N 67°20′24″W   https://en.wikipedia.org/wiki/Baie-Trinit%C3%A9
+//   Baie-Trinite          49°25′12″N 67°20′24″W   https://en.wikipedia.org/wiki/Baie-Trinit%C3%A9
 //   Port-Cartier          50°01′48″N 66°52′12″W   https://en.wikipedia.org/wiki/Port-Cartier,_Quebec
 //   Sept-Îles             50°12′00″N 66°22′48″W   https://en.wikipedia.org/wiki/Sept-%C3%8Eles,_Quebec
 //   La Malbaie            47°39′N   70°09′W       https://en.wikipedia.org/wiki/La_Malbaie
 //   Baie-Saint-Paul       47°26′N   70°30′W       https://en.wikipedia.org/wiki/Baie-Saint-Paul
-//   Beaupré               47°02′35″N 70°53′29″W   https://en.wikipedia.org/wiki/Beaupr%C3%A9,_Quebec
-//   Québec City           46°48′30″N 71°12′29″W   https://en.wikipedia.org/wiki/Quebec_City
+//   Beaupre               47°02′35″N 70°53′29″W   https://en.wikipedia.org/wiki/Beaupr%C3%A9,_Quebec
+//   Quebec City           46°48′30″N 71°12′29″W   https://en.wikipedia.org/wiki/Quebec_City
 //   Batiscan              46°30′N   72°15′W       https://en.wikipedia.org/wiki/Batiscan,_Quebec
 //   Trois-Rivières        46°21′N   72°33′W       https://en.wikipedia.org/wiki/Trois-Rivi%C3%A8res
 //   Sorel-Tracy           46°03′N   73°07′W       https://en.wikipedia.org/wiki/Sorel-Tracy
-//   Montréal              45°30′01″N 73°34′02″W   https://en.wikipedia.org/wiki/Montreal
+//   Montreal              45°30′01″N 73°34′02″W   https://en.wikipedia.org/wiki/Montreal
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
 
 // labelPos hand-places each minimap label clear of the route line and the
@@ -71,7 +71,7 @@ const FJORD_WAYPOINTS = [
   // start, without touching the real-distance math at all.
   { name: 'Lac Saint-Jean', lat: 48.4283, lon: -71.0622, label: 'Lac Saint-Jean', labelPos: { dx: -15, dy: -3, anchor: 'middle' } },
   { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Rivière-Éternité', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Riviere-Eternite', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
   { name: "L'Anse-Saint-Jean", lat: 48.2330, lon: -70.2000, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
   { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, label: 'Tadoussac', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
@@ -87,7 +87,7 @@ const LAWRENCE_EAST_WAYPOINTS = [
   { name: 'Forestville', lat: 48.7425, lon: -69.0900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   { name: 'Baie-Comeau', lat: 49.2200, lon: -68.1500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
   { name: 'Godbout', lat: 49.2900, lon: -67.5900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Baie-Trinité', lat: 49.4200, lon: -67.3400, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Baie-Trinite', lat: 49.4200, lon: -67.3400, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
   { name: 'Port-Cartier', lat: 50.0300, lon: -66.8700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   { name: 'Sept-Îles', lat: 50.2000, lon: -66.3800, label: 'Sept-Îles', labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
 ];
@@ -95,15 +95,15 @@ const LAWRENCE_WEST_WAYPOINTS = [
   { name: 'Tadoussac', lat: 48.1500, lon: -69.7170 },
   { name: 'La Malbaie', lat: 47.6500, lon: -70.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   { name: 'Baie-Saint-Paul', lat: 47.4400, lon: -70.5000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  // A short hop downriver of Québec City itself — mainly here to give
+  // A short hop downriver of Quebec City itself — mainly here to give
   // testers (and anyone who capsizes right at the capital) a closer
   // ?start= point than doubling all the way back to Baie-Saint-Paul.
-  { name: 'Beaupré', lat: 47.0431, lon: -70.8914, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Beaupre', lat: 47.0431, lon: -70.8914, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   // Pinned to the right/north bank (side: 1) rather than left to the
-  // alternating pattern — real Québec City sits on the river's north
+  // alternating pattern — real Quebec City sits on the river's north
   // shore, and its dock/fortifications are hand-authored to that side.
-  { name: 'Québec City', lat: 46.8083, lon: -71.2080, label: 'Québec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
-  // Historic trading post between Québec City and Trois-Rivières — gives
+  { name: 'Quebec City', lat: 46.8083, lon: -71.2080, label: 'Quebec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+  // Historic trading post between Quebec City and Trois-Rivières — gives
   // players a checkpoint after the British Blockade boss fight.
   { name: 'Batiscan', lat: 46.5000, lon: -72.2500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
   { name: 'Trois-Rivieres', lat: 46.3500, lon: -72.5500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
@@ -113,7 +113,7 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // Final destination — New France's commercial heart and the great inland
   // port. The river continues past Montreal too (ultimately toward the Great
   // Lakes), but this marks the end of the current journey.
-  { name: 'Montréal', lat: 45.5017, lon: -73.5673, label: 'Montréal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
+  { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
 ];
 
 // How far (game-world units) each segment takes to cross, end to end. Real
@@ -122,11 +122,11 @@ const LAWRENCE_WEST_WAYPOINTS = [
 // waypoints stay correctly spaced *relative to each other* regardless of
 // the number; it only controls how long the segment takes to paddle.
 export const ESTUARY_SPAN_DISTANCE = 2400; // Tadoussac -> Sept-Îles, ~400km real
-// Tadoussac -> Montréal, ~435km real. Scaled up from the old Tadoussac ->
-// Québec City-only span (1300) by the same real-distance ratio (435 / 186.4
-// km) so Québec City's own flowDistance — and everything already tuned
+// Tadoussac -> Montreal, ~435km real. Scaled up from the old Tadoussac ->
+// Quebec City-only span (1300) by the same real-distance ratio (435 / 186.4
+// km) so Quebec City's own flowDistance — and everything already tuned
 // around it (its dock, the boss fight, etc.) — doesn't move at all; the
-// added length is purely the new Québec City -> Trois-Rivières -> Montréal
+// added length is purely the new Quebec City -> Trois-Rivières -> Montreal
 // stretch extending the journey to its natural conclusion at New France's
 // commercial capital.
 export const LAWRENCE_WEST_SPAN_DISTANCE = 3035;
@@ -150,7 +150,7 @@ function project(w) {
 // just its waypoint list, how long it takes to paddle end to end, and its
 // river/path.js shape offset. Every segment uses the exact same math (this
 // used to be hand-duplicated once for the fjord and once for the estuary; a
-// third copy for the new Québec City stretch is what finally made a shared
+// third copy for the new Quebec City stretch is what finally made a shared
 // factory worth it).
 function makeSegment(id, waypoints, spanDistance) {
   const shapeOffset = SEGMENT_SHAPE_OFFSET[id];
@@ -196,9 +196,9 @@ function makeSegment(id, waypoints, spanDistance) {
     name: w.label || w.name,
     segment: id,
     flowDistance: shapeOffset + localFlowDistanceForCumulative(cumulative[i + 1]),
-    // A waypoint can pin its own side (see Québec City below) instead of
+    // A waypoint can pin its own side (see Quebec City below) instead of
     // taking whatever the alternating pattern lands on — otherwise
-    // inserting a new stop earlier in the same list (as Beaupré just was)
+    // inserting a new stop earlier in the same list (as Beaupre just was)
     // silently flips every later village's bank.
     side: w.side ?? (i % 2 === 0 ? -1 : 1),
   }));

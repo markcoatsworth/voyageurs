@@ -26,12 +26,12 @@ const DOCK_LENGTH = 6; // world units the dock reaches from shore into the chann
 const DOCK_WIDTH_Z = 2.2; // dock's own extent along the river's flow axis
 const DOCK_HIT_Z = 1.3; // how close (in flowDistance) counts as "touching" the dock
 
-// Québec City's dock isn't a village pier at all — it's the King's Wharf, a
+// Quebec City's dock isn't a village pier at all — it's the King's Wharf, a
 // working port for the capital, and it's drawn to match: a genuinely huge
 // stone quay reaching deep across the channel (well past the centerline,
 // per an explicit request to make it "so big I cannot miss" after a more
 // modest oversizing still wasn't visible/findable enough), wide along the
-// shore to match, easy to spot from the moment Québec City comes into view.
+// shore to match, easy to spot from the moment Quebec City comes into view.
 const QUEBEC_CITY_DOCK_REACH = 32; // ~72% of the full ~44-unit channel width, vs. ~6 everywhere else
 const QUEBEC_CITY_DOCK_WIDTH_Z = 12; // vs. 2.2 everywhere else
 const QUEBEC_CITY_DOCK_HIT_Z = 7; // vs. 1.3 everywhere else
@@ -127,7 +127,7 @@ const cabinSprites = [0, 1, 2].map(createCabinSprite);
 const villageTreeSprites = [0, 1, 2].map(createPineTreeSprite);
 
 // Trois-Rivieres — founded 1634, by 1790 a 156-year-old established town
-// and seat of regional government. Second in importance only to Québec City
+// and seat of regional government. Second in importance only to Quebec City
 // and Montréal. Gets its own hand-authored layout showing ~12 stone buildings
 // spread along the waterfront at the confluence of three river mouths.
 const TROIS_RIVIERES_SPAN = 14; // half-width along riverbank
@@ -146,13 +146,13 @@ const TROIS_RIVIERES_BUILDINGS = buildTroisRivieresBuildings();
 // Ursuline convent (built 1697) - set back from waterfront
 const TROIS_RIVIERES_CONVENT = { dOffset: 2, depth: 5.2 };
 
-// Québec City — a real 1790s colonial capital, not another fur-trade
+// Quebec City — a real 1790s colonial capital, not another fur-trade
 // village, so it gets its own hand-authored layout instead of
 // villageLayout()'s small random cluster — shaped after an actual 1790
 // map of the city (Lower Town hugging the waterfront, Upper Town set back
 // on the bluff behind it, the fortification wall further back still, and a
 // fortified point at one end standing in for Cape Diamond's citadel) rather
-// than a single undifferentiated row. Real Québec City's walls ran along
+// than a single undifferentiated row. Real Quebec City's walls ran along
 // the *landward* side, guarding the plains approach — the riverfront itself
 // was open, unwalled Lower Town — so the wall here sits behind the whole
 // town, not along the water's edge. Functionally still just scenery for now
@@ -239,11 +239,11 @@ function toScreen(worldX, z, cameraWorldX) {
 // Used by terrain.js to keep the forest scatter from covering a village.
 export function isNearVillage(d, side) {
   for (const v of VILLAGES) {
-    // Québec City and Trois-Rivieres have larger clearings to cover their
+    // Quebec City and Trois-Rivieres have larger clearings to cover their
     // hand-authored spreads - the wilderness forest showing up between
     // buildings would defeat "established town."
     let halfD = CLEARING_HALF_D;
-    if (v.name === 'Québec City') halfD = QUEBEC_CITY_SPAN + 4;
+    if (v.name === 'Quebec City') halfD = QUEBEC_CITY_SPAN + 4;
     else if (v.name === 'Trois-Rivieres') halfD = TROIS_RIVIERES_SPAN + 2;
     if (v.side === side && Math.abs(d - v.flowDistance) < halfD) return true;
   }
@@ -251,18 +251,18 @@ export function isNearVillage(d, side) {
 }
 
 function dockReach(v) {
-  if (v.name === 'Québec City') return QUEBEC_CITY_DOCK_REACH;
+  if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_REACH;
   return DOCK_LENGTH * villageLayout(v.seed).dock.lengthScale;
 }
 
 function dockWidthZ(v) {
-  return v.name === 'Québec City' ? QUEBEC_CITY_DOCK_WIDTH_Z : DOCK_WIDTH_Z;
+  return v.name === 'Quebec City' ? QUEBEC_CITY_DOCK_WIDTH_Z : DOCK_WIDTH_Z;
 }
 
 // Exported so game.js can push the canoe back out past the dock's own
 // (village-specific) trigger zone when casting off.
 export function dockHitZ(v) {
-  return v.name === 'Québec City' ? QUEBEC_CITY_DOCK_HIT_Z : DOCK_HIT_Z;
+  return v.name === 'Quebec City' ? QUEBEC_CITY_DOCK_HIT_Z : DOCK_HIT_Z;
 }
 
 // Returns the village whose dock the canoe is currently touching, or null.
@@ -327,7 +327,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
   const pilingX = v.side > 0 ? left : right;
   ctx.fillRect(pilingX - 1, top - 1, 2, bottom - top + 2);
 
-  const isQuebecCity = v.name === 'Québec City';
+  const isQuebecCity = v.name === 'Quebec City';
   const isTroisRivieres = v.name === 'Trois-Rivieres';
 
   // Buildings and their surrounding trees, merged into one painter's-
