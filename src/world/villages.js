@@ -327,8 +327,8 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
   const pilingX = v.side > 0 ? left : right;
   ctx.fillRect(pilingX - 1, top - 1, 2, bottom - top + 2);
 
-  const isQuebecCity = v.name === 'Québec City';
-  const isTroisRivieres = v.name === 'Trois-Rivières';
+  const isQuebecCity = v.name === 'Québec City' || v.name === 'Trois-Rivières';
+  const isTroisRivieres = false; // TEMP: Force Trois-Rivières to use Québec City code
 
   // Buildings and their surrounding trees, merged into one painter's-
   // algorithm pass (sorted so the nearer thing — larger z — draws last, on
