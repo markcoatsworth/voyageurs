@@ -126,6 +126,26 @@ const VILLAGE_TREE_LAYOUT = [
 const cabinSprites = [0, 1, 2].map(createCabinSprite);
 const villageTreeSprites = [0, 1, 2].map(createPineTreeSprite);
 
+// Trois-Rivières — founded 1634, by 1790 a 156-year-old established town
+// and seat of regional government. Second in importance only to Québec City
+// and Montréal. Gets its own hand-authored layout showing ~12 stone buildings
+// spread along the waterfront at the confluence of three river mouths.
+const TROIS_RIVIERES_SPAN = 14; // half-width along riverbank
+function buildTroisRivieresBuildings() {
+  const buildings = [];
+  // Main waterfront row - government buildings, trading posts, residences
+  for (let i = 0; i < 12; i++) {
+    const t = (i / 11) * 2 - 1; // -1 to 1 spread
+    const dOffset = t * TROIS_RIVIERES_SPAN + Math.sin(i * 1.9) * 1.2;
+    const depth = 1.5 + ((Math.sin(i * 1.3) + 1) / 2) * 2.5; // 1.5-4 units deep
+    buildings.push({ dOffset, depth, variant: i % 3, mirror: i % 2 === 1 });
+  }
+  return buildings;
+}
+const TROIS_RIVIERES_BUILDINGS = buildTroisRivieresBuildings();
+// Ursuline convent (built 1697) - set back from waterfront
+const TROIS_RIVIERES_CONVENT = { dOffset: 2, depth: 5.2 };
+
 // Québec City — a real 1790s colonial capital, not another fur-trade
 // village, so it gets its own hand-authored layout instead of
 // villageLayout()'s small random cluster — shaped after an actual 1790
@@ -219,12 +239,12 @@ function toScreen(worldX, z, cameraWorldX) {
 // Used by terrain.js to keep the forest scatter from covering a village.
 export function isNearVillage(d, side) {
   for (const v of VILLAGES) {
-    // Québec City's own clearing has to cover its whole hand-authored
-    // spread (QUEBEC_CITY_SPAN, plus the ramparts' own margin past it) —
-    // the wilderness forest scatter showing up between rampart segments
-    // would rather defeat "walled city," which every other village's much
-    // smaller CLEARING_HALF_D was never built to cover.
-    const halfD = v.name === 'Québec City' ? QUEBEC_CITY_SPAN + 4 : CLEARING_HALF_D;
+    // Québec City and Trois-Rivières have larger clearings to cover their
+    // hand-authored spreads - the wilderness forest showing up between
+    // buildings would defeat "established town."
+    let halfD = CLEARING_HALF_D;
+    if (v.name === 'Québec City') halfD = QUEBEC_CITY_SPAN + 4;
+    else if (v.name === 'Trois-Rivières') halfD = TROIS_RIVIERES_SPAN + 2;
     if (v.side === side && Math.abs(d - v.flowDistance) < halfD) return true;
   }
   return false;
@@ -308,27 +328,38 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
   ctx.fillRect(pilingX - 1, top - 1, 2, bottom - top + 2);
 
   const isQuebecCity = v.name === 'Québec City';
+  const isTroisRivieres = v.name === 'Trois-Rivières';
 
   // Buildings and their surrounding trees, merged into one painter's-
   // algorithm pass (sorted so the nearer thing — larger z — draws last, on
   // top) so a tree in front of a cabin actually overlaps it correctly
   // instead of every building drawing over every tree regardless of depth.
-  const scenery = isQuebecCity
-    ? QUEBEC_CITY_BUILDINGS.map((b) => {
-        const d = v.flowDistance + b.dOffset;
-        const z = worldDistance - d;
-        const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
-        return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
-      })
-    : layout.buildings.map((b) => {
-        // along (-1..1) spreads buildings ~±3.4 units along the flow axis;
-        // inland (0..1) sets depth from the bank between 1.4 and 4.2 units.
-        const d = v.flowDistance + b.along * 3.4;
-        const depth = 1.4 + b.inland * 2.8;
-        const z = worldDistance - d;
-        const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + depth);
-        return { z, worldX, sprite: cabinSprites[b.variant % cabinSprites.length], mirror: b.mirror, anchor: 0.85 };
-      });
+  let scenery;
+  if (isQuebecCity) {
+    scenery = QUEBEC_CITY_BUILDINGS.map((b) => {
+      const d = v.flowDistance + b.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
+      return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
+    });
+  } else if (isTroisRivieres) {
+    scenery = TROIS_RIVIERES_BUILDINGS.map((b) => {
+      const d = v.flowDistance + b.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
+      return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
+    });
+  } else {
+    scenery = layout.buildings.map((b) => {
+      // along (-1..1) spreads buildings ~±3.4 units along the flow axis;
+      // inland (0..1) sets depth from the bank between 1.4 and 4.2 units.
+      const d = v.flowDistance + b.along * 3.4;
+      const depth = 1.4 + b.inland * 2.8;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + depth);
+      return { z, worldX, sprite: cabinSprites[b.variant % cabinSprites.length], mirror: b.mirror, anchor: 0.85 };
+    });
+  }
 
   // The repair shop — always present, always right at the shoreline beside
   // the dock, regardless of the seed above. Same fixed look and position
@@ -360,6 +391,15 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
       const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + r.depth);
       scenery.push({ z, worldX, sprite: rampartSprite, mirror: false, anchor: 0.95 });
     });
+  } else if (isTroisRivieres) {
+    // Ursuline convent (built 1697) - prominent religious building marking
+    // this as an established town with institutions, not just a trading post.
+    {
+      const d = v.flowDistance + TROIS_RIVIERES_CONVENT.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + TROIS_RIVIERES_CONVENT.depth);
+      scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
+    }
   } else {
     VILLAGE_TREE_LAYOUT.slice(0, layout.treeCount).forEach((t, i) => {
       const jitterD = hashRange(vIndex * 41 + i, 601, -0.35, 0.35);
