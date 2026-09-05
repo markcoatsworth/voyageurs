@@ -674,6 +674,7 @@ export class Game {
         // Music already playing from blockade - don't restart
       }
       if (this.blockade.consumeJustEscaped()) {
+        console.log('[GAME] Blockade escaped, ending boss track');
         this.music?.endBossTrack();
         this.showBanner('Trois-Rivières Ahead — Safe Waters');
       }

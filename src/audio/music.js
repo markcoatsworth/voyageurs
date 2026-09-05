@@ -255,6 +255,7 @@ export function createMusic() {
     // calls this unconditionally on every restart, boss fight or not, to
     // guarantee a restart never leaves it playing).
     endBossTrack() {
+      console.log('[music] endBossTrack called, special:', special);
       if (!special) return;
       special = false;
       generation++;
