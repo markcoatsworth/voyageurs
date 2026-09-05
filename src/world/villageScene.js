@@ -233,6 +233,7 @@ export function createVillageScene() {
   let buildings = [...buildingsFor(0), REPAIR_SHOP];
   let trees = treesFor(0);
   let isQuebecCity = false;
+  let isTroisRivieres = false;
   let wasNearTrader = false;
   const player = { x: PLAYER_START.x, y: PLAYER_START.y };
 
@@ -240,7 +241,7 @@ export function createVillageScene() {
     enter(village) {
       const seed = village ? village.seed : 0;
       isQuebecCity = village && village.name === 'Quebec City';
-      const isTroisRivieres = village && village.name === 'Trois-Rivieres';
+      isTroisRivieres = village && village.name === 'Trois-Rivieres';
       buildings = isQuebecCity
         ? [...buildingsForQuebecCity(), REPAIR_SHOP]
         : isTroisRivieres
