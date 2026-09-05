@@ -126,7 +126,7 @@ const VILLAGE_TREE_LAYOUT = [
 const cabinSprites = [0, 1, 2].map(createCabinSprite);
 const villageTreeSprites = [0, 1, 2].map(createPineTreeSprite);
 
-// Trois-Rivières — founded 1634, by 1790 a 156-year-old established town
+// Trois-Rivieres — founded 1634, by 1790 a 156-year-old established town
 // and seat of regional government. Second in importance only to Québec City
 // and Montréal. Gets its own hand-authored layout showing ~12 stone buildings
 // spread along the waterfront at the confluence of three river mouths.
@@ -239,12 +239,12 @@ function toScreen(worldX, z, cameraWorldX) {
 // Used by terrain.js to keep the forest scatter from covering a village.
 export function isNearVillage(d, side) {
   for (const v of VILLAGES) {
-    // Québec City and Trois-Rivières have larger clearings to cover their
+    // Québec City and Trois-Rivieres have larger clearings to cover their
     // hand-authored spreads - the wilderness forest showing up between
     // buildings would defeat "established town."
     let halfD = CLEARING_HALF_D;
     if (v.name === 'Québec City') halfD = QUEBEC_CITY_SPAN + 4;
-    else if (v.name === 'Trois-Rivières') halfD = TROIS_RIVIERES_SPAN + 2;
+    else if (v.name === 'Trois-Rivieres') halfD = TROIS_RIVIERES_SPAN + 2;
     if (v.side === side && Math.abs(d - v.flowDistance) < halfD) return true;
   }
   return false;
@@ -327,8 +327,8 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
   const pilingX = v.side > 0 ? left : right;
   ctx.fillRect(pilingX - 1, top - 1, 2, bottom - top + 2);
 
-  const isQuebecCity = v.name === 'Québec City' || v.name === 'Trois-Rivières';
-  const isTroisRivieres = false; // TEMP: Force Trois-Rivières to use Québec City code
+  const isQuebecCity = v.name === 'Québec City';
+  const isTroisRivieres = v.name === 'Trois-Rivieres';
 
   // Buildings and their surrounding trees, merged into one painter's-
   // algorithm pass (sorted so the nearer thing — larger z — draws last, on

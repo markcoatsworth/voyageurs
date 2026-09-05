@@ -540,10 +540,6 @@ export function createStoneBuildingSprite(variant = 0) {
     const wallH = 28;
     const wallTop = h - wallH - 4;
 
-    // TEMPORARY DEBUG: Bright red flag to confirm stone buildings are rendering
-    ctx.fillStyle = '#FF0000';
-    ctx.fillRect(cx - 3, 0, 6, 12);
-
     groundShadow(ctx, cx, h - 4, wallW / 2 + 2, 4);
 
     // stone wall: outlined, then a block-joint grid (horizontal courses

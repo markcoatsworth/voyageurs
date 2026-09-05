@@ -106,7 +106,7 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // Historic trading post between Québec City and Trois-Rivières — gives
   // players a checkpoint after the British Blockade boss fight.
   { name: 'Batiscan', lat: 46.5000, lon: -72.2500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Trois-Rivières', lat: 46.3500, lon: -72.5500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  { name: 'Trois-Rivieres', lat: 46.3500, lon: -72.5500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
   // Port at the confluence of the Richelieu and St. Lawrence rivers,
   // strategic location between Trois-Rivières and Montreal.
   { name: 'Sorel-Tracy', lat: 46.0500, lon: -73.1167, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
