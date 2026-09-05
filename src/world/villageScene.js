@@ -77,6 +77,25 @@ const QUEBEC_CITY_ONFOOT_BUILDINGS = [
   { kind: 'church', x: 160, y: 112, mirror: false },
 ];
 
+const TROIS_RIVIERES_ONFOOT_BUILDINGS = [
+  // back row - 6 buildings
+  { kind: 'stone', x: 40, y: 86, variant: 0, mirror: false },
+  { kind: 'stone', x: 90, y: 90, variant: 1, mirror: true },
+  { kind: 'stone', x: 140, y: 88, variant: 2, mirror: false },
+  { kind: 'stone', x: 180, y: 92, variant: 0, mirror: true },
+  { kind: 'stone', x: 230, y: 86, variant: 1, mirror: false },
+  { kind: 'stone', x: 280, y: 90, variant: 2, mirror: true },
+  // front row - 6 buildings closer to shore
+  { kind: 'stone', x: 30, y: 148, variant: 1, mirror: false },
+  { kind: 'stone', x: 80, y: 152, variant: 2, mirror: true },
+  { kind: 'stone', x: 130, y: 150, variant: 0, mirror: false },
+  { kind: 'stone', x: 190, y: 154, variant: 1, mirror: true },
+  { kind: 'stone', x: 240, y: 150, variant: 2, mirror: false },
+  { kind: 'stone', x: 290, y: 148, variant: 0, mirror: true },
+  // Ursuline convent, set back from the waterfront
+  { kind: 'church', x: 160, y: 100, mirror: false },
+];
+
 // The landward fortification wall, as a fixed backdrop strip along the very
 // top of the scene — behind the back row of buildings, same "wall set back
 // behind the town, not along the water" read as the river view's own
@@ -89,6 +108,18 @@ const QUEBEC_CITY_WALL_TILES = Math.ceil(CANVAS_WIDTH / WALL_TILE_W) + 1;
 
 function buildingsForQuebecCity() {
   return QUEBEC_CITY_ONFOOT_BUILDINGS.map((b) => ({
+    kind: b.kind,
+    variant: b.variant ?? 0,
+    mirror: b.mirror,
+    anchorX: b.x,
+    anchorY: b.y,
+    footHalfW: b.kind === 'church' ? 12 : 13,
+    footHeight: b.kind === 'church' ? 26 : 24,
+  }));
+}
+
+function buildingsForTroisRivieres() {
+  return TROIS_RIVIERES_ONFOOT_BUILDINGS.map((b) => ({
     kind: b.kind,
     variant: b.variant ?? 0,
     mirror: b.mirror,
@@ -208,9 +239,12 @@ export function createVillageScene() {
   return {
     enter(village) {
       const seed = village ? village.seed : 0;
-      isQuebecCity = village && village.name === 'Québec City';
+      isQuebecCity = village && village.name === 'Quebec City';
+      const isTroisRivieres = village && village.name === 'Trois-Rivieres';
       buildings = isQuebecCity
         ? [...buildingsForQuebecCity(), REPAIR_SHOP]
+        : isTroisRivieres
+        ? [...buildingsForTroisRivieres(), REPAIR_SHOP]
         : [...buildingsFor(seed), REPAIR_SHOP];
       trees = treesFor(seed);
       player.x = PLAYER_START.x;
