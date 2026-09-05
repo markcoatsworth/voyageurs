@@ -284,6 +284,9 @@ export function drawVillages(ctx, worldDistance, cameraWorldX) {
   VILLAGES.forEach((v, i) => {
     const z = worldDistance - v.flowDistance;
     if (Math.abs(z) > VISIBLE_Z_RANGE) return;
+    if (Math.abs(z) < 5 && (v.name === 'Trois-Rivieres' || v.name === 'Batiscan')) {
+      console.log(`[DRAW] Drawing ${v.name} at z=${z.toFixed(1)}, worldDistance=${worldDistance.toFixed(1)}`);
+    }
     drawOneVillage(ctx, v, i, worldDistance, cameraWorldX);
   });
 }
