@@ -1,7 +1,7 @@
 // The internal render resolution — kept small and blown up with
 // image-rendering:pixelated (see style.css) for the chunky top-down look.
-export const CANVAS_WIDTH = 320;
-export const CANVAS_HEIGHT = 220;
+export const CANVAS_WIDTH = 270;
+export const CANVAS_HEIGHT = 400;
 
 // 1 river "unit" (the same units riverPath.js's centerX/widthAt use) = this
 // many pixels. Also doubles as the nominal tile size.
