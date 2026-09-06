@@ -4,7 +4,7 @@ import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terra
 import { drawWhales } from '../world/whales.js';
 import { createCanoeSprites } from '../world/canoe.js';
 import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom } from '../audio/sfx.js';
-import { getDockHit, dockHitZ } from '../world/villages.js';
+import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import { createBlockade } from '../bossfights/blockade.js';
 import { isTouchPrimary } from './touchControls.js';
@@ -676,7 +676,10 @@ export class Game {
       if (this.blockade.consumeJustEscaped()) {
         console.log('[GAME] Blockade escaped, ending boss track');
         this.music?.endBossTrack();
-        this.showBanner('Trois-Rivières Ahead — Safe Waters');
+        // Find the next village ahead on the current segment
+        const nextVillage = VILLAGES.find(v => v.segment === this.segment && v.flowDistance > this.flowDistance);
+        const villageName = nextVillage ? nextVillage.name : 'Safe Waters';
+        this.showBanner(`${villageName} Ahead — Safe Waters`);
       }
     } else {
       this.blockadePct = null;
