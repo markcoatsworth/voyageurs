@@ -1,0 +1,213 @@
+// Headless smoke test: loads the whole module graph, wires up a Game exactly
+// the way main.js does, and runs thousands of simulated frames across every
+// mode the game has — fjord paddling, the segment transition, the upriver
+// stretch, the blockade boss fight, a village visit, and a capsize+restart.
+//
+// It renders nothing (see dom-shim.mjs) — it's here to catch the class of
+// bug that keeps shipping: a stale reference or bad assumption that throws
+// on load or on the first frame of some mode, which `vite build` never
+// executes and so never catches. Run it with `npm test` before saying a
+// change works.
+//
+// A scenario "passes" if it runs its frames without throwing. It is NOT an
+// assertion of correct gameplay — it's a crash/liveness net under the parts
+// a bundler can't check.
+
+import './dom-shim.mjs';
+import { makeElement } from './dom-shim.mjs';
+
+const failures = [];
+const notes = [];
+
+// console.error is how main.js's error boundary reports a swallowed crash —
+// treat any "Voyageurs crashed" line as a test failure even though nothing
+// threw out to us.
+// The game and its libs are chatty (debug logs, "no WebGL" warnings). Mute
+// stdout noise during the run, but keep watching console.error for the one
+// line that matters: main.js's error boundary reporting a swallowed crash.
+const real = { log: console.log, warn: console.warn, error: console.error };
+console.log = () => {};
+console.warn = () => {};
+console.error = (...args) => {
+  const msg = args.map((a) => (a && a.stack) || String(a)).join(' ');
+  if (msg.includes('Voyageurs crashed') || msg.includes('crashed while')) {
+    failures.push({ scenario: 'error-boundary (main.js caught a crash)', error: msg });
+  }
+};
+function restoreConsole() {
+  Object.assign(console, real);
+}
+
+function step(name, fn) {
+  try {
+    const r = fn();
+    notes.push(`  ok   ${name}`);
+    return r;
+  } catch (err) {
+    failures.push({ scenario: name, error: (err && err.stack) || String(err) });
+    notes.push(`  FAIL ${name}`);
+    return null;
+  }
+}
+
+// --- shared wiring, mirrors main.js -----------------------------------------
+
+const { CANVAS_WIDTH, CANVAS_HEIGHT } = await import('../src/shared/config.js');
+const { Game } = await import('../src/core/game.js');
+const { Input } = await import('../src/core/input.js');
+const { createObstacleField } = await import('../src/world/obstacles.js');
+const { createMinimap } = await import('../src/world/minimap.js');
+const { createMusic } = await import('../src/audio/music.js');
+const { createTouchControls } = await import('../src/core/touchControls.js');
+const { VILLAGES } = await import('../src/world/river/route.js');
+const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE } = await import('../src/world/river/path.js');
+const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
+
+function makeUi(minimap) {
+  const el = (id) => makeElement(id);
+  return {
+    hud: el('hud'), hudScore: el('hud-score'), hudSpeedFill: el('speed'),
+    hudHealthFill: el('health'), hudBlockade: el('blk'), hudBlockadeFill: el('blkfill'),
+    damageFlash: el('flash'), titleScreen: el('title'), gameoverScreen: el('over'),
+    finalStats: el('stats'), restartBtn: el('restart'), pauseScreen: el('pause'),
+    milestoneBanner: el('banner'), minimap,
+  };
+}
+
+function newGame(startSegment, startFlowDistance) {
+  const world = { distance: 0 };
+  const obstacles = createObstacleField(world);
+  const input = new Input();
+  createTouchControls(input);
+  const minimap = createMinimap();
+  const music = createMusic();
+  const ui = makeUi(minimap);
+  const game = new Game({ ctx: makeElement('canvas').getContext('2d'), water: null, input, obstacles, world, ui, music, startFlowDistance, startSegment });
+  return { game, input };
+}
+
+// Run `frames` updates; inputFn(i) may mutate the input state each frame.
+function run({ game, input }, frames, dt, inputFn) {
+  for (let i = 0; i < frames; i++) {
+    if (inputFn) inputFn(input.state, i);
+    game.update(dt);
+  }
+}
+
+// --- scenario 0: main.js itself loads and wires without a swallowed crash ---
+
+await step('main.js loads', async () => {
+  await import('../src/main.js');
+});
+
+// --- scenario 1: fjord paddling, long enough to cross the mouth ------------
+
+step('fjord: paddle downstream 120s', () => {
+  const g = newGame('fjord', 0);
+  run(g, 3600, 1 / 30, (s, i) => { s.up = true; s.left = i % 240 < 40; s.right = i % 240 >= 120 && i % 240 < 160; });
+  if (g.game.segment !== 'fjord') notes.push(`  note fjord run auto-advanced to ${g.game.segment} @ ${g.game.flowDistance | 0}`);
+});
+
+// --- scenario 2: the explicit fjord -> lawrenceWest mouth crossing ---------
+
+step('mouth crossing: fjord -> lawrenceWest', () => {
+  const g = newGame('fjord', MOUTH_DISTANCE - 60);
+  run(g, 900, 1 / 30, (s) => { s.up = true; });
+  if (g.game.segment !== 'lawrenceWest') throw new Error(`expected lawrenceWest after crossing the mouth, still on ${g.game.segment} @ ${g.game.flowDistance | 0}`);
+});
+
+// --- scenario 3: upriver stretch -----------------------------------------
+
+step('lawrenceWest: fight the current 90s', () => {
+  const g = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
+  run(g, 2700, 1 / 30, (s, i) => { s.up = true; s.down = i % 300 > 260; });
+});
+
+// --- scenario 4: the blockade boss fight, start to escape ------------------
+
+step('blockade: approach -> pursuit -> escape', () => {
+  const g = newGame('lawrenceWest', SHIP_FLOW_DISTANCE - 80);
+  let sawFight = false;
+  for (let i = 0; i < 6000; i++) {
+    g.input.state.up = true;
+    g.input.state.left = i % 180 < 90;
+    g.input.state.right = i % 180 >= 90;
+    g.game.update(1 / 30);
+    if (g.game.blockadePct !== null) sawFight = true;
+    if (g.game.state === 'gameover') { g.game.start(); }
+  }
+  if (!sawFight) throw new Error('blockade never activated across the whole approach');
+  notes.push(`  note blockade ran; ended segment ${g.game.segment} @ ${g.game.flowDistance | 0}`);
+});
+
+// --- scenario 5: a village visit ----------------------------------------
+
+step('village: dock, walk, trade, cast off', () => {
+  const quebec = VILLAGES.find((v) => v.name === 'Quebec City');
+  if (!quebec) throw new Error('no "Quebec City" in VILLAGES — a name/lookup drifted again');
+  const g = newGame(quebec.segment, quebec.flowDistance - 30);
+  g.game.enterVillage(quebec);
+  g.game.furs = 5;
+  run(g, 400, 1 / 30, (s, i) => { s.up = i % 120 < 60; s.down = i % 120 >= 60; s.left = i % 80 < 40; });
+  g.game.tryRepairTrade();
+  g.game.leaveVillage();
+  run(g, 200, 1 / 30, (s) => { s.up = true; });
+  if (g.game.mode !== 'river') throw new Error(`still in "${g.game.mode}" mode after casting off`);
+});
+
+// --- scenario 6: every village enter/leave individually -------------------
+
+step('village: enter+tick each of the 19 villages', () => {
+  for (const v of VILLAGES) {
+    const g = newGame(v.segment, v.flowDistance - 20);
+    g.game.enterVillage(v);
+    run(g, 60, 1 / 30, (s, i) => { s.up = true; s.right = i % 30 < 15; });
+    g.game.leaveVillage();
+    run(g, 30, 1 / 30, (s) => { s.up = true; });
+  }
+});
+
+// --- scenario 7: capsize and restart ------------------------------------
+
+step('capsize -> restart -> keep playing', () => {
+  const g = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
+  run(g, 60, 1 / 30, (s) => { s.up = true; });
+  for (let i = 0; i < 20 && g.game.state === 'playing'; i++) {
+    g.game.invulnTimer = 0;
+    g.game.handleHit({ type: 'rock' });
+  }
+  if (g.game.state !== 'gameover') throw new Error('never capsized after 20 unmitigated rock hits');
+  g.game.start();
+  if (g.game.state !== 'playing') throw new Error('restart did not return to playing');
+  run(g, 300, 1 / 30, (s) => { s.up = true; });
+});
+
+// --- scenario 8: pause / resume toggling --------------------------------
+
+step('pause and resume mid-run', () => {
+  const g = newGame('fjord', 0);
+  run(g, 100, 1 / 30, (s) => { s.up = true; });
+  g.game.togglePause();
+  run(g, 60, 1 / 30);
+  g.game.togglePause();
+  run(g, 100, 1 / 30, (s) => { s.up = true; });
+});
+
+// --- report ------------------------------------------------------------------
+
+restoreConsole();
+console.log('\nvoyageurs smoke test');
+console.log(notes.join('\n'));
+
+if (failures.length) {
+  console.log(`\n${failures.length} failure(s):\n`);
+  for (const f of failures) {
+    console.log(`● ${f.scenario}`);
+    console.log(String(f.error).split('\n').map((l) => `    ${l}`).join('\n'));
+    console.log('');
+  }
+  process.exit(1);
+}
+
+console.log('\nall scenarios ran without crashing.\n');
+process.exit(0);

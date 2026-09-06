@@ -1,0 +1,8 @@
+#!/bin/sh
+# Runs the headless smoke test before every commit so a change that breaks
+# startup or any game mode can't land. Enable once per clone with:
+#
+#   git config core.hooksPath .githooks
+#
+# Bypass for a work-in-progress commit with:  git commit --no-verify
+exec node test/smoke.mjs
