@@ -15,7 +15,7 @@ import { centerX, widthAt } from '../world/river/path.js';
 import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../shared/config.js';
 import { VILLAGES } from '../world/villages.js';
 
-const QUEBEC_CITY = VILLAGES.find((v) => v.name === 'Québec City');
+const QUEBEC_CITY = VILLAGES.find((v) => v.name === 'Quebec City');
 // How far past the capital the frigate sits — far enough that casting off
 // doesn't drop the player straight into cannon fire, close enough that it's
 // clearly part of leaving Québec City, not a random later encounter. Needs
