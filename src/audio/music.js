@@ -4,8 +4,9 @@
 // "the run has begun" anyway (see the immediate-launch design in game.js).
 //
 // Plays as a shuffled playlist that loops forever, one track after another
-// (not one track on repeat) — to add a song, just drop its file in
-// public/audio/ and add its URL here.
+// (not one track on repeat) — to add a song, run its source through
+// scripts/normalize-audio.mjs (matches every track to one loudness so the
+// shuffle doesn't jump between them) and add the resulting URL here.
 const PLAYLIST = [
   '/audio/grande-gigue-simple.mp3',
   '/audio/reel-du-pendu.mp3',
@@ -18,6 +19,10 @@ const PLAYLIST = [
   '/audio/gigue-du-poteau-blanc.mp3',
   '/audio/quadrille-acadien.mp3',
   '/audio/quadrille-francais.mp3',
+  '/audio/reel-du-diable.mp3',
+  '/audio/reel-du-terreur.mp3',
+  '/audio/avec-les-ruine-babine.mp3',
+  '/audio/les-batteux.mp3',
 ];
 
 // Not part of the shuffle above — this only ever plays on cue, the moment
@@ -51,10 +56,10 @@ function debug(text) {
 // as soon as this module loads and turned into a local blob: URL — by the
 // time a real gesture calls start(), audio.src can point straight at
 // already-downloaded local data with no network fetch left to do at all.
-// Cached forever per URL (not just look-ahead-by-one) since there are only
-// 7 tracks at a few MB each — a session that cycles through the whole
-// playlist ends up with every future transition equally instant, not just
-// the first one.
+// Cached forever per URL (not just look-ahead-by-one) since it's only a
+// dozen-odd tracks at a few MB each — a session that cycles through the
+// whole playlist ends up with every future transition equally instant, not
+// just the first one.
 const blobCache = new Map();
 function prefetch(url) {
   if (blobCache.has(url)) return blobCache.get(url);
