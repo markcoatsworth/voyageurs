@@ -7,6 +7,11 @@
 // Target is -21 LUFS integrated / -1.5 dBTP — where the catalog's recent
 // additions already sit (measure with:  npm run audio:measure).
 //
+// ffmpeg comes from the `ffmpeg-static` package — an optionalDependency
+// (not dev) so its ~80MB binary download can never fail the Docker /
+// Cloud Build image, which doesn't run these scripts. If a plain
+// `npm install` skipped it, `npm install ffmpeg-static` pulls it in.
+//
 // Usage:
 //   node scripts/normalize-audio.mjs "src/Some Artist - Title.wav=title-kebab" ...
 //
