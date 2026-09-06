@@ -53,6 +53,7 @@
 //   Batiscan              46°30′N   72°15′W       https://en.wikipedia.org/wiki/Batiscan,_Quebec
 //   Trois-Rivières        46°21′N   72°33′W       https://en.wikipedia.org/wiki/Trois-Rivi%C3%A8res
 //   Sorel-Tracy           46°03′N   73°07′W       https://en.wikipedia.org/wiki/Sorel-Tracy
+//   Charlemagne           45°43′N   73°29′W       https://en.wikipedia.org/wiki/Charlemagne,_Quebec
 //   Montreal              45°30′01″N 73°34′02″W   https://en.wikipedia.org/wiki/Montreal
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
 
@@ -110,6 +111,9 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // Port at the confluence of the Richelieu and St. Lawrence rivers,
   // strategic location between Trois-Rivières and Montreal.
   { name: 'Sorel-Tracy', lat: 46.0500, lon: -73.1167, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  // Charlemagne — a village on the north shore just upriver from Montreal,
+  // gives players a close starting point for testing the final destination.
+  { name: 'Charlemagne', lat: 45.7167, lon: -73.4833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   // Final destination — New France's commercial heart and the great inland
   // port. The river continues past Montreal too (ultimately toward the Great
   // Lakes), but this marks the end of the current journey.
