@@ -146,6 +146,22 @@ const TROIS_RIVIERES_BUILDINGS = buildTroisRivieresBuildings();
 // Ursuline convent (built 1697) - set back from waterfront
 const TROIS_RIVIERES_CONVENT = { dOffset: 2, depth: 5.2 };
 
+// Quebec City — a real 1790s colonial capital, not another fur-trade
+// village, so it gets its own hand-authored layout instead of
+// villageLayout()'s small random cluster — shaped after an actual 1790
+// map of the city (Lower Town hugging the waterfront, Upper Town set back
+// on the bluff behind it, the fortification wall further back still, and a
+// fortified point at one end standing in for Cape Diamond's citadel) rather
+// than a single undifferentiated row. Real Quebec City's walls ran along
+// the *landward* side, guarding the plains approach — the riverfront itself
+// was open, unwalled Lower Town — so the wall here sits behind the whole
+// town, not along the water's edge. Functionally still just scenery for now
+// (see the module comment) — the dock/repair shop below works exactly the
+// same as every other village; only what's drawn behind it changes.
+const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
+const churchSprite = createChurchSprite();
+const rampartSprite = createRampartSprite();
+
 // Montreal — New France's great commercial capital and inland port, larger
 // and more prosperous than Quebec City by 1790. Founded 1642, sits at the
 // confluence of the St. Lawrence and Ottawa rivers (the gateway to the Great
@@ -175,22 +191,6 @@ const MONTREAL_BUILDINGS = buildMontrealBuildings();
 // Notre-Dame Basilica (original founded 1672, rebuilt 1672-1683) - the city's
 // spiritual center, set back above the commercial district
 const MONTREAL_CHURCH = { dOffset: 4, depth: 8.8 };
-
-// Quebec City — a real 1790s colonial capital, not another fur-trade
-// village, so it gets its own hand-authored layout instead of
-// villageLayout()'s small random cluster — shaped after an actual 1790
-// map of the city (Lower Town hugging the waterfront, Upper Town set back
-// on the bluff behind it, the fortification wall further back still, and a
-// fortified point at one end standing in for Cape Diamond's citadel) rather
-// than a single undifferentiated row. Real Quebec City's walls ran along
-// the *landward* side, guarding the plains approach — the riverfront itself
-// was open, unwalled Lower Town — so the wall here sits behind the whole
-// town, not along the water's edge. Functionally still just scenery for now
-// (see the module comment) — the dock/repair shop below works exactly the
-// same as every other village; only what's drawn behind it changes.
-const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
-const churchSprite = createChurchSprite();
-const rampartSprite = createRampartSprite();
 
 const QUEBEC_CITY_SPAN = 24; // half-width of the town along the riverbank, world units
 const QUEBEC_CITY_RAMPART_SPACING = 4.2; // ≈ the rampart sprite's own drawn width, so segments tile edge to edge
