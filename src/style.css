@@ -406,36 +406,43 @@ button:hover {
   gap: 10px;
 }
 
+/* Stacked, not side by side: word labels are wider than the old "♫"/"II"
+   glyphs, and a vertical pair sits in one button's width instead of two —
+   which keeps them clear of the score (top-left) on a phone's top row.
+   Both buttons take the wider one's width so it reads as a tidy stack. */
 #right-buttons {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
 }
 
-#mute-btn {
-  padding: 8px 10px;
-  font-size: 14px;
-  line-height: 1;
-  opacity: 0.75;
-}
-
-#mute-btn:hover {
-  opacity: 1;
-}
-
-#mute-btn.muted {
-  color: #8a8272;
-  text-decoration: line-through;
-}
-
+/* Word labels, not glyphs — "♫"/"II" left players guessing, and the rest
+   of the UI (HUD labels, TRY AGAIN, NOW PLAYING) is already all-text in
+   this font. Sized down from the base button to ~HUD-label scale so two of
+   them plus the score still fit across a phone's top row. */
+#mute-btn,
 #pause-btn {
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: 9px 11px;
+  font-size: 9px;
   line-height: 1;
-  opacity: 0.75;
+  letter-spacing: 1px;
+  opacity: 0.8;
 }
 
+#mute-btn:hover,
 #pause-btn:hover {
   opacity: 1;
+}
+
+/* Music off: the label already says so ("MUSIC OFF"); this fades the
+   button so the lit "MUSIC ON" state is the one that draws the eye. */
+#mute-btn.muted {
+  opacity: 0.5;
+}
+
+#mute-btn.muted:hover {
+  opacity: 0.7;
 }
 
 /* Big, obvious arrow controls, always visible (not gated to touch devices

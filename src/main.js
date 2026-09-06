@@ -320,10 +320,15 @@ try {
 }
 
 const muteBtn = document.getElementById('mute-btn');
-muteBtn.classList.toggle('muted', music.muted);
+function syncMuteBtn(muted) {
+  muteBtn.classList.toggle('muted', muted);
+  muteBtn.textContent = muted ? 'MUSIC OFF' : 'MUSIC ON';
+  muteBtn.title = muted ? 'Turn the music back on' : 'Turn the music off';
+}
+syncMuteBtn(music.muted);
 muteBtn.addEventListener('click', () => {
   const muted = music.toggleMute();
-  muteBtn.classList.toggle('muted', muted);
+  syncMuteBtn(muted);
   // Unmuting is a natural "wait, what is this?" moment — flash the card
   // back up for the track that's currently going.
   if (!muted) showNowPlaying(music.nowPlaying);
@@ -339,17 +344,26 @@ for (const evt of ['pointerdown', 'touchend', 'keydown', 'click']) {
   window.addEventListener(evt, () => music.start());
 }
 
+// Escape has no touch equivalent, hence a visible button — shown for every
+// input type, not just touch, since a tappable/clickable pause control is
+// a reasonable thing to want on desktop too. The label flips to RESUME
+// while paused so it's obvious the same button gets you back.
+const pauseBtn = document.getElementById('pause-btn');
+function togglePause() {
+  game?.togglePause();
+  const paused = !!game?.paused;
+  pauseBtn.textContent = paused ? 'RESUME' : 'PAUSE';
+  pauseBtn.title = paused ? 'Resume the game' : 'Pause the game';
+}
+
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
     e.preventDefault();
-    game?.togglePause();
+    togglePause();
   }
 });
 
-// Escape has no touch equivalent, hence a visible button — shown for every
-// input type, not just touch, since a tappable/clickable pause control is
-// a reasonable thing to want on desktop too.
-document.getElementById('pause-btn').addEventListener('click', () => game?.togglePause());
+pauseBtn.addEventListener('click', togglePause);
 
 let lastTime = performance.now();
 let loopBroken = false;
