@@ -96,6 +96,32 @@ const TROIS_RIVIERES_ONFOOT_BUILDINGS = [
   { kind: 'church', x: 160, y: 100, mirror: false },
 ];
 
+const MONTREAL_ONFOOT_BUILDINGS = [
+  // back row - upper residential quarter (5 buildings)
+  { kind: 'stone', x: 50, y: 76, variant: 0, mirror: false },
+  { kind: 'stone', x: 110, y: 80, variant: 1, mirror: true },
+  { kind: 'stone', x: 170, y: 78, variant: 2, mirror: false },
+  { kind: 'stone', x: 230, y: 82, variant: 0, mirror: true },
+  { kind: 'stone', x: 290, y: 76, variant: 1, mirror: false },
+  // middle row - commercial district (6 buildings)
+  { kind: 'stone', x: 30, y: 110, variant: 2, mirror: true },
+  { kind: 'stone', x: 80, y: 114, variant: 0, mirror: false },
+  { kind: 'stone', x: 130, y: 112, variant: 1, mirror: true },
+  { kind: 'stone', x: 190, y: 116, variant: 2, mirror: false },
+  { kind: 'stone', x: 240, y: 112, variant: 0, mirror: true },
+  { kind: 'stone', x: 290, y: 110, variant: 1, mirror: false },
+  // front row - waterfront warehouses/trading posts (7 buildings)
+  { kind: 'stone', x: 20, y: 150, variant: 1, mirror: false },
+  { kind: 'stone', x: 65, y: 154, variant: 2, mirror: true },
+  { kind: 'stone', x: 110, y: 152, variant: 0, mirror: false },
+  { kind: 'stone', x: 160, y: 156, variant: 1, mirror: true },
+  { kind: 'stone', x: 210, y: 152, variant: 2, mirror: false },
+  { kind: 'stone', x: 255, y: 150, variant: 0, mirror: true },
+  { kind: 'stone', x: 300, y: 154, variant: 1, mirror: false },
+  // Notre-Dame Basilica - spiritual heart of the commercial capital
+  { kind: 'church', x: 160, y: 92, mirror: false },
+];
+
 // The landward fortification wall, as a fixed backdrop strip along the very
 // top of the scene — behind the back row of buildings, same "wall set back
 // behind the town, not along the water" read as the river view's own
@@ -120,6 +146,18 @@ function buildingsForQuebecCity() {
 
 function buildingsForTroisRivieres() {
   return TROIS_RIVIERES_ONFOOT_BUILDINGS.map((b) => ({
+    kind: b.kind,
+    variant: b.variant ?? 0,
+    mirror: b.mirror,
+    anchorX: b.x,
+    anchorY: b.y,
+    footHalfW: b.kind === 'church' ? 12 : 13,
+    footHeight: b.kind === 'church' ? 26 : 24,
+  }));
+}
+
+function buildingsForMontreal() {
+  return MONTREAL_ONFOOT_BUILDINGS.map((b) => ({
     kind: b.kind,
     variant: b.variant ?? 0,
     mirror: b.mirror,
@@ -234,6 +272,7 @@ export function createVillageScene() {
   let trees = treesFor(0);
   let isQuebecCity = false;
   let isTroisRivieres = false;
+  let isMontreal = false;
   let wasNearTrader = false;
   const player = { x: PLAYER_START.x, y: PLAYER_START.y };
 
@@ -242,10 +281,13 @@ export function createVillageScene() {
       const seed = village ? village.seed : 0;
       isQuebecCity = village && village.name === 'Quebec City';
       isTroisRivieres = village && village.name === 'Trois-Rivieres';
+      isMontreal = village && village.name === 'Montreal';
       buildings = isQuebecCity
         ? [...buildingsForQuebecCity(), REPAIR_SHOP]
         : isTroisRivieres
         ? [...buildingsForTroisRivieres(), REPAIR_SHOP]
+        : isMontreal
+        ? [...buildingsForMontreal(), REPAIR_SHOP]
         : [...buildingsFor(seed), REPAIR_SHOP];
       trees = treesFor(seed);
       player.x = PLAYER_START.x;

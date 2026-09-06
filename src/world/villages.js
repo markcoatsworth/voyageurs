@@ -146,6 +146,36 @@ const TROIS_RIVIERES_BUILDINGS = buildTroisRivieresBuildings();
 // Ursuline convent (built 1697) - set back from waterfront
 const TROIS_RIVIERES_CONVENT = { dOffset: 2, depth: 5.2 };
 
+// Montreal — New France's great commercial capital and inland port, larger
+// and more prosperous than Quebec City by 1790. Founded 1642, sits at the
+// confluence of the St. Lawrence and Ottawa rivers (the gateway to the Great
+// Lakes fur trade). Three bands: waterfront warehouses and merchant buildings,
+// middle commercial district, and upper residential quarter — 18 buildings
+// total showing its status as the colony's economic heart.
+const MONTREAL_SPAN = 28; // even wider spread than Quebec City
+const MONTREAL_BANDS = [
+  { count: 7, depthMin: 1.6, depthMax: 2.8, salt: 0 },    // waterfront warehouses/trading posts
+  { count: 6, depthMin: 3.8, depthMax: 5.4, salt: 100 },  // commercial district
+  { count: 5, depthMin: 6.2, depthMax: 8.0, salt: 200 },  // upper residential quarter
+];
+function buildMontrealBuildings() {
+  const buildings = [];
+  for (const band of MONTREAL_BANDS) {
+    for (let i = 0; i < band.count; i++) {
+      const t = band.count > 1 ? (i / (band.count - 1)) * 2 - 1 : 0;
+      const salted = i + band.salt;
+      const dOffset = t * MONTREAL_SPAN + Math.sin(salted * 2.1) * 1.9;
+      const depth = band.depthMin + ((Math.sin(salted * 1.8) + 1) / 2) * (band.depthMax - band.depthMin);
+      buildings.push({ dOffset, depth, variant: salted % stoneSprites.length, mirror: i % 2 === 1 });
+    }
+  }
+  return buildings;
+}
+const MONTREAL_BUILDINGS = buildMontrealBuildings();
+// Notre-Dame Basilica (original founded 1672, rebuilt 1672-1683) - the city's
+// spiritual center, set back above the commercial district
+const MONTREAL_CHURCH = { dOffset: 4, depth: 8.8 };
+
 // Quebec City — a real 1790s colonial capital, not another fur-trade
 // village, so it gets its own hand-authored layout instead of
 // villageLayout()'s small random cluster — shaped after an actual 1790
@@ -239,12 +269,13 @@ function toScreen(worldX, z, cameraWorldX) {
 // Used by terrain.js to keep the forest scatter from covering a village.
 export function isNearVillage(d, side) {
   for (const v of VILLAGES) {
-    // Quebec City and Trois-Rivieres have larger clearings to cover their
-    // hand-authored spreads - the wilderness forest showing up between
+    // Quebec City, Trois-Rivieres, and Montreal have larger clearings to cover
+    // their hand-authored spreads - the wilderness forest showing up between
     // buildings would defeat "established town."
     let halfD = CLEARING_HALF_D;
     if (v.name === 'Quebec City') halfD = QUEBEC_CITY_SPAN + 4;
     else if (v.name === 'Trois-Rivieres') halfD = TROIS_RIVIERES_SPAN + 2;
+    else if (v.name === 'Montreal') halfD = MONTREAL_SPAN + 4;
     if (v.side === side && Math.abs(d - v.flowDistance) < halfD) return true;
   }
   return false;
@@ -332,6 +363,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
 
   const isQuebecCity = v.name === 'Quebec City';
   const isTroisRivieres = v.name === 'Trois-Rivieres';
+  const isMontreal = v.name === 'Montreal';
 
   // Buildings and their surrounding trees, merged into one painter's-
   // algorithm pass (sorted so the nearer thing — larger z — draws last, on
@@ -347,6 +379,13 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
     });
   } else if (isTroisRivieres) {
     scenery = TROIS_RIVIERES_BUILDINGS.map((b) => {
+      const d = v.flowDistance + b.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
+      return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
+    });
+  } else if (isMontreal) {
+    scenery = MONTREAL_BUILDINGS.map((b) => {
       const d = v.flowDistance + b.dOffset;
       const z = worldDistance - d;
       const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
@@ -401,6 +440,15 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
       const d = v.flowDistance + TROIS_RIVIERES_CONVENT.dOffset;
       const z = worldDistance - d;
       const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + TROIS_RIVIERES_CONVENT.depth);
+      scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
+    }
+  } else if (isMontreal) {
+    // Notre-Dame Basilica - the spiritual heart of New France's commercial
+    // capital, rising above the merchant district and warehouses below.
+    {
+      const d = v.flowDistance + MONTREAL_CHURCH.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + MONTREAL_CHURCH.depth);
       scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
     }
   } else {
