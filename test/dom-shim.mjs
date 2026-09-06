@@ -54,6 +54,9 @@ function makeElement(tag = 'div') {
     textContent: '',
     innerHTML: '',
     appendChild(child) { el.children.push(child); return child; },
+    append(...kids) { el.children.push(...kids); },
+    prepend(...kids) { el.children.unshift(...kids); },
+    replaceChildren(...kids) { el.children = kids; },
     insertBefore(child) { el.children.push(child); return child; },
     removeChild(child) {
       const i = el.children.indexOf(child);

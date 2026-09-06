@@ -260,9 +260,40 @@ function showFatalError(err, context, { fatal = true } = {}) {
   }
 }
 
+// "Now playing" card (bottom-left, #now-playing in index.html). Built here
+// rather than in music.js so the audio layer stays DOM-free — music.js just
+// calls onTrack({ title, artist }) whenever a new track actually starts.
+const nowPlayingEl = document.getElementById('now-playing');
+const NOW_PLAYING_LINGER = 7000;
+let nowPlayingHideTimer;
+function showNowPlaying(track) {
+  if (!track || !nowPlayingEl) return;
+  nowPlayingEl.textContent = '';
+  const head = document.createElement('div');
+  head.className = 'np-head';
+  const eq = document.createElement('div');
+  eq.className = 'np-eq';
+  eq.innerHTML = '<span></span><span></span><span></span><span></span>';
+  const label = document.createElement('div');
+  label.className = 'np-label';
+  label.textContent = 'NOW PLAYING';
+  head.append(eq, label);
+  const title = document.createElement('div');
+  title.className = 'np-title';
+  title.textContent = track.title;
+  const artist = document.createElement('div');
+  artist.className = 'np-artist';
+  artist.textContent = track.artist;
+  nowPlayingEl.append(head, title, artist);
+
+  nowPlayingEl.classList.add('show');
+  clearTimeout(nowPlayingHideTimer);
+  nowPlayingHideTimer = setTimeout(() => nowPlayingEl.classList.remove('show'), NOW_PLAYING_LINGER);
+}
+
 // Background music — browsers block autoplay until a real user gesture, so
 // this starts on the player's first keypress or click rather than on load.
-const music = createMusic();
+const music = createMusic({ onTrack: showNowPlaying });
 
 // Registered before Game is constructed so a startup throw can't strand the
 // title screen on forever — the caption still fades out on its own timer
@@ -293,6 +324,9 @@ muteBtn.classList.toggle('muted', music.muted);
 muteBtn.addEventListener('click', () => {
   const muted = music.toggleMute();
   muteBtn.classList.toggle('muted', muted);
+  // Unmuting is a natural "wait, what is this?" moment — flash the card
+  // back up for the track that's currently going.
+  if (!muted) showNowPlaying(music.nowPlaying);
 });
 // Mobile browsers are picky about exactly which gesture type counts as
 // "real" user activation for unlocking audio, and (confirmed on a real

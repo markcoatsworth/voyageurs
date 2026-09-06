@@ -4,25 +4,31 @@
 // "the run has begun" anyway (see the immediate-launch design in game.js).
 //
 // Plays as a shuffled playlist that loops forever, one track after another
-// (not one track on repeat) — to add a song, run its source through
+// (not one track on repeat). To add a song: run its source through
 // scripts/normalize-audio.mjs (matches every track to one loudness so the
-// shuffle doesn't jump between them) and add the resulting URL here.
+// shuffle doesn't jump between them), then add an entry here with its
+// title and artist — those are shown in the "now playing" card (main.js),
+// so they're player-facing text, not just filenames.
+//
+// These are early-20th-century Québécois and Acadian fiddle recordings,
+// mostly 78rpm transfers from the Internet Archive and Library and
+// Archives Canada; titles keep their original French.
 const PLAYLIST = [
-  '/audio/grande-gigue-simple.mp3',
-  '/audio/reel-du-pendu.mp3',
-  '/audio/reel-des-laurentides.mp3',
-  '/audio/reel-des-montagnes.mp3',
-  '/audio/valse-des-laboureurs.mp3',
-  '/audio/le-violon-en-discorde.mp3',
-  '/audio/reel-des-forets.mp3',
-  '/audio/reel-canadienne.mp3',
-  '/audio/gigue-du-poteau-blanc.mp3',
-  '/audio/quadrille-acadien.mp3',
-  '/audio/quadrille-francais.mp3',
-  '/audio/reel-du-diable.mp3',
-  '/audio/reel-du-terreur.mp3',
-  '/audio/avec-les-ruine-babine.mp3',
-  '/audio/les-batteux.mp3',
+  { src: '/audio/grande-gigue-simple.mp3', title: 'Grande Gigue Simple', artist: 'Isidore Soucy' },
+  { src: '/audio/reel-du-pendu.mp3', title: 'Reel du Pendu', artist: 'Isidore Soucy' },
+  { src: '/audio/reel-des-laurentides.mp3', title: 'Reel des Laurentides', artist: 'Tommy Duchesne' },
+  { src: '/audio/reel-des-montagnes.mp3', title: 'Reel des Montagnes', artist: 'Tommy Duchesne' },
+  { src: '/audio/valse-des-laboureurs.mp3', title: 'Valse des Laboureurs', artist: 'Tommy Duchesne' },
+  { src: '/audio/le-violon-en-discorde.mp3', title: 'Le Violon en Discorde', artist: 'Jean Carignan' },
+  { src: '/audio/reel-des-forets.mp3', title: 'Reel des Forêts', artist: 'Tommy Duchesne' },
+  { src: '/audio/reel-canadienne.mp3', title: 'Reel Canadienne', artist: 'Jean Carignan' },
+  { src: '/audio/gigue-du-poteau-blanc.mp3', title: 'Gigue du Poteau Blanc', artist: 'Joseph Allard' },
+  { src: '/audio/quadrille-acadien.mp3', title: 'Quadrille Acadien', artist: 'Joseph Allard' },
+  { src: '/audio/quadrille-francais.mp3', title: 'Quadrille Français', artist: 'Joseph Allard' },
+  { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' },
+  { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du Terreur', artist: 'Jos Bouchard' },
+  { src: '/audio/avec-les-ruine-babine.mp3', title: 'Avec les Ruine-Babine', artist: 'Louis « Pitou » Boudreault' },
+  { src: '/audio/les-batteux.mp3', title: 'Les Batteux', artist: 'Louis « Pitou » Boudreault' },
 ];
 
 // Not part of the shuffle above — this only ever plays on cue, the moment
@@ -30,16 +36,14 @@ const PLAYLIST = [
 // track happens to be playing. Once it ends (or the fight resolves first —
 // see endBossTrack()), the normal shuffle picks back up right where it
 // left off, not from scratch.
-const BOSS_TRACK = '/audio/rule-britannia.mp3';
+const BOSS_TRACK = { src: '/audio/rule-britannia.mp3', title: 'Rule, Britannia!', artist: 'Thomas Arne' };
 
 const DEFAULT_VOLUME = 0.35;
 
-// Console-only now — this used to also show on-screen (#audio-debug),
-// surfacing exactly what the browser said was happening since this
-// couldn't be tested on real device hardware from here. The on-screen
-// overlay itself was distracting during normal play, so it's gone, but a
-// real mobile playback issue (a startup delay) is still open, so the
-// console trail stays for whoever's chasing that down next.
+// Console-only diagnostics — playback state, fetch timing, play() rejections.
+// Kept from earlier on-device troubleshooting of a mobile startup delay.
+// (Separate from the player-facing "now playing" card, which shows just the
+// title and artist of the current track — see onTrack / emitTrack below.)
 function debug(text) {
   console.log('[music]', text);
 }
@@ -86,7 +90,7 @@ function shuffled(list) {
   return arr;
 }
 
-export function createMusic() {
+export function createMusic({ onTrack } = {}) {
   const audio = new Audio();
   audio.volume = DEFAULT_VOLUME;
   audio.preload = 'auto';
@@ -108,10 +112,24 @@ export function createMusic() {
   // comment for why this, not audio.src/preload, is what actually gets a
   // real head start on mobile. Fire-and-forget: playCurrent() awaits
   // whichever of these promises it needs, whenever it needs it.
-  for (const track of PLAYLIST) prefetch(track);
+  for (const track of PLAYLIST) prefetch(track.src);
   // The boss track needs the exact same head start — it has to be ready to
   // cut in the instant the frigate is spotted, not start fetching then.
-  prefetch(BOSS_TRACK);
+  prefetch(BOSS_TRACK.src);
+
+  // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
+  // now, or null before the first successful play(). onTrack — passed by
+  // main.js — fires with it every time a new track starts, driving the
+  // "now playing" card.
+  let current = null;
+  function emitTrack(track) {
+    current = track;
+    try {
+      onTrack?.(track);
+    } catch (e) {
+      debug(`onTrack handler threw: ${e.message}`);
+    }
+  }
 
   // True while BOSS_TRACK is loaded instead of the shuffle — read by the
   // 'ended' handler (resume the shuffle in place, don't advance it, once
@@ -130,7 +148,8 @@ export function createMusic() {
   async function playCurrent() {
     const requestedIndex = index;
     const requestedGeneration = generation;
-    const src = await prefetch(order[requestedIndex]);
+    const track = order[requestedIndex];
+    const src = await prefetch(track.src);
     // Either index moved on (a later 'ended' fired while this fetch was
     // still in flight — the newer playCurrent() already has its own src
     // assignment) or stop() was called mid-fetch — either way, this call
@@ -140,7 +159,8 @@ export function createMusic() {
     audio.play().then(
       () => {
         started = true;
-        debug(`playing ${order[index].split('/').pop()}`);
+        debug(`playing ${track.title}`);
+        emitTrack(track);
       },
       (e) => {
         // Benign and expected whenever stop()'s pause() lands while a
@@ -158,17 +178,18 @@ export function createMusic() {
   // instead of wherever the shuffle currently points — see BOSS_TRACK's own
   // comment. Bumps generation so any in-flight normal playCurrent() fetch
   // (or a previous playSpecial()) can't land after this one and undo it.
-  async function playSpecial(url) {
+  async function playSpecial(track) {
     special = true;
     generation++;
     const requestedGeneration = generation;
-    const src = await prefetch(url);
+    const src = await prefetch(track.src);
     if (generation !== requestedGeneration) return;
     audio.src = src;
     audio.play().then(
       () => {
         started = true;
-        debug(`playing special track ${url.split('/').pop()}`);
+        debug(`playing special track ${track.title}`);
+        emitTrack(track);
       },
       (e) => {
         if (e.name === 'AbortError') return;
@@ -207,6 +228,12 @@ export function createMusic() {
     get muted() {
       return muted;
     },
+    // The track playing right now ({ src, title, artist }), or null before
+    // playback has started — main.js reads this to re-show the card on a
+    // manual cue (e.g. unmuting).
+    get nowPlaying() {
+      return current;
+    },
     // Real bug this fixes: `started` used to be set true *before* knowing
     // whether play() actually succeeded, right when start() was first
     // called — so the very first gesture on the page (which might not even
@@ -234,7 +261,12 @@ export function createMusic() {
     resume() {
       if (!started) return;
       audio.play().then(
-        () => debug(`resumed ${order[index].split('/').pop()}`),
+        () => {
+          debug(`resumed ${order[index].title}`);
+          // Re-show the card after a capsize+restart, as a small "here's
+          // where you were" cue when the world snaps back.
+          emitTrack(order[index]);
+        },
         (e) => {
           if (e.name === 'AbortError') return;
           debug(`resume play() rejected: ${e.name}: ${e.message}`);

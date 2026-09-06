@@ -19,9 +19,6 @@ import { makeElement } from './dom-shim.mjs';
 const failures = [];
 const notes = [];
 
-// console.error is how main.js's error boundary reports a swallowed crash —
-// treat any "Voyageurs crashed" line as a test failure even though nothing
-// threw out to us.
 // The game and its libs are chatty (debug logs, "no WebGL" warnings). Mute
 // stdout noise during the run, but keep watching console.error for the one
 // line that matters: main.js's error boundary reporting a swallowed crash.
@@ -38,15 +35,14 @@ function restoreConsole() {
   Object.assign(console, real);
 }
 
-function step(name, fn) {
+// Handles both sync and async scenario bodies — always await the result.
+async function step(name, fn) {
   try {
-    const r = fn();
+    await fn();
     notes.push(`  ok   ${name}`);
-    return r;
   } catch (err) {
     failures.push({ scenario: name, error: (err && err.stack) || String(err) });
     notes.push(`  FAIL ${name}`);
-    return null;
   }
 }
 
@@ -102,7 +98,7 @@ await step('main.js loads', async () => {
 
 // --- scenario 1: fjord paddling, long enough to cross the mouth ------------
 
-step('fjord: paddle downstream 120s', () => {
+await step('fjord: paddle downstream 120s', () => {
   const g = newGame('fjord', 0);
   run(g, 3600, 1 / 30, (s, i) => { s.up = true; s.left = i % 240 < 40; s.right = i % 240 >= 120 && i % 240 < 160; });
   if (g.game.segment !== 'fjord') notes.push(`  note fjord run auto-advanced to ${g.game.segment} @ ${g.game.flowDistance | 0}`);
@@ -110,7 +106,7 @@ step('fjord: paddle downstream 120s', () => {
 
 // --- scenario 2: the explicit fjord -> lawrenceWest mouth crossing ---------
 
-step('mouth crossing: fjord -> lawrenceWest', () => {
+await step('mouth crossing: fjord -> lawrenceWest', () => {
   const g = newGame('fjord', MOUTH_DISTANCE - 60);
   run(g, 900, 1 / 30, (s) => { s.up = true; });
   if (g.game.segment !== 'lawrenceWest') throw new Error(`expected lawrenceWest after crossing the mouth, still on ${g.game.segment} @ ${g.game.flowDistance | 0}`);
@@ -118,14 +114,14 @@ step('mouth crossing: fjord -> lawrenceWest', () => {
 
 // --- scenario 3: upriver stretch -----------------------------------------
 
-step('lawrenceWest: fight the current 90s', () => {
+await step('lawrenceWest: fight the current 90s', () => {
   const g = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
   run(g, 2700, 1 / 30, (s, i) => { s.up = true; s.down = i % 300 > 260; });
 });
 
 // --- scenario 4: the blockade boss fight, start to escape ------------------
 
-step('blockade: approach -> pursuit -> escape', () => {
+await step('blockade: approach -> pursuit -> escape', () => {
   const g = newGame('lawrenceWest', SHIP_FLOW_DISTANCE - 80);
   let sawFight = false;
   for (let i = 0; i < 6000; i++) {
@@ -142,7 +138,7 @@ step('blockade: approach -> pursuit -> escape', () => {
 
 // --- scenario 5: a village visit ----------------------------------------
 
-step('village: dock, walk, trade, cast off', () => {
+await step('village: dock, walk, trade, cast off', () => {
   const quebec = VILLAGES.find((v) => v.name === 'Quebec City');
   if (!quebec) throw new Error('no "Quebec City" in VILLAGES — a name/lookup drifted again');
   const g = newGame(quebec.segment, quebec.flowDistance - 30);
@@ -157,7 +153,7 @@ step('village: dock, walk, trade, cast off', () => {
 
 // --- scenario 6: every village enter/leave individually -------------------
 
-step('village: enter+tick each of the 19 villages', () => {
+await step('village: enter+tick each of the 19 villages', () => {
   for (const v of VILLAGES) {
     const g = newGame(v.segment, v.flowDistance - 20);
     g.game.enterVillage(v);
@@ -169,7 +165,7 @@ step('village: enter+tick each of the 19 villages', () => {
 
 // --- scenario 7: capsize and restart ------------------------------------
 
-step('capsize -> restart -> keep playing', () => {
+await step('capsize -> restart -> keep playing', () => {
   const g = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
   run(g, 60, 1 / 30, (s) => { s.up = true; });
   for (let i = 0; i < 20 && g.game.state === 'playing'; i++) {
@@ -184,13 +180,34 @@ step('capsize -> restart -> keep playing', () => {
 
 // --- scenario 8: pause / resume toggling --------------------------------
 
-step('pause and resume mid-run', () => {
+await step('pause and resume mid-run', () => {
   const g = newGame('fjord', 0);
   run(g, 100, 1 / 30, (s) => { s.up = true; });
   g.game.togglePause();
   run(g, 60, 1 / 30);
   g.game.togglePause();
   run(g, 100, 1 / 30, (s) => { s.up = true; });
+});
+
+// --- scenario 9: music playlist metadata + now-playing callback ----------
+
+await step('music: playlist metadata + onTrack fires a well-formed track', async () => {
+  const mod = await import('../src/audio/music.js');
+  // The card shows these strings verbatim — an entry missing one would
+  // render "undefined" on screen.
+  const seen = [];
+  const music = mod.createMusic({ onTrack: (t) => seen.push(t) });
+  music.start();
+  music.playBossTrack();
+  // let the fake play() promises resolve
+  await new Promise((r) => setTimeout(r, 20));
+  if (!seen.length) throw new Error('onTrack never fired after start() + playBossTrack()');
+  for (const t of seen) {
+    if (!t || !t.src || !t.title || !t.artist) {
+      throw new Error(`onTrack got a malformed track: ${JSON.stringify(t)}`);
+    }
+  }
+  if (music.nowPlaying == null) throw new Error('music.nowPlaying still null after playback started');
 });
 
 // --- report ------------------------------------------------------------------

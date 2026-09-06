@@ -198,6 +198,113 @@ html, body {
   opacity: 1;
 }
 
+/* "Now playing" card, bottom-left. Same visual language as the milestone
+   banner and buttons — dark panel, thick amber frame, hard offset shadow —
+   so it reads as part of the same HUD, not a browser chrome element. Slides
+   in from off the left edge when a track starts; main.js toggles .show and
+   pulls it back off after a few seconds. */
+#now-playing {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  max-width: 260px;
+  padding: 11px 13px 12px;
+  background: rgba(10, 14, 20, 0.85);
+  border: 3px solid #e0a458;
+  box-shadow: 4px 4px 0 #000;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(calc(-100% - 24px));
+  transition: transform 0.55s cubic-bezier(0.16, 0.9, 0.3, 1), opacity 0.4s ease;
+}
+
+#now-playing.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  #now-playing {
+    max-width: 190px;
+    padding: 8px 10px 9px;
+  }
+}
+
+.np-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.np-label {
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: #e0a458;
+  text-shadow: 1px 1px 0 #000;
+}
+
+/* Four bars bouncing like a level meter — the flourish that makes this
+   read as "music" at a glance. Staggered negative delays so they're
+   already mid-cycle and out of phase on the first frame. */
+.np-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+  flex: none;
+}
+
+.np-eq span {
+  width: 3px;
+  height: 30%;
+  background: #e0a458;
+  animation: np-eq 0.85s ease-in-out infinite;
+}
+
+.np-eq span:nth-child(2) { animation-delay: -0.55s; }
+.np-eq span:nth-child(3) { animation-delay: -0.20s; }
+.np-eq span:nth-child(4) { animation-delay: -0.75s; }
+
+@keyframes np-eq {
+  0%, 100% { height: 22%; }
+  50% { height: 100%; }
+}
+
+.np-title {
+  font-size: 10px;
+  line-height: 1.55;
+  color: #f4ead2;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.np-artist {
+  margin-top: 5px;
+  font-size: 8px;
+  line-height: 1.5;
+  color: #e0a458;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.np-artist::before {
+  content: '\266A  '; /* ♪ */
+}
+
+@media (max-width: 480px) {
+  .np-title { font-size: 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #now-playing {
+    transform: none;
+    transition: opacity 0.3s ease;
+  }
+  .np-eq span {
+    animation: none;
+    height: 65%;
+  }
+}
+
 .screen.intro {
   pointer-events: none;
   transition: opacity 0.8s ease;
