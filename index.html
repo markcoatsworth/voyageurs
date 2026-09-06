@@ -68,6 +68,168 @@
     </div>
   </div>
 
+  <!-- On-screen error reporting. Defined inline + as a classic (non-module)
+       script so it is guaranteed to be running before main.js is even
+       fetched — a throw during module *load* (a bad import, a stale
+       reference at module top level) happens before any of main.js's own
+       error handling can run, and would otherwise just leave the title
+       screen frozen with the error only in the F12 console.
+
+       window.showVoyageursError(summary, detail, opts) draws the panel;
+       main.js calls the same function for runtime crashes so there's one
+       consistent error UI. -->
+  <script>
+    (function () {
+      var shown = false;
+
+      function showVoyageursError(summary, detail, opts) {
+        opts = opts || {};
+        // First error wins the panel; later ones just bump a counter so a
+        // cascade doesn't hide the root cause.
+        if (shown) {
+          var more = document.getElementById('voyageurs-error-more');
+          if (more) {
+            var n = (parseInt(more.getAttribute('data-n'), 10) || 0) + 1;
+            more.setAttribute('data-n', n);
+            more.textContent = '+ ' + n + ' more error' + (n === 1 ? '' : 's') + ' after this one (see the F12 console)';
+            more.style.display = 'block';
+          }
+          return;
+        }
+        shown = true;
+        window.__voyageursErrorShown = true;
+
+        var detailText = String(detail == null ? summary : detail);
+        var whenLine = opts.when
+          ? 'This happened while ' + opts.when + '.'
+          : 'Something went wrong.';
+        var lostLine = opts.fatal === false
+          ? 'The game is still running, but may not behave correctly — reloading is safest.'
+          : 'This run has stopped. Reload to start again.';
+
+        var root = document.createElement('div');
+        root.id = 'voyageurs-error';
+        root.setAttribute('role', 'alertdialog');
+        root.style.cssText =
+          'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;' +
+          'justify-content:center;padding:20px;box-sizing:border-box;' +
+          'background:rgba(10,8,16,0.86);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+
+        var card = document.createElement('div');
+        card.style.cssText =
+          'width:100%;max-width:620px;max-height:88vh;overflow:auto;background:#f3e6c8;' +
+          'color:#2b2213;border:3px solid #7a1d1d;border-radius:8px;' +
+          'box-shadow:0 18px 60px rgba(0,0,0,0.55)';
+
+        var bar = document.createElement('div');
+        bar.style.cssText =
+          'background:#7a1d1d;color:#f3e6c8;padding:12px 18px;font-size:15px;font-weight:700;' +
+          'letter-spacing:0.02em;display:flex;align-items:center;gap:10px';
+        bar.textContent = '⚠  Voyageurs hit an error';
+        card.appendChild(bar);
+
+        var body = document.createElement('div');
+        body.style.cssText = 'padding:16px 18px 18px';
+
+        body.appendChild(mk('p', 'font-size:13px;margin:0 0 4px;font-weight:700', summary || 'Unexpected error'));
+        body.appendChild(mk('p', 'font-size:12px;margin:0 0 2px;color:#5a4a2a', whenLine));
+        body.appendChild(mk('p', 'font-size:12px;margin:0 0 12px;color:#5a4a2a', lostLine));
+
+        var pre = mk('pre', 'margin:0 0 12px;padding:10px 12px;background:#2b2213;color:#f0b8a0;' +
+          'font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-word;' +
+          'border-radius:5px;max-height:34vh;overflow:auto');
+        pre.textContent = detailText;
+        body.appendChild(pre);
+
+        var more = mk('p', 'font-size:11px;margin:0 0 12px;color:#7a1d1d;font-weight:700;display:none', '');
+        more.id = 'voyageurs-error-more';
+        more.setAttribute('data-n', '0');
+        body.appendChild(more);
+
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+
+        row.appendChild(btn('Reload game', '#7a1d1d', '#f3e6c8', function () {
+          window.location.reload();
+        }));
+        row.appendChild(btn('Copy error details', '#d8c49a', '#2b2213', function (b) {
+          var payload =
+            'Voyageurs error\n' + whenLine + '\n' + (summary || '') + '\n\n' + detailText +
+            '\n\nUA: ' + navigator.userAgent + '\nURL: ' + window.location.href;
+          copyText(payload, function (ok) {
+            b.textContent = ok ? 'Copied ✓' : 'Press Ctrl+C to copy';
+            if (!ok) selectNode(pre);
+            setTimeout(function () { b.textContent = 'Copy error details'; }, 2200);
+          });
+        }));
+
+        body.appendChild(row);
+        body.appendChild(mk('p', 'font-size:11px;margin:12px 0 0;color:#5a4a2a',
+          'If this keeps happening, copy the details above and send them along — that’s enough to pin down the cause.'));
+
+        card.appendChild(body);
+        root.appendChild(card);
+        (document.body || document.documentElement).appendChild(root);
+
+        function mk(tag, css, text) {
+          var el = document.createElement(tag);
+          el.style.cssText = css;
+          if (text != null) el.textContent = text;
+          return el;
+        }
+        function btn(label, bg, fg, onClick) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = label;
+          b.style.cssText =
+            'font:inherit;font-size:12px;font-weight:700;padding:9px 14px;border:0;border-radius:5px;' +
+            'cursor:pointer;background:' + bg + ';color:' + fg;
+          b.addEventListener('click', function () { onClick(b); });
+          return b;
+        }
+      }
+
+      function copyText(text, done) {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+            return;
+          }
+        } catch (e) { /* fall through */ }
+        done(false);
+      }
+      function selectNode(node) {
+        try {
+          var r = document.createRange();
+          r.selectNodeContents(node);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(r);
+        } catch (e) { /* ignore */ }
+      }
+
+      window.showVoyageursError = showVoyageursError;
+
+      function phase() {
+        return window.__voyageursReady ? 'running the game' : 'loading the game';
+      }
+      window.addEventListener('error', function (e) {
+        var where = e.filename ? '\n    at ' + e.filename + ':' + e.lineno + ':' + e.colno : '';
+        showVoyageursError(
+          e.message || 'Script error',
+          ((e.error && e.error.stack) || e.message || String(e)) + where,
+          { when: phase(), fatal: !window.__voyageursReady }
+        );
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        showVoyageursError(
+          'Unhandled promise rejection',
+          (e.reason && e.reason.stack) || String(e.reason),
+          { when: phase(), fatal: !window.__voyageursReady }
+        );
+      });
+    })();
+  </script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

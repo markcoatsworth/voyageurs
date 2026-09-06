@@ -236,12 +236,38 @@ const ui = {
   minimap,
 };
 
+// A change that breaks one system shouldn't leave the whole page frozen on
+// the title with no clue why. This routes the error to the on-screen panel
+// defined in index.html (window.showVoyageursError) — same UI whether the
+// failure is at module load, in the Game constructor, or mid-frame. See
+// loop() below for the per-frame guard and test/smoke.mjs for the test that
+// catches these before they ship.
+function showFatalError(err, context, { fatal = true } = {}) {
+  console.error(`Voyageurs crashed while ${context}:`, err);
+  const detail = (err && (err.stack || err.message)) || String(err);
+  const summary = (err && err.message) || String(err);
+  if (typeof window.showVoyageursError === 'function') {
+    window.showVoyageursError(summary, detail, { when: context, fatal });
+  } else {
+    // Panel helper somehow isn't there (index.html edited?) — last resort.
+    window.__voyageursErrorShown = true;
+    const box = document.createElement('div');
+    box.style.cssText =
+      'position:fixed;inset:0;z-index:2147483647;background:rgba(12,10,20,0.94);' +
+      'color:#f4d79a;font:12px/1.5 monospace;padding:24px;overflow:auto';
+    box.textContent = `Voyageurs error while ${context}:\n\n${detail}`;
+    document.body.appendChild(box);
+  }
+}
+
 // Background music — browsers block autoplay until a real user gesture, so
 // this starts on the player's first keypress or click rather than on load.
 const music = createMusic();
 
-const game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance, startSegment });
-
+// Registered before Game is constructed so a startup throw can't strand the
+// title screen on forever — the caption still fades out on its own timer
+// regardless of whether the game behind it came up.
+//
 // The canoe launches immediately — this intro caption is just a fading
 // overlay, not a gate, so it disappears on its own after a few seconds.
 setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
@@ -251,6 +277,16 @@ setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
 // an invisible element to keep existing at all once its own fade
 // transition (0.8s) has actually finished.
 setTimeout(() => ui.titleScreen.classList.add('hidden'), 4500 + 900);
+
+let game = null;
+try {
+  game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance, startSegment });
+  // Lets the index.html error handler word later crashes as "running the
+  // game" rather than "loading the game".
+  window.__voyageursReady = true;
+} catch (err) {
+  showFatalError(err, 'starting up');
+}
 
 const muteBtn = document.getElementById('mute-btn');
 muteBtn.classList.toggle('muted', music.muted);
@@ -272,16 +308,17 @@ for (const evt of ['pointerdown', 'touchend', 'keydown', 'click']) {
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
     e.preventDefault();
-    game.togglePause();
+    game?.togglePause();
   }
 });
 
 // Escape has no touch equivalent, hence a visible button — shown for every
 // input type, not just touch, since a tappable/clickable pause control is
 // a reasonable thing to want on desktop too.
-document.getElementById('pause-btn').addEventListener('click', () => game.togglePause());
+document.getElementById('pause-btn').addEventListener('click', () => game?.togglePause());
 
 let lastTime = performance.now();
+let loopBroken = false;
 function loop(now) {
   // rAF's timestamp can occasionally predate the performance.now() call
   // above (most noticeably on the very first frame), so clamp dt to
@@ -289,7 +326,17 @@ function loop(now) {
   // backwards for a frame.
   const dt = Math.max(0, Math.min((now - lastTime) / 1000, 1 / 20));
   lastTime = now;
-  game.update(dt);
+  if (game && !loopBroken) {
+    try {
+      game.update(dt);
+    } catch (err) {
+      // Stop calling update rather than re-throwing the same error 60x a
+      // second — the last frame it managed to draw stays on screen under
+      // the error overlay.
+      loopBroken = true;
+      showFatalError(err, 'running the game');
+    }
+  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
