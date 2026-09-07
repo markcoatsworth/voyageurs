@@ -139,51 +139,61 @@ await step('blockade: approach -> pursuit -> escape', () => {
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---
 
-await step('chasse-galerie: fly the Ottawa, no landing, glide down', () => {
-  // Same spot ?start=chasse-galerie lands on: 10 units short of the trigger.
+await step('chasse-galerie: fly the storm, no landing, glide down', () => {
+  // A simple autopilot: steer toward the clear line through the hazards just
+  // ahead (chasseGalerie.clearOffsetAhead), fighting the storm wind. If a
+  // basic pilot like this can get through, the flight is hard but fair.
+  function flyThrough(game, input) {
+    input.state.up = true;
+    const want = game.chasseGalerie.isActive()
+      ? game.chasseGalerie.clearOffsetAhead(game.flowDistance)
+      : 0;
+    const err = game.lateralOffset - want;
+    input.state.left = err > 0.4;
+    input.state.right = err < -0.4;
+  }
+
   const g = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
   let sawFlight = false;
   let maxAltitude = 0;
   let landedMidFlight = false;
-  let sawGameOver = false;
-  // Hold a straight line down the middle of the channel — every steeple
-  // stands well over on a bank, so the centre lane is always clear.
-  for (let i = 0; i < 9000; i++) {
-    g.input.state.up = true;
+  let completed = false;
+  for (let i = 0; i < 12000 && !completed; i++) {
+    flyThrough(g.game, g.input);
     g.game.update(1 / 30);
-    const flying = g.game.chasseGalerie.isActive();
-    if (flying) {
+    if (g.game.chasseGalerie.isActive()) {
       sawFlight = true;
       maxAltitude = Math.max(maxAltitude, g.game.chasseGalerie.getAltitude());
       if (g.game.mode === 'village') landedMidFlight = true;
     }
-    if (g.game.state === 'gameover') { sawGameOver = true; g.game.start(); }
+    // Flew the whole storm and came back down onto the water past the towns.
+    if (sawFlight && !g.game.chasseGalerie.isActive()
+      && g.game.flowDistance > CHASSE_GALERIE_FLOW_DISTANCE + 700) {
+      completed = true;
+    }
+    if (g.game.state === 'gameover') g.game.start();
   }
   if (!sawFlight) throw new Error('chasse-galerie never took flight from the ?start= drop point');
   if (maxAltitude < 4) throw new Error(`canoe never really left the water (max altitude ${maxAltitude.toFixed(1)})`);
   if (landedMidFlight) throw new Error('canoe docked at a riverbank town mid-flight — there should be no landing');
-  if (sawGameOver) throw new Error('flying a clear centre line still hit a steeple — no safe lane through a town');
-  if (g.game.chasseGalerie.isActive()) throw new Error('flight never ended after the whole Ottawa stretch');
+  if (!completed) throw new Error('a centre-hold pilot could never get through the storm — too hard / unfair');
   if (g.game.chasseGalerie.getAltitude() > 0.5) throw new Error('canoe never glided back down onto the water');
-  if (g.game.flowDistance <= CHASSE_GALERIE_FLOW_DISTANCE + 400) {
-    throw new Error(`barely moved up the Ottawa (@ ${g.game.flowDistance | 0})`);
-  }
 
-  // ...but flying straight into a town's own bank clips its steeples.
-  const h = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
-  let sawSteepleDamage = false;
-  let prevHealth = 100;
-  for (let i = 0; i < 1600 && !sawSteepleDamage; i++) {
-    h.input.state.up = true;
-    h.input.state.right = true; // hug the right bank — Île-Perrot's steeples
-    h.game.update(1 / 30);
-    if (h.game.chasseGalerie.isActive() && h.game.health < prevHealth) sawSteepleDamage = true;
-    prevHealth = h.game.health;
-    if (h.game.state === 'gameover') break;
+  // It's genuinely a storm now: flying a dead-straight line (no steering at
+  // all) into the wind and hazards does take damage — the flight is not a
+  // free ride down the middle.
+  const s = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
+  let straightLineDamage = false;
+  for (let i = 0; i < 2400 && !straightLineDamage; i++) {
+    s.input.state.up = true; // no steering
+    const hpBefore = s.game.health;
+    s.game.update(1 / 30);
+    if (s.game.chasseGalerie.isActive() && s.game.health < hpBefore) straightLineDamage = true;
+    if (s.game.state === 'gameover') break;
   }
-  if (!sawSteepleDamage) throw new Error('hugging a town bank mid-flight never hit a steeple');
+  if (!straightLineDamage) throw new Error('flying a straight line through the storm took no damage — too easy');
 
-  notes.push(`  note chasse-galerie ran; max altitude ${maxAltitude.toFixed(1)}, ended @ ${g.game.flowDistance | 0}`);
+  notes.push(`  note chasse-galerie ran; max altitude ${maxAltitude.toFixed(1)}, completed the storm`);
 });
 
 // --- scenario 4c: casting off from Montreal doesn't loop back in ----------

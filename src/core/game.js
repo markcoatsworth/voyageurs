@@ -7,7 +7,7 @@ import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom } from '
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import { createBlockade } from '../bossfights/blockade.js';
-import { createChasseGalerie } from '../bossfights/chasseGalerie.js';
+import { createChasseGalerie, lightningFlash } from '../bossfights/chasseGalerie.js';
 import { isTouchPrimary } from './touchControls.js';
 
 // A D-pad's discrete taps are less precise than a keyboard's held keys, and
@@ -94,7 +94,15 @@ const SHIP_HULL_PENALTY_SPEED = 6;
 // A church steeple clipped mid-flight in the Chasse-galerie — harder than a
 // rock (there's no armour against breaking the devil's pact) but survivable
 // so a single mistake isn't an instant loss over the long flight.
-const STEEPLE_DAMAGE = 34;
+const STEEPLE_DAMAGE = 30;
+// A storm cloud is softer than a stone spire — less damage, but it also
+// buffets the canoe hard sideways (see the flight branch in update()),
+// which near a bank is its own problem.
+const CLOUD_DAMAGE = 10;
+const CLOUD_SHOVE = 5; // lateral velocity kick, world units/sec
+// Flying the Chasse-galerie the canoe rockets along faster than any paddled
+// stretch — less time to read each steeple and thread each pinch.
+const FLIGHT_CRUISE_SPEED = 18;
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
@@ -432,6 +440,9 @@ export class Game {
     } else if (entry.type === 'steeple') {
       this.takeDamage(STEEPLE_DAMAGE);
       this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'cloud') {
+      this.takeDamage(CLOUD_DAMAGE);
+      this.invulnTimer = INVULN_TIME;
     } else {
       this.speed = Math.max(MIN_SPEED - 1, this.speed - LOG_PENALTY_SPEED);
       this.takeDamage(LOG_DAMAGE);
@@ -533,11 +544,13 @@ export class Game {
     const rapids = rapidsStrength(this.flowDistance);
     const rapidsDirection = this.segment === 'lawrenceWest' ? -1 : 1;
 
-    // Chasse-galerie: flying canoe ignores river current/rapids
+    // Chasse-galerie: the flying canoe ignores the river current and rapids,
+    // and rockets along at a fast fixed cruise (paddle harder to push past
+    // it, never slower) — see FLIGHT_CRUISE_SPEED.
+    const flying = this.chasseGalerie.isActive();
     let effectiveSpeed;
-    if (this.chasseGalerie.isActive()) {
-      // Constant flying speed - no current, just player control
-      effectiveSpeed = this.speed;
+    if (flying) {
+      effectiveSpeed = Math.max(this.speed, FLIGHT_CRUISE_SPEED);
     } else {
       effectiveSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
     }
@@ -585,6 +598,13 @@ export class Game {
       this.lateralVX += this.blockadeCrossCurrent * dt;
     }
 
+    // Chasse-galerie storm crosswind: shoves the canoe toward the banks the
+    // whole flight, so holding a centre line is an active fight. Same "real
+    // force, applied before the clamp" treatment as the blockade current.
+    if (flying) {
+      this.lateralVX += this.chasseGalerie.windAccel(this.flowDistance, this.time) * dt;
+    }
+
     this.lateralVX = clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
 
     // Flying the Chasse-galerie the canoe ranges out over the banks (that's
@@ -592,7 +612,6 @@ export class Game {
     // lateralMargin()), so it opens on take-off and closes on the glide
     // down, and running into the bound up there is just the edge of the sky,
     // not "ran aground" — it costs no health.
-    const flying = this.chasseGalerie.isActive();
     const half = widthAt(this.flowDistance) / 2 - EDGE_MARGIN
       + (flying ? this.chasseGalerie.lateralMargin() : 0);
     const proposed = this.lateralOffset + this.lateralVX * dt;
@@ -752,11 +771,22 @@ export class Game {
     if (this.segment === 'lawrenceWest') {
       const flight = this.chasseGalerie.update(this.flowDistance, this.canoeWorldX, dt);
       if (flight.hit) {
-        this.handleHit({ type: 'steeple' });
+        if (flight.hitKind === 'cloud') {
+          // One sideways kick per cloud (gated the same as the damage, via
+          // invulnTimer) — thrown toward whichever bank you're already
+          // nearer, so a cloud out near the edge is real trouble.
+          if (this.invulnTimer <= 0) {
+            const dir = this.lateralOffset >= 0 ? 1 : -1;
+            this.lateralVX = clamp(this.lateralVX + dir * CLOUD_SHOVE, -STEER_MAX, STEER_MAX);
+          }
+          this.handleHit({ type: 'cloud' });
+        } else {
+          this.handleHit({ type: 'steeple' });
+        }
       }
       // Show banner when flight starts
       if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
-        this.showBanner('LA CHASSE-GALERIE — Dodge the Steeples!');
+        this.showBanner('LA CHASSE-GALERIE — ride out the storm!');
         this._chasseGalerieBannerShown = true;
       }
     }
@@ -782,11 +812,13 @@ export class Game {
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Sky gradient when flying
+    // Night-storm sky when flying — deep indigo overhead down to a murky
+    // blue-grey at the horizon, much darker than the daytime river.
     if (isFlying) {
       const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-      gradient.addColorStop(0, '#4a5f8f');
-      gradient.addColorStop(1, '#8ab6e8');
+      gradient.addColorStop(0, '#1a1c33');
+      gradient.addColorStop(0.55, '#2c3350');
+      gradient.addColorStop(1, '#454f66');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
@@ -800,11 +832,13 @@ export class Game {
       drawWaterFallback(ctx, this.flowDistance, cameraWorldX);
     }
 
-    // Fade terrain when flying (makes water look distant)
+    // Push the ground into gloom when flying — a dim, desaturated wash so
+    // the land below reads as a dark countryside seen at night, not the
+    // daytime river.
     if (isFlying) {
       ctx.save();
-      ctx.globalAlpha = 0.4;
-      ctx.fillStyle = '#8ab6e8';
+      ctx.globalAlpha = 0.62;
+      ctx.fillStyle = '#20233b';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
     }
@@ -814,8 +848,8 @@ export class Game {
     this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     // Same lawrenceWest-only guard as the update() call above.
     if (this.segment === 'lawrenceWest') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
-    // Draw Chasse-galerie steeples
-    if (this.segment === 'lawrenceWest') this.chasseGalerie.drawSteeples(ctx, this.flowDistance, cameraWorldX);
+    // Draw Chasse-galerie steeples, storm clouds and their spires
+    if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX, this.time);
 
     if (this.canoeVisible !== false) {
       const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;
@@ -896,6 +930,29 @@ export class Game {
       ctx.restore();
     } else if (this.segment === 'lawrenceWest' && this.blockadePct !== null) {
       console.log('[RENDER] Canoe NOT visible! canoeVisible:', this.canoeVisible);
+    }
+
+    // Storm mood, over everything: a dark vignette closing in the edges so
+    // steeples loom out of the corners with less warning, plus the odd
+    // lightning flash lighting the whole sky white for a frame or two.
+    if (isFlying) {
+      const vg = ctx.createRadialGradient(
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.52, CANVAS_HEIGHT * 0.28,
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.52, CANVAS_HEIGHT * 0.82,
+      );
+      vg.addColorStop(0, 'rgba(8,8,20,0)');
+      vg.addColorStop(1, 'rgba(6,6,16,0.62)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      const lf = lightningFlash(this.time);
+      if (lf > 0) {
+        ctx.save();
+        ctx.globalAlpha = lf * 0.5;
+        ctx.fillStyle = '#e8ecff';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.restore();
+      }
     }
   }
 
