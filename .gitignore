@@ -3,3 +3,9 @@ dist/
 .DS_Store
 *.log
 public/audio/src/
+
+# WSL/Windows "downloaded from the internet" marker files — never wanted
+*:Zone.Identifier
+
+# Local design/reference images kept in the repo root, not game assets
+quebec-city-1790.jpg
