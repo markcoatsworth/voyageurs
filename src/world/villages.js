@@ -36,6 +36,13 @@ const QUEBEC_CITY_DOCK_REACH = 32; // ~72% of the full ~44-unit channel width, v
 const QUEBEC_CITY_DOCK_WIDTH_Z = 12; // vs. 2.2 everywhere else
 const QUEBEC_CITY_DOCK_HIT_Z = 7; // vs. 1.3 everywhere else
 
+// Montreal's dock — the great inland port, commercial heart of New France.
+// Even larger than Quebec City's to match its status as the final destination
+// and busiest port on the St. Lawrence. Impossible to miss.
+const MONTREAL_DOCK_REACH = 36; // even bigger than Quebec City
+const MONTREAL_DOCK_WIDTH_Z = 14; // wider along the shore
+const MONTREAL_DOCK_HIT_Z = 8; // generous hit zone
+
 // Buildings sit past the rocky shoreline (terrain.js's shore+bank-rock bands
 // are ~2.2 units deep), each offset slightly along the flow axis (dOffset)
 // and inland from the bank (depth) so they read as a small cluster instead
@@ -283,17 +290,22 @@ export function isNearVillage(d, side) {
 
 function dockReach(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_REACH;
+  if (v.name === 'Montreal') return MONTREAL_DOCK_REACH;
   return DOCK_LENGTH * villageLayout(v.seed).dock.lengthScale;
 }
 
 function dockWidthZ(v) {
-  return v.name === 'Quebec City' ? QUEBEC_CITY_DOCK_WIDTH_Z : DOCK_WIDTH_Z;
+  if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_WIDTH_Z;
+  if (v.name === 'Montreal') return MONTREAL_DOCK_WIDTH_Z;
+  return DOCK_WIDTH_Z;
 }
 
 // Exported so game.js can push the canoe back out past the dock's own
 // (village-specific) trigger zone when casting off.
 export function dockHitZ(v) {
-  return v.name === 'Quebec City' ? QUEBEC_CITY_DOCK_HIT_Z : DOCK_HIT_Z;
+  if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_HIT_Z;
+  if (v.name === 'Montreal') return MONTREAL_DOCK_HIT_Z;
+  return DOCK_HIT_Z;
 }
 
 // Returns the village whose dock the canoe is currently touching, or null.

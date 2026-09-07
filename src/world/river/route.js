@@ -116,8 +116,9 @@ const LAWRENCE_WEST_WAYPOINTS = [
   { name: 'Charlemagne', lat: 45.7167, lon: -73.4833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
   // Final destination — New France's commercial heart and the great inland
   // port. The river continues past Montreal too (ultimately toward the Great
-  // Lakes), but this marks the end of the current journey.
-  { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
+  // Lakes), but this marks the end of the current journey. North shore (side: 1)
+  // like Quebec City — the real city sits on the north bank.
+  { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
 ];
 
 // How far (game-world units) each segment takes to cross, end to end. Real
