@@ -95,9 +95,9 @@ const SHIP_HULL_PENALTY_SPEED = 6;
 // rock (there's no armour against breaking the devil's pact) but survivable
 // so a single mistake isn't an instant loss over the long flight.
 const STEEPLE_DAMAGE = 28;
-// Flying the Chasse-galerie the canoe rockets along faster than any paddled
-// stretch — less time to read each church and slide into the next gap.
-const FLIGHT_CRUISE_SPEED = 17;
+// The Chasse-galerie's steady glide speed — deliberately slower than a hard
+// paddle, so there's time to read each church and slide into the next gap.
+const FLIGHT_CRUISE_SPEED = 12;
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
@@ -536,13 +536,14 @@ export class Game {
     const rapids = rapidsStrength(this.flowDistance);
     const rapidsDirection = this.segment === 'lawrenceWest' ? -1 : 1;
 
-    // Chasse-galerie: the flying canoe ignores the river current and rapids,
-    // and rockets along at a fast fixed cruise (paddle harder to push past
-    // it, never slower) — see FLIGHT_CRUISE_SPEED.
+    // Chasse-galerie: the flying canoe ignores the river current and rapids
+    // and holds a slow, steady glide — paddling only nudges it a little
+    // either way. The flight is about threading the steeples, not speed.
     const flying = this.chasseGalerie.isActive();
     let effectiveSpeed;
     if (flying) {
-      effectiveSpeed = Math.max(this.speed, FLIGHT_CRUISE_SPEED);
+      const paddle = keys.up ? 1.5 : keys.down ? -1.5 : 0;
+      effectiveSpeed = FLIGHT_CRUISE_SPEED + paddle;
     } else {
       effectiveSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
     }
