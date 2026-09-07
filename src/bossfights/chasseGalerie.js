@@ -1,9 +1,9 @@
 // Chasse-galerie — the flying canoe.
 // Past Montreal the canoe lifts off the water and flies the whole Ottawa
 // River gorge up to the voyageurs' winter camp at Gatineau, on a stormy
-// night. There's no landing along the way, and the gorge is tight: big
-// parish churches jut in from alternating banks, each one cutting across
-// most of the channel and leaving only a narrow thread on the far side.
+// night. There's no landing along the way, and the gorge is tight: parish
+// churches jut in from alternating banks, each one cutting across most of
+// the channel and leaving only a narrow thread on the far side.
 // Fly the thread, weave bank to bank as the churches alternate. Clip a
 // steeple (or "swear") and the devil's pact breaks. A light crosswind
 // nudges you off line; the river current doesn't apply in the sky (see
@@ -54,7 +54,7 @@ export function flightWind(flowDistance, time, altFrac) {
 // --- the gorge slalom --------------------------------------------------
 const STEEPLE_SPACING = 26;    // nominal flow-distance between churches
 const STEEPLE_JITTER = 4;
-const STEEPLE_HIT_Z = 2.7;     // half-depth along the flow — the churches are deep
+const STEEPLE_HIT_Z = 2.4;     // half-depth of the collision box along the flow
 const GORGE_GAP = 3.4;         // width of the clear thread past a church
 const GORGE_GAP_EASY = 4.8;    // occasional breather
 const GORGE_GAP_HARD = 2.7;    // occasional squeeze
@@ -62,7 +62,7 @@ const GAP_CENTER_MAX = 1.4;    // the thread never sits further off centre than
                                // this, so the weave stays within the canoe's
                                // steering reach between churches
 const SAME_SIDE_CHANCE = 0.16; // odds a church repeats the previous bank
-const STEEPLE_VISUAL_H = 11;   // tall
+const STEEPLE_VISUAL_H = 7;    // world-units tall (hash-varied per church)
 const STEEPLE_OVERHANG = 2.4;  // how far the church body spills past its own bank
 
 // Built once at module load — pure geometry over the flight span. Each entry
@@ -232,55 +232,65 @@ export function createChasseGalerie() {
   };
 }
 
-// A big stone parish church, its body cutting across the water from one
-// bank, a bell tower and tall spire looming over the gap it leaves.
+// A stone parish church cutting in from one bank, its bell tower and spire
+// standing over the gap it leaves. Drawn a touch narrower and shorter than
+// its collision box so it reads clearly without filling the screen; the
+// gap-facing edge is kept exactly on the collision edge so what you steer
+// around is what's actually there.
 function drawChurch(ctx, s, z, cameraWorldX) {
   const screen = worldToScreen(s.worldX, z, cameraWorldX);
   const halfPx = s.hx * PIXELS_PER_UNIT;
-  const bodyH = s.h * 0.34 * PIXELS_PER_UNIT;
-  const spireH = s.h * PIXELS_PER_UNIT;
   const waterY = screen.y;
+  const bodyH = s.h * 0.4 * PIXELS_PER_UNIT;
+  const spireH = s.h * PIXELS_PER_UNIT;
 
-  // tower/spire sit at the channel-facing end (toward -side)
-  const towerX = screen.x - s.side * (halfPx - 7);
-  const towerW = 11;
+  // gap-facing edge = collision edge; the nave runs from there toward the
+  // bank, capped so a wide church doesn't draw as a giant slab.
+  const gapEdge = screen.x - s.side * halfPx;
+  const naveW = Math.min(halfPx * 2 * 0.8, 34);
+  const x0 = gapEdge;
+  const x1 = gapEdge + s.side * naveW;
+  const left = Math.min(x0, x1);
+  const right = Math.max(x0, x1);
+  const mid = (left + right) / 2;
 
-  // nave — a long stone hall spilling from the bank into the water
+  // nave
   ctx.fillStyle = '#54545c';
-  ctx.fillRect(screen.x - halfPx, waterY - bodyH, halfPx * 2, bodyH + 6);
+  ctx.fillRect(left, waterY - bodyH, right - left, bodyH + 5);
   // pitched roof
   ctx.fillStyle = '#3b3b42';
   ctx.beginPath();
-  ctx.moveTo(screen.x - halfPx, waterY - bodyH);
-  ctx.lineTo(screen.x, waterY - bodyH - 9);
-  ctx.lineTo(screen.x + halfPx, waterY - bodyH);
+  ctx.moveTo(left, waterY - bodyH);
+  ctx.lineTo(mid, waterY - bodyH - 6);
+  ctx.lineTo(right, waterY - bodyH);
   ctx.closePath();
   ctx.fill();
-
-  // a few lit windows so the church reads at night and telegraphs its width
+  // a couple of lit windows so it reads at night
   ctx.fillStyle = '#e7c15a';
-  for (let wx = screen.x - halfPx + 6; wx < screen.x + halfPx - 4; wx += 9) {
-    ctx.fillRect(wx, waterY - bodyH * 0.62, 2, 4);
+  for (let wx = left + 4; wx < right - 3; wx += 8) {
+    ctx.fillRect(wx, waterY - bodyH * 0.58, 2, 3);
   }
 
-  // bell tower
+  // bell tower at the gap-facing end, under the spire
+  const towerX = gapEdge + s.side * 5;
+  const towerW = 8;
   ctx.fillStyle = '#4a4a52';
-  ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.62, towerW, spireH * 0.62 + 4);
+  ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, towerW, spireH * 0.56 + 4);
   // spire
   ctx.fillStyle = '#2c2c31';
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH);
-  ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.6);
-  ctx.lineTo(towerX + towerW / 2, waterY - spireH * 0.6);
+  ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.54);
+  ctx.lineTo(towerX + towerW / 2, waterY - spireH * 0.54);
   ctx.closePath();
   ctx.fill();
   // cross
   ctx.strokeStyle = '#20201f';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(towerX, waterY - spireH - 5);
-  ctx.lineTo(towerX, waterY - spireH + 7);
-  ctx.moveTo(towerX - 3.5, waterY - spireH + 1);
-  ctx.lineTo(towerX + 3.5, waterY - spireH + 1);
+  ctx.moveTo(towerX, waterY - spireH - 4);
+  ctx.lineTo(towerX, waterY - spireH + 6);
+  ctx.moveTo(towerX - 3, waterY - spireH + 0.5);
+  ctx.lineTo(towerX + 3, waterY - spireH + 0.5);
   ctx.stroke();
 }
