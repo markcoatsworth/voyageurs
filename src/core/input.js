@@ -8,10 +8,21 @@ const KEY_MAP = {
 export class Input {
   constructor() {
     this.state = { left: false, right: false, up: false, down: false };
+
+    // Get arrow elements for visual feedback
+    this.arrows = {
+      up: document.querySelector('.steer-up'),
+      down: document.querySelector('.steer-down'),
+      left: document.querySelector('.steer-left'),
+      right: document.querySelector('.steer-right'),
+    };
+
     this._onKeyDown = (e) => {
       const key = KEY_MAP[e.code];
       if (key) {
         this.state[key] = true;
+        // Light up the arrow
+        if (this.arrows[key]) this.arrows[key].classList.add('active');
         e.preventDefault();
       }
     };
@@ -19,6 +30,8 @@ export class Input {
       const key = KEY_MAP[e.code];
       if (key) {
         this.state[key] = false;
+        // Turn off the arrow
+        if (this.arrows[key]) this.arrows[key].classList.remove('active');
         e.preventDefault();
       }
     };
