@@ -66,7 +66,7 @@ function pathBetween(ctx, leftXAt, rightXAt) {
 // the WebGL shader layer underneath (waterGL.js) shows through it; when
 // that's unavailable, drawWaterFallback() below fills the same hole with a
 // flat animated pattern instead.
-export function drawBanks(ctx, worldDistance, cameraWorldX) {
+export function drawBanks(ctx, worldDistance, cameraWorldX, { hideVillages = false } = {}) {
   const pat = ensurePatterns(ctx);
 
   ctx.fillStyle = pat.grass;
@@ -110,7 +110,7 @@ export function drawBanks(ctx, worldDistance, cameraWorldX) {
   drawBraidIslands(ctx, worldDistance, cameraWorldX);
   drawShorelineStones(ctx, worldDistance, cameraWorldX, riverEdgeX);
   drawTrees(ctx, worldDistance, cameraWorldX);
-  drawVillages(ctx, worldDistance, cameraWorldX);
+  if (!hideVillages) drawVillages(ctx, worldDistance, cameraWorldX);
 }
 
 // The mid-channel islands that split the river into two short passages

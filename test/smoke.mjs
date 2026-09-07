@@ -139,20 +139,51 @@ await step('blockade: approach -> pursuit -> escape', () => {
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---
 
-await step('chasse-galerie: cast off -> take flight -> land', () => {
+await step('chasse-galerie: fly the Ottawa, no landing, glide down', () => {
   // Same spot ?start=chasse-galerie lands on: 10 units short of the trigger.
   const g = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
   let sawFlight = false;
-  for (let i = 0; i < 4000; i++) {
+  let maxAltitude = 0;
+  let landedMidFlight = false;
+  let sawGameOver = false;
+  // Hold a straight line down the middle of the channel — every steeple
+  // stands well over on a bank, so the centre lane is always clear.
+  for (let i = 0; i < 9000; i++) {
     g.input.state.up = true;
-    g.input.state.left = i % 160 < 80;
-    g.input.state.right = i % 160 >= 80;
     g.game.update(1 / 30);
-    if (g.game.chasseGalerie.isActive()) sawFlight = true;
-    if (g.game.state === 'gameover') g.game.start();
+    const flying = g.game.chasseGalerie.isActive();
+    if (flying) {
+      sawFlight = true;
+      maxAltitude = Math.max(maxAltitude, g.game.chasseGalerie.getAltitude());
+      if (g.game.mode === 'village') landedMidFlight = true;
+    }
+    if (g.game.state === 'gameover') { sawGameOver = true; g.game.start(); }
   }
   if (!sawFlight) throw new Error('chasse-galerie never took flight from the ?start= drop point');
-  notes.push(`  note chasse-galerie ran; ended segment ${g.game.segment} @ ${g.game.flowDistance | 0}`);
+  if (maxAltitude < 4) throw new Error(`canoe never really left the water (max altitude ${maxAltitude.toFixed(1)})`);
+  if (landedMidFlight) throw new Error('canoe docked at a riverbank town mid-flight — there should be no landing');
+  if (sawGameOver) throw new Error('flying a clear centre line still hit a steeple — no safe lane through a town');
+  if (g.game.chasseGalerie.isActive()) throw new Error('flight never ended after the whole Ottawa stretch');
+  if (g.game.chasseGalerie.getAltitude() > 0.5) throw new Error('canoe never glided back down onto the water');
+  if (g.game.flowDistance <= CHASSE_GALERIE_FLOW_DISTANCE + 400) {
+    throw new Error(`barely moved up the Ottawa (@ ${g.game.flowDistance | 0})`);
+  }
+
+  // ...but flying straight into a town's own bank clips its steeples.
+  const h = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
+  let sawSteepleDamage = false;
+  let prevHealth = 100;
+  for (let i = 0; i < 1600 && !sawSteepleDamage; i++) {
+    h.input.state.up = true;
+    h.input.state.right = true; // hug the right bank — Île-Perrot's steeples
+    h.game.update(1 / 30);
+    if (h.game.chasseGalerie.isActive() && h.game.health < prevHealth) sawSteepleDamage = true;
+    prevHealth = h.game.health;
+    if (h.game.state === 'gameover') break;
+  }
+  if (!sawSteepleDamage) throw new Error('hugging a town bank mid-flight never hit a steeple');
+
+  notes.push(`  note chasse-galerie ran; max altitude ${maxAltitude.toFixed(1)}, ended @ ${g.game.flowDistance | 0}`);
 });
 
 // --- scenario 4c: casting off from Montreal doesn't loop back in ----------

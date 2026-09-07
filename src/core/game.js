@@ -91,6 +91,10 @@ const CANNON_DAMAGE = 16;
 // you're in contact, same shape as BANK_PENALTY_SPEED just harder.
 const SHIP_HULL_DAMAGE = 40;
 const SHIP_HULL_PENALTY_SPEED = 6;
+// A church steeple clipped mid-flight in the Chasse-galerie — harder than a
+// rock (there's no armour against breaking the devil's pact) but survivable
+// so a single mistake isn't an instant loss over the long flight.
+const STEEPLE_DAMAGE = 34;
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
@@ -425,6 +429,9 @@ export class Game {
     } else if (entry.type === 'shiphull') {
       this.takeDamage(SHIP_HULL_DAMAGE);
       this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'steeple') {
+      this.takeDamage(STEEPLE_DAMAGE);
+      this.invulnTimer = INVULN_TIME;
     } else {
       this.speed = Math.max(MIN_SPEED - 1, this.speed - LOG_PENALTY_SPEED);
       this.takeDamage(LOG_DAMAGE);
@@ -612,10 +619,14 @@ export class Game {
     // reach on the way past, still works exactly like every other village).
     if (this._castOffGrace > 0) this._castOffGrace -= dt;
     const dockHit = getDockHit(this.flowDistance, this.canoeWorldX);
-    // Suppress only the dock just cast off from, and only while the grace
-    // window is open — every other dock (and this one, once it closes) still
-    // triggers normally. See leaveVillage()'s lawrenceWest branch.
-    const suppressed = this._castOffGrace > 0 && dockHit === this._castOffGraceVillage;
+    // Suppressed when: (a) it's the dock just cast off from and the grace
+    // window is still open (see leaveVillage()'s lawrenceWest branch), or
+    // (b) the canoe is airborne in the Chasse-galerie — there's no landing
+    // anywhere along the flight, the riverbank towns are steeples now, not
+    // docks. Every other dock still triggers normally.
+    const suppressed =
+      (this._castOffGrace > 0 && dockHit === this._castOffGraceVillage) ||
+      this.chasseGalerie.isActive();
     if (dockHit && !suppressed) {
       this.enterVillage(dockHit);
       return;
@@ -644,9 +655,12 @@ export class Game {
     // Braided-channel islands sit mid-water, not at a fixed edge, so unlike
     // the bank they can't be handled with a position clamp — the canoe must
     // be free to pass through that X range in either side channel, and only
-    // colliding if it's actually still over the island itself.
+    // colliding if it's actually still over the island itself. Skipped while
+    // airborne in the Chasse-galerie — same as rocks and deadfall below, the
+    // only hazard up there is the steeples.
     const braid = braidAt(this.flowDistance);
-    if (braid && Math.abs(this.canoeWorldX - braid.centerX) < braid.halfWidth + ISLAND_HIT_MARGIN) {
+    if (!this.chasseGalerie.isActive()
+      && braid && Math.abs(this.canoeWorldX - braid.centerX) < braid.halfWidth + ISLAND_HIT_MARGIN) {
       this.handleHit({ type: 'island' });
     }
 
@@ -680,9 +694,13 @@ export class Game {
       this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");
     }
 
+    // Airborne in the Chasse-galerie, rocks and deadfall on the water below
+    // can't touch the canoe — only the steeples (handled above) can. Pelts
+    // are still fair game to swoop.
+    const flying = this.chasseGalerie.isActive();
     this.obstacles.update(
       this.time, dt, effectiveSpeed, this.canoeWorldX,
-      (entry) => this.handleHit(entry),
+      (entry) => { if (!flying) this.handleHit(entry); },
       (entry) => this.handleCollect(entry)
     );
 
@@ -728,7 +746,7 @@ export class Game {
     if (this.segment === 'lawrenceWest') {
       const flight = this.chasseGalerie.update(this.flowDistance, this.canoeWorldX, dt);
       if (flight.hit) {
-        this.handleHit({ damage: 30, reason: 'Touched a church steeple!' });
+        this.handleHit({ type: 'steeple' });
       }
       // Show banner when flight starts
       if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
@@ -767,7 +785,9 @@ export class Game {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
 
-    drawBanks(ctx, this.flowDistance, cameraWorldX);
+    // While flying the Chasse-galerie there are no docks or town buildings
+    // below — the riverbank parishes read as steeples only (drawn later).
+    drawBanks(ctx, this.flowDistance, cameraWorldX, { hideVillages: isFlying });
     if (this.water) {
       this.water.render(this.time, this.flowDistance, cameraWorldX);
     } else {
