@@ -7,6 +7,7 @@ import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom } from '
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import { createBlockade } from '../bossfights/blockade.js';
+import { createChasseGalerie } from '../bossfights/chasseGalerie.js';
 import { isTouchPrimary } from './touchControls.js';
 
 // A D-pad's discrete taps are less precise than a keyboard's held keys, and
@@ -211,6 +212,7 @@ export class Game {
     this.villageScene = createVillageScene();
     this.blockade = createBlockade();
     this.blockadePct = null; // null hides the HUD bar; set by update() while the fight is active
+    this.chasseGalerie = createChasseGalerie();
 
     // 'river' (paddling) or 'village' (on foot, ashore at a dock) — see
     // enterVillage()/leaveVillage(). Separate from this.state, which is
@@ -297,6 +299,8 @@ export class Game {
     this.obstacles.reset();
     this.blockade.reset();
     this.blockadePct = null;
+    this.chasseGalerie.reset();
+    this._chasseGalerieBannerShown = false;
     // Restart now always returns to the run's actual start (see reset()'s
     // own comment) — if the boss track was playing when the capsize
     // happened, leaving it running would be paired with a scene nowhere
@@ -686,6 +690,19 @@ export class Game {
       this.blockadeCrossCurrent = 0;
     }
 
+    // Chasse-galerie flying canoe boss fight (after Montreal)
+    if (this.segment === 'lawrenceWest') {
+      const flight = this.chasseGalerie.update(this.flowDistance, this.canoeWorldX, dt);
+      if (flight.hit) {
+        this.handleHit({ damage: 30, reason: 'Touched a church steeple!' });
+      }
+      // Show banner when flight starts
+      if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
+        this.showBanner('LA CHASSE-GALERIE — Dodge the Steeples!');
+        this._chasseGalerieBannerShown = true;
+      }
+    }
+
     this.render();
     this.updateHud();
   }
@@ -716,6 +733,8 @@ export class Game {
     this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     // Same lawrenceWest-only guard as the update() call above.
     if (this.segment === 'lawrenceWest') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+    // Draw Chasse-galerie steeples
+    if (this.segment === 'lawrenceWest') this.chasseGalerie.drawSteeples(ctx, this.flowDistance, cameraWorldX);
 
     if (this.canoeVisible !== false) {
       const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;
@@ -726,8 +745,12 @@ export class Game {
         console.log('[RENDER] Canoe screen pos:', canoeScreenX.toFixed(1), 'World pos:', this.canoeWorldX.toFixed(1), 'Camera:', cameraWorldX.toFixed(1));
       }
 
+      // Lift canoe when flying (Chasse-galerie)
+      const altitude = this.chasseGalerie.isActive() ? this.chasseGalerie.getAltitude() : 0;
+      const canoeScreenY = CANOE_SCREEN_Y - altitude * PIXELS_PER_UNIT;
+
       ctx.save();
-      ctx.translate(canoeScreenX, CANOE_SCREEN_Y);
+      ctx.translate(canoeScreenX, canoeScreenY);
       ctx.rotate(this.tilt || 0);
       ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
       ctx.restore();
