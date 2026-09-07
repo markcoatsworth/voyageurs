@@ -821,7 +821,7 @@ export class Game {
     // daytime river.
     if (isFlying) {
       ctx.save();
-      ctx.globalAlpha = 0.62;
+      ctx.globalAlpha = 0.5;
       ctx.fillStyle = '#20233b';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
@@ -921,11 +921,11 @@ export class Game {
     // lightning flash lighting the whole sky white for a frame or two.
     if (isFlying) {
       const vg = ctx.createRadialGradient(
-        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.52, CANVAS_HEIGHT * 0.28,
-        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.52, CANVAS_HEIGHT * 0.82,
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.42,
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.92,
       );
       vg.addColorStop(0, 'rgba(8,8,20,0)');
-      vg.addColorStop(1, 'rgba(6,6,16,0.62)');
+      vg.addColorStop(1, 'rgba(6,6,16,0.42)');
       ctx.fillStyle = vg;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 

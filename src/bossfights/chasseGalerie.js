@@ -254,38 +254,52 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   const right = Math.max(x0, x1);
   const mid = (left + right) / 2;
 
-  // nave
-  ctx.fillStyle = '#54545c';
+  // nave — pale lit limestone so it stands out against the night storm
+  ctx.fillStyle = '#c9cdd6';
   ctx.fillRect(left, waterY - bodyH, right - left, bodyH + 5);
+  // shaded lower course, just for a bit of form
+  ctx.fillStyle = '#9aa0ad';
+  ctx.fillRect(left, waterY - bodyH * 0.34, right - left, bodyH * 0.34 + 5);
   // pitched roof
-  ctx.fillStyle = '#3b3b42';
+  ctx.fillStyle = '#8b93a6';
   ctx.beginPath();
-  ctx.moveTo(left, waterY - bodyH);
-  ctx.lineTo(mid, waterY - bodyH - 6);
-  ctx.lineTo(right, waterY - bodyH);
+  ctx.moveTo(left - 1, waterY - bodyH);
+  ctx.lineTo(mid, waterY - bodyH - 7);
+  ctx.lineTo(right + 1, waterY - bodyH);
   ctx.closePath();
   ctx.fill();
-  // a couple of lit windows so it reads at night
-  ctx.fillStyle = '#e7c15a';
+  // glowing windows
   for (let wx = left + 4; wx < right - 3; wx += 8) {
+    ctx.fillStyle = 'rgba(255,213,120,0.35)';
+    ctx.fillRect(wx - 1.5, waterY - bodyH * 0.58 - 1.5, 5, 6);
+    ctx.fillStyle = '#ffe08a';
     ctx.fillRect(wx, waterY - bodyH * 0.58, 2, 3);
   }
 
   // bell tower at the gap-facing end, under the spire
   const towerX = gapEdge + s.side * 5;
   const towerW = 8;
-  ctx.fillStyle = '#4a4a52';
+  ctx.fillStyle = '#c9cdd6';
   ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, towerW, spireH * 0.56 + 4);
+  ctx.fillStyle = '#9aa0ad';
+  ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, 2, spireH * 0.56 + 4);
   // spire
-  ctx.fillStyle = '#2c2c31';
+  ctx.fillStyle = '#b3b8c4';
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH);
   ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.54);
   ctx.lineTo(towerX + towerW / 2, waterY - spireH * 0.54);
   ctx.closePath();
   ctx.fill();
-  // cross
-  ctx.strokeStyle = '#20201f';
+  // rim light down the spire's leading edge + a bright cross, so the
+  // silhouette separates cleanly from the dark sky
+  ctx.strokeStyle = '#eef0f5';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(towerX, waterY - spireH);
+  ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.54);
+  ctx.stroke();
+  ctx.strokeStyle = '#fff3d4';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH - 4);
