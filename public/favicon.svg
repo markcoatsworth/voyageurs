@@ -3,27 +3,28 @@
        icon blends naturally into a browser tab, light or dark. -->
   <rect width="64" height="64" rx="10" fill="#0a0e14"/>
 
-  <!-- A disc of water with one ripple. Kept simple so the canoe still reads
-       at a 16px browser-tab size. -->
-  <circle cx="32" cy="33" r="26" fill="#15374f"/>
-  <path d="M8,45 q6,-4 12,0 t12,0 t12,0" fill="none" stroke="#2b5878"
-        stroke-width="2.6" stroke-linecap="round"/>
+  <!-- A "V" — the Voyageurs initial and the fjord's V-shaped valley — made
+       from the two things the game is about: a canoe is the left arm (bow
+       up and to the left, pointed at both ends), a paddle is the right arm
+       (broad blade up and to the right). Bold gold shapes with heavy dark
+       outlines so the V holds up at a 16px browser-tab size and resolves
+       into canoe + paddle up close. Colours from the title accent
+       (#e0a458) and the in-game canoe sprite. -->
 
-  <!-- The paddle — one bold, near-vertical stroke so it stays distinct from
-       the horizontal hull even when tiny. -->
-  <line x1="42" y1="6" x2="27" y2="41" stroke="#6f4a29" stroke-width="4.4"
+  <!-- LEFT ARM — the canoe: an almond hull, pointed bow and stern, along
+       the up-left diagonal, meeting the paddle at the point of the V. -->
+  <path d="M32,50 Q33,25 14,9 Q8,32 32,50 Z"
+        fill="#e0a458" stroke="#3a2412" stroke-width="3.6" stroke-linejoin="round"/>
+  <path d="M30,45 Q30,25 17,13 Q13,30 30,45 Z" fill="#9c5f2b"/>
+  <line x1="18" y1="30" x2="27" y2="25" stroke="#3a2412" stroke-width="2.6"
         stroke-linecap="round"/>
-  <path d="M27,37 q-6,3 -6,12 q9,1 12,-8 z" fill="#c98a4b" stroke="#3a2412"
-        stroke-width="1.6" stroke-linejoin="round"/>
 
-  <!-- Canoe, side profile — a big bold crescent hull with upswept stems,
-       filling most of the icon. Colors from the in-game sprite
-       (twod/sprites.js's createCanoeSprite). -->
-  <path d="M4,24 Q32,34 60,24 Q32,52 4,24 Z" fill="#a3672f"
-        stroke="#3a2412" stroke-width="3.6" stroke-linejoin="round"/>
-  <!-- hollow interior -->
-  <path d="M12,25.5 Q32,31 52,25.5 Q32,44 12,25.5 Z" fill="#6b3f1e"/>
-  <!-- gunwale highlight along the top edge -->
-  <path d="M7,24 Q32,32.5 57,24" fill="none" stroke="#d9a05c"
-        stroke-width="2.2" stroke-linecap="round"/>
+  <!-- RIGHT ARM — the paddle: a thick shaft up the up-right diagonal into a
+       broad blade at the top. -->
+  <line x1="33" y1="49" x2="46" y2="22" stroke="#a3672f" stroke-width="6.5"
+        stroke-linecap="round"/>
+  <path d="M45,27 Q36,15 47,3 Q59,13 52,27 Q49,31 45,27 Z"
+        fill="#e0a458" stroke="#3a2412" stroke-width="3.6" stroke-linejoin="round"/>
+  <line x1="48" y1="7" x2="47" y2="25" stroke="#3a2412" stroke-width="2"
+        stroke-linecap="round"/>
 </svg>
