@@ -1,15 +1,17 @@
 // Chasse-galerie — the flying canoe.
 // Past Montreal the canoe lifts off the water and flies the whole Ottawa
 // River stretch up to the voyageurs' winter camp at Gatineau. There's no
-// landing anywhere along the way: the riverbank towns you pass (Île-Perrot,
-// Hudson, Rigaud, Carillon) don't have docks any more, only big church
-// steeples — clip one and it costs you (in the legend, brushing a steeple
-// or swearing breaks the devil's pact). Steer between them; the current
-// doesn't apply in the sky (see game.js's flight branch).
+// landing anywhere along the way: the settled banks are lined with parish
+// church steeples the whole distance, and clipping one costs you (in the
+// legend, brushing a steeple or swearing breaks the devil's pact). The
+// steeples all stand on land, past the water's edge — fly the open river
+// and you're safe; stray out over a bank and there's a spire there. The
+// river current doesn't apply in the sky (see game.js's flight branch).
 
-import { VILLAGES } from '../world/river/route.js';
 import { centerX, widthAt } from '../world/river/path.js';
-import { worldToScreen, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
+import { VILLAGES } from '../world/river/route.js';
+import { worldToScreen, PIXELS_PER_UNIT } from '../shared/config.js';
+import { hashRange } from '../shared/hash.js';
 
 const MONTREAL = VILLAGES.find(v => v.name === 'Montreal');
 const GATINEAU = VILLAGES.find(v => v.name === 'Gatineau');
@@ -28,42 +30,46 @@ const FLIGHT_HEIGHT = 8;       // cruising altitude, world units above the river
 const CLIMB_RATE = 3;          // world units of altitude gained/shed per second
 const DESCENT_RANGE = 48;      // how far out from FLIGHT_END the glide-down starts
 
-// Church steeples — the only thing the riverbank towns do during the flight.
-// Each real parish you fly over (Île-Perrot, Hudson, Rigaud, Carillon) gets
-// a pair of spires standing on its own bank; the far half of the channel
-// stays a clear lane, so passing a town safely means being over on the
-// other side by the time you reach it. The towns sit on alternating banks
-// (see route.js), so the flight is a lazy weave with open sky between.
-const STEEPLE_HIT_Z = 2.4;     // half-length of the collision box along the flow
-const STEEPLE_HIT_X = 2.4;     // half-width across the channel
-const STEEPLE_VISUAL_H = 9;    // world units tall — deliberately "big"
-const STEEPLE_LONG_GAP = 8;    // flow-distance spacing of a town's two spires
-// How far toward the town's own bank each spire sits, as a fraction of the
-// channel half-width. Both stay well over on one side of a narrow (~11-unit)
-// channel — the centre and the far bank are always a clear lane, so a
-// straight line down the middle survives and a drift toward the town's bank
-// as you pass it doesn't.
-const STEEPLE_LANES = [0.68, 0.9];
+// How far past the water's edge the flying canoe is allowed to drift, world
+// units — out over the settled banks where the steeples stand, but no
+// further. game.js widens its lateral clamp to this while the flight is
+// active (and drops the "ran aground" penalty — you're in the air).
+export const FLIGHT_LATERAL_MARGIN = 7;
 
-// Every named place between the take-off point and the landing — Montreal
-// and Gatineau themselves excluded (you start past one and glide down onto
-// the other). Pure geometry, so it's built once at module load.
+// The steeple line — parish churches packed along both banks for the whole
+// flight, every one standing on land past the water's edge. Hash-placed
+// (like the trees and whales) so it's dense and deterministic without
+// storing anything; the open river down the middle is always a clear lane.
+const STEEPLE_HIT_Z = 2.2;     // half-length of the collision box along the flow
+const STEEPLE_HIT_X = 2.3;     // half-width of the collision box across the river
+const STEEPLE_VISUAL_H = 7;    // nominal world-units tall (hash-varied per spire)
+const CHAPEL_SPACING = 12;     // nominal flow-distance between chapel slots
+const CHAPEL_JITTER = 4.5;     // flow-distance wobble per slot
+const CHAPEL_SIDE_CHANCE = 0.72; // odds a given slot has a chapel on a given bank
+const CHAPEL_INSET_MIN = 2.6;  // nearest a steeple sits to the water (fully on land)
+const CHAPEL_INSET_MAX = FLIGHT_LATERAL_MARGIN; // farthest — out at the flight limit
+
+// Built once at module load — pure geometry over the flight span.
 const STEEPLES = (() => {
-  const towns = VILLAGES.filter(
-    v => v.segment === 'lawrenceWest'
-      && v.flowDistance > TRIGGER_DISTANCE + 8
-      && v.flowDistance < FLIGHT_END - 8,
-  );
+  const from = TRIGGER_DISTANCE - 6;
+  const to = FLIGHT_END + 6;
   const out = [];
-  for (const town of towns) {
-    STEEPLE_LANES.forEach((frac, i) => {
-      const d = town.flowDistance + (i - 0.5) * STEEPLE_LONG_GAP;
+  const slots = Math.ceil((to - from) / CHAPEL_SPACING);
+  for (let i = 0; i < slots; i++) {
+    const d = from + i * CHAPEL_SPACING + hashRange(i, 11, -CHAPEL_JITTER, CHAPEL_JITTER);
+    if (d < from || d > to) continue;
+    const waterHalf = widthAt(d) / 2;
+    for (const side of [-1, 1]) {
+      const salt = side < 0 ? 20 : 40;
+      if (hashRange(i, salt, 0, 1) > CHAPEL_SIDE_CHANCE) continue;
+      const inset = hashRange(i, salt + 1, CHAPEL_INSET_MIN, CHAPEL_INSET_MAX);
       out.push({
-        town: town.name,
         flowDistance: d,
-        worldX: centerX(d) + town.side * frac * widthAt(d) / 2,
+        side,
+        worldX: centerX(d) + side * (waterHalf + inset),
+        h: STEEPLE_VISUAL_H * hashRange(i, salt + 2, 0.8, 1.3),
       });
-    });
+    }
   }
   return out.sort((a, b) => a.flowDistance - b.flowDistance);
 })();
@@ -102,7 +108,7 @@ export function createChasseGalerie() {
       else if (altitude > target) altitude = Math.max(target, altitude - step);
 
       let hit = false;
-      if (active) {
+      if (active && altitude > 0.5) {
         for (const s of STEEPLES) {
           if (Math.abs(playerFlowDistance - s.flowDistance) < STEEPLE_HIT_Z
             && Math.abs(canoeWorldX - s.worldX) < STEEPLE_HIT_X) {
@@ -125,12 +131,15 @@ export function createChasseGalerie() {
       if (!active) return;
 
       for (const steeple of STEEPLES) {
+        // z < 0 is ahead of the canoe (up the screen), z > 0 behind it. Cull
+        // to a bit more than the visible span so tall spires still poke in
+        // from just off the top edge.
         const z = worldDistance - steeple.flowDistance;
+        if (z < -18 || z > 6) continue;
         const screen = worldToScreen(steeple.worldX, z, cameraWorldX);
-        if (screen.y < -120 || screen.y > CANVAS_HEIGHT + 120) continue;
 
-        const h = STEEPLE_VISUAL_H * PIXELS_PER_UNIT;
-        const baseW = 11;
+        const h = steeple.h * PIXELS_PER_UNIT;
+        const baseW = 9;
         const tipW = 3;
 
         // little stone nave at the base
@@ -166,6 +175,14 @@ export function createChasseGalerie() {
 
     getAltitude() {
       return altitude;
+    },
+
+    // How far past the water's edge the canoe may currently drift, world
+    // units — scales with altitude, so it opens up as you climb out and
+    // eases back to the river as you glide down at the end (no hard snap
+    // back inside the banks when the flight flag finally flips off).
+    lateralMargin() {
+      return FLIGHT_LATERAL_MARGIN * Math.max(0, Math.min(1, altitude / FLIGHT_HEIGHT));
     },
   };
 }

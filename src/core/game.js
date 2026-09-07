@@ -587,12 +587,19 @@ export class Game {
 
     this.lateralVX = clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
 
-    const half = widthAt(this.flowDistance) / 2 - EDGE_MARGIN;
+    // Flying the Chasse-galerie the canoe ranges out over the banks (that's
+    // where the steeples are). The extra room scales with altitude (see
+    // lateralMargin()), so it opens on take-off and closes on the glide
+    // down, and running into the bound up there is just the edge of the sky,
+    // not "ran aground" — it costs no health.
+    const flying = this.chasseGalerie.isActive();
+    const half = widthAt(this.flowDistance) / 2 - EDGE_MARGIN
+      + (flying ? this.chasseGalerie.lateralMargin() : 0);
     const proposed = this.lateralOffset + this.lateralVX * dt;
     if (proposed > half || proposed < -half) {
       this.lateralOffset = clamp(proposed, -half, half);
       this.lateralVX *= -0.2;
-      this.handleHit({ type: 'bank' });
+      if (!flying) this.handleHit({ type: 'bank' });
     } else {
       this.lateralOffset = proposed;
     }
@@ -694,10 +701,9 @@ export class Game {
       this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");
     }
 
-    // Airborne in the Chasse-galerie, rocks and deadfall on the water below
-    // can't touch the canoe — only the steeples (handled above) can. Pelts
-    // are still fair game to swoop.
-    const flying = this.chasseGalerie.isActive();
+    // Airborne in the Chasse-galerie (`flying`, above), rocks and deadfall on
+    // the water below can't touch the canoe — only the steeples (handled
+    // above) can. Pelts are still fair game to swoop.
     this.obstacles.update(
       this.time, dt, effectiveSpeed, this.canoeWorldX,
       (entry) => { if (!flying) this.handleHit(entry); },
