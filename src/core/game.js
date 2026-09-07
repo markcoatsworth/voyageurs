@@ -906,8 +906,8 @@ export class Game {
       const noseUpAngle = isFlying ? 0.15 : 0; // ~8.5 degrees
       ctx.rotate((this.tilt || 0) * bankingMultiplier + noseUpAngle);
 
-      // Scale 2x when flying
-      const scale = isFlying ? 2 : 1;
+      // A little bigger when flying (closer to the camera), but not looming
+      const scale = isFlying ? 1.5 : 1;
       ctx.scale(scale, scale);
 
       ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
