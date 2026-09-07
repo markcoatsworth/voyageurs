@@ -97,7 +97,7 @@ const SHIP_HULL_PENALTY_SPEED = 6;
 const STEEPLE_DAMAGE = 28;
 // The Chasse-galerie's steady glide speed — deliberately slower than a hard
 // paddle, so there's time to read each church and slide into the next gap.
-const FLIGHT_CRUISE_SPEED = 12;
+const FLIGHT_CRUISE_SPEED = 9;
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
