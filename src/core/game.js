@@ -731,14 +731,35 @@ export class Game {
     // the canoe* is unchanged by any of this — it's purely a change of
     // render origin, not of any actual world position or collision math.
     const cameraWorldX = this.cameraWorldX;
+    const isFlying = this.chasseGalerie.isActive();
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Sky gradient when flying
+    if (isFlying) {
+      const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+      gradient.addColorStop(0, '#4a5f8f');
+      gradient.addColorStop(1, '#8ab6e8');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
+
     drawBanks(ctx, this.flowDistance, cameraWorldX);
     if (this.water) {
       this.water.render(this.time, this.flowDistance, cameraWorldX);
     } else {
       drawWaterFallback(ctx, this.flowDistance, cameraWorldX);
     }
+
+    // Fade terrain when flying (makes water look distant)
+    if (isFlying) {
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = '#8ab6e8';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+
     drawCurrentEffects(ctx, this.time, this.flowDistance, this.rapids);
     drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
     this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
@@ -756,13 +777,72 @@ export class Game {
         console.log('[RENDER] Canoe screen pos:', canoeScreenX.toFixed(1), 'World pos:', this.canoeWorldX.toFixed(1), 'Camera:', cameraWorldX.toFixed(1));
       }
 
-      // Lift canoe when flying (Chasse-galerie)
-      const altitude = this.chasseGalerie.isActive() ? this.chasseGalerie.getAltitude() : 0;
-      const canoeScreenY = CANOE_SCREEN_Y - altitude * PIXELS_PER_UNIT;
+      // Flying effects (Chasse-galerie)
+      const isFlying = this.chasseGalerie.isActive();
+      const altitude = isFlying ? this.chasseGalerie.getAltitude() : 0;
 
+      // Bobbing animation when flying
+      const bob = isFlying ? Math.sin(this.time * 2) * 3 : 0;
+      const canoeScreenY = CANOE_SCREEN_Y - altitude * PIXELS_PER_UNIT + bob;
+
+      // Draw shadow on water when flying
+      if (isFlying && altitude > 1) {
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#000';
+        const shadowY = CANOE_SCREEN_Y; // Shadow stays on water
+        ctx.translate(canoeScreenX, shadowY);
+        ctx.rotate(this.tilt || 0);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, sprite.width / 2, sprite.height / 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Sparkle trail
+        for (let i = 0; i < 5; i++) {
+          const trailX = canoeScreenX + (Math.random() - 0.5) * sprite.width;
+          const trailY = canoeScreenY + sprite.height / 2 + i * 8;
+          const sparkleSize = 1 + Math.random() * 2;
+          const sparkleAlpha = 0.4 - i * 0.08;
+
+          ctx.save();
+          ctx.globalAlpha = sparkleAlpha * (0.5 + Math.sin(this.time * 8 + i) * 0.5);
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(trailX - sparkleSize / 2, trailY - sparkleSize / 2, sparkleSize, sparkleSize);
+          ctx.restore();
+        }
+
+        // Speed lines
+        for (let i = 0; i < 8; i++) {
+          const lineY = Math.random() * CANVAS_HEIGHT;
+          const lineLength = 20 + Math.random() * 30;
+          const lineX = CANVAS_WIDTH - (this.time * 200 + i * 40) % CANVAS_WIDTH;
+
+          ctx.save();
+          ctx.globalAlpha = 0.2;
+          ctx.strokeStyle = '#aaf';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(lineX, lineY);
+          ctx.lineTo(lineX - lineLength, lineY);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // Draw canoe with flying effects
       ctx.save();
       ctx.translate(canoeScreenX, canoeScreenY);
-      ctx.rotate(this.tilt || 0);
+
+      // Banking tilt (enhanced when flying) + nose-up angle
+      const bankingMultiplier = isFlying ? 2.5 : 1;
+      const noseUpAngle = isFlying ? 0.15 : 0; // ~8.5 degrees
+      ctx.rotate((this.tilt || 0) * bankingMultiplier + noseUpAngle);
+
+      // Scale 2x when flying
+      const scale = isFlying ? 2 : 1;
+      ctx.scale(scale, scale);
+
       ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
       ctx.restore();
     } else if (this.segment === 'lawrenceWest' && this.blockadePct !== null) {
