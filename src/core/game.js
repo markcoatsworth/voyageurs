@@ -683,6 +683,19 @@ export class Game {
     this.cameraWorldX = this.canoeWorldX - onscreenOffset;
     this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
 
+    // Chasse-galerie: tick the flight here — before the dock / braid-island /
+    // obstacle checks below — so those all see this frame's airborne state
+    // and nothing on the water can touch the canoe the instant it lifts off.
+    if (this.segment === 'lawrenceWest') {
+      const flight = this.chasseGalerie.update(this.flowDistance, this.canoeWorldX, dt);
+      if (flight.hit) this.handleHit({ type: 'steeple' });
+      if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
+        this.showBanner('LA CHASSE-GALERIE — thread the steeples!');
+        this._chasseGalerieBannerShown = true;
+      }
+    }
+    const airborne = this.chasseGalerie.isActive();
+
     // Docking takes priority over everything else this frame — running
     // into a dock is the one collision that isn't damage. Still checked
     // first, every frame, ahead of the mouth-crossing check below (so
@@ -730,7 +743,7 @@ export class Game {
     // airborne in the Chasse-galerie — same as rocks and deadfall below, the
     // only hazard up there is the steeples.
     const braid = braidAt(this.flowDistance);
-    if (!this.chasseGalerie.isActive()
+    if (!airborne
       && braid && Math.abs(this.canoeWorldX - braid.centerX) < braid.halfWidth + ISLAND_HIT_MARGIN) {
       this.handleHit({ type: 'island' });
     }
@@ -765,14 +778,15 @@ export class Game {
       this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");
     }
 
-    // Airborne in the Chasse-galerie (`flying`, above), nothing on the water
-    // below interacts with the canoe — rocks and deadfall can't hit it, fur
-    // pelts can't be collected. Only the steeples (handled above) matter.
+    // Airborne in the Chasse-galerie (`airborne`), nothing on the water below
+    // interacts with the canoe — rocks and deadfall can't hit it, fur pelts
+    // can't be collected. The field still advances so it's coherent again on
+    // landing. Only the steeples matter up there.
     this.obstacles.update(
       this.time, dt, effectiveSpeed, this.canoeWorldX,
       (entry) => this.handleHit(entry),
       (entry) => this.handleCollect(entry),
-      !flying,
+      !airborne,
     );
 
     // Only meaningful on lawrenceWest — SHIP_FLOW_DISTANCE is a number on
@@ -811,19 +825,6 @@ export class Game {
     } else {
       this.blockadePct = null;
       this.blockadeCrossCurrent = 0;
-    }
-
-    // Chasse-galerie flying canoe boss fight (after Montreal)
-    if (this.segment === 'lawrenceWest') {
-      const flight = this.chasseGalerie.update(this.flowDistance, this.canoeWorldX, dt);
-      if (flight.hit) {
-        this.handleHit({ type: 'steeple' });
-      }
-      // Show banner when flight starts
-      if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
-        this.showBanner('LA CHASSE-GALERIE — thread the steeples!');
-        this._chasseGalerieBannerShown = true;
-      }
     }
 
     this.render();
@@ -893,9 +894,15 @@ export class Game {
       ctx.restore();
     }
 
-    drawCurrentEffects(ctx, this.time, this.flowDistance, this.rapids);
-    drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
-    this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
+    // Airborne in the Chasse-galerie, the river below is just backdrop —
+    // don't draw the rocks, logs, pelts, whitewater or whales the canoe is
+    // flying over. (They still can't touch it either — see obstacles.update
+    // below.) Only the steeples on the banks matter up there.
+    if (!isFlying) {
+      drawCurrentEffects(ctx, this.time, this.flowDistance, this.rapids);
+      drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
+      this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
+    }
     // Same lawrenceWest-only guard as the update() call above.
     if (this.segment === 'lawrenceWest') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
     // Draw the Chasse-galerie churches cutting into the gorge
