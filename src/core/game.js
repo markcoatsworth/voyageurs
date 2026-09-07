@@ -536,14 +536,18 @@ export class Game {
     const rapids = rapidsStrength(this.flowDistance);
     const rapidsDirection = this.segment === 'lawrenceWest' ? -1 : 1;
 
-    // Chasse-galerie: the flying canoe ignores the river current and rapids
-    // and holds a slow, steady glide — paddling only nudges it a little
-    // either way. The flight is about threading the steeples, not speed.
+    // Chasse-galerie: as the canoe lifts off the river's pull fades out and
+    // a slow, steady glide takes over — blended by how far off the water it
+    // is (lift 0..1) so the take-off isn't an instant lurch. Paddling only
+    // nudges the glide a little either way; the flight is about threading
+    // the steeples, not speed.
     const flying = this.chasseGalerie.isActive();
+    const lift = this.chasseGalerie.liftFraction();
     let effectiveSpeed;
     if (flying) {
       const paddle = keys.up ? 1.5 : keys.down ? -1.5 : 0;
-      effectiveSpeed = FLIGHT_CRUISE_SPEED + paddle;
+      const riverSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
+      effectiveSpeed = riverSpeed + (FLIGHT_CRUISE_SPEED + paddle - riverSpeed) * lift;
     } else {
       effectiveSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
     }
@@ -794,21 +798,30 @@ export class Game {
     // render origin, not of any actual world position or collision math.
     const cameraWorldX = this.cameraWorldX;
     const isFlying = this.chasseGalerie.isActive();
+    // 0..1 — how far the canoe is off the water, and how fully the hellstorm
+    // look has crept in. Both ramp gradually over the climb up the Ottawa
+    // (see chasseGalerie.js), so the shift into the Chasse-galerie is a slow
+    // darkening rather than a snap.
+    const lift = this.chasseGalerie.liftFraction();
+    const storm = this.chasseGalerie.stormIntensityAt(this.flowDistance);
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Hellstorm sky when flying — near-black violet overhead bleeding down
-    // to a sullen ember glow at the horizon, like the clouds are lit from
-    // below by something burning. The Devil isn't here yet, but this is his
-    // weather.
-    if (isFlying) {
+    // Hellstorm sky, faded in by `storm` — near-black violet overhead
+    // bleeding down to a sullen ember glow at the horizon, like the clouds
+    // are lit from below by something burning. The Devil isn't here yet, but
+    // this is his weather.
+    if (storm > 0) {
       const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
       gradient.addColorStop(0, '#05030a');
       gradient.addColorStop(0.42, '#150611');
       gradient.addColorStop(0.76, '#3a0c0a');
       gradient.addColorStop(1, '#7c1f07');
+      ctx.save();
+      ctx.globalAlpha = storm;
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
     }
 
     // While flying the Chasse-galerie there are no docks or town buildings
@@ -820,15 +833,15 @@ export class Game {
       drawWaterFallback(ctx, this.flowDistance, cameraWorldX);
     }
 
-    // Drown the ground in gloom when flying — a heavy near-black wash with a
-    // dull red heat under it, so the land and river below read as scorched
-    // country glimpsed through smoke, not the daytime river.
-    if (isFlying) {
+    // Drown the ground in gloom as the storm creeps in — a heavy near-black
+    // wash with a dull red heat under it, so the land and river below read
+    // as scorched country glimpsed through smoke.
+    if (storm > 0) {
       ctx.save();
-      ctx.globalAlpha = 0.68;
+      ctx.globalAlpha = 0.68 * storm;
       ctx.fillStyle = '#0c0304';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.globalAlpha = 0.16;
+      ctx.globalAlpha = 0.16 * storm;
       ctx.fillStyle = '#5a1408';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
@@ -851,21 +864,20 @@ export class Game {
         console.log('[RENDER] Canoe screen pos:', canoeScreenX.toFixed(1), 'World pos:', this.canoeWorldX.toFixed(1), 'Camera:', cameraWorldX.toFixed(1));
       }
 
-      // Flying effects (Chasse-galerie)
-      const isFlying = this.chasseGalerie.isActive();
-      const altitude = isFlying ? this.chasseGalerie.getAltitude() : 0;
+      // Flying effects (Chasse-galerie) — everything scales with `lift`, so
+      // the canoe rises, tilts and lights its trail gradually on take-off.
+      const altitude = this.chasseGalerie.getAltitude();
 
-      // Bobbing animation when flying
-      const bob = isFlying ? Math.sin(this.time * 2) * 3 : 0;
+      // Bobbing grows in as the canoe leaves the water
+      const bob = Math.sin(this.time * 2) * 3 * lift;
       const canoeScreenY = CANOE_SCREEN_Y - altitude * PIXELS_PER_UNIT + bob;
 
-      // Draw shadow on water when flying
-      if (isFlying && altitude > 1) {
+      if (lift > 0.05) {
+        // Shadow on the water below, deepening as the canoe climbs
         ctx.save();
-        ctx.globalAlpha = 0.3;
+        ctx.globalAlpha = 0.3 * lift;
         ctx.fillStyle = '#000';
-        const shadowY = CANOE_SCREEN_Y; // Shadow stays on water
-        ctx.translate(canoeScreenX, shadowY);
+        ctx.translate(canoeScreenX, CANOE_SCREEN_Y);
         ctx.rotate(this.tilt || 0);
         ctx.beginPath();
         ctx.ellipse(0, 0, sprite.width / 2, sprite.height / 4, 0, 0, Math.PI * 2);
@@ -877,7 +889,7 @@ export class Game {
           const trailX = canoeScreenX + (Math.random() - 0.5) * sprite.width;
           const trailY = canoeScreenY + sprite.height / 2 + i * 8;
           const sparkleSize = 1 + Math.random() * 2.5;
-          const sparkleAlpha = 0.5 - i * 0.08;
+          const sparkleAlpha = (0.5 - i * 0.08) * lift;
 
           ctx.save();
           ctx.globalAlpha = sparkleAlpha * (0.5 + Math.sin(this.time * 8 + i) * 0.5);
@@ -893,7 +905,7 @@ export class Game {
           const lineX = CANVAS_WIDTH - (this.time * 200 + i * 40) % CANVAS_WIDTH;
 
           ctx.save();
-          ctx.globalAlpha = 0.18;
+          ctx.globalAlpha = 0.18 * lift;
           ctx.strokeStyle = '#7a1c12';
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -908,13 +920,13 @@ export class Game {
       ctx.save();
       ctx.translate(canoeScreenX, canoeScreenY);
 
-      // Banking tilt (enhanced when flying) + nose-up angle
-      const bankingMultiplier = isFlying ? 2.5 : 1;
-      const noseUpAngle = isFlying ? 0.15 : 0; // ~8.5 degrees
+      // Banking tilt and nose-up pitch ease in with `lift`
+      const bankingMultiplier = 1 + 1.5 * lift;
+      const noseUpAngle = 0.15 * lift;
       ctx.rotate((this.tilt || 0) * bankingMultiplier + noseUpAngle);
 
-      // A little bigger when flying (closer to the camera), but not looming
-      const scale = isFlying ? 1.5 : 1;
+      // Grows a little as it climbs toward the camera, but never looms
+      const scale = 1 + 0.5 * lift;
       ctx.scale(scale, scale);
 
       ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
@@ -923,8 +935,8 @@ export class Game {
       console.log('[RENDER] Canoe NOT visible! canoeVisible:', this.canoeVisible);
     }
 
-    // Storm mood, over everything.
-    if (isFlying) {
+    // Storm mood, over everything — all of it faded in by `storm`.
+    if (storm > 0) {
       // Embers streaming up past the canoe out of the fire below.
       ctx.save();
       for (let i = 0; i < 18; i++) {
@@ -935,7 +947,7 @@ export class Game {
         const flick = 0.35 + Math.sin(this.time * 8 + seed) * 0.45;
         if (flick <= 0.08) continue;
         const s = 1 + (i % 3);
-        ctx.globalAlpha = Math.min(1, flick) * 0.75;
+        ctx.globalAlpha = Math.min(1, flick) * 0.75 * storm;
         ctx.fillStyle = i % 4 === 0 ? '#ffb347' : '#ff4d1c';
         ctx.fillRect(x, y, s, s);
       }
@@ -943,7 +955,7 @@ export class Game {
 
       // Heavy black-red vignette, breathing slightly, closing the edges in
       // so the churches loom out of the dark with less warning.
-      const pulse = 0.58 + Math.sin(this.time * 1.2) * 0.07;
+      const pulse = (0.58 + Math.sin(this.time * 1.2) * 0.07) * storm;
       const vg = ctx.createRadialGradient(
         CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.36,
         CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.95,
@@ -958,7 +970,7 @@ export class Game {
       const lf = lightningFlash(this.time);
       if (lf > 0) {
         ctx.save();
-        ctx.globalAlpha = lf * 0.42;
+        ctx.globalAlpha = lf * 0.42 * storm;
         ctx.fillStyle = '#ff7a38';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         ctx.restore();

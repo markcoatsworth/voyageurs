@@ -30,8 +30,32 @@ export const TRIGGER_DISTANCE = MONTREAL.flowDistance + 20; // Shortly after Mon
 const FLIGHT_END = GATINEAU.flowDistance - 18;
 
 const FLIGHT_HEIGHT = 8;       // cruising altitude, world units above the river
-const CLIMB_RATE = 3;          // world units of altitude gained/shed per second
-const DESCENT_RANGE = 48;      // how far out from FLIGHT_END the glide-down starts
+// The take-off and landing are gradual, measured in flow-distance rather
+// than seconds: the canoe rises over the first CLIMB_DISTANCE units out of
+// Montreal and settles back down over the last DESCENT_DISTANCE into
+// Gatineau, so neither end is an abrupt switch.
+const CLIMB_DISTANCE = 80;
+const DESCENT_DISTANCE = 110;
+// The hellstorm look fades in and out over a longer stretch still, so the
+// world darkens around you as you climb the Ottawa rather than snapping.
+// Nonzero from TRIGGER_DISTANCE to a little past FLIGHT_END (STORM_TAIL).
+const STORM_FADE_IN = 220;
+const STORM_FADE_OUT = 150;
+const STORM_TAIL = 70;
+
+const smoothstep = (t) => {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * (3 - 2 * x);
+};
+
+// Altitude (world units above the water) purely as a function of how far
+// into the flight you are — a smooth rise, a plateau at FLIGHT_HEIGHT, a
+// smooth descent.
+function altitudeAt(flowDistance) {
+  const climb = (flowDistance - TRIGGER_DISTANCE) / CLIMB_DISTANCE;
+  const descend = (FLIGHT_END - flowDistance) / DESCENT_DISTANCE;
+  return FLIGHT_HEIGHT * smoothstep(Math.min(climb, descend));
+}
 
 // How far past the water's edge the flying canoe is allowed to drift, world
 // units — just a little overhang room; the churches spill onto the banks so
@@ -129,13 +153,6 @@ export function createChasseGalerie() {
   let flightDone = false;
   let altitude = 0;
 
-  function targetAltitude(flowDistance) {
-    if (!active) return 0;
-    const toEnd = FLIGHT_END - flowDistance;
-    if (toEnd < DESCENT_RANGE) return FLIGHT_HEIGHT * Math.max(0, toEnd / DESCENT_RANGE);
-    return FLIGHT_HEIGHT;
-  }
-
   return {
     update(playerFlowDistance, canoeWorldX, dt) {
       const inRange = playerFlowDistance >= TRIGGER_DISTANCE && playerFlowDistance < FLIGHT_END;
@@ -150,12 +167,11 @@ export function createChasseGalerie() {
         console.log('[CHASSE-GALERIE] Back on the water — Gatineau ahead.');
       }
 
-      // Ease toward the target height — climb out on take-off, glide down on
-      // the approach to FLIGHT_END.
-      const target = targetAltitude(playerFlowDistance);
-      const step = CLIMB_RATE * dt;
-      if (altitude < target) altitude = Math.min(target, altitude + step);
-      else if (altitude > target) altitude = Math.max(target, altitude - step);
+      // Altitude follows the distance-based curve while flying and eases back
+      // to the water otherwise (belt-and-braces — the curve is already ~0 by
+      // FLIGHT_END).
+      const targetAlt = active ? altitudeAt(playerFlowDistance) : 0;
+      altitude += Math.max(-3 * dt, Math.min(3 * dt, targetAlt - altitude));
 
       let hit = false;
       if (active && altitude > 0.5) {
@@ -206,6 +222,24 @@ export function createChasseGalerie() {
 
     getAltitude() {
       return altitude;
+    },
+
+    // 0 on the water, 1 at cruising height — the master "how much am I
+    // flying" value the game blends take-off physics with.
+    liftFraction() {
+      return Math.max(0, Math.min(1, altitude / FLIGHT_HEIGHT));
+    },
+
+    // How fully the hellstorm look should be applied at a given point on the
+    // river, 0..1 — a slow fade in from Montreal and out past Gatineau, so
+    // the world darkens around you as you climb rather than snapping. Pure
+    // function of position (independent of the `active` latch) so it also
+    // covers the short tail after the flight officially ends.
+    stormIntensityAt(flowDistance) {
+      if (flowDistance <= TRIGGER_DISTANCE || flowDistance >= FLIGHT_END + STORM_TAIL) return 0;
+      const up = (flowDistance - TRIGGER_DISTANCE) / STORM_FADE_IN;
+      const down = (FLIGHT_END + STORM_TAIL - flowDistance) / (STORM_FADE_OUT + STORM_TAIL);
+      return smoothstep(Math.min(up, down));
     },
 
     // The centre-relative lateral offset to be at right now to thread the
