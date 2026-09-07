@@ -139,18 +139,19 @@ await step('blockade: approach -> pursuit -> escape', () => {
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---
 
-await step('chasse-galerie: fly the storm, no landing, glide down', () => {
-  // A simple autopilot: steer toward the clear line through the hazards just
-  // ahead (chasseGalerie.clearOffsetAhead), fighting the storm wind. If a
-  // basic pilot like this can get through, the flight is hard but fair.
+await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
+  // A simple autopilot: steer toward the thread through the churches ahead
+  // (chasseGalerie.clearOffsetAhead), which also has to fight the crosswind.
+  // If a basic bang-bang pilot like this can get through, the gorge slalom
+  // is hard but fair.
   function flyThrough(game, input) {
     input.state.up = true;
     const want = game.chasseGalerie.isActive()
       ? game.chasseGalerie.clearOffsetAhead(game.flowDistance)
       : 0;
     const err = game.lateralOffset - want;
-    input.state.left = err > 0.4;
-    input.state.right = err < -0.4;
+    input.state.left = err > 0.12;
+    input.state.right = err < -0.12;
   }
 
   const g = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
@@ -176,12 +177,11 @@ await step('chasse-galerie: fly the storm, no landing, glide down', () => {
   if (!sawFlight) throw new Error('chasse-galerie never took flight from the ?start= drop point');
   if (maxAltitude < 4) throw new Error(`canoe never really left the water (max altitude ${maxAltitude.toFixed(1)})`);
   if (landedMidFlight) throw new Error('canoe docked at a riverbank town mid-flight — there should be no landing');
-  if (!completed) throw new Error('a centre-hold pilot could never get through the storm — too hard / unfair');
+  if (!completed) throw new Error('a thread-following pilot could never clear the gorge — too hard / unfair');
   if (g.game.chasseGalerie.getAltitude() > 0.5) throw new Error('canoe never glided back down onto the water');
 
-  // It's genuinely a storm now: flying a dead-straight line (no steering at
-  // all) into the wind and hazards does take damage — the flight is not a
-  // free ride down the middle.
+  // The steeples are the fight now: flying a dead-straight line (no steering
+  // at all) plows into a church within seconds — no free lane down the middle.
   const s = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
   let straightLineDamage = false;
   for (let i = 0; i < 2400 && !straightLineDamage; i++) {

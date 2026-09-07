@@ -96,13 +96,14 @@ export function estuaryProgress(d) {
 }
 
 export function widthAt(d) {
-  // Ottawa River (Chasse-galerie section) - much narrower for dodging challenge
-  // Starts after Montreal on lawrenceWest segment
-  const MONTREAL_FLOW = SEGMENT_SHAPE_OFFSET.lawrenceWest + 1250; // ~Montreal's position
-  if (d > MONTREAL_FLOW) {
-    // Narrow Ottawa River - half the normal width
-    const ottawaWidth = 12 + Math.sin(d * 0.08) * 2;
-    return Math.max(8, ottawaWidth); // 8-14 units wide (vs 20-44 normally)
+  // Ottawa River (Chasse-galerie section) — a tight gorge, so the big church
+  // steeples cutting in from the banks leave only a narrow thread to fly.
+  // Starts just before Montreal on lawrenceWest (offset ~2150 past that
+  // segment's shape offset — Montreal's own flowDistance).
+  const OTTAWA_FLOW = SEGMENT_SHAPE_OFFSET.lawrenceWest + 2150;
+  if (d > OTTAWA_FLOW) {
+    const ottawaWidth = 7 + Math.sin(d * 0.09) * 1.3 + Math.sin(d * 0.037 + 2) * 0.8;
+    return Math.max(5.2, ottawaWidth); // ~5-9 units wide (vs 20-44 normally)
   }
 
   // Cubic ease-in, not the raw linear progress — the fjord should stay

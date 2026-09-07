@@ -1,16 +1,13 @@
 // Chasse-galerie — the flying canoe.
 // Past Montreal the canoe lifts off the water and flies the whole Ottawa
-// River stretch up to the voyageurs' winter camp at Gatineau, through a
-// night storm. There's no landing anywhere along the way. Four things are
-// trying to end the flight (clip any church steeple or "swear" and the
-// devil's pact breaks):
-//   - parish steeples packed along both banks, all on land past the water
-//   - pinch points where a parish crowds both banks right to the waterline,
-//     leaving only a thread down the middle
-//   - storm clouds hanging in the channel itself — fair game to hit, you're
-//     airborne — that also buffet you sideways
-//   - a crosswind that shoves the canoe toward the banks the whole way
-// The river current doesn't apply in the sky (see game.js's flight branch).
+// River gorge up to the voyageurs' winter camp at Gatineau, on a stormy
+// night. There's no landing along the way, and the gorge is tight: big
+// parish churches jut in from alternating banks, each one cutting across
+// most of the channel and leaving only a narrow thread on the far side.
+// Fly the thread, weave bank to bank as the churches alternate. Clip a
+// steeple (or "swear") and the devil's pact breaks. A light crosswind
+// nudges you off line; the river current doesn't apply in the sky (see
+// game.js's flight branch).
 
 import { centerX, widthAt } from '../world/river/path.js';
 import { VILLAGES } from '../world/river/route.js';
@@ -35,130 +32,81 @@ const CLIMB_RATE = 3;          // world units of altitude gained/shed per second
 const DESCENT_RANGE = 48;      // how far out from FLIGHT_END the glide-down starts
 
 // How far past the water's edge the flying canoe is allowed to drift, world
-// units — out over the settled banks where the steeples stand, but no
-// further. game.js widens its lateral clamp to this while the flight is
-// active (and drops the "ran aground" penalty — you're in the air).
-export const FLIGHT_LATERAL_MARGIN = 7;
+// units — just a little overhang room; the churches spill onto the banks so
+// there's nothing to gain by flying wide. game.js widens its lateral clamp
+// to this while the flight is active (and drops the "ran aground" penalty).
+export const FLIGHT_LATERAL_MARGIN = 2;
 
-// --- the crosswind ---------------------------------------------------------
-// A lateral acceleration (world units/sec^2) applied to the canoe the whole
-// flight, so holding a dead-centre line is a constant fight rather than a
-// free ride. Peaks around WIND_STRENGTH; the player's own steering accel
-// (game.js STEER_ACCEL) is stronger, so it's beatable but never idle.
-// Scaled by altitude fraction — calm on the runway, full force at height.
-const WIND_STRENGTH = 9;
+// --- the crosswind -------------------------------------------------------
+// A gentle lateral acceleration (world units/sec^2) the whole flight, so
+// holding the thread takes small constant corrections. Secondary to the
+// steeples — the player's steering accel (game.js STEER_ACCEL) dwarfs it.
+// Scaled by altitude — calm on the runway, full at height.
+const WIND_STRENGTH = 4.5;
 export function flightWind(flowDistance, time, altFrac) {
   const d = flowDistance;
   const wave =
-    0.55 * Math.sin(d * 0.031) +
-    0.30 * Math.sin(d * 0.0117 + 2.1) +
-    0.15 * Math.sin(d * 0.084 + time * 0.6);
+    0.6 * Math.sin(d * 0.028) +
+    0.4 * Math.sin(d * 0.011 + 2.1);
   return WIND_STRENGTH * wave * Math.max(0, Math.min(1, altFrac));
 }
 
-// --- steeples ------------------------------------------------------------
-const STEEPLE_HIT_Z = 2.2;     // half-length of the collision box along the flow
-const STEEPLE_HIT_X = 2.3;     // half-width of the collision box across the river
-const STEEPLE_VISUAL_H = 7;    // nominal world-units tall (hash-varied per spire)
-const CHAPEL_SPACING = 12;     // nominal flow-distance between chapel slots
-const CHAPEL_JITTER = 4.5;     // flow-distance wobble per slot
-const CHAPEL_SIDE_CHANCE = 0.72; // odds a normal slot has a chapel on a given bank
-const CHAPEL_INSET_MIN = 2.6;  // nearest a normal steeple sits to the water
-const CHAPEL_INSET_MAX = FLIGHT_LATERAL_MARGIN; // farthest — out at the flight limit
-// Pinch points: a parish crowding both banks right down to the waterline.
-const PINCH_CHANCE = 0.11;     // of slots (never two in a row — see the builder)
-const PINCH_INSET_MIN = 0.0;   // right at the water's edge
-const PINCH_INSET_MAX = 1.1;
-const PINCH_STACK = 5;         // flow-distance between the two spires of a pinch side
+// --- the gorge slalom --------------------------------------------------
+const STEEPLE_SPACING = 26;    // nominal flow-distance between churches
+const STEEPLE_JITTER = 4;
+const STEEPLE_HIT_Z = 2.7;     // half-depth along the flow — the churches are deep
+const GORGE_GAP = 3.4;         // width of the clear thread past a church
+const GORGE_GAP_EASY = 4.8;    // occasional breather
+const GORGE_GAP_HARD = 2.7;    // occasional squeeze
+const GAP_CENTER_MAX = 1.4;    // the thread never sits further off centre than
+                               // this, so the weave stays within the canoe's
+                               // steering reach between churches
+const SAME_SIDE_CHANCE = 0.16; // odds a church repeats the previous bank
+const STEEPLE_VISUAL_H = 11;   // tall
+const STEEPLE_OVERHANG = 2.4;  // how far the church body spills past its own bank
 
-// --- storm clouds ------------------------------------------------------
-// Clouds sit off to one side of the channel, never dead centre, so there's
-// always a lane past them — consecutive clouds on opposite banks make a
-// weave. Wide but softer than a steeple.
-const CLOUD_HIT_Z = 2.5;
-const CLOUD_HIT_X = 2.8;
-const CLOUD_SPACING = 32;
-const CLOUD_JITTER = 9;
-const CLOUD_CHANCE = 0.8;
-const CLOUD_OFF_MIN = 1.8;     // nearest a cloud sits to the centre line
-const CLOUD_OFF_MAX = 4.6;     // farthest
-const CLOUD_CLEAR_OF_PINCH = 15; // keep clouds away from a pinch's narrow gap
-
-// Everything you can hit, built once at module load — pure geometry over the
-// flight span. `kind` is 'steeple' or 'cloud'; game.js damages them
-// differently and a cloud also shoves you sideways.
-const HAZARDS = (() => {
-  const from = TRIGGER_DISTANCE - 6;
-  const to = FLIGHT_END + 6;
-  const steeples = [];
-  const pinchCenters = [];
-
-  const slots = Math.ceil((to - from) / CHAPEL_SPACING);
-  let prevPinch = false;
-  for (let i = 0; i < slots; i++) {
-    const d = from + i * CHAPEL_SPACING + hashRange(i, 11, -CHAPEL_JITTER, CHAPEL_JITTER);
-    if (d < from || d > to) { prevPinch = false; continue; }
+// Built once at module load — pure geometry over the flight span. Each entry
+// is one church: `worldX`/`hx`/`hz` are its collision box (which reaches from
+// past its own bank across the centre line, cutting off most of the gorge),
+// `gapOffset` is the centre-relative lateral offset of the clear thread it
+// leaves on the far side (aim there), `side` is the bank it stands on.
+const STEEPLES = (() => {
+  const from = TRIGGER_DISTANCE - 4;
+  const to = FLIGHT_END + 4;
+  const out = [];
+  let side = 1;
+  let d = from + 12;
+  let i = 0;
+  while (d < to) {
+    const gapRoll = hashRange(i, 3, 0, 1);
+    const gap = gapRoll < 0.16 ? GORGE_GAP_EASY : gapRoll > 0.83 ? GORGE_GAP_HARD : GORGE_GAP;
     const waterHalf = widthAt(d) / 2;
-
-    const pinch = !prevPinch && hashRange(i, 7, 0, 1) < PINCH_CHANCE;
-    prevPinch = pinch;
-
-    if (pinch) {
-      pinchCenters.push(d);
-      for (const side of [-1, 1]) {
-        for (let k = 0; k < 2; k++) {
-          const sd = d + (k - 0.5) * PINCH_STACK;
-          const inset = hashRange(i, (side < 0 ? 60 : 70) + k, PINCH_INSET_MIN, PINCH_INSET_MAX);
-          steeples.push({
-            kind: 'steeple',
-            flowDistance: sd,
-            worldX: centerX(sd) + side * (widthAt(sd) / 2 + inset),
-            hz: STEEPLE_HIT_Z, hx: STEEPLE_HIT_X,
-            h: STEEPLE_VISUAL_H * hashRange(i, 80 + k, 0.95, 1.35),
-          });
-        }
-      }
-      continue;
-    }
-
-    for (const side of [-1, 1]) {
-      const salt = side < 0 ? 20 : 40;
-      if (hashRange(i, salt, 0, 1) > CHAPEL_SIDE_CHANCE) continue;
-      const inset = hashRange(i, salt + 1, CHAPEL_INSET_MIN, CHAPEL_INSET_MAX);
-      steeples.push({
-        kind: 'steeple',
-        flowDistance: d,
-        worldX: centerX(d) + side * (waterHalf + inset),
-        hz: STEEPLE_HIT_Z, hx: STEEPLE_HIT_X,
-        h: STEEPLE_VISUAL_H * hashRange(i, salt + 2, 0.8, 1.3),
-      });
-    }
-  }
-
-  const clouds = [];
-  const cslots = Math.ceil((to - from) / CLOUD_SPACING);
-  for (let i = 0; i < cslots; i++) {
-    if (hashRange(i, 91, 0, 1) > CLOUD_CHANCE) continue;
-    const d = from + i * CLOUD_SPACING + hashRange(i, 92, -CLOUD_JITTER, CLOUD_JITTER);
-    if (d < from || d > to) continue;
-    if (pinchCenters.some(pc => Math.abs(pc - d) < CLOUD_CLEAR_OF_PINCH)) continue;
-    const side = hashRange(i, 95, 0, 1) < 0.5 ? -1 : 1;
-    clouds.push({
-      kind: 'cloud',
+    const cx = centerX(d);
+    // Thread sits `gap/2` off the far bank, but never more than
+    // GAP_CENTER_MAX off centre — otherwise a wide spot would demand a weave
+    // the canoe can't physically cross in one church-spacing.
+    const gapCenter = -side * Math.min(Math.max(0, waterHalf - gap / 2), GAP_CENTER_MAX);
+    const innerX = gapCenter + side * (gap / 2); // church edge facing the thread
+    const outerX = side * (waterHalf + STEEPLE_OVERHANG);
+    out.push({
       flowDistance: d,
-      worldX: centerX(d) + side * hashRange(i, 93, CLOUD_OFF_MIN, CLOUD_OFF_MAX),
-      hz: CLOUD_HIT_Z, hx: CLOUD_HIT_X,
-      h: 3.4 * hashRange(i, 94, 0.8, 1.4),
-      seed: i,
+      side,
+      worldX: cx + (innerX + outerX) / 2,
+      hx: Math.abs(outerX - innerX) / 2,
+      hz: STEEPLE_HIT_Z,
+      gapOffset: gapCenter,
+      h: STEEPLE_VISUAL_H * hashRange(i, 6, 0.85, 1.3),
     });
+    i++;
+    if (hashRange(i, 9, 0, 1) >= SAME_SIDE_CHANCE) side = -side;
+    d += STEEPLE_SPACING + hashRange(i, 11, -STEEPLE_JITTER, STEEPLE_JITTER);
   }
-
-  return [...steeples, ...clouds].sort((a, b) => a.flowDistance - b.flowDistance);
+  return out;
 })();
 
-// --- lightning ---------------------------------------------------------
+// --- lightning -------------------------------------------------------
 // A deterministic flicker in [0,1] for render() to flash the screen with.
-// Pure cosmetic (a flash briefly *helps* visibility) — the point is mood.
+// Pure mood (a flash briefly *helps* visibility).
 export function lightningFlash(time) {
   const period = 2.9;
   const idx = Math.floor(time / period);
@@ -189,7 +137,7 @@ export function createChasseGalerie() {
 
       if (inRange && !flightDone && !active) {
         active = true;
-        console.log('[CHASSE-GALERIE] Taking flight into the storm!');
+        console.log('[CHASSE-GALERIE] Taking flight into the gorge!');
       }
       if (active && playerFlowDistance >= FLIGHT_END) {
         active = false;
@@ -205,19 +153,17 @@ export function createChasseGalerie() {
       else if (altitude > target) altitude = Math.max(target, altitude - step);
 
       let hit = false;
-      let hitKind = null;
       if (active && altitude > 0.5) {
-        for (const s of HAZARDS) {
+        for (const s of STEEPLES) {
           if (Math.abs(playerFlowDistance - s.flowDistance) < s.hz
             && Math.abs(canoeWorldX - s.worldX) < s.hx) {
             hit = true;
-            hitKind = s.kind;
-            if (s.kind === 'steeple') break; // steeple trumps a cloud on the same frame
+            break;
           }
         }
       }
 
-      return { hit, hitKind, active, altitude };
+      return { hit, active, altitude };
     },
 
     // Lateral acceleration from the storm wind at the canoe's position.
@@ -232,50 +178,20 @@ export function createChasseGalerie() {
       altitude = 0;
     },
 
-    drawStorm(ctx, worldDistance, cameraWorldX, time) {
+    drawStorm(ctx, worldDistance, cameraWorldX) {
       if (!active) return;
 
-      for (const hz of HAZARDS) {
-        // z < 0 is ahead of the canoe (up the screen), z > 0 behind it. Cull
-        // to a bit more than the visible span so tall spires still poke in
-        // from just off the top edge.
-        const z = worldDistance - hz.flowDistance;
-        if (z < -18 || z > 6) continue;
-        const screen = worldToScreen(hz.worldX, z, cameraWorldX);
+      const visible = [];
+      for (const s of STEEPLES) {
+        const z = worldDistance - s.flowDistance;
+        if (z < -20 || z > 6) continue;
+        visible.push({ s, z });
+      }
+      // Farthest ahead first, so nearer churches paint over them.
+      visible.sort((a, b) => a.z - b.z);
 
-        if (hz.kind === 'cloud') {
-          drawCloud(ctx, screen.x, screen.y, hz.h * PIXELS_PER_UNIT, hz.seed, time);
-          continue;
-        }
-
-        const h = hz.h * PIXELS_PER_UNIT;
-        const baseW = 9;
-        const tipW = 3;
-
-        // little stone nave at the base
-        ctx.fillStyle = '#5c5c56';
-        ctx.fillRect(screen.x - baseW, screen.y - h * 0.28, baseW * 2, h * 0.28);
-
-        // the spire
-        ctx.fillStyle = '#2f2f2f';
-        ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y - h);
-        ctx.lineTo(screen.x - tipW, screen.y - h * 0.72);
-        ctx.lineTo(screen.x - baseW, screen.y - h * 0.28);
-        ctx.lineTo(screen.x + baseW, screen.y - h * 0.28);
-        ctx.lineTo(screen.x + tipW, screen.y - h * 0.72);
-        ctx.closePath();
-        ctx.fill();
-
-        // cross at the peak
-        ctx.strokeStyle = '#1f1f1f';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(screen.x, screen.y - h - 4);
-        ctx.lineTo(screen.x, screen.y - h + 6);
-        ctx.moveTo(screen.x - 3, screen.y - h);
-        ctx.lineTo(screen.x + 3, screen.y - h);
-        ctx.stroke();
+      for (const { s, z } of visible) {
+        drawChurch(ctx, s, z, cameraWorldX);
       }
     },
 
@@ -287,62 +203,84 @@ export function createChasseGalerie() {
       return altitude;
     },
 
-    // The lateral offset that best threads whatever hazards sit just ahead —
-    // there is always a clear line through the storm, and this finds it.
-    // Used by the smoke test to prove the flight stays fair; could also
-    // drive a difficulty-assist ghost line later.
+    // The centre-relative lateral offset to be at right now to thread the
+    // churches: a straight ramp from the gap you just flew to the gap you're
+    // headed for, so at each church you're exactly in its gap and the weave
+    // between is gradual and trackable. There is always a clear line; this
+    // is it. Used by the smoke test (proves the flight stays fair) and could
+    // drive an assist line later.
     clearOffsetAhead(flowDistance) {
-      const LOOK = 16;
-      const cx = centerX(flowDistance);
-      const bound = widthAt(flowDistance) / 2 + FLIGHT_LATERAL_MARGIN;
-      let best = 0;
-      let bestScore = -Infinity;
-      for (let o = -bound; o <= bound; o += 0.4) {
-        const wx = cx + o;
-        let clearance = Infinity;
-        for (const s of HAZARDS) {
-          if (s.flowDistance < flowDistance - 2 || s.flowDistance > flowDistance + LOOK) continue;
-          clearance = Math.min(clearance, Math.abs(wx - s.worldX) - s.hx);
-        }
-        const score = Math.min(clearance, 6) - Math.abs(o) * 0.05;
-        if (score > bestScore) { bestScore = score; best = o; }
+      let idx = -1;
+      for (let k = 0; k < STEEPLES.length; k++) {
+        if (STEEPLES[k].flowDistance + STEEPLES[k].hz >= flowDistance) { idx = k; break; }
       }
-      return best;
+      if (idx === -1) return 0;
+      const next = STEEPLES[idx];
+      const prev = idx > 0 ? STEEPLES[idx - 1] : null;
+      if (!prev || flowDistance >= next.flowDistance) return next.gapOffset;
+      const t = (flowDistance - prev.flowDistance) / (next.flowDistance - prev.flowDistance);
+      return prev.gapOffset + (next.gapOffset - prev.gapOffset) * Math.max(0, Math.min(1, t));
     },
 
     // How far past the water's edge the canoe may currently drift, world
-    // units — scales with altitude, so it opens up as you climb out and
-    // eases back to the river as you glide down at the end (no hard snap
-    // back inside the banks when the flight flag finally flips off).
+    // units — scales with altitude, so it opens on take-off and eases back
+    // to the river on the glide down (no hard snap back inside the banks
+    // when the flight flag finally flips off).
     lateralMargin() {
       return FLIGHT_LATERAL_MARGIN * Math.max(0, Math.min(1, altitude / FLIGHT_HEIGHT));
     },
   };
 }
 
-function drawCloud(ctx, x, y, r, seed, time) {
-  const drift = Math.sin(time * 0.8 + seed) * 2;
-  ctx.save();
-  ctx.translate(x + drift, y);
-  // a few overlapping puffs, dark storm-grey with a paler crown
-  const puffs = [
-    { dx: -r * 0.9, dy: r * 0.15, s: 0.85 },
-    { dx: r * 0.9, dy: r * 0.2, s: 0.8 },
-    { dx: 0, dy: -r * 0.3, s: 1.05 },
-    { dx: -r * 0.25, dy: r * 0.35, s: 0.9 },
-    { dx: r * 0.35, dy: r * 0.3, s: 0.85 },
-  ];
-  ctx.fillStyle = '#4b4f5c';
-  for (const p of puffs) {
-    ctx.beginPath();
-    ctx.ellipse(p.dx, p.dy + r * 0.25, r * p.s, r * p.s * 0.72, 0, 0, Math.PI * 2);
-    ctx.fill();
+// A big stone parish church, its body cutting across the water from one
+// bank, a bell tower and tall spire looming over the gap it leaves.
+function drawChurch(ctx, s, z, cameraWorldX) {
+  const screen = worldToScreen(s.worldX, z, cameraWorldX);
+  const halfPx = s.hx * PIXELS_PER_UNIT;
+  const bodyH = s.h * 0.34 * PIXELS_PER_UNIT;
+  const spireH = s.h * PIXELS_PER_UNIT;
+  const waterY = screen.y;
+
+  // tower/spire sit at the channel-facing end (toward -side)
+  const towerX = screen.x - s.side * (halfPx - 7);
+  const towerW = 11;
+
+  // nave — a long stone hall spilling from the bank into the water
+  ctx.fillStyle = '#54545c';
+  ctx.fillRect(screen.x - halfPx, waterY - bodyH, halfPx * 2, bodyH + 6);
+  // pitched roof
+  ctx.fillStyle = '#3b3b42';
+  ctx.beginPath();
+  ctx.moveTo(screen.x - halfPx, waterY - bodyH);
+  ctx.lineTo(screen.x, waterY - bodyH - 9);
+  ctx.lineTo(screen.x + halfPx, waterY - bodyH);
+  ctx.closePath();
+  ctx.fill();
+
+  // a few lit windows so the church reads at night and telegraphs its width
+  ctx.fillStyle = '#e7c15a';
+  for (let wx = screen.x - halfPx + 6; wx < screen.x + halfPx - 4; wx += 9) {
+    ctx.fillRect(wx, waterY - bodyH * 0.62, 2, 4);
   }
-  ctx.fillStyle = '#6b7180';
-  for (const p of puffs) {
-    ctx.beginPath();
-    ctx.ellipse(p.dx, p.dy - r * 0.1, r * p.s * 0.8, r * p.s * 0.55, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
+
+  // bell tower
+  ctx.fillStyle = '#4a4a52';
+  ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.62, towerW, spireH * 0.62 + 4);
+  // spire
+  ctx.fillStyle = '#2c2c31';
+  ctx.beginPath();
+  ctx.moveTo(towerX, waterY - spireH);
+  ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.6);
+  ctx.lineTo(towerX + towerW / 2, waterY - spireH * 0.6);
+  ctx.closePath();
+  ctx.fill();
+  // cross
+  ctx.strokeStyle = '#20201f';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(towerX, waterY - spireH - 5);
+  ctx.lineTo(towerX, waterY - spireH + 7);
+  ctx.moveTo(towerX - 3.5, waterY - spireH + 1);
+  ctx.lineTo(towerX + 3.5, waterY - spireH + 1);
+  ctx.stroke();
 }

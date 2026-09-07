@@ -94,15 +94,10 @@ const SHIP_HULL_PENALTY_SPEED = 6;
 // A church steeple clipped mid-flight in the Chasse-galerie — harder than a
 // rock (there's no armour against breaking the devil's pact) but survivable
 // so a single mistake isn't an instant loss over the long flight.
-const STEEPLE_DAMAGE = 30;
-// A storm cloud is softer than a stone spire — less damage, but it also
-// buffets the canoe hard sideways (see the flight branch in update()),
-// which near a bank is its own problem.
-const CLOUD_DAMAGE = 10;
-const CLOUD_SHOVE = 5; // lateral velocity kick, world units/sec
+const STEEPLE_DAMAGE = 28;
 // Flying the Chasse-galerie the canoe rockets along faster than any paddled
-// stretch — less time to read each steeple and thread each pinch.
-const FLIGHT_CRUISE_SPEED = 18;
+// stretch — less time to read each church and slide into the next gap.
+const FLIGHT_CRUISE_SPEED = 17;
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
@@ -440,9 +435,6 @@ export class Game {
     } else if (entry.type === 'steeple') {
       this.takeDamage(STEEPLE_DAMAGE);
       this.invulnTimer = INVULN_TIME;
-    } else if (entry.type === 'cloud') {
-      this.takeDamage(CLOUD_DAMAGE);
-      this.invulnTimer = INVULN_TIME;
     } else {
       this.speed = Math.max(MIN_SPEED - 1, this.speed - LOG_PENALTY_SPEED);
       this.takeDamage(LOG_DAMAGE);
@@ -771,22 +763,11 @@ export class Game {
     if (this.segment === 'lawrenceWest') {
       const flight = this.chasseGalerie.update(this.flowDistance, this.canoeWorldX, dt);
       if (flight.hit) {
-        if (flight.hitKind === 'cloud') {
-          // One sideways kick per cloud (gated the same as the damage, via
-          // invulnTimer) — thrown toward whichever bank you're already
-          // nearer, so a cloud out near the edge is real trouble.
-          if (this.invulnTimer <= 0) {
-            const dir = this.lateralOffset >= 0 ? 1 : -1;
-            this.lateralVX = clamp(this.lateralVX + dir * CLOUD_SHOVE, -STEER_MAX, STEER_MAX);
-          }
-          this.handleHit({ type: 'cloud' });
-        } else {
-          this.handleHit({ type: 'steeple' });
-        }
+        this.handleHit({ type: 'steeple' });
       }
       // Show banner when flight starts
       if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
-        this.showBanner('LA CHASSE-GALERIE — ride out the storm!');
+        this.showBanner('LA CHASSE-GALERIE — thread the steeples!');
         this._chasseGalerieBannerShown = true;
       }
     }
@@ -848,8 +829,8 @@ export class Game {
     this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     // Same lawrenceWest-only guard as the update() call above.
     if (this.segment === 'lawrenceWest') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
-    // Draw Chasse-galerie steeples, storm clouds and their spires
-    if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX, this.time);
+    // Draw the Chasse-galerie churches cutting into the gorge
+    if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX);
 
     if (this.canoeVisible !== false) {
       const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;
