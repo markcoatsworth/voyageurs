@@ -491,8 +491,11 @@ export class Game {
     // deliberate, sustained effort rather than a one-way switch: stop
     // paddling and the river carries you forward again (or, on
     // lawrenceWest, backward — same drift, aimed the other way).
-    else if (this.speed > ambientCurrent) this.speed = Math.max(ambientCurrent, this.speed - ambientDecel * dt);
-    else this.speed = Math.min(ambientCurrent, this.speed + ambientDecel * dt);
+    // EXCEPT when flying (Chasse-galerie) - no current in the sky!
+    else if (!this.chasseGalerie.isActive()) {
+      if (this.speed > ambientCurrent) this.speed = Math.max(ambientCurrent, this.speed - ambientDecel * dt);
+      else this.speed = Math.min(ambientCurrent, this.speed + ambientDecel * dt);
+    }
 
     // Rapids strength at where the canoe currently is (i.e. before this
     // frame's advance) — the current adds its own push on top of whatever
@@ -504,7 +507,15 @@ export class Game {
     // stronger current, not getting a boost: same magnitude, flipped sign.
     const rapids = rapidsStrength(this.flowDistance);
     const rapidsDirection = this.segment === 'lawrenceWest' ? -1 : 1;
-    const effectiveSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
+
+    // Chasse-galerie: flying canoe ignores river current/rapids
+    let effectiveSpeed;
+    if (this.chasseGalerie.isActive()) {
+      // Constant flying speed - no current, just player control
+      effectiveSpeed = this.speed;
+    } else {
+      effectiveSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
+    }
 
     // Advance the shared river clock using this frame's effective speed —
     // the same value obstacles sample below — so the baked downstream
