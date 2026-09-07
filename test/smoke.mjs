@@ -159,7 +159,8 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
   let maxAltitude = 0;
   let landedMidFlight = false;
   let completed = false;
-  for (let i = 0; i < 12000 && !completed; i++) {
+  // The flight is a multi-minute glide now — allow the frames for it.
+  for (let i = 0; i < 20000 && !completed; i++) {
     flyThrough(g.game, g.input);
     g.game.update(1 / 30);
     if (g.game.chasseGalerie.isActive()) {
@@ -184,7 +185,7 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
   // at all) plows into a church within seconds — no free lane down the middle.
   const s = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
   let straightLineDamage = false;
-  for (let i = 0; i < 2400 && !straightLineDamage; i++) {
+  for (let i = 0; i < 5000 && !straightLineDamage; i++) {
     s.input.state.up = true; // no steering
     const hpBefore = s.game.health;
     s.game.update(1 / 30);
@@ -199,7 +200,7 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
   const t = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
   let treeDamage = false;
   let maxOffset = 0;
-  for (let i = 0; i < 1400; i++) {
+  for (let i = 0; i < 3000; i++) {
     t.input.state.up = true;
     t.input.state.left = true; // fly straight at the bank
     const hpBefore = t.game.health;

@@ -110,19 +110,20 @@ const CANNON_DAMAGE = 16;
 // you're in contact, same shape as BANK_PENALTY_SPEED just harder.
 const SHIP_HULL_DAMAGE = 40;
 const SHIP_HULL_PENALTY_SPEED = 6;
-// A church steeple clipped mid-flight in the Chasse-galerie — harder than a
-// rock (there's no armour against breaking the devil's pact) but survivable
-// so a single mistake isn't an instant loss over the long flight.
-const STEEPLE_DAMAGE = 28;
+// A church steeple clipped mid-flight in the Chasse-galerie. The flight is a
+// long (4+ minute) war of attrition, not a gauntlet of one-shot mistakes —
+// each clip is a small chip so a rough patch of weaving doesn't end the run.
+const STEEPLE_DAMAGE = 5;
 // Clipping the bank treetops mid-flight — the devil's canoe stays over the
-// water. Light per hit, but you take one every INVULN_TIME you're in the
-// trees, and a shove back toward the river on top, so straying off the
-// channel bleeds you fast.
-const TREE_DAMAGE = 9;
+// water. Slightly worse than a steeple, and you take one every INVULN_TIME
+// you're in the trees (plus a shove back toward the river), so straying off
+// the channel still bleeds you noticeably faster than a clean weave does.
+const TREE_DAMAGE = 7;
 const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
-// The Chasse-galerie's steady glide speed — deliberately slower than a hard
-// paddle, so there's time to read each church and slide into the next gap.
-const FLIGHT_CRUISE_SPEED = 9;
+// The Chasse-galerie's glide speed — slow and stately, so the flight up the
+// Ottawa runs several minutes and there's plenty of time to read each
+// church and slide into the next gap.
+const FLIGHT_CRUISE_SPEED = 3.4;
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
@@ -572,18 +573,18 @@ export class Game {
     const rapids = rapidsStrength(this.flowDistance);
     const rapidsDirection = this.segment === 'lawrenceWest' ? -1 : 1;
 
-    // Chasse-galerie: as the canoe lifts off the river's pull fades out and
-    // a slow, steady glide takes over — blended by how far off the water it
-    // is (lift 0..1) so the take-off isn't an instant lurch. Paddling only
-    // nudges the glide a little either way; the flight is about threading
-    // the steeples, not speed.
+    // Chasse-galerie: once airborne the canoe holds a slow, steady glide,
+    // fully independent of the river current below (which on this upstream
+    // stretch runs backward and would otherwise stall the whole flight at
+    // this cruise speed). Paddling only nudges the glide a little either
+    // way; the flight is about threading the steeples, not speed. The
+    // take-off still reads as gradual because the altitude/tilt ramp up
+    // visually (see liftFraction()).
     const flying = this.chasseGalerie.isActive();
-    const lift = this.chasseGalerie.liftFraction();
     let effectiveSpeed;
     if (flying) {
       const paddle = keys.up ? 1.5 : keys.down ? -1.5 : 0;
-      const riverSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
-      effectiveSpeed = riverSpeed + (FLIGHT_CRUISE_SPEED + paddle - riverSpeed) * lift;
+      effectiveSpeed = FLIGHT_CRUISE_SPEED + paddle;
     } else {
       effectiveSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
     }
