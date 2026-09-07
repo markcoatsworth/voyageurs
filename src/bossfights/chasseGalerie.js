@@ -1,13 +1,13 @@
 // Chasse-galerie — the flying canoe.
 // Past Montreal the canoe lifts off the water and flies the whole Ottawa
 // River gorge up to the voyageurs' winter camp at Gatineau, on a stormy
-// night. There's no landing along the way, and the gorge is tight: parish
-// churches jut in from alternating banks, each one cutting across most of
-// the channel and leaving only a narrow thread on the far side.
-// Fly the thread, weave bank to bank as the churches alternate. Clip a
-// steeple (or "swear") and the devil's pact breaks. A light crosswind
-// nudges you off line; the river current doesn't apply in the sky (see
-// game.js's flight branch).
+// night. There's no landing along the way. Parish churches stand along both
+// banks with their ends reaching into the water — the middle of the channel
+// stays open, so mostly you just keep off the banks on the bends, but every
+// so often a church reaches far enough across to force a dodge toward the
+// far bank, and those alternate sides. Clip a steeple (or "swear") and the
+// devil's pact breaks. A light crosswind nudges you off line; the river
+// current doesn't apply in the sky (see game.js's flight branch).
 
 import { centerX, widthAt } from '../world/river/path.js';
 import { VILLAGES } from '../world/river/route.js';
@@ -51,25 +51,27 @@ export function flightWind(flowDistance, time, altFrac) {
   return WIND_STRENGTH * wave * Math.max(0, Math.min(1, altFrac));
 }
 
-// --- the gorge slalom --------------------------------------------------
-const STEEPLE_SPACING = 26;    // nominal flow-distance between churches
+// --- the churches along the gorge -------------------------------------
+// Every church stands on a bank and only nips into the water — the middle
+// of the channel stays open. Most just cost the careless who drift wide on
+// a bend; roughly one in four "reaches" far enough to force a real dodge
+// toward the far bank, and those alternate sides so a cluster of them is a
+// weave with clear water between.
+const STEEPLE_SPACING = 25;    // nominal flow-distance between churches
 const STEEPLE_JITTER = 4;
-const STEEPLE_HIT_Z = 2.4;     // half-depth of the collision box along the flow
-const GORGE_GAP = 3.4;         // width of the clear thread past a church
-const GORGE_GAP_EASY = 4.8;    // occasional breather
-const GORGE_GAP_HARD = 2.7;    // occasional squeeze
-const GAP_CENTER_MAX = 1.4;    // the thread never sits further off centre than
-                               // this, so the weave stays within the canoe's
-                               // steering reach between churches
+const STEEPLE_HIT_Z = 2.3;     // half-depth of the collision box along the flow
+const REACH_NORMAL = 1.3;      // how far a normal church nips in from its bank
+const REACH_REACHING = 3.1;    // a "reaching" church — crosses the centre line
+const REACH_MIN_INNER = 0.5;   // never let the inner edge sit further than this
+                               // past centre onto the church's own side
+const REACHING_CHANCE = 0.26;  // odds a church is a reaching one
 const SAME_SIDE_CHANCE = 0.16; // odds a church repeats the previous bank
 const STEEPLE_VISUAL_H = 7;    // world-units tall (hash-varied per church)
 const STEEPLE_OVERHANG = 2.4;  // how far the church body spills past its own bank
 
 // Built once at module load — pure geometry over the flight span. Each entry
-// is one church: `worldX`/`hx`/`hz` are its collision box (which reaches from
-// past its own bank across the centre line, cutting off most of the gorge),
-// `gapOffset` is the centre-relative lateral offset of the clear thread it
-// leaves on the far side (aim there), `side` is the bank it stands on.
+// is one church: `worldX`/`hx`/`hz` are its collision box, `gapOffset` is the
+// centre-relative lateral offset to aim for to clear it, `side` is the bank.
 const STEEPLES = (() => {
   const from = TRIGGER_DISTANCE - 4;
   const to = FLIGHT_END + 4;
@@ -78,23 +80,24 @@ const STEEPLES = (() => {
   let d = from + 12;
   let i = 0;
   while (d < to) {
-    const gapRoll = hashRange(i, 3, 0, 1);
-    const gap = gapRoll < 0.16 ? GORGE_GAP_EASY : gapRoll > 0.83 ? GORGE_GAP_HARD : GORGE_GAP;
     const waterHalf = widthAt(d) / 2;
     const cx = centerX(d);
-    // Thread sits `gap/2` off the far bank, but never more than
-    // GAP_CENTER_MAX off centre — otherwise a wide spot would demand a weave
-    // the canoe can't physically cross in one church-spacing.
-    const gapCenter = -side * Math.min(Math.max(0, waterHalf - gap / 2), GAP_CENTER_MAX);
-    const innerX = gapCenter + side * (gap / 2); // church edge facing the thread
+    const reaching = hashRange(i, 3, 0, 1) < REACHING_CHANCE;
+    const reach = reaching ? REACH_REACHING : REACH_NORMAL;
+    // Inner edge (facing the open channel): `reach` in from this church's own
+    // bank, but never more than REACH_MIN_INNER past the centre line.
+    const innerX = side * Math.max(waterHalf - reach, -REACH_MIN_INNER);
     const outerX = side * (waterHalf + STEEPLE_OVERHANG);
+    // Aim just clear of the inner edge, toward the open middle/far bank.
+    const gapOffset = reaching ? innerX - side * 1.5 : 0;
     out.push({
       flowDistance: d,
       side,
+      reaching,
       worldX: cx + (innerX + outerX) / 2,
       hx: Math.abs(outerX - innerX) / 2,
       hz: STEEPLE_HIT_Z,
-      gapOffset: gapCenter,
+      gapOffset,
       h: STEEPLE_VISUAL_H * hashRange(i, 6, 0.85, 1.3),
     });
     i++;
@@ -232,11 +235,10 @@ export function createChasseGalerie() {
   };
 }
 
-// A stone parish church cutting in from one bank, its bell tower and spire
-// standing over the gap it leaves. Drawn a touch narrower and shorter than
-// its collision box so it reads clearly without filling the screen; the
-// gap-facing edge is kept exactly on the collision edge so what you steer
-// around is what's actually there.
+// A stone parish church standing on a bank, only its end reaching into the
+// water. Anchored at the bank-side collision edge and drawn toward the
+// channel: a "reaching" church is drawn the full width of its box (so you
+// see it cross the centre line); a normal one hugs its bank.
 function drawChurch(ctx, s, z, cameraWorldX) {
   const screen = worldToScreen(s.worldX, z, cameraWorldX);
   const halfPx = s.hx * PIXELS_PER_UNIT;
@@ -244,12 +246,10 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   const bodyH = s.h * 0.4 * PIXELS_PER_UNIT;
   const spireH = s.h * PIXELS_PER_UNIT;
 
-  // gap-facing edge = collision edge; the nave runs from there toward the
-  // bank, capped so a wide church doesn't draw as a giant slab.
-  const gapEdge = screen.x - s.side * halfPx;
-  const naveW = Math.min(halfPx * 2 * 0.8, 34);
-  const x0 = gapEdge;
-  const x1 = gapEdge + s.side * naveW;
+  const bankEdge = screen.x + s.side * halfPx;
+  const naveW = s.reaching ? halfPx * 2 : Math.min(halfPx * 2 * 0.7, 26);
+  const x0 = bankEdge;                    // over the bank
+  const x1 = bankEdge - s.side * naveW;   // toward the channel
   const left = Math.min(x0, x1);
   const right = Math.max(x0, x1);
   const mid = (left + right) / 2;
@@ -276,8 +276,9 @@ function drawChurch(ctx, s, z, cameraWorldX) {
     ctx.fillRect(wx, waterY - bodyH * 0.58, 2, 3);
   }
 
-  // bell tower at the gap-facing end, under the spire
-  const towerX = gapEdge + s.side * 5;
+  // bell tower near the bank end, under the spire — so the tall spire reads
+  // as standing over the bank, not out in the channel
+  const towerX = bankEdge - s.side * Math.min(naveW * 0.32, 13);
   const towerW = 8;
   ctx.fillStyle = '#c9cdd6';
   ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, towerW, spireH * 0.56 + 4);
