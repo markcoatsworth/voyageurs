@@ -3,21 +3,27 @@
        icon blends naturally into a browser tab, light or dark. -->
   <rect width="64" height="64" rx="10" fill="#0a0e14"/>
 
-  <!-- The V: doubles as the Voyageurs initial and the fjord's own V-shaped
-       valley walls (see route.js/path.js — this game is literally set in
-       one), rather than an arbitrary letterform bolted onto a boat.
-       Color matches the title screen's own H1 accent (#e0a458). -->
-  <path d="M10,9 L30,46 L34,46 L54,9"
-        fill="none" stroke="#e0a458" stroke-width="9"
-        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- A disc of water with one ripple. Kept simple so the canoe still reads
+       at a 16px browser-tab size. -->
+  <circle cx="32" cy="33" r="26" fill="#15374f"/>
+  <path d="M8,45 q6,-4 12,0 t12,0 t12,0" fill="none" stroke="#2b5878"
+        stroke-width="2.6" stroke-linecap="round"/>
 
-  <!-- A hint of river in the V's notch, right where the canoe sits. -->
-  <ellipse cx="32" cy="47.5" rx="11" ry="4" fill="#5fa8d9"/>
+  <!-- The paddle — one bold, near-vertical stroke so it stays distinct from
+       the horizontal hull even when tiny. -->
+  <line x1="42" y1="6" x2="27" y2="41" stroke="#6f4a29" stroke-width="4.4"
+        stroke-linecap="round"/>
+  <path d="M27,37 q-6,3 -6,12 q9,1 12,-8 z" fill="#c98a4b" stroke="#3a2412"
+        stroke-width="1.6" stroke-linejoin="round"/>
 
-  <!-- Canoe, side profile, nestled in the valley — same hull colors as the
-       in-game sprite (twod/sprites.js's createCanoeSprite): #4a2f18
-       outline, #a3672f base, #c98a4b gunwale highlight. -->
-  <path d="M15,47 Q32,38 49,47 Q32,54 15,47 Z" fill="#4a2f18"/>
-  <path d="M17,47 Q32,40 47,47 Q32,52 17,47 Z" fill="#a3672f"/>
-  <path d="M20,45.5 Q32,42 44,45.5" fill="none" stroke="#c98a4b" stroke-width="1.2" stroke-linecap="round"/>
+  <!-- Canoe, side profile — a big bold crescent hull with upswept stems,
+       filling most of the icon. Colors from the in-game sprite
+       (twod/sprites.js's createCanoeSprite). -->
+  <path d="M4,24 Q32,34 60,24 Q32,52 4,24 Z" fill="#a3672f"
+        stroke="#3a2412" stroke-width="3.6" stroke-linejoin="round"/>
+  <!-- hollow interior -->
+  <path d="M12,25.5 Q32,31 52,25.5 Q32,44 12,25.5 Z" fill="#6b3f1e"/>
+  <!-- gunwale highlight along the top edge -->
+  <path d="M7,24 Q32,32.5 57,24" fill="none" stroke="#d9a05c"
+        stroke-width="2.2" stroke-linecap="round"/>
 </svg>
