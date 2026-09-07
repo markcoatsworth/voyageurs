@@ -55,6 +55,12 @@
 //   Sorel-Tracy           46°03′N   73°07′W       https://en.wikipedia.org/wiki/Sorel-Tracy
 //   Charlemagne           45°43′N   73°29′W       https://en.wikipedia.org/wiki/Charlemagne,_Quebec
 //   Montreal              45°30′01″N 73°34′02″W   https://en.wikipedia.org/wiki/Montreal
+//   Ottawa River (Chasse-galerie flight path):
+//   Ile-Perrot            45°23′N   73°57′W       https://en.wikipedia.org/wiki/%C3%8Ele-Perrot
+//   Hudson                45°27′N   74°09′W       https://en.wikipedia.org/wiki/Hudson,_Quebec
+//   Rigaud                45°29′N   74°18′W       https://en.wikipedia.org/wiki/Rigaud,_Quebec
+//   Carillon              45°34′N   74°22′W       https://en.wikipedia.org/wiki/Carillon,_Quebec
+//   Gatineau              45°26′N   75°42′W       https://en.wikipedia.org/wiki/Gatineau
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
 
 // labelPos hand-places each minimap label clear of the route line and the
@@ -119,6 +125,13 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // Lakes), but this marks the end of the current journey. North shore (side: 1)
   // like Quebec City — the real city sits on the north bank.
   { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+
+  // The Ottawa River — Chasse-galerie flight path toward Gatineau
+  { name: 'Ile-Perrot', lat: 45.3800, lon: -73.9500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Hudson', lat: 45.4500, lon: -74.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Rigaud', lat: 45.4800, lon: -74.3000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Carillon', lat: 45.5600, lon: -74.3700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Gatineau', lat: 45.4300, lon: -75.7000, label: 'Gatineau', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
 ];
 
 // How far (game-world units) each segment takes to cross, end to end. Real
