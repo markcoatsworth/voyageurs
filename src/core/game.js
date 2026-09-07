@@ -15,14 +15,14 @@ import { isTouchPrimary } from './touchControls.js';
 // same numbers that felt right on desktop consistently played as "way too
 // fast" on touch. Scale forward-motion constants down for touch specifically
 // rather than changing the feel for everyone.
-const MOBILE_SPEED_SCALE = 0.6;
+const MOBILE_SPEED_SCALE = 0.45;
 const speedScale = isTouchPrimary() ? MOBILE_SPEED_SCALE : 1;
 // On top of the overall touch slowdown, the forward paddle specifically is
 // dialled down further for phone play: pushing "up" should *ease* the canoe
 // up to speed, not launch it, and top speed sits lower. Only touches how
 // "up" behaves — not the current, the brake, reverse, or steering.
 const FWD_ACCEL_SCALE = isTouchPrimary() ? 0.42 : 1; // gentler ramp
-const FWD_MAX_SCALE = isTouchPrimary() ? 0.72 : 1;   // lower ceiling
+const FWD_MAX_SCALE = isTouchPrimary() ? 0.78 : 1;   // lower ceiling
 // And when you let go of "up", the canoe settles back to its calm drift
 // speed quicker on touch — so "not pushing forward" reliably reads as slow
 // rather than coasting fast for ten-plus seconds.
@@ -72,8 +72,12 @@ const ACCEL = 7 * speedScale * FWD_ACCEL_SCALE;
 // ACCEL so the response is immediate.
 const BRAKE_DECEL = 17 * speedScale;
 const DECEL_DRIFT = 1.8 * speedScale;
-const STEER_ACCEL = 20;
-const STEER_MAX = 7;
+// Steering authority is halved for touch play: on a phone the pad is on/off,
+// so any nudge was full desktop steering and the canoe swung too hard.
+// Damping is unchanged, so it still settles promptly when you let go — it
+// just turns at half the rate while you're pushing.
+const STEER_ACCEL = 20 * (isTouchPrimary() ? 0.5 : 1);
+const STEER_MAX = 7 * (isTouchPrimary() ? 0.5 : 1);
 const STEER_DAMPING = 6;
 const EDGE_MARGIN = 0.55;
 const ISLAND_HIT_MARGIN = 0.35;
