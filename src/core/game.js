@@ -17,6 +17,16 @@ import { isTouchPrimary } from './touchControls.js';
 // rather than changing the feel for everyone.
 const MOBILE_SPEED_SCALE = 0.6;
 const speedScale = isTouchPrimary() ? MOBILE_SPEED_SCALE : 1;
+// On top of the overall touch slowdown, the forward paddle specifically is
+// dialled down further for phone play: pushing "up" should *ease* the canoe
+// up to speed, not launch it, and top speed sits lower. Only touches how
+// "up" behaves — not the current, the brake, reverse, or steering.
+const FWD_ACCEL_SCALE = isTouchPrimary() ? 0.42 : 1; // gentler ramp
+const FWD_MAX_SCALE = isTouchPrimary() ? 0.72 : 1;   // lower ceiling
+// And when you let go of "up", the canoe settles back to its calm drift
+// speed quicker on touch — so "not pushing forward" reliably reads as slow
+// rather than coasting fast for ten-plus seconds.
+const DRIFT_DECEL_TOUCH_MULT = isTouchPrimary() ? 2.4 : 1;
 
 // MIN_SPEED is really the ambient current's own speed — holding Down long
 // enough now overcomes it and actually paddles upstream (negative
@@ -27,7 +37,7 @@ const speedScale = isTouchPrimary() ? MOBILE_SPEED_SCALE : 1;
 // reads as an actual "chill" slow speed, not just a mild step down from
 // medium.
 const MIN_SPEED = 2.5 * speedScale;
-const MAX_SPEED = 16 * speedScale;
+const MAX_SPEED = 16 * speedScale * FWD_MAX_SCALE;
 // Paddling against the current is harder than going with it — capped well
 // under MAX_SPEED's magnitude, so upstream is a real but slow slog, not a
 // second forward gear pointed the other way.
@@ -55,7 +65,7 @@ const UPRIVER_CURRENT = -MIN_SPEED;
 // UPRIVER_CURRENT instead of reusing DECEL_DRIFT's gentle one.
 const UPRIVER_DECEL = 6 * speedScale;
 const BASE_SPEED = 8 * speedScale;
-const ACCEL = 7 * speedScale;
+const ACCEL = 7 * speedScale * FWD_ACCEL_SCALE;
 // Holding "down" (back on the steer pad / Down key) is a brake, not a lazy
 // back-paddle: it kills forward speed fast so the canoe visibly slows, then
 // eases on into a gentle reverse if you keep holding. Much stronger than
@@ -524,7 +534,9 @@ export class Game {
     // target is negative and the decay is much quicker (see
     // UPRIVER_CURRENT/UPRIVER_DECEL/AMBIENT_CURRENT's comments).
     const ambientCurrent = AMBIENT_CURRENT[this.segment] ?? MIN_SPEED;
-    const ambientDecel = this.segment === 'lawrenceWest' ? UPRIVER_DECEL : DECEL_DRIFT * 0.3;
+    const ambientDecel = this.segment === 'lawrenceWest'
+      ? UPRIVER_DECEL
+      : DECEL_DRIFT * 0.3 * DRIFT_DECEL_TOUCH_MULT;
 
     if (keys.up) this.speed = Math.min(MAX_SPEED, this.speed + ACCEL * dt);
     else if (keys.down) {
