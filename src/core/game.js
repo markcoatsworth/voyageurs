@@ -56,6 +56,11 @@ const UPRIVER_CURRENT = -MIN_SPEED;
 const UPRIVER_DECEL = 6 * speedScale;
 const BASE_SPEED = 8 * speedScale;
 const ACCEL = 7 * speedScale;
+// Holding "down" (back on the steer pad / Down key) is a brake, not a lazy
+// back-paddle: it kills forward speed fast so the canoe visibly slows, then
+// eases on into a gentle reverse if you keep holding. Much stronger than
+// ACCEL so the response is immediate.
+const BRAKE_DECEL = 17 * speedScale;
 const DECEL_DRIFT = 1.8 * speedScale;
 const STEER_ACCEL = 20;
 const STEER_MAX = 7;
@@ -522,7 +527,13 @@ export class Game {
     const ambientDecel = this.segment === 'lawrenceWest' ? UPRIVER_DECEL : DECEL_DRIFT * 0.3;
 
     if (keys.up) this.speed = Math.min(MAX_SPEED, this.speed + ACCEL * dt);
-    else if (keys.down) this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - ACCEL * dt);
+    else if (keys.down) {
+      // Brake hard toward a stop; only past ~0 does it slow to the gentler
+      // ACCEL rate, so holding on still backs you up but the first thing
+      // that happens is an obvious slow-down.
+      const rate = this.speed > 0 ? BRAKE_DECEL : ACCEL;
+      this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - rate * dt);
+    }
     // No input: drift back toward the current's own speed from whichever
     // side you're currently on — this is what makes upstream paddling a
     // deliberate, sustained effort rather than a one-way switch: stop
@@ -1005,10 +1016,18 @@ export class Game {
     this.ui.hudHealthFill.classList.toggle('critical', healthPct <= 30);
 
     // Effective (current-boosted) speed, not just the paddle stat, so the
-    // bar actually shows "the current is flying you along" during rapids.
-    const speedPct = ((this.effectiveSpeed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)) * 100;
-    this.ui.hudSpeedFill.style.width = `${clamp(speedPct, 0, 100)}%`;
-    this.ui.hudSpeedFill.classList.toggle('rapids', this.rapids > 0.15);
+    // bar shows "the current is flying you along" during rapids. Measured
+    // from a dead stop (0), not from MIN_SPEED — so just drifting still
+    // shows a little fill, and braking visibly drains it to empty instead
+    // of it already sitting at zero the moment you stop paddling hard.
+    const speedPct = clamp((this.effectiveSpeed / MAX_SPEED) * 100, 0, 100);
+    // While actively braking, hold the bar at a short red nub so pushing
+    // back always reads as a real action — even pinned against the put-in
+    // where there's no forward motion left to visibly lose.
+    const braking = this.input.state.down && this.mode === 'river';
+    this.ui.hudSpeedFill.style.width = `${braking ? Math.max(6, speedPct) : speedPct}%`;
+    this.ui.hudSpeedFill.classList.toggle('rapids', this.rapids > 0.15 && !braking);
+    this.ui.hudSpeedFill.classList.toggle('braking', braking);
 
     // flowDistance is the persistent world position that never resets on
     // restart, so the map marker holds its real place on the river across a
