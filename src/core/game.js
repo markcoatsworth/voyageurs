@@ -580,8 +580,10 @@ export class Game {
     if (keys.right) steerInput += 1;
 
     // Fighting the current: steering authority drops the harder the
-    // whitewater is pushing.
-    this.lateralVX += steerInput * STEER_ACCEL * (1 - rapids * RAPIDS_STEER_PENALTY) * dt;
+    // whitewater is pushing — but not in the air (Chasse-galerie), where the
+    // river below can't touch the canoe at all, only the steeples can.
+    const steerRapids = flying ? 0 : rapids;
+    this.lateralVX += steerInput * STEER_ACCEL * (1 - steerRapids * RAPIDS_STEER_PENALTY) * dt;
     this.lateralVX -= this.lateralVX * STEER_DAMPING * dt;
 
     // Cross-current from blockade fight: pushes you away from the gap,
