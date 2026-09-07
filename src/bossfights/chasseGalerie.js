@@ -55,7 +55,9 @@ export function createChasseGalerie() {
 
           // Random side: left (-1) or right (1)
           const side = Math.random() < 0.5 ? -1 : 1;
-          const offset = (Math.random() * 0.3 + 0.4) * side; // 40-70% from center
+          // Steeples on the BANK (churches are on shore, not mid-river)
+          const bankOffset = 0.85 + Math.random() * 0.1; // 85-95% toward edge
+          const offset = side * bankOffset;
 
           steeples.push({
             flowDistance: d,

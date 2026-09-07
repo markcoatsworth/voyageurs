@@ -96,6 +96,15 @@ export function estuaryProgress(d) {
 }
 
 export function widthAt(d) {
+  // Ottawa River (Chasse-galerie section) - much narrower for dodging challenge
+  // Starts after Montreal on lawrenceWest segment
+  const MONTREAL_FLOW = SEGMENT_SHAPE_OFFSET.lawrenceWest + 1250; // ~Montreal's position
+  if (d > MONTREAL_FLOW) {
+    // Narrow Ottawa River - half the normal width
+    const ottawaWidth = 12 + Math.sin(d * 0.08) * 2;
+    return Math.max(8, ottawaWidth); // 8-14 units wide (vs 20-44 normally)
+  }
+
   // Cubic ease-in, not the raw linear progress — the fjord should stay
   // close to its own width for most of the approach and only really open up
   // right near the mouth ("until the walls fall away and the Saint Lawrence
