@@ -7,7 +7,10 @@ import { centerX, widthAt } from '../world/river/path.js';
 import { worldToScreen, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
 
 const MONTREAL = VILLAGES.find(v => v.name === 'Montreal');
-const TRIGGER_DISTANCE = MONTREAL.flowDistance + 20; // Shortly after Montreal
+// Where the canoe leaves the water and takes flight. Exported (like
+// blockade.js's SHIP_FLOW_DISTANCE) so main.js's ?start= keyword can drop a
+// tester right on the cusp of it without re-deriving Montreal's geography.
+export const TRIGGER_DISTANCE = MONTREAL.flowDistance + 20; // Shortly after Montreal
 const FLIGHT_DURATION = 200; // How long the flight lasts in world units
 const FLIGHT_END = TRIGGER_DISTANCE + FLIGHT_DURATION;
 

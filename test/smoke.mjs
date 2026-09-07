@@ -58,6 +58,7 @@ const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
+const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE } = await import('../src/bossfights/chasseGalerie.js');
 
 function makeUi(minimap) {
   const el = (id) => makeElement(id);
@@ -134,6 +135,24 @@ await step('blockade: approach -> pursuit -> escape', () => {
   }
   if (!sawFight) throw new Error('blockade never activated across the whole approach');
   notes.push(`  note blockade ran; ended segment ${g.game.segment} @ ${g.game.flowDistance | 0}`);
+});
+
+// --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---
+
+await step('chasse-galerie: cast off -> take flight -> land', () => {
+  // Same spot ?start=chasse-galerie lands on: 10 units short of the trigger.
+  const g = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
+  let sawFlight = false;
+  for (let i = 0; i < 4000; i++) {
+    g.input.state.up = true;
+    g.input.state.left = i % 160 < 80;
+    g.input.state.right = i % 160 >= 80;
+    g.game.update(1 / 30);
+    if (g.game.chasseGalerie.isActive()) sawFlight = true;
+    if (g.game.state === 'gameover') g.game.start();
+  }
+  if (!sawFlight) throw new Error('chasse-galerie never took flight from the ?start= drop point');
+  notes.push(`  note chasse-galerie ran; ended segment ${g.game.segment} @ ${g.game.flowDistance | 0}`);
 });
 
 // --- scenario 5: a village visit ----------------------------------------

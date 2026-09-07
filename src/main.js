@@ -9,6 +9,7 @@ import { Game } from './core/game.js';
 import { VILLAGES } from './world/river/route.js';
 import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
 import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
+import { TRIGGER_DISTANCE as CHASSE_GALERIE_FLOW_DISTANCE } from './bossfights/chasseGalerie.js';
 
 const app = document.getElementById('app');
 
@@ -46,8 +47,9 @@ function normalizeStartName(s) {
 // Also-recognized, dev-only keywords that aren't real places — not part of
 // VILLAGES, so they never show up on the minimap or anywhere in-game, they
 // just give ?start= a couple more names to jump to for testing. One entry
-// per boss fight (bossfights/blockade.js today; more planned, each landing
-// here the same way as it's built) — normalizeStartName() is applied to
+// per boss fight (bossfights/blockade.js and bossfights/chasseGalerie.js
+// today; more planned, each landing here the same way as it's built) —
+// normalizeStartName() is applied to
 // these keys too, so "british-blockade", "british blockade", and
 // "british+blockade" all work, same as every real village name already
 // does. "british-blockade" drops the canoe already within firing range of
@@ -56,8 +58,14 @@ function normalizeStartName(s) {
 // ship, comfortably inside APPROACH_RANGE (190) so cannon fire starts
 // immediately, but with real room left to practice finding the gap before
 // the hull itself.
+//
+// "chasse-galerie" drops the canoe just past Montreal's dock and 10 units
+// short of chasseGalerie.js's TRIGGER_DISTANCE — clear of that dock's hit
+// zone (so it doesn't instantly go ashore) but close enough that the canoe
+// lifts off into the flight up the Ottawa within a second of casting off.
 const START_KEYWORDS = {
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'lawrenceWest' },
+  [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE - 10, segment: 'lawrenceWest' },
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
