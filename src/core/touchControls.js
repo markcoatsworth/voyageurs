@@ -16,9 +16,16 @@
 // Fraction of the pad's radius near the centre that reads as neutral.
 const DEAD_ZONE = 0.28;
 // How aligned the push must be with an axis for that arrow to count, as a
-// share of the (normalised) push direction — generous, so a slightly-off
-// push still registers cleanly and a real diagonal lights both arrows.
-const AXIS_SHARE = 0.34;
+// share of the (normalised) push direction. Asymmetric on purpose:
+//   - steering (left/right) is generous, so a slightly-off sideways push
+//     still turns cleanly
+//   - throttle (up/down) is strict, so a mostly-sideways push does NOT
+//     also gun the paddle — you have to push clearly up or down to change
+//     speed. Steering while paddling still works: push a real diagonal.
+// STEER_SHARE 0.4  -> steering registers within ~66 deg of horizontal.
+// THROTTLE_SHARE 0.72 -> speed only changes within ~44 deg of vertical.
+const STEER_SHARE = 0.4;
+const THROTTLE_SHARE = 0.72;
 // How far (px) the knob travels from centre at a full push — kept short of
 // the rim so the knob never covers the arrows (pad radius ~71, knob 24).
 const KNOB_RANGE = 26;
@@ -50,10 +57,10 @@ export function createTouchControls(input) {
     if (mag > DEAD_ZONE) {
       const ux = nx / mag;
       const uy = ny / mag;
-      up = -uy > AXIS_SHARE;
-      down = uy > AXIS_SHARE;
-      left = -ux > AXIS_SHARE;
-      right = ux > AXIS_SHARE;
+      up = -uy > THROTTLE_SHARE;
+      down = uy > THROTTLE_SHARE;
+      left = -ux > STEER_SHARE;
+      right = ux > STEER_SHARE;
     }
     input.state.up = up;
     input.state.down = down;
