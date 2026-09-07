@@ -445,56 +445,69 @@ button:hover {
   opacity: 0.7;
 }
 
-/* Big, obvious arrow controls, always visible (not gated to touch devices
-   — a clickable directional control is just as reasonable to want with a
-   mouse as the mute/pause buttons are). A single row, not the old 2D
-   plus-shaped grid, in the order up/left/right/down. Four independent
-   buttons rather than a drag stick — see touchControls.js for why.
+/* The steer pad — a round thumb-stick marked with direction arrows, always
+   visible (not gated to touch: a directional control is as reasonable to
+   want with a mouse as the mute/pause buttons are). See touchControls.js.
    Pinned to the screen's actual bottom-right corner — `right` here is the
    real, permanent value (same convention #right-panel uses up top), not
    just a pre-JS fallback. `top` is the one dynamic piece: main.js's
    resize() overrides it every time the window changes, computed from the
-   game canvas's own actual rendered bottom edge so this row sits just below
-   it rather than on top of it — `bottom` below is only the pre-JS fallback
+   game canvas's own actual rendered bottom edge so this sits just below it
+   rather than on top of it — `bottom` below is only the pre-JS fallback
    for the very first paint, before that override runs. */
 #touch-dpad {
-  display: flex;
-  flex-direction: row;
   position: fixed;
   right: 20px;
   bottom: 20px;
-  gap: 10px;
   z-index: 5;
 }
 
-.dpad-btn {
-  padding: 0;
-  margin: 0;
-  width: 58px;
-  height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26px;
-  background: rgba(10, 14, 20, 0.55);
-  color: #f4ead2;
-  border: 3px solid rgba(244, 234, 210, 0.65);
-  border-radius: 10px;
-  box-shadow: none;
+#steer-pad {
+  position: relative;
+  width: 142px;
+  height: 142px;
+  border-radius: 50%;
+  background: rgba(10, 14, 20, 0.5);
+  border: 3px solid rgba(244, 234, 210, 0.6);
   pointer-events: all;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Lights up red the instant a button is pressed — driven explicitly via
-   .pressed (see touchControls.js) rather than relying on :active alone,
-   which doesn't reliably fire for touch input on every browser; :active
-   stays too so a mouse click still gets the same feedback outside of
-   touchControls.js's own pointer tracking. */
-.dpad-btn:active,
-.dpad-btn.pressed {
-  background: rgba(214, 69, 69, 0.85);
-  border-color: #ff6b6b;
+/* The four arrows, hugging the rim at N/W/E/S — kept clearly visible so the
+   control reads as "four directions" at a glance. Each lights red while its
+   direction is being pushed (.active, set by touchControls.js). */
+.steer-arrow {
+  position: absolute;
+  font-size: 22px;
+  line-height: 1;
+  color: rgba(244, 234, 210, 0.75);
+  pointer-events: none;
+  transition: color 0.06s linear, text-shadow 0.06s linear;
+}
+.steer-arrow.active {
+  color: #ff6b6b;
+  text-shadow: 0 0 9px rgba(255, 107, 107, 0.95);
+}
+.steer-up { top: 5px; left: 50%; transform: translateX(-50%); }
+.steer-down { bottom: 5px; left: 50%; transform: translateX(-50%); }
+.steer-left { left: 6px; top: 50%; transform: translateY(-50%); }
+.steer-right { right: 6px; top: 50%; transform: translateY(-50%); }
+
+/* The knob that follows the thumb — sits centred, moved by an inline
+   transform from touchControls.js. Sized and range-limited (KNOB_RANGE
+   there) so it never crowds the rim arrows. */
+#steer-knob {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  left: 50%;
+  top: 50%;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: rgba(244, 234, 210, 0.3);
+  border: 2px solid rgba(244, 234, 210, 0.85);
+  pointer-events: none;
 }
 
 /* The real-world locator map (world/minimap.js) — deliberately outside the

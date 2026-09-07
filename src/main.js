@@ -147,8 +147,8 @@ const MINIMAP_MIN = 110;
 const MOBILE_MINIMAP_MIN = 150;
 const MINIMAP_MAX = 280;
 
-const dpad = document.getElementById('touch-dpad');
-const DPAD_GAP = 4; // breathing room between the canvas and the dpad row
+const dpad = document.getElementById('touch-dpad'); // the steer pad wrapper
+const DPAD_GAP = 4; // breathing room between the canvas and the steer pad
 
 function resize() {
   // The canvas's own size is unaffected by the dpad — it's picked exactly
@@ -201,9 +201,20 @@ function resize() {
     dpad.style.top = 'auto';
     dpad.style.bottom = '20px';
   } else if (bottomMargin >= dpadRect.height + DPAD_GAP) {
+    // Below the canvas — but on a tall phone with a short landscape canvas
+    // there's a lot of empty space down here, and a pad floating right
+    // under the canvas ends up mid-screen, out of comfortable thumb reach.
+    // Sit it near the bottom edge instead, never higher than just-below the
+    // canvas and never off-screen.
+    const nearBottom = window.innerHeight - dpadRect.height - 28;
+    const justBelowCanvas = screenRect.bottom + DPAD_GAP;
+    const top = Math.min(
+      window.innerHeight - dpadRect.height,
+      Math.max(justBelowCanvas, nearBottom),
+    );
     dpad.style.right = '20px';
     dpad.style.bottom = 'auto';
-    dpad.style.top = `${Math.round(screenRect.bottom + DPAD_GAP)}px`;
+    dpad.style.top = `${Math.round(top)}px`;
   } else {
     // Neither margin fits it — a window shaped so tightly that avoiding the
     // canvas entirely isn't possible without shrinking it, which the canvas

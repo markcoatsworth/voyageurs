@@ -34,11 +34,17 @@
       </div>
     </div>
 
+    <!-- The steer pad: a round thumb-stick marked with direction arrows.
+         See src/core/touchControls.js. #touch-dpad stays the positioned
+         wrapper main.js's resize() moves around. -->
     <div id="touch-dpad">
-      <button type="button" id="dpad-up" class="dpad-btn dpad-up" title="Up">&#9650;</button>
-      <button type="button" id="dpad-left" class="dpad-btn dpad-left" title="Left">&#9664;</button>
-      <button type="button" id="dpad-right" class="dpad-btn dpad-right" title="Right">&#9654;</button>
-      <button type="button" id="dpad-down" class="dpad-btn dpad-down" title="Down">&#9660;</button>
+      <div id="steer-pad" title="Steer / paddle">
+        <span class="steer-arrow steer-up">&#9650;</span>
+        <span class="steer-arrow steer-left">&#9664;</span>
+        <span class="steer-arrow steer-right">&#9654;</span>
+        <span class="steer-arrow steer-down">&#9660;</span>
+        <div id="steer-knob"></div>
+      </div>
     </div>
 
     <div id="hud" class="hidden">
