@@ -110,11 +110,14 @@ export function createObstacleField(world) {
 
   return {
     pool,
-    update(time, dt, speed, canoeWorldX, onHit, onCollect) {
+    // `collidable` false (Chasse-galerie flight) still advances and recycles
+    // every entry so the field keeps scrolling under the canoe, but nothing
+    // is hit or picked up — the canoe is in the air, not on the water.
+    update(time, dt, speed, canoeWorldX, onHit, onCollect, collidable = true) {
       for (const entry of pool) {
         entry.z += speed * dt;
 
-        if (entry.active && Math.abs(entry.z) < 0.7) {
+        if (collidable && entry.active && Math.abs(entry.z) < 0.7) {
           const dx = Math.abs(entry.x - canoeWorldX);
           if (dx < hitRadiusFor(entry.type)) {
             entry.active = false;

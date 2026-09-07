@@ -715,13 +715,14 @@ export class Game {
       this.showBanner("You've reached Tadoussac — the Saguenay opens into the Saint Lawrence");
     }
 
-    // Airborne in the Chasse-galerie (`flying`, above), rocks and deadfall on
-    // the water below can't touch the canoe — only the steeples (handled
-    // above) can. Pelts are still fair game to swoop.
+    // Airborne in the Chasse-galerie (`flying`, above), nothing on the water
+    // below interacts with the canoe — rocks and deadfall can't hit it, fur
+    // pelts can't be collected. Only the steeples (handled above) matter.
     this.obstacles.update(
       this.time, dt, effectiveSpeed, this.canoeWorldX,
-      (entry) => { if (!flying) this.handleHit(entry); },
-      (entry) => this.handleCollect(entry)
+      (entry) => this.handleHit(entry),
+      (entry) => this.handleCollect(entry),
+      !flying,
     );
 
     // Only meaningful on lawrenceWest — SHIP_FLOW_DISTANCE is a number on
