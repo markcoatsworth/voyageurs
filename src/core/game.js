@@ -95,6 +95,12 @@ const SHIP_HULL_PENALTY_SPEED = 6;
 // rock (there's no armour against breaking the devil's pact) but survivable
 // so a single mistake isn't an instant loss over the long flight.
 const STEEPLE_DAMAGE = 28;
+// Clipping the bank treetops mid-flight — the devil's canoe stays over the
+// water. Light per hit, but you take one every INVULN_TIME you're in the
+// trees, and a shove back toward the river on top, so straying off the
+// channel bleeds you fast.
+const TREE_DAMAGE = 9;
+const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
 // The Chasse-galerie's steady glide speed — deliberately slower than a hard
 // paddle, so there's time to read each church and slide into the next gap.
 const FLIGHT_CRUISE_SPEED = 9;
@@ -435,6 +441,9 @@ export class Game {
     } else if (entry.type === 'steeple') {
       this.takeDamage(STEEPLE_DAMAGE);
       this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'tree') {
+      this.takeDamage(TREE_DAMAGE);
+      this.invulnTimer = INVULN_TIME;
     } else {
       this.speed = Math.max(MIN_SPEED - 1, this.speed - LOG_PENALTY_SPEED);
       this.takeDamage(LOG_DAMAGE);
@@ -606,13 +615,12 @@ export class Game {
 
     this.lateralVX = clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
 
-    // Flying the Chasse-galerie the canoe ranges out over the banks (that's
-    // where the steeples are). The extra room scales with altitude (see
-    // lateralMargin()), so it opens on take-off and closes on the glide
-    // down, and running into the bound up there is just the edge of the sky,
-    // not "ran aground" — it costs no health.
-    const half = widthAt(this.flowDistance) / 2 - EDGE_MARGIN
-      + (flying ? this.chasseGalerie.lateralMargin() : 0);
+    // The navigable water: the canoe (flying or not) is held to this.
+    const waterEdge = widthAt(this.flowDistance) / 2 - EDGE_MARGIN;
+    // In the air the hard clamp sits a hair past the water so there's no
+    // invisible wall at the edge — but that shallow strip is the bank
+    // treetops (see below), not free sky.
+    const half = waterEdge + (flying ? this.chasseGalerie.lateralMargin() : 0);
     const proposed = this.lateralOffset + this.lateralVX * dt;
     if (proposed > half || proposed < -half) {
       this.lateralOffset = clamp(proposed, -half, half);
@@ -620,6 +628,16 @@ export class Game {
       if (!flying) this.handleHit({ type: 'bank' });
     } else {
       this.lateralOffset = proposed;
+    }
+
+    // Chasse-galerie: the devil's canoe belongs over the river. Stray past
+    // the water's edge into the bank treetops and you clip them — a hit
+    // every INVULN_TIME you're in there, plus a shove back toward the
+    // channel — so the flight stays fenced to the water even though you're
+    // airborne.
+    if (flying && Math.abs(this.lateralOffset) > waterEdge) {
+      this.lateralVX -= Math.sign(this.lateralOffset) * TREE_PUSHBACK * dt;
+      this.handleHit({ type: 'tree' });
     }
 
     this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;

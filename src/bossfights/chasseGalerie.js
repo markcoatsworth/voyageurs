@@ -57,18 +57,18 @@ function altitudeAt(flowDistance) {
   return FLIGHT_HEIGHT * smoothstep(Math.min(climb, descend));
 }
 
-// How far past the water's edge the flying canoe is allowed to drift, world
-// units — just a little overhang room; the churches spill onto the banks so
-// there's nothing to gain by flying wide. game.js widens its lateral clamp
-// to this while the flight is active (and drops the "ran aground" penalty).
-export const FLIGHT_LATERAL_MARGIN = 2;
+// How far past the water's edge the flying canoe can push before the hard
+// clamp, world units — a shallow strip so there's no invisible wall right
+// at the waterline. That strip IS the bank treetops, and flying into it
+// costs you (game.js) — the devil's canoe is meant to stay over the river.
+export const FLIGHT_LATERAL_MARGIN = 1.1;
 
 // --- the crosswind -------------------------------------------------------
 // A gentle lateral acceleration (world units/sec^2) the whole flight, so
 // holding the thread takes small constant corrections. Secondary to the
 // steeples — the player's steering accel (game.js STEER_ACCEL) dwarfs it.
 // Scaled by altitude — calm on the runway, full at height.
-const WIND_STRENGTH = 4.5;
+const WIND_STRENGTH = 3.5;
 export function flightWind(flowDistance, time, altFrac) {
   const d = flowDistance;
   const wave =
@@ -85,11 +85,14 @@ export function flightWind(flowDistance, time, altFrac) {
 // weave with clear water between.
 const STEEPLE_SPACING = 25;    // nominal flow-distance between churches
 const STEEPLE_JITTER = 4;
-const STEEPLE_HIT_Z = 2.3;     // half-depth of the collision box along the flow
+const STEEPLE_HIT_Z = 1.9;     // half-depth of the collision box along the flow
 const REACH_NORMAL = 1.3;      // how far a normal church nips in from its bank
-const REACH_REACHING = 3.1;    // a "reaching" church — crosses the centre line
-const REACH_MIN_INNER = 0.5;   // never let the inner edge sit further than this
-                               // past centre onto the church's own side
+const REACH_REACHING = 5;      // a "reaching" church crosses the centre line —
+                               // large so it always clamps to REACH_MIN_INNER
+const REACH_MIN_INNER = 0.15;   // how far past centre a reaching church's inner
+                               // edge sits — enough that a dead-centre line
+                               // clips it, not so far the far-side thread
+                               // brushes the bank treetops
 const REACHING_CHANCE = 0.26;  // odds a church is a reaching one
 const SAME_SIDE_CHANCE = 0.16; // odds a church repeats the previous bank
 const STEEPLE_VISUAL_H = 7;    // world-units tall (hash-varied per church)
@@ -114,8 +117,13 @@ const STEEPLES = (() => {
     // bank, but never more than REACH_MIN_INNER past the centre line.
     const innerX = side * Math.max(waterHalf - reach, -REACH_MIN_INNER);
     const outerX = side * (waterHalf + STEEPLE_OVERHANG);
-    // Aim just clear of the inner edge, toward the open middle/far bank.
-    const gapOffset = reaching ? innerX - side * 1.5 : 0;
+    // Aim just clear of the inner edge, toward the open middle — but keep
+    // the thread inside the water (the bank treetops are a hazard now, see
+    // game.js), so never send it closer than ~0.7 units off the far bank.
+    const threadLimit = Math.max(0, waterHalf - 1.0);
+    const gapOffset = reaching
+      ? Math.max(-threadLimit, Math.min(threadLimit, innerX - side * 1.5))
+      : 0;
     out.push({
       flowDistance: d,
       side,

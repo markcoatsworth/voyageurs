@@ -102,8 +102,8 @@ export function widthAt(d) {
   // segment's shape offset — Montreal's own flowDistance).
   const OTTAWA_FLOW = SEGMENT_SHAPE_OFFSET.lawrenceWest + 2150;
   if (d > OTTAWA_FLOW) {
-    const ottawaWidth = 7 + Math.sin(d * 0.09) * 1.3 + Math.sin(d * 0.037 + 2) * 0.8;
-    return Math.max(5.2, ottawaWidth); // ~5-9 units wide (vs 20-44 normally)
+    const ottawaWidth = 8 + Math.sin(d * 0.09) * 1.4 + Math.sin(d * 0.037 + 2) * 0.9;
+    return Math.max(6.2, ottawaWidth); // ~6-10.5 units wide (vs 20-44 normally)
   }
 
   // Cubic ease-in, not the raw linear progress — the fjord should stay

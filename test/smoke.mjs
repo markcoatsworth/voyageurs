@@ -193,6 +193,26 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
   }
   if (!straightLineDamage) throw new Error('flying a straight line through the storm took no damage — too easy');
 
+  // The flight stays fenced to the river: steering hard into a bank the
+  // whole time clips the treetops (damage) and never lets the canoe escape
+  // out over the land.
+  const t = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
+  let treeDamage = false;
+  let maxOffset = 0;
+  for (let i = 0; i < 1400; i++) {
+    t.input.state.up = true;
+    t.input.state.left = true; // fly straight at the bank
+    const hpBefore = t.game.health;
+    t.game.update(1 / 30);
+    if (t.game.chasseGalerie.isActive()) {
+      if (t.game.health < hpBefore) treeDamage = true;
+      maxOffset = Math.max(maxOffset, Math.abs(t.game.lateralOffset));
+    }
+    if (t.game.state === 'gameover') break;
+  }
+  if (!treeDamage) throw new Error('flying into the bank mid-flight never clipped the treetops');
+  if (maxOffset > 12) throw new Error(`canoe escaped out over the land mid-flight (offset ${maxOffset.toFixed(1)})`);
+
   notes.push(`  note chasse-galerie ran; max altitude ${maxAltitude.toFixed(1)}, completed the storm`);
 });
 
