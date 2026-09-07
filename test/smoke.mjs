@@ -155,6 +155,29 @@ await step('chasse-galerie: cast off -> take flight -> land', () => {
   notes.push(`  note chasse-galerie ran; ended segment ${g.game.segment} @ ${g.game.flowDistance | 0}`);
 });
 
+// --- scenario 4c: casting off from Montreal doesn't loop back in ----------
+
+await step('montreal: cast off without re-docking', () => {
+  const montreal = VILLAGES.find((v) => v.name === 'Montreal');
+  if (!montreal) throw new Error('no "Montreal" in VILLAGES — a name/lookup drifted again');
+  const g = newGame(montreal.segment, montreal.flowDistance - 20);
+  g.game.enterVillage(montreal);
+  g.game.leaveVillage();
+  if (g.game.mode !== 'river') throw new Error('leaveVillage did not return to river mode');
+  const castOffAt = g.game.flowDistance;
+  // Paddle upstream, hard — the current here runs backward toward the dock.
+  let reDocked = false;
+  for (let i = 0; i < 240 && !reDocked; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+    if (g.game.mode === 'village') reDocked = true;
+  }
+  if (reDocked) throw new Error('canoe re-docked at Montreal while paddling away after casting off');
+  if (g.game.flowDistance <= castOffAt) {
+    throw new Error(`no upstream progress after casting off (${g.game.flowDistance | 0} <= ${castOffAt | 0})`);
+  }
+});
+
 // --- scenario 5: a village visit ----------------------------------------
 
 await step('village: dock, walk, trade, cast off', () => {

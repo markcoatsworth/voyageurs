@@ -266,6 +266,8 @@ export class Game {
     this.mode = 'river';
     this.currentVillage = null;
     this.blockadeCrossCurrent = 0;
+    this._castOffGrace = 0;
+    this._castOffGraceVillage = null;
 
     this.segment = this.startSegment;
     this.flowDistance = this.startFlowDistance;
@@ -384,7 +386,23 @@ export class Game {
       // Push just past the dock's own trigger zone — otherwise the instant
       // control returns to the canoe, it's still sitting in the exact spot
       // that triggered docking, and the very next frame docks it again.
-      this.flowDistance = this.currentVillage.flowDistance + dockHitZ(this.currentVillage) + 0.5;
+      const clearance = dockHitZ(this.currentVillage) + 0.5;
+      if (this.segment === 'lawrenceWest') {
+        // The current here runs *backward* (upriver, toward the dock), so a
+        // half-unit nudge is dragged straight back into the trigger zone
+        // before the player can react — worst at Montreal and Québec City,
+        // whose docks reach most of the way across the channel, so steering
+        // clear laterally doesn't help either. Give the canoe real upstream
+        // separation plus forward momentum, and ignore this one dock for a
+        // few seconds (see update()'s getDockHit check) so casting off isn't
+        // an instant loop back into the same village.
+        this.flowDistance = this.currentVillage.flowDistance + dockHitZ(this.currentVillage) + 6;
+        this.speed = Math.max(this.speed, BASE_SPEED);
+        this._castOffGraceVillage = this.currentVillage;
+        this._castOffGrace = 3;
+      } else {
+        this.flowDistance = this.currentVillage.flowDistance + clearance;
+      }
       this.world.distance = this.flowDistance;
       this.showBanner('Casting off');
     }
@@ -592,8 +610,13 @@ export class Game {
     // first, every frame, ahead of the mouth-crossing check below (so
     // docking at Tadoussac itself, if the player happens to steer into its
     // reach on the way past, still works exactly like every other village).
+    if (this._castOffGrace > 0) this._castOffGrace -= dt;
     const dockHit = getDockHit(this.flowDistance, this.canoeWorldX);
-    if (dockHit) {
+    // Suppress only the dock just cast off from, and only while the grace
+    // window is open — every other dock (and this one, once it closes) still
+    // triggers normally. See leaveVillage()'s lawrenceWest branch.
+    const suppressed = this._castOffGrace > 0 && dockHit === this._castOffGraceVillage;
+    if (dockHit && !suppressed) {
       this.enterVillage(dockHit);
       return;
     }
