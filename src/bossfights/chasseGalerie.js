@@ -1,9 +1,11 @@
 // Chasse-galerie — the flying canoe.
 // Past Montreal the canoe lifts off the water and flies the whole Ottawa
-// River gorge up to the voyageurs' winter camp at Gatineau, on a stormy
-// night. There's no landing along the way. Parish churches stand along both
-// banks with their ends reaching into the water — the middle of the channel
-// stays open, so mostly you just keep off the banks on the bends, but every
+// River gorge up to the voyageurs' winter camp at Gatineau, through the
+// Devil's own weather — a black sky burning at the horizon (see game.js's
+// flight render). There's no landing along the way. Parish churches stand
+// along both banks with their ends reaching into the water — the middle of
+// the channel stays open, so mostly you just keep off the banks on the
+// bends, but every
 // so often a church reaches far enough across to force a dodge toward the
 // far bank, and those alternate sides. Clip a steeple (or "swear") and the
 // devil's pact breaks. A light crosswind nudges you off line; the river
@@ -254,53 +256,68 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   const right = Math.max(x0, x1);
   const mid = (left + right) / 2;
 
-  // nave — pale lit limestone so it stands out against the night storm
-  ctx.fillStyle = '#c9cdd6';
+  const towerX = bankEdge - s.side * Math.min(naveW * 0.32, 13);
+  const towerW = 8;
+
+  // A cold moonlit halo behind the whole church, so its dark bulk still
+  // separates from the burning sky at every edge — eerie, not invisible.
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = '#9fb4c4';
+  ctx.fillRect(left - 2, waterY - bodyH - 3, right - left + 4, bodyH + 8);
+  ctx.beginPath();
+  ctx.moveTo(towerX - towerW / 2 - 2, waterY - spireH * 0.56);
+  ctx.lineTo(towerX, waterY - spireH - 3);
+  ctx.lineTo(towerX + towerW / 2 + 2, waterY - spireH * 0.56);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // nave — cold, dead stone. Grey lit only by the moon, no life in it;
+  // deliberately not warm. Forbidding, not welcoming: this is holy ground
+  // the pact won't let you touch.
+  ctx.fillStyle = '#9a9791';
   ctx.fillRect(left, waterY - bodyH, right - left, bodyH + 5);
-  // shaded lower course, just for a bit of form
-  ctx.fillStyle = '#9aa0ad';
+  // shaded lower course
+  ctx.fillStyle = '#48453f';
   ctx.fillRect(left, waterY - bodyH * 0.34, right - left, bodyH * 0.34 + 5);
-  // pitched roof
-  ctx.fillStyle = '#8b93a6';
+  // pitched roof — near-black slate
+  ctx.fillStyle = '#252229';
   ctx.beginPath();
   ctx.moveTo(left - 1, waterY - bodyH);
   ctx.lineTo(mid, waterY - bodyH - 7);
   ctx.lineTo(right + 1, waterY - bodyH);
   ctx.closePath();
   ctx.fill();
-  // glowing windows
+  // dark, empty windows with the faintest cold gleam — nobody's home
   for (let wx = left + 4; wx < right - 3; wx += 8) {
-    ctx.fillStyle = 'rgba(255,213,120,0.35)';
-    ctx.fillRect(wx - 1.5, waterY - bodyH * 0.58 - 1.5, 5, 6);
-    ctx.fillStyle = '#ffe08a';
-    ctx.fillRect(wx, waterY - bodyH * 0.58, 2, 3);
+    ctx.fillStyle = '#191719';
+    ctx.fillRect(wx - 1, waterY - bodyH * 0.58 - 1, 4, 5);
+    ctx.fillStyle = 'rgba(160,176,188,0.55)';
+    ctx.fillRect(wx, waterY - bodyH * 0.58, 2, 2);
   }
 
-  // bell tower near the bank end, under the spire — so the tall spire reads
-  // as standing over the bank, not out in the channel
-  const towerX = bankEdge - s.side * Math.min(naveW * 0.32, 13);
-  const towerW = 8;
-  ctx.fillStyle = '#c9cdd6';
+  // bell tower near the bank end, under the spire
+  ctx.fillStyle = '#8a8781';
   ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, towerW, spireH * 0.56 + 4);
-  ctx.fillStyle = '#9aa0ad';
+  ctx.fillStyle = '#48453f';
   ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, 2, spireH * 0.56 + 4);
-  // spire
-  ctx.fillStyle = '#b3b8c4';
+  // spire — dark, its moonlit leading edge catching the only light
+  ctx.fillStyle = '#5c5966';
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH);
   ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.54);
   ctx.lineTo(towerX + towerW / 2, waterY - spireH * 0.54);
   ctx.closePath();
   ctx.fill();
-  // rim light down the spire's leading edge + a bright cross, so the
-  // silhouette separates cleanly from the dark sky
-  ctx.strokeStyle = '#eef0f5';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#b6c0c8';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH);
   ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.54);
   ctx.stroke();
-  ctx.strokeStyle = '#fff3d4';
+  // the cross still holds its own light — the one thing the storm can't dim
+  ctx.strokeStyle = '#eef3f6';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH - 4);

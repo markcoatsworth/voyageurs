@@ -797,13 +797,16 @@ export class Game {
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Night-storm sky when flying — deep indigo overhead down to a murky
-    // blue-grey at the horizon, much darker than the daytime river.
+    // Hellstorm sky when flying — near-black violet overhead bleeding down
+    // to a sullen ember glow at the horizon, like the clouds are lit from
+    // below by something burning. The Devil isn't here yet, but this is his
+    // weather.
     if (isFlying) {
       const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-      gradient.addColorStop(0, '#1a1c33');
-      gradient.addColorStop(0.55, '#2c3350');
-      gradient.addColorStop(1, '#454f66');
+      gradient.addColorStop(0, '#05030a');
+      gradient.addColorStop(0.42, '#150611');
+      gradient.addColorStop(0.76, '#3a0c0a');
+      gradient.addColorStop(1, '#7c1f07');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
@@ -817,13 +820,16 @@ export class Game {
       drawWaterFallback(ctx, this.flowDistance, cameraWorldX);
     }
 
-    // Push the ground into gloom when flying — a dim, desaturated wash so
-    // the land below reads as a dark countryside seen at night, not the
-    // daytime river.
+    // Drown the ground in gloom when flying — a heavy near-black wash with a
+    // dull red heat under it, so the land and river below read as scorched
+    // country glimpsed through smoke, not the daytime river.
     if (isFlying) {
       ctx.save();
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = '#20233b';
+      ctx.globalAlpha = 0.68;
+      ctx.fillStyle = '#0c0304';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = '#5a1408';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
     }
@@ -866,29 +872,29 @@ export class Game {
         ctx.fill();
         ctx.restore();
 
-        // Sparkle trail
-        for (let i = 0; i < 5; i++) {
+        // Hellfire trail — the flame the canoe is riding on
+        for (let i = 0; i < 6; i++) {
           const trailX = canoeScreenX + (Math.random() - 0.5) * sprite.width;
           const trailY = canoeScreenY + sprite.height / 2 + i * 8;
-          const sparkleSize = 1 + Math.random() * 2;
-          const sparkleAlpha = 0.4 - i * 0.08;
+          const sparkleSize = 1 + Math.random() * 2.5;
+          const sparkleAlpha = 0.5 - i * 0.08;
 
           ctx.save();
           ctx.globalAlpha = sparkleAlpha * (0.5 + Math.sin(this.time * 8 + i) * 0.5);
-          ctx.fillStyle = '#fff';
+          ctx.fillStyle = i % 3 === 0 ? '#ffca5a' : '#ff5a1e';
           ctx.fillRect(trailX - sparkleSize / 2, trailY - sparkleSize / 2, sparkleSize, sparkleSize);
           ctx.restore();
         }
 
-        // Speed lines
+        // Wind streaks, dragged dark-red across the storm
         for (let i = 0; i < 8; i++) {
           const lineY = Math.random() * CANVAS_HEIGHT;
           const lineLength = 20 + Math.random() * 30;
           const lineX = CANVAS_WIDTH - (this.time * 200 + i * 40) % CANVAS_WIDTH;
 
           ctx.save();
-          ctx.globalAlpha = 0.2;
-          ctx.strokeStyle = '#aaf';
+          ctx.globalAlpha = 0.18;
+          ctx.strokeStyle = '#7a1c12';
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(lineX, lineY);
@@ -917,24 +923,43 @@ export class Game {
       console.log('[RENDER] Canoe NOT visible! canoeVisible:', this.canoeVisible);
     }
 
-    // Storm mood, over everything: a dark vignette closing in the edges so
-    // steeples loom out of the corners with less warning, plus the odd
-    // lightning flash lighting the whole sky white for a frame or two.
+    // Storm mood, over everything.
     if (isFlying) {
+      // Embers streaming up past the canoe out of the fire below.
+      ctx.save();
+      for (let i = 0; i < 18; i++) {
+        const seed = i * 47.3;
+        const rise = 16 + (i % 5) * 7;
+        const y = CANVAS_HEIGHT + 16 - ((this.time * rise + seed * 6.1) % (CANVAS_HEIGHT + 40));
+        const x = (seed * 13.7 + Math.sin(this.time * 0.6 + seed) * 22) % CANVAS_WIDTH;
+        const flick = 0.35 + Math.sin(this.time * 8 + seed) * 0.45;
+        if (flick <= 0.08) continue;
+        const s = 1 + (i % 3);
+        ctx.globalAlpha = Math.min(1, flick) * 0.75;
+        ctx.fillStyle = i % 4 === 0 ? '#ffb347' : '#ff4d1c';
+        ctx.fillRect(x, y, s, s);
+      }
+      ctx.restore();
+
+      // Heavy black-red vignette, breathing slightly, closing the edges in
+      // so the churches loom out of the dark with less warning.
+      const pulse = 0.58 + Math.sin(this.time * 1.2) * 0.07;
       const vg = ctx.createRadialGradient(
-        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.42,
-        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.92,
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.36,
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.95,
       );
-      vg.addColorStop(0, 'rgba(8,8,20,0)');
-      vg.addColorStop(1, 'rgba(6,6,16,0.42)');
+      vg.addColorStop(0, 'rgba(2,0,1,0)');
+      vg.addColorStop(0.65, `rgba(8,1,2,${(pulse * 0.45).toFixed(3)})`);
+      vg.addColorStop(1, `rgba(3,0,0,${pulse.toFixed(3)})`);
       ctx.fillStyle = vg;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+      // Lightning — a sickly orange sheet-flash, not clean white.
       const lf = lightningFlash(this.time);
       if (lf > 0) {
         ctx.save();
-        ctx.globalAlpha = lf * 0.5;
-        ctx.fillStyle = '#e8ecff';
+        ctx.globalAlpha = lf * 0.42;
+        ctx.fillStyle = '#ff7a38';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         ctx.restore();
       }
