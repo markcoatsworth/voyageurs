@@ -29,7 +29,16 @@ export const TRIGGER_DISTANCE = MONTREAL.flowDistance + 20; // Shortly after Mon
 // winter camp rather than the sky just switching off mid-channel.
 const FLIGHT_END = GATINEAU.flowDistance - 18;
 
-const FLIGHT_HEIGHT = 8;       // cruising altitude, world units above the river
+// Cruising altitude, world units above the river. Doubles as how far up the
+// screen the canoe sits mid-flight (game.js draws it at CANOE_SCREEN_Y minus
+// this * PIXELS_PER_UNIT), so it's a framing knob too: 8 pinned the canoe
+// right against the top edge with almost no view of the churches ahead.
+// Dropped to 6.5 for a strip of headroom — the shadow still sits well clear
+// of the bottom (it stays on the water plane at CANOE_SCREEN_Y) and the
+// canoe still floats a good ~100px above it. Only the visual height and the
+// climb/descent scale with this; every gameplay ratio (lift, wind, the
+// lateral margin) is altitude/FLIGHT_HEIGHT, so those are unchanged.
+const FLIGHT_HEIGHT = 6.5;
 // The take-off and landing are gradual, measured in flow-distance rather
 // than seconds: the canoe rises over the first CLIMB_DISTANCE units out of
 // Montreal and settles back down over the last DESCENT_DISTANCE into
