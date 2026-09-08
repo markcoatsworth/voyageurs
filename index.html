@@ -64,6 +64,14 @@
       <div id="hud-speed-wrap"><div id="hud-speed-fill"></div></div>
     </div>
 
+    <!-- Le Diable's health, shown only during the boss fight at the head of
+         the Chasse-galerie (game.js drives it from diablePct). Separate from
+         #hud so it can sit centred at the top over the storm. -->
+    <div id="hud-diable" class="hidden">
+      <div id="hud-diable-label">LE DIABLE</div>
+      <div id="hud-diable-wrap"><div id="hud-diable-fill"></div></div>
+    </div>
+
     <div id="damage-flash"></div>
 
     <div id="title-screen" class="screen intro">
@@ -77,7 +85,7 @@
     <div id="now-playing" aria-live="polite"></div>
 
     <div id="gameover-screen" class="screen hidden">
-      <h1>CAPSIZED</h1>
+      <h1 id="gameover-title">CAPSIZED</h1>
       <p id="final-stats"></p>
       <button id="restart-btn">Try Again</button>
     </div>

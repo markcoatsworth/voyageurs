@@ -37,6 +37,10 @@ const PLAYLIST = [
 // see endBossTrack()), the normal shuffle picks back up right where it
 // left off, not from scratch.
 const BOSS_TRACK = { src: '/audio/rule-britannia.mp3', title: 'Rule, Britannia!', artist: 'Thomas Arne' };
+// Same deal for the Diable fight at the head of the Chasse-galerie — the
+// Devil is a fiddler, so his fight gets a reel. Also sits in the shuffle
+// above; that's fine, it just means it can turn up on its own elsewhere too.
+const DIABLE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' };
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -113,9 +117,10 @@ export function createMusic({ onTrack } = {}) {
   // real head start on mobile. Fire-and-forget: playCurrent() awaits
   // whichever of these promises it needs, whenever it needs it.
   for (const track of PLAYLIST) prefetch(track.src);
-  // The boss track needs the exact same head start — it has to be ready to
-  // cut in the instant the frigate is spotted, not start fetching then.
+  // The boss tracks need the exact same head start — ready to cut in the
+  // instant the frigate is spotted / the Devil looms up, not fetching then.
   prefetch(BOSS_TRACK.src);
+  prefetch(DIABLE_TRACK.src);
 
   // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
   // now, or null before the first successful play(). onTrack — passed by
@@ -284,6 +289,11 @@ export function createMusic({ onTrack } = {}) {
     // `started` itself.
     playBossTrack() {
       playSpecial(BOSS_TRACK);
+    },
+    // The Diable fight's reel — same cut-in-now behaviour as playBossTrack;
+    // endBossTrack() drops either one back into the shuffle.
+    playDiableTrack() {
+      playSpecial(DIABLE_TRACK);
     },
     // Cuts the boss track short and drops back into the normal shuffle —
     // called the moment the fight resolves, rather than waiting out the

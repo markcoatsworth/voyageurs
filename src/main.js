@@ -10,6 +10,7 @@ import { VILLAGES } from './world/river/route.js';
 import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
 import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
 import { TRIGGER_DISTANCE as CHASSE_GALERIE_FLOW_DISTANCE } from './bossfights/chasseGalerie.js';
+import { DIABLE_FLOW_DISTANCE } from './bossfights/diable.js';
 
 const app = document.getElementById('app');
 
@@ -65,9 +66,16 @@ function normalizeStartName(s) {
 // short, but on a touch device the dialled-down forward paddle can't fight
 // the backward Ottawa current + rapids over that gap, so the flight never
 // started.)
+//
+// "diable" drops the canoe a short paddle short of the Devil's arena at the
+// head of the Chasse-galerie — the flight/storm are already live there, and
+// game.js's armDiableCheckpoint() (called below) hands over the pistol so
+// you can actually fight him. A capsize then respawns right here, not at
+// Montréal.
 const START_KEYWORDS = {
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'lawrenceWest' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
+  [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
@@ -293,9 +301,12 @@ const ui = {
   hudHealthFill: document.getElementById('hud-health-fill'),
   hudBlockade: document.getElementById('hud-blockade'),
   hudBlockadeFill: document.getElementById('hud-blockade-fill'),
+  hudDiable: document.getElementById('hud-diable'),
+  hudDiableFill: document.getElementById('hud-diable-fill'),
   damageFlash: document.getElementById('damage-flash'),
   titleScreen: document.getElementById('title-screen'),
   gameoverScreen: document.getElementById('gameover-screen'),
+  gameoverTitle: document.getElementById('gameover-title'),
   finalStats: document.getElementById('final-stats'),
   restartBtn: document.getElementById('restart-btn'),
   pauseScreen: document.getElementById('pause-screen'),
@@ -380,9 +391,15 @@ setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
 // transition (0.8s) has actually finished.
 setTimeout(() => ui.titleScreen.classList.add('hidden'), 4500 + 900);
 
+const startedAtDiable =
+  normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('diable');
+
 let game = null;
 try {
   game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance, startSegment });
+  // ?start=diable is a checkpoint, not just a spawn point — hand over the
+  // pistol and mark it so a capsize respawns at the fight.
+  if (startedAtDiable) game.armDiableCheckpoint();
   // Lets the index.html error handler word later crashes as "running the
   // game" rather than "loading the game".
   window.__voyageursReady = true;

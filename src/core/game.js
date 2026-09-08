@@ -3,11 +3,12 @@ import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEI
 import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
 import { createCanoeSprites } from '../world/canoe.js';
-import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import { createBlockade } from '../bossfights/blockade.js';
 import { createChasseGalerie, lightningFlash } from '../bossfights/chasseGalerie.js';
+import { createDiable, DIABLE_FLOW_DISTANCE } from '../bossfights/diable.js';
 import { createWeapons } from './weapons.js';
 import { isTouchPrimary } from './touchControls.js';
 
@@ -251,6 +252,12 @@ export class Game {
     this.blockade = createBlockade();
     this.blockadePct = null; // null hides the HUD bar; set by update() while the fight is active
     this.chasseGalerie = createChasseGalerie();
+    this.diable = createDiable();
+    this.diablePct = null; // null hides the HUD bar; his HP% while the fight runs
+    // Set once the Devil looms up (or by ?start=diable): a capsize then
+    // respawns just before the fight with the pistol, not all the way back
+    // at Montréal — see start() and update()'s consumeJustAppeared branch.
+    this._diableCheckpoint = false;
     this.weapons = createWeapons();
 
     // Set up weapon firing callback
@@ -350,7 +357,13 @@ export class Game {
     this.blockade.reset();
     this.blockadePct = null;
     this.chasseGalerie.reset();
+    this.diable.reset();
+    this.diablePct = null;
     this.weapons.reset();
+    // Respawning at the Diable checkpoint means the pistol is a given — you
+    // can't fight him bare-handed, and ?start=diable / a capsize mid-fight
+    // both land here.
+    if (this._diableCheckpoint) this.weapons.unlock('pistol');
     this.syncWeaponControls(); // weapons.reset() just cleared the pool — hide the pad
     this._chasseGalerieBannerShown = false;
     // Restart now always returns to the run's actual start (see reset()'s
@@ -373,10 +386,24 @@ export class Game {
   gameOver() {
     this.state = 'gameover';
     this.ui.hud.classList.add('hidden');
+    this.ui.hudDiable?.classList.add('hidden');
     this.ui.finalStats.innerHTML = '';
+    // Losing to the Devil is losing your soul, not just the canoe.
+    const byDiable = !!this.diable?.isActive();
+    if (this.ui.gameoverTitle) {
+      this.ui.gameoverTitle.textContent = byDiable ? 'THE DEVIL COLLECTS' : 'CAPSIZED';
+    }
     this.ui.gameoverScreen.classList.remove('hidden');
     playCapsizeHorn();
     this.music?.stop();
+  }
+
+  // Called by main.js for ?start=diable: hand over the pistol and mark the
+  // checkpoint so a capsize keeps it and respawns at the fight.
+  armDiableCheckpoint() {
+    this._diableCheckpoint = true;
+    this.weapons.unlock('pistol');
+    this.syncWeaponControls();
   }
 
   // Ashore mechanics are intentionally minimal for now: walk around, walk
@@ -482,6 +509,9 @@ export class Game {
     } else if (entry.type === 'steeple') {
       this.takeDamage(STEEPLE_DAMAGE);
       this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'diable') {
+      this.takeDamage(entry.damage ?? 18);
+      this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'tree') {
       this.takeDamage(TREE_DAMAGE);
       this.invulnTimer = INVULN_TIME;
@@ -553,6 +583,50 @@ export class Game {
     const armed = this.weapons.has('pistol');
     this.ui.weaponPad?.classList.toggle('hidden', !armed);
     if (armed) this.ui.layoutWeaponPad?.();
+  }
+
+  // Le Diable — feeds the boss this frame's canoe position and pistol shots
+  // (both converted to screen space, since he's a screen-space entity at the
+  // top of the channel), applies his fireball hits, drains spent bullets,
+  // and fires the appear/defeat one-shots (banner + music + the flight's
+  // altitude hold + arming the checkpoint).
+  updateDiable(dt) {
+    const alt = this.chasseGalerie.getAltitude();
+    const canoeScreen = {
+      x: CANOE_SCREEN_X + (this.canoeWorldX - this.cameraWorldX) * PIXELS_PER_UNIT,
+      y: CANOE_SCREEN_Y - alt * PIXELS_PER_UNIT,
+    };
+    const bulletScreens = this.weapons.getBullets().map((b) => {
+      const p = worldToScreen(b.worldX, this.flowDistance - b.flowDistance, this.cameraWorldX);
+      return { x: p.x, y: p.y - (b.altitude || 0) * PIXELS_PER_UNIT, ref: b };
+    });
+
+    const res = this.diable.update(
+      dt, this.flowDistance, canoeScreen, bulletScreens,
+      (dmg) => this.handleHit({ type: 'diable', damage: dmg }),
+    );
+    for (const ref of res.hitBullets) this.weapons.removeBullet(ref);
+
+    this.diablePct = this.diable.isActive() ? this.diable.hpPct() : null;
+
+    if (this.diable.consumeJustAppeared()) {
+      this.showBanner('LE DIABLE — break the pact!');
+      this.chasseGalerie.setHeldAloft(true);
+      playDiableRoar();
+      this.music?.start();
+      this.music?.playDiableTrack();
+      // From here on a capsize is the Devil taking your soul — respawn at
+      // the fight with the pistol, not back at Montréal.
+      this._diableCheckpoint = true;
+      this.startFlowDistance = DIABLE_FLOW_DISTANCE - 6;
+      this.startSegment = 'lawrenceWest';
+    }
+    if (this.diable.consumeJustDefeated()) {
+      this.showBanner('THE PACT IS BROKEN — Gatineau ahead');
+      this.chasseGalerie.setHeldAloft(false);
+      playDiableDefeat();
+      this.music?.endBossTrack();
+    }
   }
 
   update(dt) {
@@ -658,6 +732,15 @@ export class Game {
       }
     }
 
+    // Diable's held arena: forward progress is clamped at the fight until
+    // he's beaten. The clamp lands one frame before diable.update() below
+    // flips the fight on; that's fine — a single frame of overshoot at
+    // cruise speed is well under a tenth of a unit.
+    if (this.segment === 'lawrenceWest' && !this.diable.isDefeated()
+      && proposedFlowDistance >= DIABLE_FLOW_DISTANCE) {
+      proposedFlowDistance = DIABLE_FLOW_DISTANCE;
+    }
+
     this.flowDistance = proposedFlowDistance;
     this.world.distance = this.flowDistance;
 
@@ -682,7 +765,7 @@ export class Game {
     // Chasse-galerie storm crosswind: shoves the canoe toward the banks the
     // whole flight, so holding a centre line is an active fight. Same "real
     // force, applied before the clamp" treatment as the blockade current.
-    if (flying) {
+    if (flying && !this.diable.isActive()) {
       this.lateralVX += this.chasseGalerie.windAccel(this.flowDistance, this.time) * dt;
     }
 
@@ -710,7 +793,9 @@ export class Game {
     // airborne.
     if (flying && Math.abs(this.lateralOffset) > waterEdge) {
       this.lateralVX -= Math.sign(this.lateralOffset) * TREE_PUSHBACK * dt;
-      this.handleHit({ type: 'tree' });
+      // During the Diable fight the treetops still fence you into the channel
+      // (the pushback), but they don't bite — dodging his fire is enough.
+      if (!this.diable.isActive()) this.handleHit({ type: 'tree' });
     }
 
     this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
@@ -733,7 +818,9 @@ export class Game {
     // and nothing on the water can touch the canoe the instant it lifts off.
     if (this.segment === 'lawrenceWest') {
       const flight = this.chasseGalerie.update(this.flowDistance, this.canoeWorldX, dt);
-      if (flight.hit) this.handleHit({ type: 'steeple' });
+      // The flight's own hazards (steeples, crosswind) are suspended for the
+      // Diable fight — he's the whole challenge there.
+      if (flight.hit && !this.diable.isActive()) this.handleHit({ type: 'steeple' });
       if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
         this.showBanner('LA CHASSE-GALERIE — thread the steeples!');
         this._chasseGalerieBannerShown = true;
@@ -743,6 +830,13 @@ export class Game {
 
     // Update weapons (bullets fly forward)
     this.weapons.update(dt);
+
+    // Le Diable — the held-arena boss just before Gatineau. Ticked here so it
+    // sees this frame's canoe position (for aiming/collision) and the flow
+    // clamp above is already in place.
+    if (this.segment === 'lawrenceWest') {
+      this.updateDiable(dt);
+    }
 
     // Docking takes priority over everything else this frame — running
     // into a dock is the one collision that isn't damage. Still checked
@@ -898,7 +992,9 @@ export class Game {
     // (see chasseGalerie.js), so the shift into the Chasse-galerie is a slow
     // darkening rather than a snap.
     const lift = this.chasseGalerie.liftFraction();
-    const storm = this.chasseGalerie.stormIntensityAt(this.flowDistance);
+    // The Diable fight sits at full storm regardless of where along the fade
+    // curve its flowDistance happens to land — his darkness, held.
+    const storm = this.diable.isActive() ? 1 : this.chasseGalerie.stormIntensityAt(this.flowDistance);
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -1086,6 +1182,10 @@ export class Game {
         ctx.restore();
       }
     }
+
+    // Le Diable, over the storm mood so his hellfire rim and eyes stay crisp
+    // against the black. His fireballs are drawn here too (inside diable.js).
+    if (this.segment === 'lawrenceWest') this.diable.draw(ctx, this.time);
   }
 
   updateHud() {
@@ -1116,5 +1216,13 @@ export class Game {
     // needed alongside it since flowDistance alone doesn't say which of the
     // three branches that number belongs to (see minimap.js's update()).
     this.ui.minimap.update(this.segment, this.flowDistance);
+
+    // Le Diable's health bar — only up while the fight runs.
+    if (this.diablePct != null) {
+      this.ui.hudDiable?.classList.remove('hidden');
+      if (this.ui.hudDiableFill) this.ui.hudDiableFill.style.width = `${clamp(this.diablePct, 0, 100)}%`;
+    } else {
+      this.ui.hudDiable?.classList.add('hidden');
+    }
   }
 }

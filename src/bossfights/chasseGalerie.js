@@ -27,7 +27,7 @@ export const TRIGGER_DISTANCE = MONTREAL.flowDistance + 20; // Shortly after Mon
 // The flight ends a little short of Gatineau's own dock, so the canoe
 // glides back down onto the water and you paddle the last stretch in to the
 // winter camp rather than the sky just switching off mid-channel.
-const FLIGHT_END = GATINEAU.flowDistance - 18;
+export const FLIGHT_END = GATINEAU.flowDistance - 18;
 
 // Cruising altitude, world units above the river. Doubles as how far up the
 // screen the canoe sits mid-flight (game.js draws it at CANOE_SCREEN_Y minus
@@ -39,6 +39,11 @@ const FLIGHT_END = GATINEAU.flowDistance - 18;
 // climb/descent scale with this; every gameplay ratio (lift, wind, the
 // lateral margin) is altitude/FLIGHT_HEIGHT, so those are unchanged.
 const FLIGHT_HEIGHT = 6.5;
+// The Diable fight (bossfights/diable.js) holds the canoe at this lower
+// hover instead of cruise height — the Devil drags you down toward him as he
+// closes to collect, which also opens a real arena above the canoe for his
+// fire to cross and for you to dodge in.
+const BOSS_HOVER_HEIGHT = 3.0;
 // The take-off and landing are gradual, measured in flow-distance rather
 // than seconds: the canoe rises over the first CLIMB_DISTANCE units out of
 // Montreal and settles back down over the last DESCENT_DISTANCE into
@@ -175,6 +180,11 @@ export function createChasseGalerie() {
   let active = false;
   let flightDone = false;
   let altitude = 0;
+  // Held true by game.js during the Diable boss fight (bossfights/diable.js):
+  // the Devil keeps the canoe aloft at cruise height while flowDistance is
+  // clamped at the arena, instead of the distance-driven descent curve
+  // taking over. Released when the fight resolves and the glide-in resumes.
+  let heldAloft = false;
 
   return {
     update(playerFlowDistance, canoeWorldX, dt) {
@@ -192,8 +202,9 @@ export function createChasseGalerie() {
 
       // Altitude follows the distance-based curve while flying and eases back
       // to the water otherwise (belt-and-braces — the curve is already ~0 by
-      // FLIGHT_END).
-      const targetAlt = active ? altitudeAt(playerFlowDistance) : 0;
+      // FLIGHT_END). heldAloft (the Diable fight) overrides it to a lower,
+      // steady hover.
+      const targetAlt = heldAloft ? BOSS_HOVER_HEIGHT : (active ? altitudeAt(playerFlowDistance) : 0);
       altitude += Math.max(-3 * dt, Math.min(3 * dt, targetAlt - altitude));
 
       let hit = false;
@@ -216,10 +227,17 @@ export function createChasseGalerie() {
       return flightWind(flowDistance, time, altitude / FLIGHT_HEIGHT);
     },
 
+    // Diable fight: keep the canoe hovering at cruise height for the duration
+    // (the Devil won't let you land) instead of the position-driven descent.
+    setHeldAloft(v) {
+      heldAloft = v;
+    },
+
     reset() {
       active = false;
       flightDone = false;
       altitude = 0;
+      heldAloft = false;
     },
 
     drawStorm(ctx, worldDistance, cameraWorldX) {

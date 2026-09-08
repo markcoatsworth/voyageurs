@@ -161,3 +161,54 @@ export function playCannonBoom() {
   thump(c, t0, 0.32 * jitter, 130 * jitter, 38 * jitter);
   noiseBurst(c, t0, 0.42 * jitter, 2200);
 }
+
+// Le Diable (bossfights/diable.js). A roar when he looms up: two detuned
+// low sawtooths bending downward through a lowpass, with a noise-rumble
+// bed — big and subterranean, nothing like the game's other cues.
+function growl(c, startTime, freq, duration) {
+  for (const detune of [0, 7, -5]) {
+    const osc = c.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq + detune, startTime);
+    osc.frequency.exponentialRampToValueAtTime((freq + detune) * 0.55, startTime + duration);
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(700, startTime);
+    filter.frequency.exponentialRampToValueAtTime(160, startTime + duration);
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.22, startTime + 0.05);
+    gain.gain.setValueAtTime(0.22, startTime + duration * 0.6);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+    osc.connect(filter).connect(gain).connect(c.destination);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.02);
+  }
+}
+
+export function playDiableRoar() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  growl(c, t0, 78, 1.4);
+  noiseBurst(c, t0 + 0.05, 1.1, 900);
+}
+
+// His death: the roar in reverse — a rising shriek that cuts out hard, then
+// a last low collapse.
+export function playDiableDefeat() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  const osc = c.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(180, t0);
+  osc.frequency.exponentialRampToValueAtTime(1400, t0 + 0.5);
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(0.28, t0 + 0.1);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.55);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t0);
+  osc.stop(t0 + 0.6);
+  growl(c, t0 + 0.5, 120, 1.2);
+  noiseBurst(c, t0 + 0.5, 0.9, 1600);
+}

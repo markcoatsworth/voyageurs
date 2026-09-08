@@ -6,14 +6,23 @@ import { PIXELS_PER_UNIT } from '../shared/config.js';
 export function createWeapons() {
   const bullets = [];
   const weapons = {
-    pistol: false,    // Z - unlocked at Montreal
+    pistol: false,    // Z - acquired from the Montréal gunsmith
     musket: false,    // X - not yet unlocked
     blunderbuss: false, // C - not yet unlocked
   };
 
   // Bullet speed and properties
   const BULLET_SPEED = 35; // world units per second
-  const BULLET_LIFETIME = 2; // seconds
+  const BULLET_LIFETIME = 2; // seconds (of game time — see `clock` below)
+
+  // Rate limit, in game-time seconds between shots. Held keys auto-repeat at
+  // the browser's rate (~30/s) and the touch button is one-per-tap, so
+  // without this the pistol's real fire rate swung wildly by input method
+  // and the Diable fight couldn't be tuned. `clock` is accumulated dt, not
+  // wall time, so it behaves identically in the headless smoke test.
+  const FIRE_COOLDOWN = 0.16;
+  let clock = 0;
+  let lastFireAt = -999;
 
   return {
     unlock(weaponName) {
@@ -36,8 +45,8 @@ export function createWeapons() {
         console.log(`[WEAPONS] ${weaponName} not unlocked yet`);
         return false;
       }
-
-      const now = performance.now() / 1000;
+      if (clock - lastFireAt < FIRE_COOLDOWN) return false;
+      lastFireAt = clock;
 
       // Different weapons have different bullet patterns
       switch (weaponName) {
@@ -48,7 +57,7 @@ export function createWeapons() {
             flowDistance: canoeFlowDistance,
             altitude,
             speed: BULLET_SPEED,
-            createdAt: now,
+            createdAt: clock,
             type: 'pistol',
           });
           break;
@@ -66,15 +75,11 @@ export function createWeapons() {
     },
 
     update(dt) {
-      // Move bullets forward and remove old ones
-      const now = performance.now() / 1000;
-
+      clock += dt;
       for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
         b.flowDistance += b.speed * dt;
-
-        // Remove old bullets
-        if (now - b.createdAt > BULLET_LIFETIME) {
+        if (clock - b.createdAt > BULLET_LIFETIME) {
           bullets.splice(i, 1);
         }
       }
@@ -115,6 +120,7 @@ export function createWeapons() {
 
     reset() {
       bullets.length = 0;
+      lastFireAt = -999;
       weapons.pistol = false;
       weapons.musket = false;
       weapons.blunderbuss = false;

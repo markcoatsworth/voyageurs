@@ -48,7 +48,7 @@ async function step(name, fn) {
 
 // --- shared wiring, mirrors main.js -----------------------------------------
 
-const { CANVAS_WIDTH, CANVAS_HEIGHT } = await import('../src/shared/config.js');
+const { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, PIXELS_PER_UNIT } = await import('../src/shared/config.js');
 const { Game } = await import('../src/core/game.js');
 const { Input } = await import('../src/core/input.js');
 const { createObstacleField } = await import('../src/world/obstacles.js');
@@ -58,7 +58,8 @@ const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
-const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE } = await import('../src/bossfights/chasseGalerie.js');
+const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
+const { DIABLE_FLOW_DISTANCE } = await import('../src/bossfights/diable.js');
 
 function makeUi(minimap) {
   const el = (id) => makeElement(id);
@@ -159,9 +160,12 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
   let sawFlight = false;
   let maxAltitude = 0;
   let landedMidFlight = false;
-  let completed = false;
-  // The flight is a multi-minute glide now — allow the frames for it.
-  for (let i = 0; i < 20000 && !completed; i++) {
+  let reachedArena = false;
+  let hpAtArena = 100;
+  // Fly the whole gorge up to the Diable arena (the boss itself gets its own
+  // scenario below). If a bang-bang thread-follower can get there in one
+  // piece, the steeple slalom is hard but fair.
+  for (let i = 0; i < 20000 && !reachedArena; i++) {
     flyThrough(g.game, g.input);
     g.game.update(1 / 30);
     if (g.game.chasseGalerie.isActive()) {
@@ -169,18 +173,17 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
       maxAltitude = Math.max(maxAltitude, g.game.chasseGalerie.getAltitude());
       if (g.game.mode === 'village') landedMidFlight = true;
     }
-    // Flew the whole storm and came back down onto the water past the towns.
-    if (sawFlight && !g.game.chasseGalerie.isActive()
-      && g.game.flowDistance > CHASSE_GALERIE_FLOW_DISTANCE + 700) {
-      completed = true;
+    if (g.game.flowDistance >= DIABLE_FLOW_DISTANCE - 2) {
+      reachedArena = true;
+      hpAtArena = g.game.health;
     }
     if (g.game.state === 'gameover') g.game.start();
   }
   if (!sawFlight) throw new Error('chasse-galerie never took flight from the ?start= drop point');
   if (maxAltitude < 4) throw new Error(`canoe never really left the water (max altitude ${maxAltitude.toFixed(1)})`);
   if (landedMidFlight) throw new Error('canoe docked at a riverbank town mid-flight — there should be no landing');
-  if (!completed) throw new Error('a thread-following pilot could never clear the gorge — too hard / unfair');
-  if (g.game.chasseGalerie.getAltitude() > 0.5) throw new Error('canoe never glided back down onto the water');
+  if (!reachedArena) throw new Error('a thread-following pilot could never clear the gorge — too hard / unfair');
+  if (hpAtArena < 25) throw new Error(`thread-follower limped to the Diable arena on ${hpAtArena|0} hull — steeples too harsh`);
 
   // The steeples are the fight, and clipping them bites hard (STEEPLE_DAMAGE):
   // a dead-straight line, no steering at all, capsizes on the reaching
@@ -220,7 +223,69 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
   if (!treeDamage) throw new Error('flying into the bank mid-flight never clipped the treetops');
   if (maxOffset > 12) throw new Error(`canoe escaped out over the land mid-flight (offset ${maxOffset.toFixed(1)})`);
 
-  notes.push(`  note chasse-galerie ran; max altitude ${maxAltitude.toFixed(1)}, completed the storm`);
+  notes.push(`  note chasse-galerie ran; max altitude ${maxAltitude.toFixed(1)}, reached the Diable arena at ${hpAtArena | 0} hull`);
+});
+
+// --- scenario 4e: the Diable boss fight, from the ?start= checkpoint ------
+
+await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
+  // Autopilot: line the canoe up under the Devil (debugCentreX) so shots
+  // land — chasing his sway also lags his aimed fire, which is most of the
+  // dodging. If this crude pilot can win, the fight is beatable.
+  function fightDiable(game, input) {
+    input.state.up = true;
+    input.onWeaponFire?.('pistol');
+    const d = game.diable;
+    if (d.isActive() && !d.isDefeated()) {
+      const wantOffset = (d.debugCentreX() - CANOE_SCREEN_X) / PIXELS_PER_UNIT;
+      const err = game.lateralOffset - wantOffset;
+      input.state.left = err > 0.4;
+      input.state.right = err < -0.4;
+    } else {
+      input.state.left = false;
+      input.state.right = false;
+    }
+  }
+
+  const g = newGame('lawrenceWest', DIABLE_FLOW_DISTANCE - 22);
+  g.game.armDiableCheckpoint(); // ?start=diable does this in main.js
+  if (!g.game.weapons.has('pistol')) throw new Error('armDiableCheckpoint did not hand over the pistol');
+
+  let sawFight = false;
+  let heldAtArena = false;
+  let won = false;
+  let deaths = 0;
+  for (let i = 0; i < 20000 && !won; i++) {
+    fightDiable(g.game, g.input);
+    g.game.update(1 / 30);
+    if (g.game.diable.isActive()) {
+      sawFight = true;
+      // while holding, the flow clamp pins us at the arena
+      if (Math.abs(g.game.flowDistance - DIABLE_FLOW_DISTANCE) < 0.5 && g.game.diable.isHolding()) heldAtArena = true;
+    }
+    if (g.game.state === 'gameover') {
+      if (g.game.ui.gameoverTitle.textContent !== 'THE DEVIL COLLECTS') {
+        throw new Error(`died to Diable but game-over said "${g.game.ui.gameoverTitle.textContent}"`);
+      }
+      deaths++;
+      g.game.start();
+      if (!g.game.weapons.has('pistol')) throw new Error('respawn at the Diable checkpoint lost the pistol');
+    }
+    // Beaten, hold released, and the flight has carried us on past the arena.
+    if (sawFight && g.game.diable.isDefeated() && g.game.flowDistance > DIABLE_FLOW_DISTANCE + 20) {
+      won = true;
+    }
+  }
+  if (!sawFight) throw new Error('the Diable fight never activated at the arena');
+  if (!heldAtArena) throw new Error('the arena never actually held the canoe in place');
+  if (!won) throw new Error('a tracking autopilot could never kill Diable / the flight never resumed — unwinnable or stuck');
+
+  // Ride it out: the flight should finish its descent to the water and end.
+  for (let i = 0; i < 6000 && g.game.chasseGalerie.isActive(); i++) {
+    g.game.update(1 / 30);
+  }
+  if (g.game.chasseGalerie.getAltitude() > 0.6) throw new Error('canoe never glided back down after the fight');
+  notes.push(`  note diable fight won after ${deaths} death(s)`);
 });
 
 // --- scenario 4c: casting off from Montreal doesn't loop back in ----------
