@@ -467,6 +467,14 @@ button:hover {
   right: 20px;
   bottom: 20px;
   z-index: 5;
+  display: block; /* visible on desktop */
+}
+
+/* Hide on-screen controls on touch devices (mobile/tablet) */
+@media (hover: none) and (pointer: coarse) {
+  #touch-dpad {
+    display: none;
+  }
 }
 
 #steer-pad {
