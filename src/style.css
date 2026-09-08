@@ -452,9 +452,11 @@ button:hover {
   opacity: 0.7;
 }
 
-/* The steer pad — a round thumb-stick marked with direction arrows, always
-   visible (not gated to touch: a directional control is as reasonable to
-   want with a mouse as the mute/pause buttons are). See touchControls.js.
+/* The steer pad — a round thumb-stick marked with direction arrows. See
+   touchControls.js. Shown everywhere, but styled per input type: on touch
+   it's the real control, so the full ring + follower knob; on desktop the
+   keyboard is the real control, so the ring and knob are dropped and the
+   four arrows are left as a plain "how to play" cue.
    Pinned to the screen's actual bottom-right corner — `right` here is the
    real, permanent value (same convention #right-panel uses up top), not
    just a pre-JS fallback. `top` is the one dynamic piece: main.js's
@@ -467,25 +469,6 @@ button:hover {
   right: 20px;
   bottom: 20px;
   z-index: 5;
-  display: block; /* visible on desktop */
-}
-
-/* Desktop: hide the circular background and center knob, just show arrows */
-@media (hover: hover) and (pointer: fine) {
-  #steer-pad {
-    background: none !important;
-    border: none !important;
-  }
-  #steer-knob {
-    display: none !important;
-  }
-}
-
-/* Hide on-screen controls on touch devices (mobile/tablet) */
-@media (hover: none) and (pointer: coarse) {
-  #touch-dpad {
-    display: none;
-  }
 }
 
 #steer-pad {
@@ -534,6 +517,20 @@ button:hover {
   background: rgba(244, 234, 210, 0.3);
   border: 2px solid rgba(244, 234, 210, 0.85);
   pointer-events: none;
+}
+
+/* Desktop (keyboard is the real control): drop the ring and knob so the
+   four arrows are left on their own as a plain "how to play" cue. On touch,
+   the full pad above stands — it's the actual control. Placed after the
+   base rules so it wins without needing !important. */
+@media (hover: hover) and (pointer: fine) {
+  #steer-pad {
+    background: none;
+    border: none;
+  }
+  #steer-knob {
+    display: none;
+  }
 }
 
 /* The real-world locator map (world/minimap.js) — deliberately outside the
