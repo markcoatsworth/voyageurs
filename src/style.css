@@ -578,6 +578,91 @@ button:hover {
   .steer-right { inset: auto 0 0 auto; }
 }
 
+/* Weapon controls — the mirror image of #touch-dpad on the left edge, shown
+   only once you've picked up a gun (game.js toggles .hidden). One Z button
+   for now; more slots stack below it as further guns unlock. Same
+   per-input-type treatment as the steer pad: a real tappable button on
+   touch, a light-up "how to play" keycap on desktop where the keyboard's Z
+   is the real control. left/top are set by main.js's resize() so it stays
+   level with the move controls opposite it; the values here are the
+   before-JS fallback. */
+#weapon-dpad {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.weapon-key {
+  pointer-events: all;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 26px;
+  line-height: 1;
+  color: rgba(244, 234, 210, 0.8);
+  background: rgba(10, 14, 20, 0.5);
+  border: 3px solid rgba(244, 234, 210, 0.6);
+  border-radius: 14px;
+  box-shadow: none;
+  cursor: pointer;
+  transition: color 0.06s linear, background-color 0.06s linear, border-color 0.06s linear;
+}
+
+.weapon-key:hover {
+  background: rgba(10, 14, 20, 0.62);
+}
+
+/* Firing: lit red while the Z key is held (input.js's .active toggle) or the
+   button is being pressed — same feedback language as the steer arrows. */
+.weapon-key.active,
+.weapon-key:active {
+  color: #ff6b6b;
+  background: rgba(214, 69, 69, 0.35);
+  border-color: #ff6b6b;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Desktop: the keyboard's Z is the real control, so this is a labelled
+   keycap cue filling the left sidebar — sized off the same --key main.js
+   computes for the MOVE cue (set on :root there so both cues read it), with
+   a "FIRE" caption above it mirroring the move cue's "MOVE". */
+@media (hover: hover) and (pointer: fine) {
+  #weapon-dpad {
+    --k: var(--key, 34px);
+  }
+  .weapon-key {
+    width: var(--k);
+    height: var(--k);
+    font-size: calc(var(--k) * 0.4);
+    border: max(2px, calc(var(--k) * 0.055)) solid rgba(244, 234, 210, 0.45);
+    border-radius: calc(var(--k) * 0.18);
+    background: rgba(10, 14, 20, 0.55);
+  }
+  #weapon-dpad::after {
+    content: 'FIRE';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: calc(var(--k) * 0.22);
+    font-size: calc(var(--k) * 0.24);
+    letter-spacing: 0.22em;
+    color: rgba(244, 234, 210, 0.45);
+    white-space: nowrap;
+  }
+}
+
 /* The real-world locator map (world/minimap.js) — deliberately outside the
    game canvas/HUD, always visible, never intercepting clicks. Square (not
    the old wide rectangle) since it's now a fixed-size window that pans

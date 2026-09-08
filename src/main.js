@@ -150,7 +150,25 @@ const MOBILE_MINIMAP_MIN = 150;
 const MINIMAP_MAX = 280;
 
 const dpad = document.getElementById('touch-dpad'); // the steer pad wrapper
+const weaponDpad = document.getElementById('weapon-dpad'); // the fire-button column, opposite side
 const DPAD_GAP = 4; // breathing room between the canvas and the steer pad
+
+// Keep the weapon controls (index.html #weapon-dpad) level with the move
+// controls, straight across on the left edge: vertically centred on the move
+// cluster (which is taller — 2+ keycap rows vs. one), anchored left instead
+// of right. Called at the end of resize() and again by game.js (via
+// ui.layoutWeaponPad) the moment the pistol is picked up and the pad stops
+// being display:none, since resize() may not fire around then. A zero-size
+// rect (still hidden) just parks it at the cluster's centre — harmless, and
+// the follow-up call once it's visible fixes it.
+function positionWeaponPad() {
+  const r = dpad.getBoundingClientRect();
+  const wr = weaponDpad.getBoundingClientRect();
+  weaponDpad.style.left = '20px';
+  weaponDpad.style.right = 'auto';
+  weaponDpad.style.bottom = 'auto';
+  weaponDpad.style.top = `${Math.round(r.top + r.height / 2 - wr.height / 2)}px`;
+}
 
 function resize() {
   // The canvas's own size is unaffected by the dpad — it's picked exactly
@@ -186,13 +204,15 @@ function resize() {
   // its own fixed size. The inverted-T cluster is 3.36·key wide (3 caps +
   // 2 gaps of 0.18·key); ~2.4·key tall once the "MOVE" label above it is
   // counted.
+  // --key lives on :root so both the MOVE cue (#steer-pad) and the FIRE cue
+  // (#weapon-dpad) on the opposite edge read the same keycap size.
   if (isTouchPrimary()) {
-    dpad.style.removeProperty('--key');
+    document.documentElement.style.removeProperty('--key');
   } else {
     const byWidth = (sidebarWidth - 24) / 3.36;
     const byHeight = (window.innerHeight - size - 80) / 2.4;
     const key = Math.max(30, Math.min(120, byWidth, byHeight));
-    dpad.style.setProperty('--key', `${Math.round(key)}px`);
+    document.documentElement.style.setProperty('--key', `${Math.round(key)}px`);
   }
 
   // Which margin actually has room for the dpad varies a lot by window
@@ -252,6 +272,8 @@ function resize() {
     dpad.style.bottom = 'auto';
     dpad.style.top = `${Math.round(window.innerHeight - dpadRect.height)}px`;
   }
+
+  positionWeaponPad();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -278,6 +300,10 @@ const ui = {
   restartBtn: document.getElementById('restart-btn'),
   pauseScreen: document.getElementById('pause-screen'),
   milestoneBanner: document.getElementById('milestone-banner'),
+  weaponPad: weaponDpad,
+  // Called by game.js right after it un-hides the weapon pad, so the pad is
+  // positioned immediately instead of waiting for the next window resize.
+  layoutWeaponPad: positionWeaponPad,
   minimap,
 };
 
@@ -409,6 +435,23 @@ window.addEventListener('keydown', (e) => {
 });
 
 pauseBtn.addEventListener('click', togglePause);
+
+// The on-screen fire button (index.html #fire-z). Drives the exact same
+// path the Z key does — input.onWeaponFire, wired by game.js, which ignores
+// the shot unless you're actually paddling the river. One press = one shot.
+// The lit state mirrors input.js's keycap feedback so tap and keypress look
+// the same. Kept clear of whether the pad is currently shown — game.js
+// handles that; a press on a display:none button can't reach here anyway.
+const fireBtn = document.getElementById('fire-z');
+fireBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  input.onWeaponFire?.('pistol');
+  fireBtn.classList.add('active');
+});
+const clearFireBtn = () => fireBtn.classList.remove('active');
+for (const evt of ['pointerup', 'pointercancel', 'pointerleave']) {
+  fireBtn.addEventListener(evt, clearFireBtn);
+}
 
 let lastTime = performance.now();
 let loopBroken = false;

@@ -24,6 +24,13 @@ export class Input {
       right: document.querySelector('.steer-right'),
     };
 
+    // On-screen keycap per weapon key, lit while the key is held so a
+    // keypress and a tap of the button look the same (see style.css's
+    // .weapon-key.active). Only the pistol's Z button exists so far.
+    this.weaponKeyEls = {
+      KeyZ: document.getElementById('fire-z'),
+    };
+
     this._onKeyDown = (e) => {
       const key = KEY_MAP[e.code];
       if (key) {
@@ -35,8 +42,9 @@ export class Input {
 
       // Handle weapon keys
       const weapon = WEAPON_KEYS[e.code];
-      if (weapon && this.onWeaponFire) {
-        this.onWeaponFire(weapon);
+      if (weapon) {
+        if (this.onWeaponFire) this.onWeaponFire(weapon);
+        if (this.weaponKeyEls[e.code]) this.weaponKeyEls[e.code].classList.add('active');
         e.preventDefault();
       }
     };
@@ -46,6 +54,10 @@ export class Input {
         this.state[key] = false;
         // Turn off the arrow
         if (this.arrows[key]) this.arrows[key].classList.remove('active');
+        e.preventDefault();
+      }
+      if (this.weaponKeyEls[e.code]) {
+        this.weaponKeyEls[e.code].classList.remove('active');
         e.preventDefault();
       }
     };

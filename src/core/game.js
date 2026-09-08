@@ -345,6 +345,7 @@ export class Game {
     this.blockadePct = null;
     this.chasseGalerie.reset();
     this.weapons.reset();
+    this.syncWeaponControls(); // weapons.reset() just cleared the pool — hide the pad
     this._chasseGalerieBannerShown = false;
     // Restart now always returns to the run's actual start (see reset()'s
     // own comment) — if the boss track was playing when the capsize
@@ -532,8 +533,20 @@ export class Game {
   acquirePistol() {
     if (this.weapons.has('pistol')) return;
     this.weapons.unlock('pistol');
+    this.syncWeaponControls();
     playPeltChime();
     this.showBanner('PISTOL ACQUIRED — Press Z to Fire!');
+  }
+
+  // Show the on-screen weapon controls (index.html #weapon-dpad, opposite
+  // the move controls) exactly when you actually have a gun — so it's up
+  // after picking the pistol up, and gone again after a capsize+restart
+  // (start() below clears the weapon pool). layoutWeaponPad re-pins it the
+  // moment it stops being display:none, since resize() may not fire then.
+  syncWeaponControls() {
+    const armed = this.weapons.has('pistol');
+    this.ui.weaponPad?.classList.toggle('hidden', !armed);
+    if (armed) this.ui.layoutWeaponPad?.();
   }
 
   update(dt) {

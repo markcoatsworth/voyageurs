@@ -67,7 +67,8 @@ function makeUi(minimap) {
     hudHealthFill: el('health'), hudBlockade: el('blk'), hudBlockadeFill: el('blkfill'),
     damageFlash: el('flash'), titleScreen: el('title'), gameoverScreen: el('over'),
     finalStats: el('stats'), restartBtn: el('restart'), pauseScreen: el('pause'),
-    milestoneBanner: el('banner'), minimap,
+    milestoneBanner: el('banner'), weaponPad: el('weapon-dpad'), layoutWeaponPad: () => {},
+    minimap,
   };
 }
 
@@ -250,6 +251,9 @@ await step('montreal: walk up to the gunsmith, get the pistol', () => {
   if (g.game.weapons.has('pistol')) {
     throw new Error('pistol unlocked on arrival — it should require walking up to the gunsmith now');
   }
+  if (!g.game.ui.weaponPad.classList.contains('hidden')) {
+    throw new Error('weapon controls showing before the pistol is picked up');
+  }
   // The gunsmith stands outside the gun shop, along the bank right of the
   // dock. Walk the waterfront over to him, then nudge up toward the shop.
   let armed = false;
@@ -260,6 +264,14 @@ await step('montreal: walk up to the gunsmith, get the pistol', () => {
     if (g.game.weapons.has('pistol')) armed = true;
   }
   if (!armed) throw new Error('walking up to the Montreal gunsmith never granted the pistol');
+  if (g.game.ui.weaponPad.classList.contains('hidden')) {
+    throw new Error('weapon controls still hidden after picking up the pistol');
+  }
+  // A capsize + restart clears the weapon pool — the pad should go too.
+  g.game.start();
+  if (!g.game.ui.weaponPad.classList.contains('hidden')) {
+    throw new Error('weapon controls still showing after restart cleared the weapons');
+  }
 });
 
 // --- scenario 5: a village visit ----------------------------------------

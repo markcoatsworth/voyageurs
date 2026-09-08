@@ -47,6 +47,15 @@
       </div>
     </div>
 
+    <!-- Weapon controls: the mirror of #touch-dpad on the opposite (left)
+         edge. Hidden until the pistol is picked up from the Montréal
+         gunsmith (game.js toggles .hidden); main.js's resize() keeps it
+         level with the move controls. Just the Z button for now — more
+         slots join it here as further guns unlock. -->
+    <div id="weapon-dpad" class="hidden">
+      <button id="fire-z" class="weapon-key" title="Fire pistol (Z)">Z</button>
+    </div>
+
     <div id="hud" class="hidden">
       <div id="hud-score">FURS: 0</div>
       <div id="hud-health-label">HULL HEALTH</div>
