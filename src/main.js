@@ -59,13 +59,15 @@ function normalizeStartName(s) {
 // immediately, but with real room left to practice finding the gap before
 // the hull itself.
 //
-// "chasse-galerie" drops the canoe just past Montreal's dock and 10 units
-// short of chasseGalerie.js's TRIGGER_DISTANCE — clear of that dock's hit
-// zone (so it doesn't instantly go ashore) but close enough that the canoe
-// lifts off into the flight up the Ottawa within a second of casting off.
+// "chasse-galerie" drops the canoe a few units *past* chasseGalerie.js's
+// TRIGGER_DISTANCE so the flight is already active on the first frame — the
+// canoe still lifts off gradually from there. (It used to land 10 units
+// short, but on a touch device the dialled-down forward paddle can't fight
+// the backward Ottawa current + rapids over that gap, so the flight never
+// started.)
 const START_KEYWORDS = {
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'lawrenceWest' },
-  [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE - 10, segment: 'lawrenceWest' },
+  [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');

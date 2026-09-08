@@ -154,7 +154,7 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
     input.state.right = err < -0.12;
   }
 
-  const g = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
+  const g = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE + 3);
   let sawFlight = false;
   let maxAltitude = 0;
   let landedMidFlight = false;
@@ -183,7 +183,7 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
 
   // The steeples are the fight now: flying a dead-straight line (no steering
   // at all) plows into a church within seconds — no free lane down the middle.
-  const s = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
+  const s = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE + 3);
   let straightLineDamage = false;
   for (let i = 0; i < 5000 && !straightLineDamage; i++) {
     s.input.state.up = true; // no steering
@@ -197,7 +197,7 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
   // The flight stays fenced to the river: steering hard into a bank the
   // whole time clips the treetops (damage) and never lets the canoe escape
   // out over the land.
-  const t = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 10);
+  const t = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE + 3);
   let treeDamage = false;
   let maxOffset = 0;
   for (let i = 0; i < 3000; i++) {
