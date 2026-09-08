@@ -182,18 +182,23 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
   if (!completed) throw new Error('a thread-following pilot could never clear the gorge — too hard / unfair');
   if (g.game.chasseGalerie.getAltitude() > 0.5) throw new Error('canoe never glided back down onto the water');
 
-  // The steeples are the fight now: flying a dead-straight line (no steering
-  // at all) plows into a church within seconds — no free lane down the middle.
+  // The steeples are the fight, and clipping them bites hard (STEEPLE_DAMAGE):
+  // a dead-straight line, no steering at all, capsizes on the reaching
+  // churches well before the gorge is cleared — no free lane down the middle,
+  // and no shrugging the whole thing off any more.
   const s = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE + 3);
   let straightLineDamage = false;
-  for (let i = 0; i < 5000 && !straightLineDamage; i++) {
+  let straightLineCapsized = false;
+  for (let i = 0; i < 8000; i++) {
     s.input.state.up = true; // no steering
     const hpBefore = s.game.health;
     s.game.update(1 / 30);
     if (s.game.chasseGalerie.isActive() && s.game.health < hpBefore) straightLineDamage = true;
-    if (s.game.state === 'gameover') break;
+    if (s.game.state === 'gameover') { straightLineCapsized = true; break; }
+    if (!s.game.chasseGalerie.isActive() && s.game.flowDistance > CHASSE_GALERIE_FLOW_DISTANCE + 700) break;
   }
   if (!straightLineDamage) throw new Error('flying a straight line through the storm took no damage — too easy');
+  if (!straightLineCapsized) throw new Error('a no-steering straight line survived the whole gorge — steeples hit too softly');
 
   // The flight stays fenced to the river: steering hard into a bank the
   // whole time clips the treetops (damage) and never lets the canoe escape

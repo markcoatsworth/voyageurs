@@ -111,14 +111,17 @@ const CANNON_DAMAGE = 16;
 // you're in contact, same shape as BANK_PENALTY_SPEED just harder.
 const SHIP_HULL_DAMAGE = 40;
 const SHIP_HULL_PENALTY_SPEED = 6;
-// A church steeple clipped mid-flight in the Chasse-galerie. The flight is a
-// long (4+ minute) war of attrition, not a gauntlet of one-shot mistakes —
-// each clip is a small chip so a rough patch of weaving doesn't end the run.
-const STEEPLE_DAMAGE = 5;
+// A church steeple clipped mid-flight in the Chasse-galerie. Still not a
+// one-shot on a full hull (~7 clips ends the run, one INVULN_TIME apart) —
+// but a real bite now, on par with a cannon hit, so botching more than a
+// couple of the reaching-church dodges genuinely threatens the run. The old
+// value (5) let a careless weave shrug the whole gorge off.
+const STEEPLE_DAMAGE = 15;
 // Clipping the bank treetops mid-flight — the devil's canoe stays over the
-// water. Slightly worse than a steeple, and you take one every INVULN_TIME
-// you're in the trees (plus a shove back toward the river), so straying off
-// the channel still bleeds you noticeably faster than a clean weave does.
+// water. A smaller single hit than a steeple, but you take one every
+// INVULN_TIME you're in the trees (plus a shove back toward the river), so a
+// few seconds off the channel adds up to worse than a clean steeple clip —
+// straying wide still bleeds you noticeably faster than a tight weave does.
 const TREE_DAMAGE = 7;
 const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
 // The Chasse-galerie's glide speed — slow and stately, so the flight up the
