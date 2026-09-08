@@ -86,7 +86,13 @@ export function flightWind(flowDistance, time, altFrac) {
 const STEEPLE_SPACING = 25;    // nominal flow-distance between churches
 const STEEPLE_JITTER = 4;
 const STEEPLE_HIT_Z = 1.9;     // half-depth of the collision box along the flow
-const REACH_NORMAL = 1.3;      // how far a normal church nips in from its bank
+const REACH_NORMAL = 2.3;      // how far a normal church reaches in from its
+                               // bank — enough that it noticeably narrows
+                               // its side of the channel and a loose centre
+                               // line will clip it on the bends, but always
+                               // short of the centre line itself (< the
+                               // gorge's minimum half-width, so it never
+                               // ends up standing in open water)
 const REACH_REACHING = 5;      // a "reaching" church crosses the centre line —
                                // large so it always clamps to REACH_MIN_INNER
 const REACH_MIN_INNER = 0.15;   // how far past centre a reaching church's inner
