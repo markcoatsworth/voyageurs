@@ -39,7 +39,13 @@ function makeElement(tag = 'div') {
     dataset: {},
     width: 320,
     height: 220,
-    style: new Proxy({}, { get: () => '', set: () => true }),
+    style: new Proxy({}, {
+      get: (_t, p) =>
+        (p === 'setProperty' || p === 'removeProperty' ? noop
+          : p === 'getPropertyValue' ? () => ''
+          : ''),
+      set: () => true,
+    }),
     classList: {
       _s: new Set(),
       add(...c) { c.forEach((x) => this._s.add(x)); },

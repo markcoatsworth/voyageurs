@@ -520,18 +520,23 @@ button:hover {
 }
 
 /* Desktop (keyboard is the real control): this isn't a control any more, it's
-   a "how to play" cue — drop the ring and knob and lay the four arrows out
-   like the actual keys, an inverted-T (↑ on top, ← ↓ → in a row below),
-   styled as little keycaps that light up (via input.js's .active toggle)
-   when you press the matching key. On touch the full round pad above stands
-   — it's the real control. Placed after the base rules so it wins without
-   needing !important. */
+   a big "how to play" cue filling the empty column beside the game — drop
+   the ring and knob and lay the four arrows out like the actual keys, an
+   inverted-T (↑ on top, ← ↓ → in a row below), as keycaps that light up
+   (via input.js's .active toggle) when you press the matching key.
+   The keycap size is --key, set by main.js's resize() to fill the sidebar
+   width (falling back to a small fixed size before/without JS). Everything
+   else — gaps, borders, font, box — is derived from it. On touch the full
+   round pad above stands as the real control; placed after the base rules
+   so it wins without needing !important. */
 @media (hover: hover) and (pointer: fine) {
   #steer-pad {
+    --k: var(--key, 34px);
+    --gap: calc(var(--k) * 0.18);
     background: none;
     border: none;
-    width: 108px;
-    height: 72px;
+    width: calc(3 * var(--k) + 2 * var(--gap));
+    height: calc(2 * var(--k) + var(--gap));
   }
   #steer-knob {
     display: none;
@@ -542,21 +547,21 @@ button:hover {
     bottom: 100%;
     left: 50%;
     transform: translateX(-50%);
-    margin-bottom: 6px;
-    font-size: 7px;
-    letter-spacing: 2px;
+    margin-bottom: calc(var(--k) * 0.22);
+    font-size: calc(var(--k) * 0.24);
+    letter-spacing: 0.22em;
     color: rgba(244, 234, 210, 0.45);
     white-space: nowrap;
   }
   .steer-arrow {
-    width: 30px;
-    height: 30px;
+    width: var(--k);
+    height: var(--k);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
-    border: 2px solid rgba(244, 234, 210, 0.45);
-    border-radius: 6px;
+    font-size: calc(var(--k) * 0.46);
+    border: max(2px, calc(var(--k) * 0.055)) solid rgba(244, 234, 210, 0.45);
+    border-radius: calc(var(--k) * 0.18);
     background: rgba(10, 14, 20, 0.55);
     transform: none;
     transition: color 0.06s linear, background-color 0.06s linear, border-color 0.06s linear;
@@ -567,9 +572,9 @@ button:hover {
     text-shadow: none;
   }
   /* inverted-T: ↑ centred on top, ← ↓ → across the bottom */
-  .steer-up    { inset: 0 auto auto 50%; margin-left: -15px; }
+  .steer-up    { inset: 0 auto auto 50%; margin-left: calc(var(--k) / -2); }
   .steer-left  { inset: auto auto 0 0; }
-  .steer-down  { inset: auto auto 0 50%; margin-left: -15px; }
+  .steer-down  { inset: auto auto 0 50%; margin-left: calc(var(--k) / -2); }
   .steer-right { inset: auto 0 0 auto; }
 }
 

@@ -179,6 +179,22 @@ function resize() {
   const size = Math.round(Math.max(minimapMin, Math.min(MINIMAP_MAX, sidebarWidth - 32)));
   minimap.el.style.width = `${size}px`;
 
+  // Desktop only: size the "how to play" keycap cue (style.css's --key) to
+  // fill the sidebar column beside the game — as wide as the space allows,
+  // but never so tall it would run into the minimap sitting above it. Left
+  // unset on touch, where the round steer pad is the real control and has
+  // its own fixed size. The inverted-T cluster is 3.36·key wide (3 caps +
+  // 2 gaps of 0.18·key); ~2.4·key tall once the "MOVE" label above it is
+  // counted.
+  if (isTouchPrimary()) {
+    dpad.style.removeProperty('--key');
+  } else {
+    const byWidth = (sidebarWidth - 24) / 3.36;
+    const byHeight = (window.innerHeight - size - 80) / 2.4;
+    const key = Math.max(30, Math.min(120, byWidth, byHeight));
+    dpad.style.setProperty('--key', `${Math.round(key)}px`);
+  }
+
   // Which margin actually has room for the dpad varies a lot by window
   // shape, and picking the wrong one is exactly what went wrong before: on
   // a typical wide desktop window the strip *beside* the canvas is huge
@@ -200,8 +216,16 @@ function resize() {
 
   if (rightMargin >= dpadRect.width + DPAD_GAP) {
     dpad.style.right = '20px';
-    dpad.style.top = 'auto';
-    dpad.style.bottom = '20px';
+    // Centre it vertically in the empty column between the minimap (which
+    // sits at the top of this same margin) and the bottom of the window,
+    // so the big desktop cue doesn't look stranded down in the corner.
+    const minimapBottom = minimap.el.getBoundingClientRect().bottom;
+    const top = minimapBottom + Math.max(
+      12,
+      (window.innerHeight - minimapBottom - 20 - dpadRect.height) / 2,
+    );
+    dpad.style.bottom = 'auto';
+    dpad.style.top = `${Math.round(top)}px`;
   } else if (bottomMargin >= dpadRect.height + DPAD_GAP) {
     // Below the canvas — but on a tall phone with a short landscape canvas
     // there's a lot of empty space down here, and a pad floating right
