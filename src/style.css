@@ -519,18 +519,58 @@ button:hover {
   pointer-events: none;
 }
 
-/* Desktop (keyboard is the real control): drop the ring and knob so the
-   four arrows are left on their own as a plain "how to play" cue. On touch,
-   the full pad above stands — it's the actual control. Placed after the
-   base rules so it wins without needing !important. */
+/* Desktop (keyboard is the real control): this isn't a control any more, it's
+   a "how to play" cue — drop the ring and knob and lay the four arrows out
+   like the actual keys, an inverted-T (↑ on top, ← ↓ → in a row below),
+   styled as little keycaps that light up (via input.js's .active toggle)
+   when you press the matching key. On touch the full round pad above stands
+   — it's the real control. Placed after the base rules so it wins without
+   needing !important. */
 @media (hover: hover) and (pointer: fine) {
   #steer-pad {
     background: none;
     border: none;
+    width: 108px;
+    height: 72px;
   }
   #steer-knob {
     display: none;
   }
+  #steer-pad::after {
+    content: 'MOVE';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 6px;
+    font-size: 7px;
+    letter-spacing: 2px;
+    color: rgba(244, 234, 210, 0.45);
+    white-space: nowrap;
+  }
+  .steer-arrow {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    border: 2px solid rgba(244, 234, 210, 0.45);
+    border-radius: 6px;
+    background: rgba(10, 14, 20, 0.55);
+    transform: none;
+    transition: color 0.06s linear, background-color 0.06s linear, border-color 0.06s linear;
+  }
+  .steer-arrow.active {
+    background: rgba(214, 69, 69, 0.35);
+    border-color: #ff6b6b;
+    text-shadow: none;
+  }
+  /* inverted-T: ↑ centred on top, ← ↓ → across the bottom */
+  .steer-up    { inset: 0 auto auto 50%; margin-left: -15px; }
+  .steer-left  { inset: auto auto 0 0; }
+  .steer-down  { inset: auto auto 0 50%; margin-left: -15px; }
+  .steer-right { inset: auto 0 0 auto; }
 }
 
 /* The real-world locator map (world/minimap.js) — deliberately outside the
