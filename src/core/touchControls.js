@@ -14,18 +14,19 @@
 // directional control rather than a mystery knob.
 
 // Fraction of the pad's radius near the centre that reads as neutral.
-const DEAD_ZONE = 0.28;
+const DEAD_ZONE = 0.22;
 // How aligned the push must be with an axis for that arrow to count, as a
 // share of the (normalised) push direction. Asymmetric on purpose:
 //   - steering (left/right) is generous, so a slightly-off sideways push
 //     still turns cleanly
-//   - throttle (up/down) is strict, so a mostly-sideways push does NOT
-//     also gun the paddle — you have to push clearly up or down to change
-//     speed. Steering while paddling still works: push a real diagonal.
+//   - throttle (up/down) was 0.72 (strict ~44 deg cone) but landed too
+//     unresponsive for the Diable fight's vertical dodging. Now 0.58 (~54
+//     deg) — easier to register, but still won't fire on a mostly-sideways
+//     push. Steering while paddling still works: push a real diagonal.
 // STEER_SHARE 0.4  -> steering registers within ~66 deg of horizontal.
-// THROTTLE_SHARE 0.72 -> speed only changes within ~44 deg of vertical.
+// THROTTLE_SHARE 0.58 -> speed changes within ~54 deg of vertical.
 const STEER_SHARE = 0.4;
-const THROTTLE_SHARE = 0.72;
+const THROTTLE_SHARE = 0.58;
 // How far (px) the knob travels from centre at a full push — kept short of
 // the rim so the knob never covers the arrows (pad radius ~71, knob 24).
 const KNOB_RANGE = 26;
