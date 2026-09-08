@@ -40,7 +40,13 @@ const SWAY_X = CANVAS_WIDTH * 0.17;
 // --- his fireballs
 const FIREBALL_SPEED = 98;    // px/sec — slow enough to read and dodge over the arena
 const FIREBALL_R = 6;         // collision radius
-const CANOE_HIT_R = 6;
+const CANOE_HIT_R = 4;        // the canoe's a thin sliver — only a near-centre hit counts
+// The multi-shot volleys aim at points spread perpendicular to the canoe by
+// this many pixels *at the canoe's range*, rather than by a fixed angle
+// (which fans out tight up close and wide far away, so you couldn't thread
+// it when pressed toward the Devil). A gap this wide leaves a
+// SPREAD_GAP - 2*(FIREBALL_R + CANOE_HIT_R) ≈ 22px lane to slip through.
+const SPREAD_GAP = 42;
 const TELEGRAPH = 0.55;       // wind-up before a shot: the flame in his hand swells
 const FIRE_INTERVAL_FULL = 2.1;   // seconds between shots at full health
 const FIRE_INTERVAL_LOW = 1.1;    // ...and when nearly dead
@@ -178,14 +184,25 @@ export function createDiable() {
             const sx = hand.x;
             const sy = hand.y;
             const ang = Math.atan2(canoe.y - sy, canoe.x - sx);
-            const spread = hpFrac < 0.4 ? [-0.26, 0, 0.26] : hpFrac < 0.7 ? [-0.18, 0.18] : [0];
-            for (const off of spread) {
+            // Perpendicular to the aim line, so each shot in a volley is
+            // aimed at a point offset sideways from the canoe by a fixed
+            // pixel amount — a consistent gap no matter the range.
+            const px = -Math.sin(ang);
+            const py = Math.cos(ang);
+            const offsets = hpFrac < 0.4
+              ? [-SPREAD_GAP, 0, SPREAD_GAP]
+              : hpFrac < 0.7 ? [-SPREAD_GAP / 2, SPREAD_GAP / 2] : [0];
+            for (const off of offsets) {
+              const a = Math.atan2(
+                (canoe.y + py * off) - sy,
+                (canoe.x + px * off) - sx,
+              );
               fireballs.push({
                 x: sx,
                 y: sy,
-                vx: Math.cos(ang + off) * FIREBALL_SPEED,
+                vx: Math.cos(a) * FIREBALL_SPEED,
                 // never let one drift upward — it must always come down at you
-                vy: Math.max(55, Math.sin(ang + off) * FIREBALL_SPEED),
+                vy: Math.max(55, Math.sin(a) * FIREBALL_SPEED),
                 born: 0,
               });
             }
