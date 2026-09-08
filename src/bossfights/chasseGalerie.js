@@ -96,7 +96,7 @@ const REACH_MIN_INNER = 0.15;   // how far past centre a reaching church's inner
 const REACHING_CHANCE = 0.26;  // odds a church is a reaching one
 const SAME_SIDE_CHANCE = 0.16; // odds a church repeats the previous bank
 const STEEPLE_VISUAL_H = 7;    // world-units tall (hash-varied per church)
-const STEEPLE_OVERHANG = 2.4;  // how far the church body spills past its own bank
+const STEEPLE_OVERHANG = 0.8;  // how far the church body spills past its own bank
 
 // Built once at module load — pure geometry over the flight span. Each entry
 // is one church: `worldX`/`hx`/`hz` are its collision box, `gapOffset` is the
