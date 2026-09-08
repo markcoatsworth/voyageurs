@@ -8,6 +8,7 @@ import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import { createBlockade } from '../bossfights/blockade.js';
 import { createChasseGalerie, lightningFlash } from '../bossfights/chasseGalerie.js';
+import { createWeapons } from './weapons.js';
 import { isTouchPrimary } from './touchControls.js';
 
 // A D-pad's discrete taps are less precise than a keyboard's held keys, and
@@ -246,6 +247,14 @@ export class Game {
     this.blockade = createBlockade();
     this.blockadePct = null; // null hides the HUD bar; set by update() while the fight is active
     this.chasseGalerie = createChasseGalerie();
+    this.weapons = createWeapons();
+
+    // Set up weapon firing callback
+    input.onWeaponFire = (weaponName) => {
+      if (this.mode === 'river' && this.state === 'playing') {
+        this.weapons.fire(weaponName, this.canoeWorldX, this.flowDistance);
+      }
+    };
 
     // 'river' (paddling) or 'village' (on foot, ashore at a dock) — see
     // enterVillage()/leaveVillage(). Separate from this.state, which is
@@ -335,6 +344,7 @@ export class Game {
     this.blockade.reset();
     this.blockadePct = null;
     this.chasseGalerie.reset();
+    this.weapons.reset();
     this._chasseGalerieBannerShown = false;
     // Restart now always returns to the run's actual start (see reset()'s
     // own comment) — if the boss track was playing when the capsize
@@ -375,6 +385,12 @@ export class Game {
     // restart here instead of all the way back at the original put-in
     this.startFlowDistance = village.flowDistance;
     this.startSegment = village.segment;
+
+    // Auto-unlock pistol at Montreal
+    if (village.name === 'Montreal' && !this.weapons.has('pistol')) {
+      this.weapons.unlock('pistol');
+      this.showBanner('PISTOL ACQUIRED — Press Z to Fire!');
+    }
 
     // Tadoussac is the one place in the game where casting off isn't just
     // resuming the same segment — leaving here jumps into lawrenceWest's
@@ -696,6 +712,9 @@ export class Game {
     }
     const airborne = this.chasseGalerie.isActive();
 
+    // Update weapons (bullets fly forward)
+    this.weapons.update(dt);
+
     // Docking takes priority over everything else this frame — running
     // into a dock is the one collision that isn't damage. Still checked
     // first, every frame, ahead of the mouth-crossing check below (so
@@ -987,6 +1006,9 @@ export class Game {
     } else if (this.segment === 'lawrenceWest' && this.blockadePct !== null) {
       console.log('[RENDER] Canoe NOT visible! canoeVisible:', this.canoeVisible);
     }
+
+    // Draw bullets
+    this.weapons.draw(ctx, this.flowDistance, cameraWorldX, worldToScreen);
 
     // Storm mood, over everything — all of it faded in by `storm`.
     if (storm > 0) {

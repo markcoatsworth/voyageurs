@@ -5,9 +5,16 @@ const KEY_MAP = {
   ArrowDown: 'down', KeyS: 'down',
 };
 
+const WEAPON_KEYS = {
+  KeyZ: 'pistol',
+  KeyX: 'musket',
+  KeyC: 'blunderbuss',
+};
+
 export class Input {
   constructor() {
     this.state = { left: false, right: false, up: false, down: false };
+    this.onWeaponFire = null; // Callback for weapon firing
 
     // Get arrow elements for visual feedback
     this.arrows = {
@@ -23,6 +30,13 @@ export class Input {
         this.state[key] = true;
         // Light up the arrow
         if (this.arrows[key]) this.arrows[key].classList.add('active');
+        e.preventDefault();
+      }
+
+      // Handle weapon keys
+      const weapon = WEAPON_KEYS[e.code];
+      if (weapon && this.onWeaponFire) {
+        this.onWeaponFire(weapon);
         e.preventDefault();
       }
     };
