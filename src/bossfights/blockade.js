@@ -190,7 +190,8 @@ export function createBlockade() {
       if (wellPastBlockade && !resolved) {
         resolved = true;
         chasePhase = false;
-        chaseEscaped = true;
+        // Silent cleanup — no "escaped!" banner for a fight that never
+        // happened (you started downstream of it, e.g. ?start=diable).
         console.log('[BLOCKADE] Auto-resolved (started past blockade)');
       }
 

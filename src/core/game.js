@@ -378,7 +378,9 @@ export class Game {
     // both land here.
     if (this._diableCheckpoint) this.weapons.unlock('pistol');
     this.syncWeaponControls(); // weapons.reset() just cleared the pool — hide the pad
-    this._chasseGalerieBannerShown = false;
+    // The "thread the steeples" intro only makes sense on a full flight from
+    // Montréal — never when a run starts (or respawns) at the Devil's door.
+    this._chasseGalerieBannerShown = this._diableCheckpoint;
     // Restart now always returns to the run's actual start (see reset()'s
     // own comment) — if the boss track was playing when the capsize
     // happened, leaving it running would be paired with a scene nowhere
@@ -417,6 +419,10 @@ export class Game {
     this._diableCheckpoint = true;
     this.weapons.unlock('pistol');
     this.syncWeaponControls();
+    // Dropped straight into the Devil's approach — the steeple-threading
+    // intro doesn't apply. Suppress it and set the scene instead.
+    this._chasseGalerieBannerShown = true;
+    this.showBanner('YOUR DEBT TO THE DEVIL COMES DUE');
   }
 
   // Ashore mechanics are intentionally minimal for now: walk around, walk
