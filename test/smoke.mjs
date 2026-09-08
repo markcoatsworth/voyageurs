@@ -240,6 +240,28 @@ await step('montreal: cast off without re-docking', () => {
   }
 });
 
+// --- scenario 4d: the Montreal gun shop hands over the pistol ------------
+
+await step('montreal: walk up to the gunsmith, get the pistol', () => {
+  const montreal = VILLAGES.find((v) => v.name === 'Montreal');
+  if (!montreal) throw new Error('no "Montreal" in VILLAGES — a name/lookup drifted again');
+  const g = newGame(montreal.segment, montreal.flowDistance - 20);
+  g.game.enterVillage(montreal);
+  if (g.game.weapons.has('pistol')) {
+    throw new Error('pistol unlocked on arrival — it should require walking up to the gunsmith now');
+  }
+  // The gunsmith stands outside the gun shop, along the bank right of the
+  // dock. Walk the waterfront over to him, then nudge up toward the shop.
+  let armed = false;
+  for (let i = 0; i < 600 && !armed; i++) {
+    g.input.state.right = true;
+    g.input.state.up = i > 120; // reach his column first, then close in
+    g.game.update(1 / 30);
+    if (g.game.weapons.has('pistol')) armed = true;
+  }
+  if (!armed) throw new Error('walking up to the Montreal gunsmith never granted the pistol');
+});
+
 // --- scenario 5: a village visit ----------------------------------------
 
 await step('village: dock, walk, trade, cast off', () => {

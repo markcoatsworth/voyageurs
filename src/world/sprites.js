@@ -516,6 +516,206 @@ export function createRepairShopSprite() {
   });
 }
 
+// The gun shop at Montréal — where the voyageur picks up a pistol before
+// pushing on past the city. Deliberately nothing like the repair shop's
+// warm little timber shed: a squat coursed-stone armoury under a broad
+// blue-slate roof, with a forge chimney smoking up the left side and its
+// fire-mouth glowing at the base, a rack of muskets leaning by the
+// iron-banded door, and a musket branded on an iron plaque above it. Taller
+// and wider than the repair shop, and the only building in any village that
+// glows — so it reads as its own thing at a glance.
+export function createGunShopSprite() {
+  const w = 40, h = 44;
+  const wall = '#6f6a62', wallDark = '#46423b', wallLight = '#8c867c';
+  const roof = '#3a4250', roofDark = '#232934', roofLight = '#545d6e';
+  const iron = '#3a3a40', wood = '#6a4a2c', woodDark = '#3f2b1a';
+
+  return makeSprite(w, h, (ctx) => {
+    // Stone block left-of-centre, a tall forge chimney off its left end, a
+    // lean-to porch with a musket rack off its right end — a three-part
+    // silhouette nothing like the repair shop's plain gable box.
+    const cx = 15;
+    const wallW = 22, wallH = 22;
+    const wallTop = h - wallH - 3;
+    const wallBot = wallTop + wallH;
+    const blockL = cx - wallW / 2, blockR = cx + wallW / 2;
+
+    groundShadow(ctx, w / 2, h - 3, w / 2 - 2, 4);
+
+    // --- forge chimney off the left end ---
+    const chX = 1, chW = 7;
+    ctx.fillStyle = wallDark;
+    ctx.fillRect(chX - 1, 4, chW + 2, wallBot - 4);
+    ctx.fillStyle = wall;
+    ctx.fillRect(chX, 4, chW, wallBot - 4);
+    ctx.fillStyle = wallLight;
+    ctx.fillRect(chX, 4, 1.3, wallBot - 4);
+    ctx.fillStyle = wallDark;
+    ctx.fillRect(chX - 1.5, 2, chW + 3, 2.4); // cap
+    ctx.strokeStyle = wallDark;
+    ctx.lineWidth = 0.7;
+    for (let ly = 8; ly < wallBot; ly += 4) {
+      ctx.beginPath(); ctx.moveTo(chX, ly); ctx.lineTo(chX + chW, ly); ctx.stroke();
+    }
+    // smoke drifting off the top
+    for (const [dx, dy, r, a] of [[1, -1, 2.1, 0.5], [3, -4, 2.7, 0.34], [1, -8, 3.2, 0.2]]) {
+      ctx.fillStyle = `rgba(202,205,210,${a})`;
+      ctx.beginPath(); ctx.arc(chX + chW / 2 + dx, 3 + dy, r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // --- coursed-stone main block ---
+    ctx.fillStyle = wallDark;
+    ctx.fillRect(blockL - 1, wallTop - 1, wallW + 2, wallH + 2);
+    ctx.fillStyle = wall;
+    ctx.fillRect(blockL, wallTop, wallW, wallH);
+    ctx.strokeStyle = wallDark;
+    ctx.lineWidth = 0.8;
+    let row = 0;
+    for (let ly = wallTop + 4; ly < wallBot; ly += 4, row++) {
+      ctx.beginPath(); ctx.moveTo(blockL, ly); ctx.lineTo(blockR, ly); ctx.stroke();
+      const j = row % 2 ? 3 : 0;
+      for (let lx = blockL + 3 + j; lx < blockR; lx += 6) {
+        ctx.beginPath(); ctx.moveTo(lx, ly - 4); ctx.lineTo(lx, ly); ctx.stroke();
+      }
+    }
+    ctx.fillStyle = wallLight;
+    ctx.fillRect(blockL, wallTop, 1.4, wallH);
+
+    // --- forge fire-mouth at the chimney base — the one light in any village ---
+    const fx = chX + chW / 2 + 1, fy = wallBot - 6;
+    const halo = ctx.createRadialGradient(fx, fy, 1, fx, fy, 12);
+    halo.addColorStop(0, 'rgba(255,178,82,0.9)');
+    halo.addColorStop(1, 'rgba(255,150,60,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(fx - 13, fy - 13, 26, 19);
+    ctx.fillStyle = '#180d06';
+    ctx.fillRect(fx - 3.5, fy - 5, 7, 9);
+    ctx.fillStyle = '#ff7a1e';
+    ctx.fillRect(fx - 2.6, fy - 1.5, 5.2, 5.5);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillRect(fx - 1.3, fy + 0.8, 2.6, 3.2);
+
+    // heavy iron-banded door
+    ctx.fillStyle = '#1c130b';
+    ctx.fillRect(cx - 4, wallBot - 11, 8, 11);
+    ctx.fillStyle = iron;
+    ctx.fillRect(cx - 4, wallBot - 8, 8, 1);
+    ctx.fillRect(cx - 4, wallBot - 4, 8, 1);
+    ctx.fillStyle = '#5c5c62';
+    ctx.fillRect(cx + 2, wallBot - 6, 1.4, 1.4); // ring handle
+
+    // barred window left of the door
+    ctx.fillStyle = '#1c130b';
+    ctx.fillRect(cx - 10, wallBot - 10, 5, 5);
+    ctx.strokeStyle = iron;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(cx - 7.5, wallBot - 10); ctx.lineTo(cx - 7.5, wallBot - 5);
+    ctx.moveTo(cx - 10, wallBot - 7.5); ctx.lineTo(cx - 5, wallBot - 7.5);
+    ctx.stroke();
+
+    // --- lean-to porch off the right end, sheltering a musket rack ---
+    const ltR = w - 1;
+    ctx.fillStyle = woodDark; // corner post
+    ctx.fillRect(ltR - 2, wallTop + 4, 2, wallH - 4);
+    ctx.fillStyle = wood; // rack rail the muskets lean on
+    ctx.fillRect(blockR, wallTop + 12, ltR - blockR, 1.6);
+    for (let i = 0; i < 4; i++) {
+      const bx = blockR + 1.5 + i * 2.7;
+      ctx.strokeStyle = i % 2 ? '#9a9aa2' : '#82828c';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(bx, wallBot - 1);
+      ctx.lineTo(bx + 2.2, wallTop + 6);
+      ctx.stroke();
+      ctx.strokeStyle = wood; // wooden stock at the foot
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(bx, wallBot - 1);
+      ctx.lineTo(bx + 1, wallBot - 4.5);
+      ctx.stroke();
+    }
+
+    // --- roofs: broad blue-slate gable over the block, shed over the lean-to ---
+    // shed first, so the main roof's eave overlaps its top edge
+    ctx.fillStyle = roofDark;
+    ctx.beginPath();
+    ctx.moveTo(blockR - 1, wallTop - 1);
+    ctx.lineTo(ltR + 1, wallTop + 5);
+    ctx.lineTo(ltR + 1, wallTop + 8);
+    ctx.lineTo(blockR - 1, wallTop + 2);
+    ctx.closePath(); ctx.fill();
+
+    const roofL = blockL - 9, roofR = blockR + 3;
+    const apex = cx - 2, roofPeak = wallTop - 12;
+    ctx.fillStyle = roofDark;
+    ctx.beginPath();
+    ctx.moveTo(apex, roofPeak - 2);
+    ctx.lineTo(roofR, wallTop + 3);
+    ctx.lineTo(roofL, wallTop + 3);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = roof;
+    ctx.beginPath();
+    ctx.moveTo(apex, roofPeak);
+    ctx.lineTo(roofR - 2, wallTop + 2);
+    ctx.lineTo(roofL + 2, wallTop + 2);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = roofLight;
+    ctx.fillRect(apex - 1, roofPeak, 2, wallTop + 2 - roofPeak);
+    ctx.fillStyle = roofDark;
+    ctx.fillRect(roofL, wallTop + 2, roofR - roofL, 1.3);
+  });
+}
+
+// The gunsmith — stands outside the Montréal gun shop; walk up to them and
+// the pistol is yours (villageScene.js / game.js's acquirePistol). Same
+// small build as the repair-shop trader, but read at a glance as military
+// rather than tradesman: a deep-blue regimental coat with a buff waistcoat,
+// a black tricorne, and a musket held upright at his side, barrel past the
+// hat.
+export function createGunsmithSprite() {
+  const w = 16, h = 26;
+  return makeSprite(w, h, (ctx) => {
+    const cx = 7;
+    groundShadow(ctx, cx, h - 1, 4.5, 2);
+
+    // musket held upright at the side — steel barrel over a wooden stock
+    ctx.fillStyle = '#4a3220';
+    ctx.fillRect(cx + 5, 13, 2.4, 11);
+    ctx.fillStyle = '#70707a';
+    ctx.fillRect(cx + 5.6, 1, 1.4, 13);
+    ctx.fillStyle = '#9a9aa2';
+    ctx.fillRect(cx + 5.6, 1, 0.6, 13);
+
+    // legs — dark breeches into boots
+    ctx.fillStyle = '#2a2a2f';
+    ctx.fillRect(cx - 3, 18, 2.6, 6);
+    ctx.fillRect(cx + 0.5, 18, 2.6, 6);
+
+    // long regimental coat
+    ctx.fillStyle = '#1f2a4a';
+    ctx.fillRect(cx - 5, 7, 10, 13);
+    ctx.fillStyle = '#30427a';
+    ctx.fillRect(cx - 4, 8, 8, 11);
+    // buff waistcoat down the front + collar
+    ctx.fillStyle = '#cbba8a';
+    ctx.fillRect(cx - 1.3, 8, 2.6, 11);
+    ctx.fillRect(cx - 4, 8, 8, 1.4);
+    // brass buttons
+    ctx.fillStyle = '#d8c98f';
+    ctx.fillRect(cx - 3, 10.5, 1, 1);
+    ctx.fillRect(cx - 3, 13.5, 1, 1);
+    ctx.fillRect(cx - 3, 16.5, 1, 1);
+
+    // head + black tricorne
+    ctx.fillStyle = '#c98a5e';
+    ctx.fillRect(cx - 3, 3, 6, 5);
+    ctx.fillStyle = '#1b1610';
+    ctx.fillRect(cx - 5, 2.2, 10, 1.8);
+    triangle(ctx, cx, -0.3, 3.4, 4.4, '#231c15');
+  });
+}
+
 // Québec City's own building set (villages.js/villageScene.js special-
 // case it by name) — meant to read as a real 1790s colonial town at a
 // glance, not a bigger version of the fur-trade villages' log cabins.

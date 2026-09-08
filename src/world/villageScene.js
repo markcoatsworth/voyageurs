@@ -6,7 +6,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../shared/config.js';
 import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
 import {
   createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
-  createStoneBuildingSprite, createChurchSprite, createRampartSprite,
+  createStoneBuildingSprite, createChurchSprite, createRampartSprite, createGunShopSprite, createGunsmithSprite,
 } from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../shared/hash.js';
@@ -110,12 +110,15 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   { kind: 'stone', x: 190, y: 116, variant: 2, mirror: false },
   { kind: 'stone', x: 240, y: 112, variant: 0, mirror: true },
   { kind: 'stone', x: 290, y: 110, variant: 1, mirror: false },
-  // front row - waterfront warehouses/trading posts (7 buildings)
+  // front row - waterfront warehouses/trading posts (7 buildings). The one
+  // just right of the dock is the gun shop — walk up to it and you're
+  // handed a pistol (see game.js's acquirePistol / the trigger in update()
+  // below), mirroring the repair shop that always sits just left of the dock.
   { kind: 'stone', x: 20, y: 150, variant: 1, mirror: false },
   { kind: 'stone', x: 65, y: 154, variant: 2, mirror: true },
   { kind: 'stone', x: 110, y: 152, variant: 0, mirror: false },
   { kind: 'stone', x: 160, y: 156, variant: 1, mirror: true },
-  { kind: 'stone', x: 210, y: 152, variant: 2, mirror: false },
+  { kind: 'gunshop', x: 210, y: 152, mirror: false },
   { kind: 'stone', x: 255, y: 150, variant: 0, mirror: true },
   { kind: 'stone', x: 300, y: 154, variant: 1, mirror: false },
   // Notre-Dame Basilica - spiritual heart of the commercial capital
@@ -163,8 +166,9 @@ function buildingsForMontreal() {
     mirror: b.mirror,
     anchorX: b.x,
     anchorY: b.y,
-    footHalfW: b.kind === 'church' ? 12 : 13,
-    footHeight: b.kind === 'church' ? 26 : 24,
+    isGunShop: b.kind === 'gunshop',
+    footHalfW: b.kind === 'church' || b.kind === 'gunshop' ? 12 : 13,
+    footHeight: b.kind === 'church' ? 26 : b.kind === 'gunshop' ? 20 : 24,
   }));
 }
 
@@ -212,6 +216,14 @@ const REPAIR_SHOP = {
 const TRADER_POS = { x: REPAIR_SHOP.anchorX + 19, y: REPAIR_SHOP.anchorY + 5 };
 const TRADER_TRIGGER_RADIUS = 16;
 
+// Montréal only: the gunsmith stands a little forward of the gun shop's
+// door, shifted just off-centre so the forge glow (to his left) and the
+// musket rack (to his right) both stay visible past him. Walking this close
+// is the whole interaction — same "proximity alone, once per approach"
+// trigger as the repair trader.
+const GUNSMITH_OFFSET = { x: 4, y: 11 };
+const GUNSMITH_TRIGGER_RADIUS = 20;
+
 const PLAYER_START = { x: CANVAS_WIDTH / 2, y: WATER_TOP - 10 };
 const PLAYER_HALF = 4; // simple circular-ish collision radius against buildings
 
@@ -231,10 +243,63 @@ const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
 const churchSprite = createChurchSprite();
 const rampartSprite = createRampartSprite();
 const repairShopSprite = createRepairShopSprite();
+const gunShopSprite = createGunShopSprite();
 const traderSprite = createTraderSprite();
+const gunsmithSprite = createGunsmithSprite();
 const walkerFrames = [createWalkerSprite(false), createWalkerSprite(true)];
 const parkedCanoeSprite = createCanoeSprite(1);
 const treeSprites = [0, 1, 2].map(createPineTreeSprite);
+
+// The fraction of a tree sprite's height that sits above its ground point —
+// the draw pass anchors trees at `t.y - height * this`, and the tree/building
+// overlap test below has to use the same number to match what's on screen.
+const TREE_DRAW_ANCHOR = 0.72;
+
+function buildingSprite(b) {
+  if (b.isRepairShop) return repairShopSprite;
+  if (b.isGunShop) return gunShopSprite;
+  if (b.kind === 'church') return churchSprite;
+  if (b.kind === 'stone') return stoneSprites[b.variant % stoneSprites.length];
+  return cabinSprites[b.variant % cabinSprites.length];
+}
+
+// On-screen rectangle actually covered by a building's sprite — wider and
+// taller than its collision footprint (buildingBox): roof overhang, full
+// wall height, the works. Mirroring flips the sprite in place, so the x
+// extent is unchanged. Matches the draw pass's own `top` math.
+function buildingSpriteRect(b) {
+  const s = buildingSprite(b);
+  return {
+    x0: b.anchorX - s.width / 2,
+    x1: b.anchorX + s.width / 2,
+    y0: b.anchorY - s.height + 6,
+    y1: b.anchorY + 6,
+  };
+}
+
+function treeSpriteRect(t) {
+  const s = treeSprites[t.variant];
+  const top = t.y - s.height * TREE_DRAW_ANCHOR;
+  return { x0: t.x - s.width / 2, x1: t.x + s.width / 2, y0: top, y1: top + s.height };
+}
+
+function rectsIntersect(a, b) {
+  return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+}
+
+// The framing treeline is one fixed set of spots (TREE_SPOTS) sized for the
+// small procedural building cluster; the hand-authored towns (Montréal,
+// Trois-Rivières) pack far more building into the same scene, so several of
+// those spots end up sitting on top of a wall or roof. Drop any tree whose
+// sprite overlaps any building's — the clearing should read as cut *around*
+// the town, not have pines growing through the rooftops.
+function treesClearOfBuildings(trees, buildings) {
+  const boxes = buildings.map(buildingSpriteRect);
+  return trees.filter((t) => {
+    const tr = treeSpriteRect(t);
+    return !boxes.some((box) => rectsIntersect(tr, box));
+  });
+}
 
 function buildingBox(b) {
   return {
@@ -274,6 +339,11 @@ export function createVillageScene() {
   let isTroisRivieres = false;
   let isMontreal = false;
   let wasNearTrader = false;
+  // The gunsmith who stands outside the Montréal gun shop — his scene
+  // position, worked out from the gun shop building on enter(). null in
+  // every other village (no gun shop, nobody to draw or range-check).
+  let gunsmithPos = null;
+  let wasNearGunsmith = false;
   const player = { x: PLAYER_START.x, y: PLAYER_START.y };
 
   return {
@@ -289,7 +359,12 @@ export function createVillageScene() {
         : isMontreal
         ? [...buildingsForMontreal(), REPAIR_SHOP]
         : [...buildingsFor(seed), REPAIR_SHOP];
-      trees = treesFor(seed);
+      trees = treesClearOfBuildings(treesFor(seed), buildings);
+      const gunShop = buildings.find((b) => b.isGunShop) || null;
+      gunsmithPos = gunShop
+        ? { x: gunShop.anchorX + GUNSMITH_OFFSET.x, y: gunShop.anchorY + GUNSMITH_OFFSET.y }
+        : null;
+      wasNearGunsmith = false;
       player.x = PLAYER_START.x;
       player.y = PLAYER_START.y;
       strideTimer = 0;
@@ -301,11 +376,12 @@ export function createVillageScene() {
       wasNearTrader = false;
     },
 
-    // Returns { reboard, tradeRequested }: reboard is true the moment the
-    // player steps into the reboard zone; tradeRequested is true for one
-    // frame, the moment the player comes within range of the trader (not
-    // held true the whole time they stand there, so game.js can treat it
-    // as a single trade action per approach rather than repeating it every
+    // Returns { reboard, tradeRequested, gunsmithMet }: reboard is true the
+    // moment the player steps into the reboard zone; tradeRequested and
+    // gunsmithMet are each true for one frame only, the moment the player
+    // first comes within range of the repair trader / the Montréal gunsmith
+    // (not held true the whole time they stand there, so game.js can treat
+    // each as a single action per approach rather than repeating it every
     // frame).
     update(dt, keys) {
       let dx = 0, dy = 0;
@@ -346,7 +422,14 @@ export function createVillageScene() {
       const tradeRequested = nearTrader && !wasNearTrader;
       wasNearTrader = nearTrader;
 
-      return { reboard, tradeRequested };
+      let gunsmithMet = false;
+      if (gunsmithPos) {
+        const nearGunsmith = Math.hypot(player.x - gunsmithPos.x, player.y - gunsmithPos.y) < GUNSMITH_TRIGGER_RADIUS;
+        gunsmithMet = nearGunsmith && !wasNearGunsmith;
+        wasNearGunsmith = nearGunsmith;
+      }
+
+      return { reboard, tradeRequested, gunsmithMet };
     },
 
     draw(ctx) {
@@ -384,7 +467,7 @@ export function createVillageScene() {
       } else {
         for (const t of trees) {
           const sprite = treeSprites[t.variant];
-          ctx.drawImage(sprite, t.x - sprite.width / 2, t.y - sprite.height * 0.72);
+          ctx.drawImage(sprite, t.x - sprite.width / 2, t.y - sprite.height * TREE_DRAW_ANCHOR);
         }
       }
 
@@ -393,14 +476,7 @@ export function createVillageScene() {
 
       // buildings, painter's-algorithm by anchor Y
       const order = buildings
-        .map((b) => {
-          let sprite;
-          if (b.isRepairShop) sprite = repairShopSprite;
-          else if (b.kind === 'church') sprite = churchSprite;
-          else if (b.kind === 'stone') sprite = stoneSprites[b.variant % stoneSprites.length];
-          else sprite = cabinSprites[b.variant % cabinSprites.length];
-          return { b, sprite };
-        })
+        .map((b) => ({ b, sprite: buildingSprite(b) }))
         .sort((a, c) => a.b.anchorY - c.b.anchorY);
       for (const { b, sprite } of order) {
         const top = b.anchorY - sprite.height + 6;
@@ -419,6 +495,12 @@ export function createVillageScene() {
       // building pass (TRADER_POS.y sits below every building's anchorY,
       // i.e. nearer the camera, so this is already correct painter's-order)
       ctx.drawImage(traderSprite, TRADER_POS.x - traderSprite.width / 2, TRADER_POS.y - traderSprite.height + 2);
+
+      // the gunsmith, outside the Montréal gun shop (null elsewhere) — same
+      // painter's-order reasoning as the trader above
+      if (gunsmithPos) {
+        ctx.drawImage(gunsmithSprite, gunsmithPos.x - gunsmithSprite.width / 2, gunsmithPos.y - gunsmithSprite.height + 2);
+      }
 
       // player, mirrored horizontally for facing rather than separate frames
       const sprite = walkerFrames[strideFrame];

@@ -386,11 +386,9 @@ export class Game {
     this.startFlowDistance = village.flowDistance;
     this.startSegment = village.segment;
 
-    // Auto-unlock pistol at Montreal
-    if (village.name === 'Montreal' && !this.weapons.has('pistol')) {
-      this.weapons.unlock('pistol');
-      this.showBanner('PISTOL ACQUIRED — Press Z to Fire!');
-    }
+    // The pistol isn't handed out on arrival any more — you walk up to the
+    // gunsmith outside the gun shop for it (see acquirePistol(), fired from
+    // the villageScene trigger in update()'s village branch).
 
     // Tadoussac is the one place in the game where casting off isn't just
     // resuming the same segment — leaving here jumps into lawrenceWest's
@@ -527,6 +525,17 @@ export class Game {
     this.showBanner(`Traded ${spend} fur${spend === 1 ? '' : 's'} for repairs`);
   }
 
+  // The gun shop at Montréal — walk up to the gunsmith standing outside and
+  // the pistol is yours, free (villageScene.js fires gunsmithMet once per
+  // approach). One gun for now; this is where the eventual small/medium/large
+  // weapon choices will live (see core/weapons.js). No-op once you have it.
+  acquirePistol() {
+    if (this.weapons.has('pistol')) return;
+    this.weapons.unlock('pistol');
+    playPeltChime();
+    this.showBanner('PISTOL ACQUIRED — Press Z to Fire!');
+  }
+
   update(dt) {
     if (this.paused) return; // hard freeze, same as gameover below — see togglePause()
 
@@ -541,8 +550,9 @@ export class Game {
     }
 
     if (this.mode === 'village') {
-      const { reboard, tradeRequested } = this.villageScene.update(dt, this.input.state);
+      const { reboard, tradeRequested, gunsmithMet } = this.villageScene.update(dt, this.input.state);
       if (tradeRequested) this.tryRepairTrade();
+      if (gunsmithMet) this.acquirePistol();
       this.villageScene.draw(this.ctx);
       if (reboard) this.leaveVillage();
       return;
