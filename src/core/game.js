@@ -111,12 +111,13 @@ const CANNON_DAMAGE = 16;
 // you're in contact, same shape as BANK_PENALTY_SPEED just harder.
 const SHIP_HULL_DAMAGE = 40;
 const SHIP_HULL_PENALTY_SPEED = 6;
-// A church steeple clipped mid-flight in the Chasse-galerie. Still not a
-// one-shot on a full hull (~7 clips ends the run, one INVULN_TIME apart) —
-// but a real bite now, on par with a cannon hit, so botching more than a
-// couple of the reaching-church dodges genuinely threatens the run. The old
-// value (5) let a careless weave shrug the whole gorge off.
-const STEEPLE_DAMAGE = 15;
+// A church steeple clipped mid-flight in the Chasse-galerie. A real bite —
+// just under a cannon hit, ~8 clips (one INVULN_TIME apart) ends a full
+// hull — so botching more than a couple of the reaching-church dodges
+// genuinely threatens the run. Dialled back a hair from 15 alongside making
+// the steeples easier to see; the old 5 let a careless weave shrug the
+// whole gorge off.
+const STEEPLE_DAMAGE = 13;
 // Clipping the bank treetops mid-flight — the devil's canoe stays over the
 // water. A smaller single hit than a steeple, but you take one every
 // INVULN_TIME you're in the trees (plus a shove back toward the river), so a

@@ -318,14 +318,13 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   const towerX = channelEdge + s.side * Math.min(naveW * 0.32, 13);
   const towerW = 8;
 
-  // A cold dead halo behind the whole church — the only reason its near-black
-  // bulk separates from the near-black sky at all. Colder and a little
-  // stronger now the stonework itself is darker, so it still reads as a
-  // shape lunging out of the dark and never as nothing.
+  // A cold dead halo behind the whole church — a big part of why its dark
+  // bulk separates from the dark sky. It's a hazard you have to dodge, so
+  // it needs to read early: a touch brighter and wider than strictly moody.
   ctx.save();
-  ctx.globalAlpha = 0.24;
-  ctx.fillStyle = '#7c90a2';
-  ctx.fillRect(left - 2, waterY - bodyH - 3, right - left + 4, bodyH + 8);
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = '#93a7b6';
+  ctx.fillRect(left - 3, waterY - bodyH - 4, right - left + 6, bodyH + 9);
   ctx.beginPath();
   ctx.moveTo(towerX - towerW / 2 - 2, waterY - spireH * 0.56);
   ctx.lineTo(towerX, waterY - spireH - 3);
@@ -334,16 +333,16 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   ctx.fill();
   ctx.restore();
 
-  // nave — cold, dead stone, barely a shade off black. Lit by nothing;
-  // deliberately not warm. Forbidding, not welcoming: this is holy ground
-  // the pact won't let you touch.
-  ctx.fillStyle = '#413f3c';
+  // nave — cold, dead stone. Deliberately not warm; forbidding, not
+  // welcoming. Dark, but kept a clear step above the sky behind it so the
+  // church you have to dodge is actually visible before you're on it.
+  ctx.fillStyle = '#5b5854';
   ctx.fillRect(left, waterY - bodyH, right - left, bodyH + 5);
   // shaded lower course
-  ctx.fillStyle = '#211f1c';
+  ctx.fillStyle = '#302d29';
   ctx.fillRect(left, waterY - bodyH * 0.34, right - left, bodyH * 0.34 + 5);
-  // pitched roof — black slate
-  ctx.fillStyle = '#100f13';
+  // pitched roof — dark slate
+  ctx.fillStyle = '#1d1b22';
   ctx.beginPath();
   ctx.moveTo(left - 1, waterY - bodyH);
   ctx.lineTo(mid, waterY - bodyH - 7);
@@ -352,26 +351,26 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   ctx.fill();
   // dark, empty windows with the faintest cold gleam — nobody's home
   for (let wx = left + 4; wx < right - 3; wx += 8) {
-    ctx.fillStyle = '#141315';
+    ctx.fillStyle = '#171619';
     ctx.fillRect(wx - 1, waterY - bodyH * 0.58 - 1, 4, 5);
-    ctx.fillStyle = 'rgba(146,162,174,0.4)';
+    ctx.fillStyle = 'rgba(154,170,182,0.5)';
     ctx.fillRect(wx, waterY - bodyH * 0.58, 2, 2);
   }
 
   // bell tower near the bank end, under the spire
-  ctx.fillStyle = '#3d3b37';
+  ctx.fillStyle = '#565350';
   ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, towerW, spireH * 0.56 + 4);
-  ctx.fillStyle = '#211f1c';
+  ctx.fillStyle = '#302d29';
   ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, 2, spireH * 0.56 + 4);
-  // spire — near-black, its moonlit leading edge catching the only light
-  ctx.fillStyle = '#302e39';
+  // spire — dark, its moonlit leading edge catching the only light
+  ctx.fillStyle = '#44414e';
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH);
   ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.54);
   ctx.lineTo(towerX + towerW / 2, waterY - spireH * 0.54);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = '#8b96a0';
+  ctx.strokeStyle = '#a7b2ba';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH);
