@@ -318,11 +318,13 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   const towerX = channelEdge + s.side * Math.min(naveW * 0.32, 13);
   const towerW = 8;
 
-  // A cold moonlit halo behind the whole church, so its dark bulk still
-  // separates from the burning sky at every edge — eerie, not invisible.
+  // A cold dead halo behind the whole church — the only reason its near-black
+  // bulk separates from the near-black sky at all. Colder and a little
+  // stronger now the stonework itself is darker, so it still reads as a
+  // shape lunging out of the dark and never as nothing.
   ctx.save();
-  ctx.globalAlpha = 0.16;
-  ctx.fillStyle = '#9fb4c4';
+  ctx.globalAlpha = 0.24;
+  ctx.fillStyle = '#7c90a2';
   ctx.fillRect(left - 2, waterY - bodyH - 3, right - left + 4, bodyH + 8);
   ctx.beginPath();
   ctx.moveTo(towerX - towerW / 2 - 2, waterY - spireH * 0.56);
@@ -332,16 +334,16 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   ctx.fill();
   ctx.restore();
 
-  // nave — cold, dead stone. Grey lit only by the moon, no life in it;
+  // nave — cold, dead stone, barely a shade off black. Lit by nothing;
   // deliberately not warm. Forbidding, not welcoming: this is holy ground
   // the pact won't let you touch.
-  ctx.fillStyle = '#9a9791';
+  ctx.fillStyle = '#413f3c';
   ctx.fillRect(left, waterY - bodyH, right - left, bodyH + 5);
   // shaded lower course
-  ctx.fillStyle = '#48453f';
+  ctx.fillStyle = '#211f1c';
   ctx.fillRect(left, waterY - bodyH * 0.34, right - left, bodyH * 0.34 + 5);
-  // pitched roof — near-black slate
-  ctx.fillStyle = '#252229';
+  // pitched roof — black slate
+  ctx.fillStyle = '#100f13';
   ctx.beginPath();
   ctx.moveTo(left - 1, waterY - bodyH);
   ctx.lineTo(mid, waterY - bodyH - 7);
@@ -350,32 +352,33 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   ctx.fill();
   // dark, empty windows with the faintest cold gleam — nobody's home
   for (let wx = left + 4; wx < right - 3; wx += 8) {
-    ctx.fillStyle = '#191719';
+    ctx.fillStyle = '#141315';
     ctx.fillRect(wx - 1, waterY - bodyH * 0.58 - 1, 4, 5);
-    ctx.fillStyle = 'rgba(160,176,188,0.55)';
+    ctx.fillStyle = 'rgba(146,162,174,0.4)';
     ctx.fillRect(wx, waterY - bodyH * 0.58, 2, 2);
   }
 
   // bell tower near the bank end, under the spire
-  ctx.fillStyle = '#8a8781';
+  ctx.fillStyle = '#3d3b37';
   ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, towerW, spireH * 0.56 + 4);
-  ctx.fillStyle = '#48453f';
+  ctx.fillStyle = '#211f1c';
   ctx.fillRect(towerX - towerW / 2, waterY - spireH * 0.56, 2, spireH * 0.56 + 4);
-  // spire — dark, its moonlit leading edge catching the only light
-  ctx.fillStyle = '#5c5966';
+  // spire — near-black, its moonlit leading edge catching the only light
+  ctx.fillStyle = '#302e39';
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH);
   ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.54);
   ctx.lineTo(towerX + towerW / 2, waterY - spireH * 0.54);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = '#b6c0c8';
+  ctx.strokeStyle = '#8b96a0';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(towerX, waterY - spireH);
   ctx.lineTo(towerX - towerW / 2, waterY - spireH * 0.54);
   ctx.stroke();
-  // the cross still holds its own light — the one thing the storm can't dim
+  // the cross still holds its own hard white light — the one thing the storm
+  // can't dim, and starker than ever now everything round it is black
   ctx.strokeStyle = '#eef3f6';
   ctx.lineWidth = 2;
   ctx.beginPath();

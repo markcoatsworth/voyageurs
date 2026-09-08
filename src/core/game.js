@@ -901,16 +901,18 @@ export class Game {
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Hellstorm sky, faded in by `storm` — near-black violet overhead
-    // bleeding down to a sullen ember glow at the horizon, like the clouds
-    // are lit from below by something burning. The Devil isn't here yet, but
-    // this is his weather.
+    // Hellstorm sky, faded in by `storm` — all but pure black overhead with
+    // the faintest dead-violet cast, sinking to a low, smothered smear of
+    // dried-blood red right at the horizon, like something is burning a long
+    // way off and the smoke has swallowed most of it. The Devil isn't here
+    // yet, but this is his weather.
     if (storm > 0) {
       const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-      gradient.addColorStop(0, '#05030a');
-      gradient.addColorStop(0.42, '#150611');
-      gradient.addColorStop(0.76, '#3a0c0a');
-      gradient.addColorStop(1, '#7c1f07');
+      gradient.addColorStop(0, '#020105');
+      gradient.addColorStop(0.44, '#08040a');
+      gradient.addColorStop(0.74, '#170509');
+      gradient.addColorStop(0.9, '#28080a');
+      gradient.addColorStop(1, '#431009');
       ctx.save();
       ctx.globalAlpha = storm;
       ctx.fillStyle = gradient;
@@ -927,16 +929,17 @@ export class Game {
       drawWaterFallback(ctx, this.flowDistance, cameraWorldX);
     }
 
-    // Drown the ground in gloom as the storm creeps in — a heavy near-black
-    // wash with a dull red heat under it, so the land and river below read
-    // as scorched country glimpsed through smoke.
+    // Drown the ground in gloom as the storm creeps in — a heavy black wash
+    // with a low, dull red heat bleeding through it, so the land and river
+    // below read as scorched country glimpsed through smoke. Enough black
+    // that the banks are shapes in the dark, not scenery.
     if (storm > 0) {
       ctx.save();
-      ctx.globalAlpha = 0.68 * storm;
-      ctx.fillStyle = '#0c0304';
+      ctx.globalAlpha = 0.8 * storm;
+      ctx.fillStyle = '#050203';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.globalAlpha = 0.16 * storm;
-      ctx.fillStyle = '#5a1408';
+      ctx.globalAlpha = 0.13 * storm;
+      ctx.fillStyle = '#420d06';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
     }
@@ -1040,41 +1043,44 @@ export class Game {
 
     // Storm mood, over everything — all of it faded in by `storm`.
     if (storm > 0) {
-      // Embers streaming up past the canoe out of the fire below.
+      // A few dim cinders drifting up out of the dark — sparse and
+      // blood-coloured, the last of a fire rather than a warm shower of sparks.
       ctx.save();
-      for (let i = 0; i < 18; i++) {
+      for (let i = 0; i < 13; i++) {
         const seed = i * 47.3;
-        const rise = 16 + (i % 5) * 7;
+        const rise = 14 + (i % 5) * 6;
         const y = CANVAS_HEIGHT + 16 - ((this.time * rise + seed * 6.1) % (CANVAS_HEIGHT + 40));
         const x = (seed * 13.7 + Math.sin(this.time * 0.6 + seed) * 22) % CANVAS_WIDTH;
         const flick = 0.35 + Math.sin(this.time * 8 + seed) * 0.45;
         if (flick <= 0.08) continue;
         const s = 1 + (i % 3);
-        ctx.globalAlpha = Math.min(1, flick) * 0.75 * storm;
-        ctx.fillStyle = i % 4 === 0 ? '#ffb347' : '#ff4d1c';
+        ctx.globalAlpha = Math.min(1, flick) * 0.42 * storm;
+        ctx.fillStyle = i % 4 === 0 ? '#a8481a' : '#7a1e0e';
         ctx.fillRect(x, y, s, s);
       }
       ctx.restore();
 
-      // Heavy black-red vignette, breathing slightly, closing the edges in
-      // so the churches loom out of the dark with less warning.
-      const pulse = (0.58 + Math.sin(this.time * 1.2) * 0.07) * storm;
+      // A heavy black vignette, breathing slightly, crushed in tight so only
+      // the middle of the channel is ever really lit and the churches lunge
+      // out of the dark with almost no warning.
+      const pulse = (0.78 + Math.sin(this.time * 1.15) * 0.09) * storm;
       const vg = ctx.createRadialGradient(
-        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.36,
-        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.95,
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.24,
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.5, CANVAS_HEIGHT * 0.92,
       );
-      vg.addColorStop(0, 'rgba(2,0,1,0)');
-      vg.addColorStop(0.65, `rgba(8,1,2,${(pulse * 0.45).toFixed(3)})`);
-      vg.addColorStop(1, `rgba(3,0,0,${pulse.toFixed(3)})`);
+      vg.addColorStop(0, 'rgba(1,0,1,0)');
+      vg.addColorStop(0.5, `rgba(4,0,2,${(pulse * 0.62).toFixed(3)})`);
+      vg.addColorStop(1, `rgba(0,0,0,${pulse.toFixed(3)})`);
       ctx.fillStyle = vg;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // Lightning — a sickly orange sheet-flash, not clean white.
+      // Lightning — no relief. A dim, dead-coloured flicker, the wrong
+      // colour for lightning, that barely lifts the gloom before it's gone.
       const lf = lightningFlash(this.time);
       if (lf > 0) {
         ctx.save();
-        ctx.globalAlpha = lf * 0.42 * storm;
-        ctx.fillStyle = '#ff7a38';
+        ctx.globalAlpha = lf * 0.28 * storm;
+        ctx.fillStyle = '#6f6076';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         ctx.restore();
       }
