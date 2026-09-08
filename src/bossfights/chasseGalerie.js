@@ -298,7 +298,9 @@ function drawChurch(ctx, s, z, cameraWorldX) {
   const right = Math.max(x0, x1);
   const mid = (left + right) / 2;
 
-  const towerX = bankEdge - s.side * Math.min(naveW * 0.32, 13);
+  // Tower/steeple on the river side (channel edge), not the bank side
+  const channelEdge = bankEdge - s.side * naveW;
+  const towerX = channelEdge + s.side * Math.min(naveW * 0.32, 13);
   const towerW = 8;
 
   // A cold moonlit halo behind the whole church, so its dark bulk still
