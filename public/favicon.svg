@@ -1,30 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Background matches the game's own page background (#0a0e14) so the
-       icon blends naturally into a browser tab, light or dark. -->
-  <rect width="64" height="64" rx="10" fill="#0a0e14"/>
+  <!-- Light background for better visibility in browser tabs -->
+  <rect width="64" height="64" rx="10" fill="#f4ead2"/>
 
   <!-- A "V" — the Voyageurs initial and the fjord's V-shaped valley — made
        from the two things the game is about: a canoe is the left arm (bow
        up and to the left, pointed at both ends), a paddle is the right arm
-       (broad blade up and to the right). Bold gold shapes with heavy dark
-       outlines so the V holds up at a 16px browser-tab size and resolves
-       into canoe + paddle up close. Colours from the title accent
-       (#e0a458) and the in-game canoe sprite. -->
+       (broad blade up and to the right). Dark brown/wood tones for visibility
+       on light background. -->
 
   <!-- LEFT ARM — the canoe: an almond hull, pointed bow and stern, along
        the up-left diagonal, meeting the paddle at the point of the V. -->
   <path d="M32,50 Q33,25 14,9 Q8,32 32,50 Z"
-        fill="#e0a458" stroke="#3a2412" stroke-width="3.6" stroke-linejoin="round"/>
-  <path d="M30,45 Q30,25 17,13 Q13,30 30,45 Z" fill="#9c5f2b"/>
-  <line x1="18" y1="30" x2="27" y2="25" stroke="#3a2412" stroke-width="2.6"
+        fill="#5a3a1f" stroke="#2a1810" stroke-width="3.6" stroke-linejoin="round"/>
+  <path d="M30,45 Q30,25 17,13 Q13,30 30,45 Z" fill="#3a2412"/>
+  <line x1="18" y1="30" x2="27" y2="25" stroke="#1a0c08" stroke-width="2.6"
         stroke-linecap="round"/>
 
   <!-- RIGHT ARM — the paddle: a thick shaft up the up-right diagonal into a
        broad blade at the top. -->
-  <line x1="33" y1="49" x2="46" y2="22" stroke="#a3672f" stroke-width="6.5"
+  <line x1="33" y1="49" x2="46" y2="22" stroke="#5a3a1f" stroke-width="6.5"
         stroke-linecap="round"/>
   <path d="M45,27 Q36,15 47,3 Q59,13 52,27 Q49,31 45,27 Z"
-        fill="#e0a458" stroke="#3a2412" stroke-width="3.6" stroke-linejoin="round"/>
-  <line x1="48" y1="7" x2="47" y2="25" stroke="#3a2412" stroke-width="2"
+        fill="#5a3a1f" stroke="#2a1810" stroke-width="3.6" stroke-linejoin="round"/>
+  <line x1="48" y1="7" x2="47" y2="25" stroke="#1a0c08" stroke-width="2"
         stroke-linecap="round"/>
 </svg>
