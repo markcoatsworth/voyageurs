@@ -40,16 +40,17 @@ const SWAY_X = CANVAS_WIDTH * 0.17;
 // --- his fireballs
 const FIREBALL_SPEED = 98;    // px/sec — slow enough to read and dodge over the arena
 const FIREBALL_R = 6;         // collision radius
-const CANOE_HIT_R = 4;        // the canoe's a thin sliver — only a near-centre hit counts
+const CANOE_HIT_R = 5;        // the canoe's a thin sliver — only a near-centre hit counts
 // The multi-shot volleys aim at points spread perpendicular to the canoe by
 // this many pixels *at the canoe's range*, rather than by a fixed angle
 // (which fans out tight up close and wide far away, so you couldn't thread
-// it when pressed toward the Devil). A gap this wide leaves a
-// SPREAD_GAP - 2*(FIREBALL_R + CANOE_HIT_R) ≈ 22px lane to slip through.
-const SPREAD_GAP = 42;
-const TELEGRAPH = 0.55;       // wind-up before a shot: the flame in his hand swells
-const FIRE_INTERVAL_FULL = 2.1;   // seconds between shots at full health
-const FIRE_INTERVAL_LOW = 1.1;    // ...and when nearly dead
+// it when pressed toward the Devil). This gap leaves a
+// SPREAD_GAP - 2*(FIREBALL_R + CANOE_HIT_R) ≈ 12px lane to slip through —
+// threadable, but it takes a committed dodge rather than a nudge.
+const SPREAD_GAP = 34;
+const TELEGRAPH = 0.5;        // wind-up before a shot: the flame in his hand swells
+const FIRE_INTERVAL_FULL = 1.8;   // seconds between shots at full health
+const FIRE_INTERVAL_LOW = 1.0;    // ...and when nearly dead
 
 const TAU = Math.PI * 2;
 function clamp01(v) { return Math.max(0, Math.min(1, v)); }
@@ -189,9 +190,9 @@ export function createDiable() {
             // pixel amount — a consistent gap no matter the range.
             const px = -Math.sin(ang);
             const py = Math.cos(ang);
-            const offsets = hpFrac < 0.4
+            const offsets = hpFrac < 0.45
               ? [-SPREAD_GAP, 0, SPREAD_GAP]
-              : hpFrac < 0.7 ? [-SPREAD_GAP / 2, SPREAD_GAP / 2] : [0];
+              : hpFrac < 0.8 ? [-SPREAD_GAP / 2, SPREAD_GAP / 2] : [0];
             for (const off of offsets) {
               const a = Math.atan2(
                 (canoe.y + py * off) - sy,
