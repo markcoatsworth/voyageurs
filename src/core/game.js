@@ -767,12 +767,19 @@ export class Game {
     if (keys.left) steerInput -= 1;
     if (keys.right) steerInput += 1;
 
-    // Fighting the current: steering authority drops the harder the
-    // whitewater is pushing — but not in the air (Chasse-galerie), where the
-    // river below can't touch the canoe at all, only the steeples can.
-    const steerRapids = flying ? 0 : rapids;
-    this.lateralVX += steerInput * STEER_ACCEL * (1 - steerRapids * RAPIDS_STEER_PENALTY) * dt;
-    this.lateralVX -= this.lateralVX * STEER_DAMPING * dt;
+    // Diable fight: direct lateral control for instant dodging, matching the
+    // vertical responsiveness. Skip the normal physics and just move.
+    if (this.diable.isHolding()) {
+      const FIGHT_LATERAL_SPEED = 12; // units/sec, very responsive
+      this.lateralVX = steerInput * FIGHT_LATERAL_SPEED;
+    } else {
+      // Fighting the current: steering authority drops the harder the
+      // whitewater is pushing — but not in the air (Chasse-galerie), where the
+      // river below can't touch the canoe at all, only the steeples can.
+      const steerRapids = flying ? 0 : rapids;
+      this.lateralVX += steerInput * STEER_ACCEL * (1 - steerRapids * RAPIDS_STEER_PENALTY) * dt;
+      this.lateralVX -= this.lateralVX * STEER_DAMPING * dt;
+    }
 
     // Cross-current from blockade fight: pushes you away from the gap,
     // getting stronger as you approach the ship. Applied before velocity

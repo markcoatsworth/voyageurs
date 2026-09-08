@@ -400,6 +400,23 @@ try {
   // ?start=diable is a checkpoint, not just a spawn point — hand over the
   // pistol and mark it so a capsize respawns at the fight.
   if (startedAtDiable) game.armDiableCheckpoint();
+
+  // Debug overlay for ?start=diable on mobile: shows timestamp and tuning
+  // values so you know you're running the latest build.
+  if (startedAtDiable && isTouchPrimary()) {
+    const debugEl = document.createElement('div');
+    debugEl.style.cssText = 'position:fixed;top:10px;left:10px;background:rgba(0,0,0,0.8);color:#0f0;padding:8px 12px;font-family:monospace;font-size:11px;z-index:9999;border:1px solid #0f0;border-radius:4px;';
+    debugEl.innerHTML = `
+      <div>🔧 DEBUG - DIABLE START</div>
+      <div>Build: ${new Date().toISOString()}</div>
+      <div>Touch: DZ=0.15 TH=0.45</div>
+      <div>Lateral: FAST (12u/s)</div>
+    `;
+    document.body.appendChild(debugEl);
+    // Auto-hide after 8 seconds
+    setTimeout(() => debugEl.remove(), 8000);
+  }
+
   // Lets the index.html error handler word later crashes as "running the
   // game" rather than "loading the game".
   window.__voyageursReady = true;
