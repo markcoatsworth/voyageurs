@@ -25,7 +25,6 @@ const PLAYLIST = [
   { src: '/audio/gigue-du-poteau-blanc.mp3', title: 'Gigue du Poteau Blanc', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-acadien.mp3', title: 'Quadrille Acadien', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-francais.mp3', title: 'Quadrille Français', artist: 'Joseph Allard' },
-  { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' },
   { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du Terreur', artist: 'Jos Bouchard' },
   { src: '/audio/avec-les-ruine-babine.mp3', title: 'Avec les Ruine-Babine', artist: 'Louis « Pitou » Boudreault' },
   { src: '/audio/les-batteux.mp3', title: 'Les Batteux', artist: 'Louis « Pitou » Boudreault' },
@@ -38,8 +37,8 @@ const PLAYLIST = [
 // left off, not from scratch.
 const BOSS_TRACK = { src: '/audio/rule-britannia.mp3', title: 'Rule, Britannia!', artist: 'Thomas Arne' };
 // Same deal for the Diable fight at the head of the Chasse-galerie — the
-// Devil is a fiddler, so his fight gets a reel. Also sits in the shuffle
-// above; that's fine, it just means it can turn up on its own elsewhere too.
+// Devil is a fiddler, so his fight gets a reel. Reserved for that fight
+// only; kept out of the shuffle so it never turns up on its own elsewhere.
 const DIABLE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' };
 
 const DEFAULT_VOLUME = 0.35;
