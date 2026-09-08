@@ -470,6 +470,17 @@ button:hover {
   display: block; /* visible on desktop */
 }
 
+/* Desktop: hide the circular background and center knob, just show arrows */
+@media (hover: hover) and (pointer: fine) {
+  #steer-pad {
+    background: none !important;
+    border: none !important;
+  }
+  #steer-knob {
+    display: none !important;
+  }
+}
+
 /* Hide on-screen controls on touch devices (mobile/tablet) */
 @media (hover: none) and (pointer: coarse) {
   #touch-dpad {
