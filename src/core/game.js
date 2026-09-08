@@ -252,7 +252,9 @@ export class Game {
     // Set up weapon firing callback
     input.onWeaponFire = (weaponName) => {
       if (this.mode === 'river' && this.state === 'playing') {
-        this.weapons.fire(weaponName, this.canoeWorldX, this.flowDistance);
+        // getAltitude() is 0 except mid-Chasse-galerie flight, where it lifts
+        // the shot to leave the flying canoe instead of its shadow.
+        this.weapons.fire(weaponName, this.canoeWorldX, this.flowDistance, this.chasseGalerie.getAltitude());
       }
     };
 

@@ -1,6 +1,8 @@
 // Broforce-style weapons system
 // Z = small (pistol), X = medium (musket), C = large (blunderbuss)
 
+import { PIXELS_PER_UNIT } from '../shared/config.js';
+
 export function createWeapons() {
   const bullets = [];
   const weapons = {
@@ -25,8 +27,11 @@ export function createWeapons() {
       return weapons[weaponName] === true;
     },
 
-    // Fire a weapon from the canoe's position
-    fire(weaponName, canoeWorldX, canoeFlowDistance) {
+    // Fire a weapon from the canoe's position. `altitude` (world units above
+    // the water) is only ever non-zero in the Chasse-galerie flight — the
+    // bullet keeps it and flies level, so shots leave the flying canoe
+    // itself rather than its shadow on the water below (see draw()).
+    fire(weaponName, canoeWorldX, canoeFlowDistance, altitude = 0) {
       if (!weapons[weaponName]) {
         console.log(`[WEAPONS] ${weaponName} not unlocked yet`);
         return false;
@@ -41,6 +46,7 @@ export function createWeapons() {
           bullets.push({
             worldX: canoeWorldX,
             flowDistance: canoeFlowDistance,
+            altitude,
             speed: BULLET_SPEED,
             createdAt: now,
             type: 'pistol',
@@ -79,6 +85,10 @@ export function createWeapons() {
       for (const b of bullets) {
         const z = worldDistance - b.flowDistance;
         const screen = worldToScreen(b.worldX, z, cameraWorldX);
+        // Lift the bullet by the altitude it was fired at (Chasse-galerie
+        // only; 0 on the water) so it tracks the flying canoe, not its
+        // shadow — same screen-space offset the canoe sprite gets in game.js.
+        const y = screen.y - (b.altitude || 0) * PIXELS_PER_UNIT;
 
         // Draw bullet as a small yellow/orange flash
         ctx.save();
@@ -86,7 +96,7 @@ export function createWeapons() {
         ctx.shadowColor = '#ff8800';
         ctx.shadowBlur = 4;
         ctx.beginPath();
-        ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
+        ctx.arc(screen.x, y, 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
