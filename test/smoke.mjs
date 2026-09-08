@@ -288,6 +288,41 @@ await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
   notes.push(`  note diable fight won after ${deaths} death(s)`);
 });
 
+// --- scenario 4f: vertical dodge while the Diable arena holds the river ----
+
+await step('diable: up/down move the canoe without unlocking the river', () => {
+  const g = newGame('lawrenceWest', DIABLE_FLOW_DISTANCE - 22);
+  g.game.armDiableCheckpoint();
+  // Paddle in until the river is actually clamped at the arena (the fight
+  // proper, not just the Devil rising into view).
+  const clamped = () => g.game.diable.isHolding()
+    && Math.abs(g.game.flowDistance - DIABLE_FLOW_DISTANCE) < 0.5;
+  for (let i = 0; i < 1200 && !clamped(); i++) {
+    g.game.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (!clamped()) throw new Error('never got clamped at the Diable arena');
+  // Let the hover settle, then record the locked river position.
+  g.game.input.state.up = false;
+  for (let i = 0; i < 40; i++) g.game.update(1 / 30);
+  const lockedFlow = g.game.flowDistance;
+  const restAlt = g.game.chasseGalerie.getAltitude();
+
+  // Hold "down" — the canoe should drop (lower altitude / lower on screen)
+  // while the river stays pinned at the arena.
+  for (let i = 0; i < 45; i++) { g.game.input.state.down = true; g.game.update(1 / 30); }
+  g.game.input.state.down = false;
+  const lowAlt = g.game.chasseGalerie.getAltitude();
+  if (lowAlt >= restAlt - 0.5) throw new Error(`holding "down" barely moved the canoe (alt ${restAlt.toFixed(2)} -> ${lowAlt.toFixed(2)})`);
+  if (Math.abs(g.game.flowDistance - lockedFlow) > 0.5) throw new Error('the river scrolled while dodging — screen not locked');
+  if (g.game.diable.isDefeated()) throw new Error('the fight ended unexpectedly during the dodge test');
+
+  // Release — it eases back up toward the baseline hover.
+  for (let i = 0; i < 90; i++) g.game.update(1 / 30);
+  const backAlt = g.game.chasseGalerie.getAltitude();
+  if (backAlt <= lowAlt + 0.3) throw new Error(`canoe never eased back up after releasing "down" (${lowAlt.toFixed(2)} -> ${backAlt.toFixed(2)})`);
+});
+
 // --- scenario 4c: casting off from Montreal doesn't loop back in ----------
 
 await step('montreal: cast off without re-docking', () => {

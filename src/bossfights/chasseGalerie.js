@@ -42,8 +42,10 @@ const FLIGHT_HEIGHT = 6.5;
 // The Diable fight (bossfights/diable.js) holds the canoe at this lower
 // hover instead of cruise height — the Devil drags you down toward him as he
 // closes to collect, which also opens a real arena above the canoe for his
-// fire to cross and for you to dodge in.
-const BOSS_HOVER_HEIGHT = 3.0;
+// fire to cross and for you to dodge in. During the fight the player can
+// push up/down off this baseline (game.js clamps the range) to dodge
+// vertically while the river itself stays locked.
+export const BOSS_HOVER_HEIGHT = 3.0;
 // The take-off and landing are gradual, measured in flow-distance rather
 // than seconds: the canoe rises over the first CLIMB_DISTANCE units out of
 // Montreal and settles back down over the last DESCENT_DISTANCE into
@@ -185,6 +187,10 @@ export function createChasseGalerie() {
   // clamped at the arena, instead of the distance-driven descent curve
   // taking over. Released when the fight resolves and the glide-in resumes.
   let heldAloft = false;
+  // The altitude to hold at while heldAloft — game.js drives this off the
+  // player's up/down input during the Diable fight so the canoe can dodge
+  // vertically in the arena. Defaults to the baseline hover.
+  let heldAlt = BOSS_HOVER_HEIGHT;
 
   return {
     update(playerFlowDistance, canoeWorldX, dt) {
@@ -204,8 +210,11 @@ export function createChasseGalerie() {
       // to the water otherwise (belt-and-braces — the curve is already ~0 by
       // FLIGHT_END). heldAloft (the Diable fight) overrides it to a lower,
       // steady hover.
-      const targetAlt = heldAloft ? BOSS_HOVER_HEIGHT : (active ? altitudeAt(playerFlowDistance) : 0);
-      altitude += Math.max(-3 * dt, Math.min(3 * dt, targetAlt - altitude));
+      const targetAlt = heldAloft ? heldAlt : (active ? altitudeAt(playerFlowDistance) : 0);
+      // A touch quicker to reach the target while held, so the vertical
+      // dodge in the Diable fight feels responsive rather than floaty.
+      const rate = heldAloft ? 6 : 3;
+      altitude += Math.max(-rate * dt, Math.min(rate * dt, targetAlt - altitude));
 
       let hit = false;
       if (active && altitude > 0.5) {
@@ -227,10 +236,16 @@ export function createChasseGalerie() {
       return flightWind(flowDistance, time, altitude / FLIGHT_HEIGHT);
     },
 
-    // Diable fight: keep the canoe hovering at cruise height for the duration
-    // (the Devil won't let you land) instead of the position-driven descent.
+    // Diable fight: keep the canoe hovering (the Devil won't let you land)
+    // instead of the position-driven descent. setHeldAloft toggles the hold;
+    // setHeldAlt sets the altitude to hold at, which game.js moves up/down
+    // with the player's input so they can dodge vertically in the arena.
     setHeldAloft(v) {
       heldAloft = v;
+      if (!v) heldAlt = BOSS_HOVER_HEIGHT;
+    },
+    setHeldAlt(a) {
+      heldAlt = a;
     },
 
     reset() {
@@ -238,6 +253,7 @@ export function createChasseGalerie() {
       flightDone = false;
       altitude = 0;
       heldAloft = false;
+      heldAlt = BOSS_HOVER_HEIGHT;
     },
 
     drawStorm(ctx, worldDistance, cameraWorldX) {

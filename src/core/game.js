@@ -7,7 +7,7 @@ import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDia
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import { createBlockade } from '../bossfights/blockade.js';
-import { createChasseGalerie, lightningFlash } from '../bossfights/chasseGalerie.js';
+import { createChasseGalerie, lightningFlash, BOSS_HOVER_HEIGHT } from '../bossfights/chasseGalerie.js';
 import { createDiable, DIABLE_FLOW_DISTANCE } from '../bossfights/diable.js';
 import { createWeapons } from './weapons.js';
 import { isTouchPrimary } from './touchControls.js';
@@ -130,6 +130,15 @@ const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
 // Ottawa runs several minutes and there's plenty of time to read each
 // church and slide into the next gap.
 const FLIGHT_CRUISE_SPEED = 3.4;
+// Diable fight: the river is locked at the arena, but up/down still do
+// something — they move the canoe vertically within the arena to dodge his
+// fire. Altitude (world units) is held between these; it eases back toward
+// BOSS_HOVER_HEIGHT when neither is pressed so you naturally return to the
+// aiming line.
+const FIGHT_HOVER_MIN = -1.0;   // fully retreated — low on screen, near the bottom
+const FIGHT_HOVER_MAX = 4.6;    // pressed up toward him
+const FIGHT_HOVER_SPEED = 5;    // units/sec of vertical move under input
+const FIGHT_HOVER_RECENTER = 1.6; // units/sec drift back to the baseline when idle
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
@@ -258,6 +267,9 @@ export class Game {
     // respawns just before the fight with the pistol, not all the way back
     // at Montréal — see start() and update()'s consumeJustAppeared branch.
     this._diableCheckpoint = false;
+    // Canoe altitude while the Diable fight holds the river locked — driven
+    // by up/down for a vertical dodge, eased back to BOSS_HOVER_HEIGHT idle.
+    this._bossHoverAlt = BOSS_HOVER_HEIGHT;
     this.weapons = createWeapons();
 
     // Set up weapon firing callback
@@ -359,6 +371,7 @@ export class Game {
     this.chasseGalerie.reset();
     this.diable.reset();
     this.diablePct = null;
+    this._bossHoverAlt = BOSS_HOVER_HEIGHT;
     this.weapons.reset();
     // Respawning at the Diable checkpoint means the pistol is a given — you
     // can't fight him bare-handed, and ?start=diable / a capsize mid-fight
@@ -812,6 +825,21 @@ export class Game {
     const onscreenOffset = clamp(this.canoeWorldX - this.cameraWorldX, -CAMERA_MAX_ONSCREEN_OFFSET, CAMERA_MAX_ONSCREEN_OFFSET);
     this.cameraWorldX = this.canoeWorldX - onscreenOffset;
     this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
+
+    // Diable fight: the river is locked, but up/down move the canoe
+    // vertically within the arena so you can back off from the Devil (down
+    // the screen) or press up toward him to dodge his fire. Feeds the held
+    // hover altitude the flight update below eases toward.
+    if (this.diable.isHolding()) {
+      if (keys.down) this._bossHoverAlt -= FIGHT_HOVER_SPEED * dt;
+      else if (keys.up) this._bossHoverAlt += FIGHT_HOVER_SPEED * dt;
+      else {
+        const back = BOSS_HOVER_HEIGHT - this._bossHoverAlt;
+        this._bossHoverAlt += Math.sign(back) * Math.min(Math.abs(back), FIGHT_HOVER_RECENTER * dt);
+      }
+      this._bossHoverAlt = clamp(this._bossHoverAlt, FIGHT_HOVER_MIN, FIGHT_HOVER_MAX);
+      this.chasseGalerie.setHeldAlt(this._bossHoverAlt);
+    }
 
     // Chasse-galerie: tick the flight here — before the dock / braid-island /
     // obstacle checks below — so those all see this frame's airborne state
