@@ -65,7 +65,7 @@ const CLEAR_MARGIN = 3; // how far past the ship counts as "in the clear"
 // CANNON_DAMAGE in game.js) — still a real, escalating fight, just not one
 // that can end the run before its actual climax.
 const VOLLEY_INTERVAL_FAR = 2.3;
-const VOLLEY_INTERVAL_NEAR = 0.75;
+const VOLLEY_INTERVAL_NEAR = 0.95;
 const SPLASH_WARN_TIME = 0.65; // telegraph before it's dangerous
 const SPLASH_HOT_TIME = 0.3; // the actual damaging window
 const SPLASH_FADE_TIME = 0.15;
@@ -224,7 +224,7 @@ export function createBlockade() {
           const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
           volleyTimer -= dt;
           if (volleyTimer <= 0) {
-            const shots = progress > 0.85 ? 3 : progress > 0.5 ? 2 : 1;
+            const shots = progress > 0.9 ? 3 : progress > 0.55 ? 2 : 1;
             const spread = SPLASH_SPREAD_MIN + (SPLASH_SPREAD_MAX - SPLASH_SPREAD_MIN) * progress;
             for (let i = 0; i < shots; i++) {
               // Evenly-spaced lanes across the fan, not independent random
@@ -305,7 +305,7 @@ export function createBlockade() {
       const progressPct = distToShip <= 0 ? 100 : (1 - clamp(distToShip / APPROACH_RANGE, 0, 1)) * 100;
       // Cross-current pushes you away from the gap side, getting stronger as you approach
       const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
-      const crossCurrent = -gapSide * progress * 7; // negative gap side means push away from gap
+      const crossCurrent = -gapSide * progress * 5.5; // negative gap side means push away from gap
       return { active: true, progressPct, boomCount, crossCurrent, gapSide };
     },
 

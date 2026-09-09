@@ -107,19 +107,19 @@ const ROCK_DAMAGE = 32;
 const LOG_DAMAGE = 12;
 const BANK_DAMAGE = 8;
 // The Château Gauntlet (bossfights/blockade.js) — a cannon splash used to cost as
-// much as a rock (30), but combined with how many volleys a real approach
-// exposes you to, that added up to dying to cannon fire before ever
-// reaching the ship — the fight's actual climax. Dropped so a run of bad
-// luck during the approach costs real health without being able to end the
-// run on its own before the hull is even reached.
-const CANNON_DAMAGE = 16;
+// much as a rock (30), then 16, now 12. Combined with how many volleys a
+// real approach exposes you to, the higher numbers added up to the approach
+// killing runs before the ship — the fight's actual climax — was ever
+// reached. Kept low enough that a bad patch of luck on the way in costs
+// real health without ending the run on its own.
+const CANNON_DAMAGE = 12;
 // The hull itself is a solid wall, not a one-off "you clipped it" penalty
 // (see the isHullBlocking check in update()) — outside the gap you simply
 // can't push through it at all, taking this (the single hardest hit in the
 // game) on repeat every INVULN_TIME while you're pinned against it, plus a
 // heavy speed penalty that keeps sapping your paddling the whole time
 // you're in contact, same shape as BANK_PENALTY_SPEED just harder.
-const SHIP_HULL_DAMAGE = 40;
+const SHIP_HULL_DAMAGE = 30;
 const SHIP_HULL_PENALTY_SPEED = 6;
 // A church steeple clipped mid-flight in the Chasse-galerie. A real bite —
 // just under a cannon hit, ~8 clips (one INVULN_TIME apart) ends a full
