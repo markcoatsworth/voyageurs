@@ -56,6 +56,7 @@ const { createMinimap } = await import('../src/world/minimap.js');
 const { createMusic } = await import('../src/audio/music.js');
 const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
+const { getDockHit } = await import('../src/world/villages.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
@@ -412,6 +413,53 @@ await step('rideau: paddle the whole leg and reach Kingston -> won', () => {
     throw new Error('"Play Again" from the win screen did not return to the put-in');
   }
   if (g.game.state !== 'playing') throw new Error('restart after winning did not resume play');
+});
+
+await step('rideau: casting off from Kars survives drifting back onto its own dock', () => {
+  const kars = VILLAGES.find((v) => v.name === 'Kars');
+  if (!kars) throw new Error('no "Kars" in VILLAGES — a name/lookup drifted');
+
+  // The lateral offset that lines the canoe up with Kars's pier (found by
+  // scan — bankEdge/dockReach aren't exported). This is where you sit the
+  // moment you dock, and leaveVillage() doesn't move you off it.
+  const g0 = newGame('rideau', kars.flowDistance);
+  let dockLat = null;
+  for (let lat = 0; lat <= 20 && dockLat === null; lat += 0.25) {
+    const cx = centerX(kars.flowDistance) + lat;
+    if (getDockHit(kars.flowDistance, cx) === kars) dockLat = lat;
+  }
+  if (dockLat === null) throw new Error('could not find Kars\'s dock lane — geometry drifted');
+
+  // The reported bug: re-boarding leaves the canoe sitting on the pier's
+  // lateral line, and a "down" key held over from walking to the re-board
+  // zone (with no forward speed) pulls it straight back through the dock's
+  // flow-trigger — over and over, "kicked" back into town every time.
+  const stuck = newGame('rideau', kars.flowDistance - 4);
+  stuck.game.enterVillage(kars);
+  stuck.game.leaveVillage();
+  if (stuck.game.mode !== 'river') throw new Error('leaveVillage did not return to river mode at Kars');
+  stuck.game.speed = -2;
+  for (let i = 0; i < 150; i++) {
+    stuck.input.state.down = true;
+    stuck.game.lateralOffset = dockLat; // pinned on the pier line: flow axis only
+    stuck.game.update(1 / 30);
+    if (stuck.game.mode === 'village') {
+      throw new Error(`re-docked at Kars ${i} frames after casting off, "down" held — the cast-off loop`);
+    }
+  }
+
+  // And an ordinary forward departure just leaves.
+  const away = newGame('rideau', kars.flowDistance - 4);
+  away.game.enterVillage(kars);
+  away.game.leaveVillage();
+  const before = away.game.flowDistance;
+  for (let i = 0; i < 200; i++) {
+    away.input.state.up = true;
+    away.game.lateralOffset = dockLat;
+    away.game.update(1 / 30);
+    if (away.game.mode === 'village') throw new Error(`paddling forward off Kars's dock re-docked (frame ${i})`);
+  }
+  if (away.game.flowDistance <= before) throw new Error('no forward progress leaving Kars');
 });
 
 await step('rideau: reaching Kingston by its dock also wins', () => {

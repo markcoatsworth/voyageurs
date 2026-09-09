@@ -563,26 +563,24 @@ export class Game {
     } else if (this.currentVillage.name === 'Gatineau') {
       this.enterRideau();
     } else {
-      // Push just past the dock's own trigger zone — otherwise the instant
-      // control returns to the canoe, it's still sitting in the exact spot
-      // that triggered docking, and the very next frame docks it again.
-      const clearance = dockHitZ(this.currentVillage) + 0.5;
+      // Re-boarding drops the canoe right where it triggered the dock. Two
+      // things then push it straight back in: on lawrenceWest the current
+      // itself runs backward (upriver, toward the dock), and everywhere a
+      // "down" key still held from walking down to the re-board zone reverses
+      // the canoe for a beat. So on *every* cast-off: put real separation
+      // between the canoe and the dock, and ignore that one dock for a few
+      // seconds (see update()'s getDockHit check) — long enough to paddle
+      // clear or let go of the key — instead of an instant loop back into
+      // the same village.
+      const past = dockHitZ(this.currentVillage);
       if (this.segment === 'lawrenceWest') {
-        // The current here runs *backward* (upriver, toward the dock), so a
-        // half-unit nudge is dragged straight back into the trigger zone
-        // before the player can react — worst at Montreal and Québec City,
-        // whose docks reach most of the way across the channel, so steering
-        // clear laterally doesn't help either. Give the canoe real upstream
-        // separation plus forward momentum, and ignore this one dock for a
-        // few seconds (see update()'s getDockHit check) so casting off isn't
-        // an instant loop back into the same village.
-        this.flowDistance = this.currentVillage.flowDistance + dockHitZ(this.currentVillage) + 6;
-        this.speed = Math.max(this.speed, BASE_SPEED);
-        this._castOffGraceVillage = this.currentVillage;
-        this._castOffGrace = 3;
+        this.flowDistance = this.currentVillage.flowDistance + past + 6;
+        this.speed = Math.max(this.speed, BASE_SPEED); // forward momentum vs. the backward current
       } else {
-        this.flowDistance = this.currentVillage.flowDistance + clearance;
+        this.flowDistance = this.currentVillage.flowDistance + past + 3;
       }
+      this._castOffGraceVillage = this.currentVillage;
+      this._castOffGrace = 3;
       this.world.distance = this.flowDistance;
       this.showBanner('Casting off');
     }
