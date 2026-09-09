@@ -27,7 +27,7 @@ const APPROACH = 16;
 
 const HP_MAX = 240;
 const BULLET_DAMAGE = 4;      // per pistol hit
-const CONTACT_DAMAGE = 20;    // a fireball that connects (game.js applies INVULN_TIME)
+const CONTACT_DAMAGE = 30;    // a fireball that connects (game.js applies INVULN_TIME) — ~3 hits and the 4th kills
 
 // --- his screen footprint. He stands in the upper half of the channel; the
 // canoe is pulled low for the fight (chasseGalerie.js's boss hover height),
