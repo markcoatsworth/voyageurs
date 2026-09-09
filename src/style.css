@@ -497,18 +497,17 @@ button:hover {
   opacity: 0.7;
 }
 
-/* The steer pad — a round thumb-stick marked with direction arrows. See
-   touchControls.js. Shown everywhere, but styled per input type: on touch
-   it's the real control, so the full ring + follower knob; on desktop the
-   keyboard is the real control, so the ring and knob are dropped and the
-   four arrows are left as a plain "how to play" cue.
-   Pinned to the screen's actual bottom-right corner — `right` here is the
-   real, permanent value (same convention #right-panel uses up top), not
-   just a pre-JS fallback. `top` is the one dynamic piece: main.js's
-   resize() overrides it every time the window changes, computed from the
-   game canvas's own actual rendered bottom edge so this sits just below it
-   rather than on top of it — `bottom` below is only the pre-JS fallback
-   for the very first paint, before that override runs. */
+/* The steer pad — four direction keys in an inverted-T (↑ on top, ← ↓ →
+   across the bottom), the same shape everywhere. See touchControls.js. On
+   touch each key is a real tap-and-hold button; on desktop the keyboard is
+   the control and these are a lit-up "how to play" cue (input.js toggles
+   .active). Size comes from --key on :root (main.js's resize() sets it per
+   device — big and thumb-sized on a phone, sidebar-filling on desktop);
+   everything else — gaps, font, borders — derives from it.
+   Pinned to the screen's actual bottom-right corner — `right` is the real,
+   permanent value (same convention #right-panel uses up top). `top` is the
+   dynamic piece: resize() overrides it from the game canvas's own rendered
+   bottom edge; `bottom` is only the pre-JS first-paint fallback. */
 #touch-dpad {
   position: fixed;
   right: 20px;
@@ -517,75 +516,68 @@ button:hover {
 }
 
 #steer-pad {
+  --k: var(--key, 56px);
+  --gap: calc(var(--k) * 0.16);
   position: relative;
-  width: 142px;
-  height: 142px;
-  border-radius: 50%;
-  background: rgba(10, 14, 20, 0.5);
-  border: 3px solid rgba(244, 234, 210, 0.6);
-  pointer-events: all;
+  width: calc(3 * var(--k) + 2 * var(--gap));
+  height: calc(2 * var(--k) + var(--gap));
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The four arrows, hugging the rim at N/W/E/S — kept clearly visible so the
-   control reads as "four directions" at a glance. Each lights red while its
-   direction is being pushed (.active, set by touchControls.js). */
+/* Each arrow is a keycap in the inverted-T. Non-interactive by default
+   (desktop cue); the touch block below turns the taps on. Lights up while
+   its direction is held — from the keyboard (input.js) or a press
+   (touchControls.js). */
 .steer-arrow {
   position: absolute;
-  font-size: 22px;
+  width: var(--k);
+  height: var(--k);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--k) * 0.46);
   line-height: 1;
-  color: rgba(244, 234, 210, 0.75);
+  color: rgba(244, 234, 210, 0.8);
+  background: rgba(10, 14, 20, 0.5);
+  border: max(2px, calc(var(--k) * 0.05)) solid rgba(244, 234, 210, 0.4);
+  border-radius: calc(var(--k) * 0.16);
   pointer-events: none;
-  transition: color 0.06s linear, text-shadow 0.06s linear;
+  transition: color 0.05s linear, background-color 0.05s linear, border-color 0.05s linear;
 }
 .steer-arrow.active {
   color: #ff6b6b;
-  text-shadow: 0 0 9px rgba(255, 107, 107, 0.95);
-}
-.steer-up { top: 5px; left: 50%; transform: translateX(-50%); }
-.steer-down { bottom: 5px; left: 50%; transform: translateX(-50%); }
-.steer-left { left: 6px; top: 50%; transform: translateY(-50%); }
-.steer-right { right: 6px; top: 50%; transform: translateY(-50%); }
-
-/* The knob that follows the thumb — sits centred, moved by an inline
-   transform from touchControls.js. Sized and range-limited (KNOB_RANGE
-   there) so it never crowds the rim arrows. */
-#steer-knob {
-  position: absolute;
-  width: 48px;
-  height: 48px;
-  left: 50%;
-  top: 50%;
-  margin: -24px 0 0 -24px;
-  border-radius: 50%;
-  background: rgba(244, 234, 210, 0.3);
-  border: 2px solid rgba(244, 234, 210, 0.85);
-  pointer-events: none;
+  background: rgba(214, 69, 69, 0.4);
+  border-color: #ff6b6b;
 }
 
-/* Desktop (keyboard is the real control): this isn't a control any more, it's
-   a big "how to play" cue filling the empty column beside the game — drop
-   the ring and knob and lay the four arrows out like the actual keys, an
-   inverted-T (↑ on top, ← ↓ → in a row below), as keycaps that light up
-   (via input.js's .active toggle) when you press the matching key.
-   The keycap size is --key, set by main.js's resize() to fill the sidebar
-   width (falling back to a small fixed size before/without JS). Everything
-   else — gaps, borders, font, box — is derived from it. On touch the full
-   round pad above stands as the real control; placed after the base rules
-   so it wins without needing !important. */
-@media (hover: hover) and (pointer: fine) {
+.steer-up    { inset: 0 auto auto 50%; margin-left: calc(var(--k) / -2); }
+.steer-left  { inset: auto auto 0 0; }
+.steer-down  { inset: auto auto 0 50%; margin-left: calc(var(--k) / -2); }
+.steer-right { inset: auto 0 0 auto; }
+
+/* Left over from the thumb-stick; the buttons don't use it. */
+#steer-knob { display: none; }
+
+/* Touch: these ARE the control. Make the keys catch taps, and firm up the
+   fill/border contrast so they read as buttons on top of the river. --key
+   is set thumb-big by main.js on touch; the fallback here covers pre-JS. */
+@media (hover: none) and (pointer: coarse) {
   #steer-pad {
-    --k: var(--key, 34px);
-    --gap: calc(var(--k) * 0.18);
-    background: none;
-    border: none;
-    width: calc(3 * var(--k) + 2 * var(--gap));
-    height: calc(2 * var(--k) + var(--gap));
+    --k: var(--key, 62px);
   }
-  #steer-knob {
-    display: none;
+  .steer-arrow {
+    pointer-events: auto;
+    touch-action: none;
+    color: rgba(244, 234, 210, 0.95);
+    background: rgba(10, 14, 20, 0.64);
+    border-color: rgba(244, 234, 210, 0.5);
   }
+}
+
+/* Desktop: a cue, not a control — label it. Sizing/layout is all inherited
+   from the base rules above now. */
+@media (hover: hover) and (pointer: fine) {
   #steer-pad::after {
     content: 'MOVE';
     position: absolute;
@@ -598,29 +590,6 @@ button:hover {
     color: rgba(244, 234, 210, 0.45);
     white-space: nowrap;
   }
-  .steer-arrow {
-    width: var(--k);
-    height: var(--k);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(var(--k) * 0.46);
-    border: max(2px, calc(var(--k) * 0.055)) solid rgba(244, 234, 210, 0.45);
-    border-radius: calc(var(--k) * 0.18);
-    background: rgba(10, 14, 20, 0.55);
-    transform: none;
-    transition: color 0.06s linear, background-color 0.06s linear, border-color 0.06s linear;
-  }
-  .steer-arrow.active {
-    background: rgba(214, 69, 69, 0.35);
-    border-color: #ff6b6b;
-    text-shadow: none;
-  }
-  /* inverted-T: ↑ centred on top, ← ↓ → across the bottom */
-  .steer-up    { inset: 0 auto auto 50%; margin-left: calc(var(--k) / -2); }
-  .steer-left  { inset: auto auto 0 0; }
-  .steer-down  { inset: auto auto 0 50%; margin-left: calc(var(--k) / -2); }
-  .steer-right { inset: auto 0 0 auto; }
 }
 
 /* Weapon controls — the mirror image of #touch-dpad on the left edge, shown

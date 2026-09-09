@@ -1,123 +1,91 @@
-// The on-screen steer pad — a round control marked with up/left/right/down
-// arrows that behaves like a thumb-stick: rest a finger (or the mouse)
-// anywhere on it and a knob follows, and the direction from the pad's
-// centre to the knob decides which of the arrows are "pushed". It drives
-// the exact same left/right/up/down booleans the keyboard does (see
-// input.js) — every system that reads input (river steering/paddling,
-// village walking) just consumes that shared state object, so nothing in
-// game.js or villageScene.js needs to know this exists.
+// The on-screen steer pad — four direction keys laid out in an inverted-T
+// (↑ on top, ← ↓ → across the bottom), the same shape the desktop "how to
+// play" cue already uses. On a touch device each key is a real tap-and-hold
+// button: press it and its direction latches on, lift and it latches off —
+// exactly like a keyboard key, and with none of a thumb-stick's "drag far
+// enough past a threshold" lag. It drives the same left/right/up/down
+// booleans the keyboard does (input.js), so nothing downstream knows or
+// cares which one moved the canoe.
 //
-// Why a stick and not the four separate buttons it used to be: for a
-// non-gamer, "push the way you want to go" needs no aiming, and diagonals
-// (up+left to steer while paddling) come for free. The arrows stay drawn
-// and light up as you push, so it still reads unambiguously as a
-// directional control rather than a mystery knob.
-
-// Fraction of the pad's radius near the centre that reads as neutral.
-const DEAD_ZONE = 0.15;
-// How aligned the push must be with an axis for that arrow to count, as a
-// share of the (normalised) push direction. Asymmetric on purpose:
-//   - steering (left/right) is generous, so a slightly-off sideways push
-//     still turns cleanly
-//   - throttle (up/down) was 0.72 (strict ~44 deg cone) but landed too
-//     unresponsive for the Diable fight's vertical dodging. Tuned down to
-//     0.45 (~63 deg) for fast reaction to fireballs.
-// STEER_SHARE 0.4  -> steering registers within ~66 deg of horizontal.
-// THROTTLE_SHARE 0.45 -> speed changes within ~63 deg of vertical.
-const STEER_SHARE = 0.4;
-const THROTTLE_SHARE = 0.45;
-// How far (px) the knob travels from centre at a full push — kept short of
-// the rim so the knob never covers the arrows (pad radius ~71, knob 24).
-const KNOB_RANGE = 26;
+// It used to be a round analog-ish thumb-stick. For the Diable fight's
+// fast lateral dodging that wasn't responsive enough on a phone — a stick
+// needs a deliberate push-and-hold, where the fight wants instant taps —
+// so it's discrete buttons now.
 
 export function isTouchPrimary() {
   return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 }
 
+const DIRS = ['up', 'down', 'left', 'right'];
+
 export function createTouchControls(input) {
   const pad = document.getElementById('steer-pad');
-  const knob = document.getElementById('steer-knob');
   const arrows = pad && {
     up: pad.querySelector('.steer-up'),
     down: pad.querySelector('.steer-down'),
     left: pad.querySelector('.steer-left'),
     right: pad.querySelector('.steer-right'),
   };
-  // Bail if the pad markup isn't there (e.g. the headless smoke test's DOM
-  // shim, which has no querySelector) — there's nothing to drive anyway.
-  if (!pad || !knob || !arrows || !arrows.up) return;
+  // Bail if the markup isn't there (the headless smoke test's DOM shim has
+  // no real querySelector) — nothing to wire up anyway.
+  if (!pad || !arrows || !arrows.up) return;
 
-  let activePointerId = null;
+  // A leftover from the thumb-stick days; discrete buttons don't use it, and
+  // CSS hides it, but clear any stale inline transform just in case.
+  const knob = document.getElementById('steer-knob');
+  if (knob) knob.style.transform = '';
 
-  // nx/ny: pointer position relative to the pad centre, in units of the pad
-  // radius (so the rim is magnitude ~1). ny positive = downward on screen.
-  function apply(nx, ny) {
-    const mag = Math.hypot(nx, ny) || 0;
-    let up = false, down = false, left = false, right = false;
-    if (mag > DEAD_ZONE) {
-      const ux = nx / mag;
-      const uy = ny / mag;
-      up = -uy > THROTTLE_SHARE;
-      down = uy > THROTTLE_SHARE;
-      left = -ux > STEER_SHARE;
-      right = ux > STEER_SHARE;
-    }
-    input.state.up = up;
-    input.state.down = down;
-    input.state.left = left;
-    input.state.right = right;
-    arrows.up.classList.toggle('active', up);
-    arrows.down.classList.toggle('active', down);
-    arrows.left.classList.toggle('active', left);
-    arrows.right.classList.toggle('active', right);
+  // Reference-counted per direction so two pointers on the same key (or a
+  // key held by touch while the same arrow is also lit by the keyboard)
+  // can't turn each other off — the direction is "on" while anything holds
+  // it. pointerId -> direction records which key a given finger pressed, so
+  // a pointerup anywhere on the page releases the right one even if the
+  // finger slid off the key first.
+  const counts = { up: 0, down: 0, left: 0, right: 0 };
+  const heldBy = new Map();
 
-    const k = Math.min(1, mag);
-    const kx = mag > 0 ? (nx / mag) * k * KNOB_RANGE : 0;
-    const ky = mag > 0 ? (ny / mag) * k * KNOB_RANGE : 0;
-    knob.style.transform = `translate(${kx.toFixed(1)}px, ${ky.toFixed(1)}px)`;
+  function sync(dir) {
+    const on = counts[dir] > 0;
+    input.state[dir] = on;
+    arrows[dir].classList.toggle('active', on);
   }
 
-  function readEvent(e) {
-    const r = pad.getBoundingClientRect();
-    const half = r.width / 2;
-    return {
-      nx: (e.clientX - (r.left + half)) / half,
-      ny: (e.clientY - (r.top + half)) / half,
-    };
+  function press(pointerId, dir) {
+    if (heldBy.has(pointerId)) return; // already counted (e.g. a stray repeat)
+    heldBy.set(pointerId, dir);
+    counts[dir] += 1;
+    sync(dir);
   }
 
-  pad.addEventListener('pointerdown', (e) => {
-    if (activePointerId !== null) return;
-    activePointerId = e.pointerId;
-    // Best-effort capture so the push keeps tracking if the finger drifts
-    // off the pad without lifting — a failure here is unrelated to whether
-    // the press is valid, same reasoning as the dock/water pointer handling
-    // elsewhere, so it must not gate apply() below.
-    try {
-      pad.setPointerCapture(e.pointerId);
-    } catch {
-      // ignore
-    }
-    const { nx, ny } = readEvent(e);
-    apply(nx, ny);
-    e.preventDefault();
+  function release(pointerId) {
+    const dir = heldBy.get(pointerId);
+    if (dir === undefined) return;
+    heldBy.delete(pointerId);
+    counts[dir] = Math.max(0, counts[dir] - 1);
+    sync(dir);
+  }
+
+  for (const dir of DIRS) {
+    arrows[dir].addEventListener('pointerdown', (e) => {
+      press(e.pointerId, dir);
+      // Best-effort: keeps move/up routed here if the finger drifts off the
+      // key without lifting. A failure is harmless — the document-level
+      // pointerup below still catches the release.
+      try {
+        arrows[dir].setPointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      e.preventDefault();
+    });
+  }
+
+  // Release on lift/cancel wherever it happens — captured to this key or not.
+  document.addEventListener('pointerup', (e) => release(e.pointerId));
+  document.addEventListener('pointercancel', (e) => release(e.pointerId));
+  // A window blur (app switch, notification) can eat the pointerup entirely;
+  // drop everything so a direction doesn't stick on.
+  window.addEventListener('blur', () => {
+    for (const id of [...heldBy.keys()]) release(id);
   });
-
-  pad.addEventListener('pointermove', (e) => {
-    if (e.pointerId !== activePointerId) return;
-    const { nx, ny } = readEvent(e);
-    apply(nx, ny);
-    e.preventDefault();
-  });
-
-  const release = (e) => {
-    if (e.pointerId !== activePointerId) return;
-    activePointerId = null;
-    apply(0, 0);
-  };
-  pad.addEventListener('pointerup', release);
-  pad.addEventListener('pointercancel', release);
-
-  // Debug timestamp so you know you're running the latest build
-  console.log(`[TOUCH] Controls initialized @ ${new Date().toISOString()} - DEAD_ZONE=${DEAD_ZONE}, THROTTLE=${THROTTLE_SHARE}`);
 }

@@ -223,19 +223,19 @@ function resize() {
   const size = Math.round(Math.max(minimapMin, Math.min(MINIMAP_MAX, sidebarWidth - 32)));
   minimap.el.style.width = `${size}px`;
 
-  // Desktop only: size the "how to play" keycap cue (style.css's --key) to
-  // fill the sidebar column beside the game — as wide as the space allows,
-  // but never so tall it would run into the minimap sitting above it. Left
-  // unset on touch, where the round steer pad is the real control and has
-  // its own fixed size. The inverted-T cluster is 3.36·key wide (3 caps +
-  // 2 gaps of 0.18·key); ~2.4·key tall once the "MOVE" label above it is
-  // counted.
-  // --key lives on :root so both the MOVE cue (#steer-pad) and the FIRE cue
-  // (#weapon-dpad) on the opposite edge read the same keycap size.
+  // Keycap size (style.css's --key) drives both the MOVE pad (#steer-pad)
+  // and the FIRE cue (#weapon-dpad) on the opposite edge, so it lives on
+  // :root. The inverted-T cluster is 3.32·key wide (3 caps + 2 gaps of
+  // 0.16·key), ~2.16·key tall.
+  //   - Touch: the pad is the real control — size the keys for a thumb,
+  //     scaled a little to the viewport but held in a comfortable tap range.
+  //   - Desktop: it's a "how to play" cue — fill the sidebar column beside
+  //     the game, as wide as fits without running into the minimap above.
   if (isTouchPrimary()) {
-    document.documentElement.style.removeProperty('--key');
+    const key = Math.round(Math.max(44, Math.min(60, window.innerWidth * 0.12)));
+    document.documentElement.style.setProperty('--key', `${key}px`);
   } else {
-    const byWidth = (sidebarWidth - 24) / 3.36;
+    const byWidth = (sidebarWidth - 24) / 3.32;
     const byHeight = (window.innerHeight - size - 80) / 2.4;
     const key = Math.max(30, Math.min(120, byWidth, byHeight));
     document.documentElement.style.setProperty('--key', `${Math.round(key)}px`);
