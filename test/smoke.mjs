@@ -353,6 +353,22 @@ await step('diable: up/down move the canoe without unlocking the river', () => {
   for (let i = 0; i < 90; i++) g.game.update(1 / 30);
   const backAlt = g.game.chasseGalerie.getAltitude();
   if (backAlt <= lowAlt + 0.3) throw new Error(`canoe never eased back up after releasing "down" (${lowAlt.toFixed(2)} -> ${backAlt.toFixed(2)})`);
+
+  // Lateral dodge: the arena is its own wide space, NOT the ~3-4-unit Ottawa
+  // gorge channel the fight sits in. Holding "left" should carry the canoe
+  // well past the channel edge (widthAt/2) and roughly out to the arena
+  // half-width, with the river still locked and no bank/steeple hits.
+  const channelHalf = widthAt(g.game.flowDistance) / 2;
+  const hpBeforeDodge = g.game.health;
+  for (let i = 0; i < 40; i++) { g.game.input.state.left = true; g.game.update(1 / 30); }
+  g.game.input.state.left = false;
+  const dodgeOut = Math.abs(g.game.lateralOffset);
+  if (dodgeOut <= channelHalf + 1) {
+    throw new Error(`Diable dodge pinned inside the gorge channel (offset ${dodgeOut.toFixed(1)} vs channel half ${channelHalf.toFixed(1)}) — arena too tight`);
+  }
+  if (dodgeOut < 5) throw new Error(`Diable lateral dodge barely moved (${dodgeOut.toFixed(1)} units)`);
+  if (g.game.health < hpBeforeDodge) throw new Error('took damage dodging inside the arena — treetops still biting');
+  if (Math.abs(g.game.flowDistance - lockedFlow) > 0.5) throw new Error('the river scrolled during the lateral dodge');
 });
 
 // --- scenario 4g: the Rideau leg — Gatineau junction through to Kingston --

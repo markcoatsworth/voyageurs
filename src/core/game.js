@@ -86,6 +86,14 @@ const STEER_DAMPING = 6;
 // with no analog magnitude, so the only "sensitivity" knob is this number,
 // and dodging fireballs on a phone needs it to really move.
 const FIGHT_LATERAL_SPEED = isTouchPrimary() ? 28 : 15;
+// The Diable fight sits at the head of the Ottawa gorge, where the river
+// itself is only ~6-10 units across (path.js's Ottawa branch) — far too
+// tight to dodge aimed hellfire in. The held fight gets its own lateral
+// arena instead: this half-width, decoupled from the channel, with the
+// camera pinned dead-centre so the dodge maps straight to the screen (see
+// the isHolding() branches in update()). ~7 units = ~112px each way, so the
+// canoe can slip clear of the Devil's reach without leaving the screen.
+const DIABLE_ARENA_HALF = 7;
 // Past this point on lawrenceWest the pistol is guaranteed (update() grants
 // it if you never walked up to the Montréal gunsmith) — the Diable fight
 // ahead can't be done unarmed.
@@ -889,8 +897,11 @@ export class Game {
     const waterEdge = widthAt(this.flowDistance) / 2 - EDGE_MARGIN;
     // In the air the hard clamp sits a hair past the water so there's no
     // invisible wall at the edge — but that shallow strip is the bank
-    // treetops (see below), not free sky.
-    const half = waterEdge + (flying ? this.chasseGalerie.lateralMargin() : 0);
+    // treetops (see below), not free sky. The held Diable fight ignores the
+    // channel entirely and uses its own wide arena (DIABLE_ARENA_HALF).
+    const half = this.diable.isHolding()
+      ? DIABLE_ARENA_HALF
+      : waterEdge + (flying ? this.chasseGalerie.lateralMargin() : 0);
     const proposed = this.lateralOffset + this.lateralVX * dt;
     if (proposed > half || proposed < -half) {
       this.lateralOffset = clamp(proposed, -half, half);
@@ -905,10 +916,11 @@ export class Game {
     // every INVULN_TIME you're in there, plus a shove back toward the
     // channel — so the flight stays fenced to the water even though you're
     // airborne.
-    if (flying && Math.abs(this.lateralOffset) > waterEdge) {
+    if (flying && !this.diable.isHolding() && Math.abs(this.lateralOffset) > waterEdge) {
       this.lateralVX -= Math.sign(this.lateralOffset) * TREE_PUSHBACK * dt;
-      // During the Diable fight the treetops still fence you into the channel
-      // (the pushback), but they don't bite — dodging his fire is enough.
+      // Outside the held fight, the treetops still fence and bite (dodging
+      // Diable's fire while he's holding is challenge enough — the arena is
+      // its own wide space, not the gorge channel).
       if (!this.diable.isActive()) this.handleHit({ type: 'tree' });
     }
 
@@ -919,12 +931,20 @@ export class Game {
     // nears the edge of the canvas (see CAMERA_DEAD_ZONE's own comment).
     const lateralExcess = this.lateralOffset - clamp(this.lateralOffset, -CAMERA_DEAD_ZONE, CAMERA_DEAD_ZONE);
     this.cameraLateralPull = lerp(this.cameraLateralPull, lateralExcess, CAMERA_LATERAL_SMOOTH);
-    this.cameraWorldX = this.cameraCenterX + this.cameraLateralPull;
-    // The hard backstop (see its comment above) — clamps how far the canoe's
-    // final on-screen position can end up from center, independent of
-    // whatever the two lerps above are still catching up on.
-    const onscreenOffset = clamp(this.canoeWorldX - this.cameraWorldX, -CAMERA_MAX_ONSCREEN_OFFSET, CAMERA_MAX_ONSCREEN_OFFSET);
-    this.cameraWorldX = this.canoeWorldX - onscreenOffset;
+    if (this.diable.isHolding()) {
+      // Arena fight: pin the camera to the channel centre so the dodge maps
+      // one-to-one to screen position — none of the follow lag or the
+      // on-screen-offset backstop below, both of which would drag the canoe
+      // back toward centre and fight the player's input.
+      this.cameraWorldX = this.cameraCenterX;
+    } else {
+      this.cameraWorldX = this.cameraCenterX + this.cameraLateralPull;
+      // The hard backstop (see its comment above) — clamps how far the canoe's
+      // final on-screen position can end up from center, independent of
+      // whatever the two lerps above are still catching up on.
+      const onscreenOffset = clamp(this.canoeWorldX - this.cameraWorldX, -CAMERA_MAX_ONSCREEN_OFFSET, CAMERA_MAX_ONSCREEN_OFFSET);
+      this.cameraWorldX = this.canoeWorldX - onscreenOffset;
+    }
     this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
 
     // Diable fight: the river is locked, but up/down move the canoe
