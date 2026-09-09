@@ -528,7 +528,12 @@ button:hover {
 /* Each arrow is a keycap in the inverted-T. Non-interactive by default
    (desktop cue); the touch block below turns the taps on. Lights up while
    its direction is held — from the keyboard (input.js) or a press
-   (touchControls.js). */
+   (touchControls.js).
+   The arrowhead is a CSS-clipped shape on ::before, not the ▲▼◀▶ glyph in
+   the markup — the geometric-shape characters don't sit on the visual
+   centre of their em box (and depend on a fallback font for their metrics),
+   so glyph + flex-centre left them looking nudged off-centre in the key.
+   font-size:0 hides the text node; the ::before is centred exactly. */
 .steer-arrow {
   position: absolute;
   width: var(--k);
@@ -536,8 +541,7 @@ button:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(var(--k) * 0.46);
-  line-height: 1;
+  font-size: 0;
   color: rgba(244, 234, 210, 0.8);
   background: rgba(10, 14, 20, 0.5);
   border: max(2px, calc(var(--k) * 0.05)) solid rgba(244, 234, 210, 0.4);
@@ -545,6 +549,27 @@ button:hover {
   pointer-events: none;
   transition: color 0.05s linear, background-color 0.05s linear, border-color 0.05s linear;
 }
+.steer-arrow::before {
+  content: '';
+  display: block;
+  background: currentColor;
+  transition: background-color 0.05s linear;
+}
+/* up/down read better a touch wider than tall; left/right the reverse */
+.steer-up::before,
+.steer-down::before {
+  width: calc(var(--k) * 0.4);
+  height: calc(var(--k) * 0.32);
+}
+.steer-left::before,
+.steer-right::before {
+  width: calc(var(--k) * 0.32);
+  height: calc(var(--k) * 0.4);
+}
+.steer-up::before    { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.steer-down::before  { clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.steer-left::before  { clip-path: polygon(100% 0, 100% 100%, 0 50%); }
+.steer-right::before { clip-path: polygon(0 0, 0 100%, 100% 50%); }
 .steer-arrow.active {
   color: #ff6b6b;
   background: rgba(214, 69, 69, 0.4);
