@@ -56,7 +56,7 @@ const { createMinimap } = await import('../src/world/minimap.js');
 const { createMusic } = await import('../src/audio/music.js');
 const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
-const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE } = await import('../src/world/river/path.js');
+const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
 const { DIABLE_FLOW_DISTANCE } = await import('../src/bossfights/diable.js');
@@ -125,18 +125,38 @@ await step('lawrenceWest: fight the current 90s', () => {
 // --- scenario 4: the blockade boss fight, start to escape ------------------
 
 await step('blockade: approach -> pursuit -> escape', () => {
-  const g = newGame('lawrenceWest', SHIP_FLOW_DISTANCE - 80);
+  // Part 1 — the approach activates as you close on the frigate.
+  const approach = newGame('lawrenceWest', SHIP_FLOW_DISTANCE - 80);
   let sawFight = false;
-  for (let i = 0; i < 6000; i++) {
-    g.input.state.up = true;
-    g.input.state.left = i % 180 < 90;
-    g.input.state.right = i % 180 >= 90;
-    g.game.update(1 / 30);
-    if (g.game.blockadePct !== null) sawFight = true;
-    if (g.game.state === 'gameover') { g.game.start(); }
+  for (let i = 0; i < 3000 && !sawFight; i++) {
+    approach.input.state.up = true;
+    approach.input.state.left = i % 180 < 90;
+    approach.input.state.right = i % 180 >= 90;
+    approach.game.update(1 / 30);
+    if (approach.game.blockadePct !== null) sawFight = true;
+    if (approach.game.state === 'gameover') approach.game.start();
   }
   if (!sawFight) throw new Error('blockade never activated across the whole approach');
-  notes.push(`  note blockade ran; ended segment ${g.game.segment} @ ${g.game.flowDistance | 0}`);
+
+  // Part 2 — thread the gap, then the pursuit MUST resolve (the bug: a boat
+  // slower than the chase ship never "got ahead", so the chase and its Rule
+  // Britannia ran forever). Drop the canoe just short of the frigate and
+  // already lined up in the gap (always the outer strip of the right bank),
+  // so this exercises the chase, not the approach.
+  const g = newGame('lawrenceWest', SHIP_FLOW_DISTANCE - 2);
+  g.game.lateralOffset = widthAt(SHIP_FLOW_DISTANCE) / 2 - 3;
+  let clearedFrigate = false;
+  let escaped = false;
+  for (let i = 0; i < 6000 && !escaped; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+    if (g.game.flowDistance > SHIP_FLOW_DISTANCE + 3) clearedFrigate = true;
+    if (clearedFrigate && g.game.blockadePct === null) escaped = true;
+    if (g.game.state === 'gameover') throw new Error('died in the gap/chase with a clear lane — blockade too harsh');
+  }
+  if (!clearedFrigate) throw new Error('never got past the frigate through an open gap');
+  if (!escaped) throw new Error('the pursuit never resolved — chase (and its music) would run forever');
+  notes.push(`  note blockade approach ran; chase resolved @ ${g.game.flowDistance - SHIP_FLOW_DISTANCE | 0} past the frigate`);
 });
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---

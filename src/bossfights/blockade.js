@@ -280,24 +280,26 @@ export function createBlockade() {
       }
       hazards = hazards.filter((h) => h.t < SPLASH_WARN_TIME + SPLASH_HOT_TIME + SPLASH_FADE_TIME);
 
-      // Chase phase: battleship pursuing from behind
+      // Chase phase: gunboat pursuing from behind
       if (chasePhase) {
-        // Ship advances at CHASE_SHIP_SPEED
         chaseShipDistance += CHASE_SHIP_SPEED * dt;
+        // It hounds from behind — never let it overtake and sail off ahead
+        // of the canoe, which is exactly what a boat slower than
+        // CHASE_SHIP_SPEED (anyone on mobile) would otherwise watch happen.
+        chaseShipDistance = Math.min(chaseShipDistance, playerFlowDistance - 4);
 
-        // Check if player escaped (got far enough ahead)
-        const leadDistance = playerFlowDistance - chaseShipDistance;
-        console.log('[CHASE] Player:', playerFlowDistance.toFixed(1), 'Chase ship:', chaseShipDistance.toFixed(1), 'Lead:', leadDistance.toFixed(1));
-
-        if (leadDistance > CHASE_DISTANCE) {
+        // Escape is a fixed distance made good past the frigate's own line,
+        // not a lead over a pursuer that can be faster than you — the old
+        // lead check never resolved for a slower boat, so the fight (and its
+        // music) ran forever.
+        const madeGood = playerFlowDistance - SHIP_FLOW_DISTANCE - CLEAR_MARGIN;
+        if (madeGood > CHASE_DISTANCE) {
           chasePhase = false;
           chaseEscaped = true;
           console.log('[CHASE] Escaped!');
         }
-        // No cannon fire during chase - pure pursuit/escape mechanic
 
-        // Return chase progress (how far ahead you are vs how far needed)
-        const chaseProgressPct = Math.min(100, (leadDistance / CHASE_DISTANCE) * 100);
+        const chaseProgressPct = clamp((madeGood / CHASE_DISTANCE) * 100, 0, 100);
         return { active: true, progressPct: chaseProgressPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance };
       }
 

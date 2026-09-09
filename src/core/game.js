@@ -1011,7 +1011,10 @@ export class Game {
         this.music?.playBossTrack();
       }
       if (this.blockade.consumeJustCleared()) {
-        // Music continues through chase - don't stop it here
+        // Past the frigate itself — drop Rule Britannia back to the normal
+        // shuffle here rather than blaring it through the whole pursuit. The
+        // chase is a footnote now, not the boss.
+        this.music?.endBossTrack();
       }
       if (this.blockade.consumeJustStartedChase()) {
         this.showBanner('PURSUIT');
