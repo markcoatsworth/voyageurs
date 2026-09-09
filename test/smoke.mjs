@@ -379,6 +379,23 @@ await step('montreal: walk up to the gunsmith, get the pistol', () => {
   }
 });
 
+await step('montreal: leave town without visiting the gunsmith -> pistol auto-granted', () => {
+  const montreal = VILLAGES.find((v) => v.name === 'Montreal');
+  const g = newGame(montreal.segment, montreal.flowDistance - 20);
+  g.game.enterVillage(montreal);
+  g.game.leaveVillage(); // cast off — never walked up to the gun shop
+  if (g.game.weapons.has('pistol')) throw new Error('had the pistol without ever meeting the gunsmith');
+  let armed = false;
+  for (let i = 0; i < 400 && !armed; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+    if (g.game.weapons.has('pistol')) armed = true;
+  }
+  if (!armed) throw new Error('left Montreal past the dock but never got the pistol on the river');
+  if (g.game.flowDistance <= montreal.flowDistance) throw new Error('granted the pistol before actually passing Montreal');
+  if (g.game.ui.weaponPad.classList.contains('hidden')) throw new Error('weapon pad still hidden after the auto-grant');
+});
+
 // --- scenario 5: a village visit ----------------------------------------
 
 await step('village: dock, walk, trade, cast off', () => {

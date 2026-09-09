@@ -86,6 +86,10 @@ const STEER_DAMPING = 6;
 // with no analog magnitude, so the only "sensitivity" knob is this number,
 // and dodging fireballs on a phone needs it to really move.
 const FIGHT_LATERAL_SPEED = isTouchPrimary() ? 28 : 15;
+// Past this point on lawrenceWest the pistol is guaranteed (update() grants
+// it if you never walked up to the Montréal gunsmith) — the Diable fight
+// ahead can't be done unarmed.
+const MONTREAL_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Montreal')?.flowDistance ?? Infinity;
 const EDGE_MARGIN = 0.55;
 const ISLAND_HIT_MARGIN = 0.35;
 const LOG_PENALTY_SPEED = 4;
@@ -444,9 +448,11 @@ export class Game {
     this.startFlowDistance = village.flowDistance;
     this.startSegment = village.segment;
 
-    // The pistol isn't handed out on arrival any more — you walk up to the
-    // gunsmith outside the gun shop for it (see acquirePistol(), fired from
-    // the villageScene trigger in update()'s village branch).
+    // The pistol comes from the Montréal gunsmith (walk up to him — see
+    // acquirePistol(), fired from the villageScene trigger in update()'s
+    // village branch), or automatically the moment you pass Montréal on the
+    // river if you never went into town (the MONTREAL_FLOW_DISTANCE check in
+    // update()). Either way it's a given before the Diable fight.
 
     // Tadoussac is the one place in the game where casting off isn't just
     // resuming the same segment — leaving here jumps into lawrenceWest's
@@ -767,6 +773,14 @@ export class Game {
 
     this.flowDistance = proposedFlowDistance;
     this.world.distance = this.flowDistance;
+
+    // Guaranteed pistol past Montréal — whether or not you stopped in town
+    // and walked up to the gunsmith. acquirePistol() no-ops if you already
+    // have it, so this just backstops the case where you sailed on by.
+    if (this.segment === 'lawrenceWest' && this.flowDistance > MONTREAL_FLOW_DISTANCE
+      && !this.weapons.has('pistol')) {
+      this.acquirePistol();
+    }
 
     let steerInput = 0;
     if (keys.left) steerInput -= 1;
