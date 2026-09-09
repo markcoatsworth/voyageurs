@@ -236,7 +236,7 @@ function resize() {
     // small keys were costing hits. Scales with the viewport's short side
     // (so portrait doesn't blow it up) and stays in a thumb-friendly band.
     const shortSide = Math.min(window.innerWidth, window.innerHeight);
-    const key = Math.round(Math.max(60, Math.min(92, shortSide * 0.25)));
+    const key = Math.round(Math.max(58, Math.min(80, shortSide * 0.22)));
     document.documentElement.style.setProperty('--key', `${key}px`);
   } else {
     const byWidth = (sidebarWidth - 24) / 3.32;
