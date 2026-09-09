@@ -100,7 +100,9 @@ const LAWRENCE_EAST_WAYPOINTS = [
 ];
 const LAWRENCE_WEST_WAYPOINTS = [
   { name: 'Tadoussac', lat: 48.1500, lon: -69.7170 },
-  { name: 'La Malbaie', lat: 47.6500, lon: -70.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  // North shore (side: 1) — real La Malbaie sits on the Charlevoix coast,
+  // the river's north bank, not the alternating pattern's south.
+  { name: 'La Malbaie', lat: 47.6500, lon: -70.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
   { name: 'Baie-Saint-Paul', lat: 47.4400, lon: -70.5000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
   // A short hop downriver of Quebec City itself — mainly here to give
   // testers (and anyone who capsizes right at the capital) a closer
