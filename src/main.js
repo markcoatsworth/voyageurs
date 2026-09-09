@@ -73,16 +73,24 @@ function normalizeStartName(s) {
 // you can actually fight him. A capsize then respawns right here, not at
 // Montréal.
 //
-// "rideau" drops the canoe at the head of the made-up Ottawa-to-Kingston
-// leg (world/river/route.js) — past Le Diable, the storm gone, on the calm
-// wide water heading for the finish. "kingston" itself is a real village
-// name, so it already works as a ?start= target the normal way (a short
-// paddle short of the finish line).
+// "rideau" (and "gatineau", which resolves to the same spot) drops the
+// canoe at the head of the made-up Ottawa-to-Kingston leg
+// (world/river/route.js) — past Le Diable, the storm gone, on the calm wide
+// water heading for the finish. Gatineau sits on the lawrenceWest number
+// line too (it's that segment's last waypoint), but "?start=gatineau" as a
+// plain village lookup would land just *short* of the Devil's arena and get
+// clamped straight into the fight — almost certainly not what someone
+// typing "start me at Gatineau" wants — so it's a keyword pointing at the
+// Rideau start instead, which is the same real place. "kingston" is a real
+// village name and already works the normal way (a short paddle short of
+// the finish line).
+const RIDEAU_START = { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' };
 const START_KEYWORDS = {
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'lawrenceWest' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
-  [normalizeStartName('rideau')]: { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' },
+  [normalizeStartName('rideau')]: RIDEAU_START,
+  [normalizeStartName('gatineau')]: RIDEAU_START,
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
