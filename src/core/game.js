@@ -276,6 +276,11 @@ export class Game {
     // respawns just before the fight with the pistol, not all the way back
     // at Montréal — see start() and update()'s consumeJustAppeared branch.
     this._diableCheckpoint = false;
+    // True from the moment the frigate is spotted (Rule Britannia cued) until
+    // the whole blockade encounter is over — approach *and* pursuit. Any way
+    // that ends (thread the gap, escape the chase, or just retreat back out
+    // of range) drops the boss track back to the shuffle exactly once.
+    this._bossTrackCued = false;
     // Canoe altitude while the Diable fight holds the river locked — driven
     // by up/down for a vertical dodge, eased back to BOSS_HOVER_HEIGHT idle.
     this._bossHoverAlt = BOSS_HOVER_HEIGHT;
@@ -342,6 +347,7 @@ export class Game {
     this.mode = 'river';
     this.currentVillage = null;
     this.blockadeCrossCurrent = 0;
+    this._bossTrackCued = false;
     this._castOffGrace = 0;
     this._castOffGraceVillage = null;
 
@@ -1009,12 +1015,21 @@ export class Game {
         this.showBanner('BRITISH BLOCKADE');
         this.music?.start(); // Ensure music system is initialized
         this.music?.playBossTrack();
+        this._bossTrackCued = true;
       }
       if (this.blockade.consumeJustCleared()) {
         // Past the frigate itself — drop Rule Britannia back to the normal
         // shuffle here rather than blaring it through the whole pursuit. The
         // chase is a footnote now, not the boss.
         this.music?.endBossTrack();
+      }
+      // Catch-all: the instant the encounter is no longer active at all —
+      // approach abandoned, chase escaped, whatever — make sure the boss
+      // track isn't still going. endBossTrack() is a no-op if the shuffle's
+      // already back, so the _bossTrackCued flag keeps this to one real call.
+      if (this._bossTrackCued && !blockade.active) {
+        this.music?.endBossTrack();
+        this._bossTrackCued = false;
       }
       if (this.blockade.consumeJustStartedChase()) {
         this.showBanner('PURSUIT');
