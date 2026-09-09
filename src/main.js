@@ -232,7 +232,11 @@ function resize() {
   //   - Desktop: it's a "how to play" cue — fill the sidebar column beside
   //     the game, as wide as fits without running into the minimap above.
   if (isTouchPrimary()) {
-    const key = Math.round(Math.max(44, Math.min(60, window.innerWidth * 0.12)));
+    // Bigger targets — the pad is what people are actually dodging with, and
+    // small keys were costing hits. Scales with the viewport's short side
+    // (so portrait doesn't blow it up) and stays in a thumb-friendly band.
+    const shortSide = Math.min(window.innerWidth, window.innerHeight);
+    const key = Math.round(Math.max(56, Math.min(84, shortSide * 0.2)));
     document.documentElement.style.setProperty('--key', `${key}px`);
   } else {
     const byWidth = (sidebarWidth - 24) / 3.32;
