@@ -768,9 +768,12 @@ export class Game {
     if (keys.right) steerInput += 1;
 
     // Diable fight: direct lateral control for instant dodging, matching the
-    // vertical responsiveness. Skip the normal physics and just move.
+    // vertical responsiveness. No accel ramp, no damping, and — critically —
+    // NOT run through the STEER_MAX clamp below, which is halved on touch
+    // and was quietly throttling this to a crawl. Releasing the key snaps
+    // the canoe to a dead stop, same as the up/down dodge.
     if (this.diable.isHolding()) {
-      const FIGHT_LATERAL_SPEED = 12; // units/sec, very responsive
+      const FIGHT_LATERAL_SPEED = 15; // units/sec
       this.lateralVX = steerInput * FIGHT_LATERAL_SPEED;
     } else {
       // Fighting the current: steering authority drops the harder the
@@ -779,23 +782,23 @@ export class Game {
       const steerRapids = flying ? 0 : rapids;
       this.lateralVX += steerInput * STEER_ACCEL * (1 - steerRapids * RAPIDS_STEER_PENALTY) * dt;
       this.lateralVX -= this.lateralVX * STEER_DAMPING * dt;
-    }
 
-    // Cross-current from blockade fight: pushes you away from the gap,
-    // getting stronger as you approach the ship. Applied before velocity
-    // clamping so the current is a real force to fight, not just a nudge.
-    if (this.blockadeCrossCurrent) {
-      this.lateralVX += this.blockadeCrossCurrent * dt;
-    }
+      // Cross-current from blockade fight: pushes you away from the gap,
+      // getting stronger as you approach the ship. Applied before velocity
+      // clamping so the current is a real force to fight, not just a nudge.
+      if (this.blockadeCrossCurrent) {
+        this.lateralVX += this.blockadeCrossCurrent * dt;
+      }
 
-    // Chasse-galerie storm crosswind: shoves the canoe toward the banks the
-    // whole flight, so holding a centre line is an active fight. Same "real
-    // force, applied before the clamp" treatment as the blockade current.
-    if (flying && !this.diable.isActive()) {
-      this.lateralVX += this.chasseGalerie.windAccel(this.flowDistance, this.time) * dt;
-    }
+      // Chasse-galerie storm crosswind: shoves the canoe toward the banks the
+      // whole flight, so holding a centre line is an active fight. Same "real
+      // force, applied before the clamp" treatment as the blockade current.
+      if (flying && !this.diable.isActive()) {
+        this.lateralVX += this.chasseGalerie.windAccel(this.flowDistance, this.time) * dt;
+      }
 
-    this.lateralVX = clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
+      this.lateralVX = clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
+    }
 
     // The navigable water: the canoe (flying or not) is held to this.
     const waterEdge = widthAt(this.flowDistance) / 2 - EDGE_MARGIN;
