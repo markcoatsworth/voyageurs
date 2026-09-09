@@ -589,7 +589,9 @@ button:hover {
    is set thumb-big by main.js on touch; the fallback here covers pre-JS. */
 @media (hover: none) and (pointer: coarse) {
   #steer-pad {
-    --k: var(--key, 62px);
+    /* big fallback — if resize()'s --key hasn't landed yet, the keys still
+       come up thumb-sized on touch rather than at the desktop-cue size */
+    --k: var(--key, 88px);
   }
   .steer-arrow {
     pointer-events: auto;
