@@ -81,6 +81,11 @@ const DECEL_DRIFT = 1.8 * speedScale;
 const STEER_ACCEL = 20 * (isTouchPrimary() ? 0.5 : 1);
 const STEER_MAX = 7 * (isTouchPrimary() ? 0.5 : 1);
 const STEER_DAMPING = 6;
+// Direct lateral speed during the Diable fight (bypasses the physics above —
+// see the isHolding() branch in update()). Higher on touch: the pad is on/off
+// with no analog magnitude, so the only "sensitivity" knob is this number,
+// and dodging fireballs on a phone needs it to really move.
+const FIGHT_LATERAL_SPEED = isTouchPrimary() ? 28 : 15;
 const EDGE_MARGIN = 0.55;
 const ISLAND_HIT_MARGIN = 0.35;
 const LOG_PENALTY_SPEED = 4;
@@ -773,7 +778,6 @@ export class Game {
     // and was quietly throttling this to a crawl. Releasing the key snaps
     // the canoe to a dead stop, same as the up/down dodge.
     if (this.diable.isHolding()) {
-      const FIGHT_LATERAL_SPEED = 15; // units/sec
       this.lateralVX = steerInput * FIGHT_LATERAL_SPEED;
     } else {
       // Fighting the current: steering authority drops the harder the
