@@ -96,6 +96,13 @@ const TROIS_RIVIERES_ONFOOT_BUILDINGS = [
   { kind: 'church', x: 160, y: 100, mirror: false },
 ];
 
+// Montréal's on-foot layout is a rough placeholder — it'll be properly built
+// up later. For now it's two rows of houses flanking a pair of grey-brick
+// streets (MONTREAL_ROAD_V / MONTREAL_ROAD_H, laid in draw()): one running
+// straight up from the dock to the basilica, one crossing it the full width
+// of the clearing. The old middle row of houses — and the one house that
+// sat squarely on the dock-to-church line — are pulled out to leave the
+// streets clear.
 const MONTREAL_ONFOOT_BUILDINGS = [
   // back row - upper residential quarter (5 buildings)
   { kind: 'stone', x: 50, y: 76, variant: 0, mirror: false },
@@ -103,27 +110,27 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   { kind: 'stone', x: 170, y: 78, variant: 2, mirror: false },
   { kind: 'stone', x: 230, y: 82, variant: 0, mirror: true },
   { kind: 'stone', x: 290, y: 76, variant: 1, mirror: false },
-  // middle row - commercial district (6 buildings)
-  { kind: 'stone', x: 30, y: 110, variant: 2, mirror: true },
-  { kind: 'stone', x: 80, y: 114, variant: 0, mirror: false },
-  { kind: 'stone', x: 130, y: 112, variant: 1, mirror: true },
-  { kind: 'stone', x: 190, y: 116, variant: 2, mirror: false },
-  { kind: 'stone', x: 240, y: 112, variant: 0, mirror: true },
-  { kind: 'stone', x: 290, y: 110, variant: 1, mirror: false },
-  // front row - waterfront warehouses/trading posts (7 buildings). The one
-  // just right of the dock is the gun shop — walk up to it and you're
-  // handed a pistol (see game.js's acquirePistol / the trigger in update()
-  // below), mirroring the repair shop that always sits just left of the dock.
+  // front row - waterfront warehouses/trading posts. The gun shop, right of
+  // the dock lane — walk up to it and you're handed a pistol (see game.js's
+  // acquirePistol / the trigger in update() below), mirroring the repair
+  // shop just left of the dock.
   { kind: 'stone', x: 20, y: 150, variant: 1, mirror: false },
   { kind: 'stone', x: 65, y: 154, variant: 2, mirror: true },
   { kind: 'stone', x: 110, y: 152, variant: 0, mirror: false },
-  { kind: 'stone', x: 160, y: 156, variant: 1, mirror: true },
   { kind: 'gunshop', x: 210, y: 152, mirror: false },
   { kind: 'stone', x: 255, y: 150, variant: 0, mirror: true },
   { kind: 'stone', x: 300, y: 154, variant: 1, mirror: false },
   // Notre-Dame Basilica - spiritual heart of the commercial capital
   { kind: 'church', x: 160, y: 92, mirror: false },
 ];
+
+// Montréal's placeholder streets, in the scene's fixed pixel space. The
+// vertical one runs from just below the basilica down to the dock head; the
+// horizontal one spans the whole clearing, crossing it where the old middle
+// row of houses used to be. Grey brick, drawn on the ground under everything
+// else — see drawBrickRoad() and the isMontreal branch in draw().
+const MONTREAL_ROAD_V = { x: 147, y: 96, w: 26, h: DOCK_TOP - 96 };
+const MONTREAL_ROAD_H = { y: 104, h: 22 };
 
 // The landward fortification wall, as a fixed backdrop strip along the very
 // top of the scene — behind the back row of buildings, same "wall set back
@@ -329,6 +336,28 @@ function isWalkable(buildings, x, y) {
   return !overlapsBuilding(buildings, x, y);
 }
 
+// A flat grey-brick strip — a placeholder street. Bricks are laid on a
+// fixed screen-space grid (not relative to x/y) so where two roads cross,
+// their courses line up instead of clashing.
+function drawBrickRoad(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.fillStyle = '#8f9094';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#74757a';
+  const bw = 12, bh = 6;
+  for (let i = 0, ry = Math.floor(y / bh) * bh; ry < y + h; i++, ry += bh) {
+    ctx.fillRect(x, ry, w, 1); // mortar course
+    const off = (i % 2) * (bw / 2); // running-bond stagger
+    for (let bx = Math.floor(x / bw) * bw + off; bx < x + w; bx += bw) {
+      ctx.fillRect(bx, ry, 1, bh);
+    }
+  }
+  ctx.restore();
+}
+
 export function createVillageScene() {
   let strideTimer = 0;
   let strideFrame = 0;
@@ -441,6 +470,13 @@ export function createVillageScene() {
       ctx.fillRect(0, WATER_TOP - 6, CANVAS_WIDTH, 6);
       ctx.fillStyle = pat.water;
       ctx.fillRect(0, WATER_TOP, CANVAS_WIDTH, CANVAS_HEIGHT - WATER_TOP);
+
+      // Montréal's placeholder streets — on the ground, under the dock,
+      // trees, buildings and player.
+      if (isMontreal) {
+        drawBrickRoad(ctx, 0, MONTREAL_ROAD_H.y, CANVAS_WIDTH, MONTREAL_ROAD_H.h);
+        drawBrickRoad(ctx, MONTREAL_ROAD_V.x, MONTREAL_ROAD_V.y, MONTREAL_ROAD_V.w, MONTREAL_ROAD_V.h);
+      }
 
       // dock, planks + pilings, leading from the shore down to the canoe
       ctx.fillStyle = '#3f2b1a';
