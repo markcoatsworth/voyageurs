@@ -93,6 +93,24 @@ function parseStartLocation() {
   return { flowDistance, segment: match.segment };
 }
 const { flowDistance: startFlowDistance, segment: startSegment } = parseStartLocation();
+const startedAtDiable =
+  normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('diable');
+
+// A ?start= cheat is a one-shot for THIS page load. Strip it from the address
+// bar now that it's been read, so a reload, a restored tab, or a home-screen
+// icon that was saved mid-testing doesn't silently keep dropping the player
+// at a checkpoint (a "why am I always at the Devil?" bug that looks like the
+// game, not the URL). Restarts within the session still return to wherever
+// this run began — Game captures startFlowDistance/startSegment in its
+// constructor, before this runs.
+if (window.location.search) {
+  try {
+    history.replaceState(null, '', window.location.pathname + window.location.hash);
+  } catch {
+    // Some embedded/sandboxed contexts forbid replaceState — harmless, the
+    // cheat just stays in the URL there.
+  }
+}
 
 // A positioned wrapper so the WebGL water layer and the 2D sprite/terrain
 // layer stack exactly on top of each other and scale together. The water
@@ -391,33 +409,12 @@ setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
 // transition (0.8s) has actually finished.
 setTimeout(() => ui.titleScreen.classList.add('hidden'), 4500 + 900);
 
-const startedAtDiable =
-  normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('diable');
-
 let game = null;
 try {
   game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance, startSegment });
   // ?start=diable is a checkpoint, not just a spawn point — hand over the
   // pistol and mark it so a capsize respawns at the fight.
   if (startedAtDiable) game.armDiableCheckpoint();
-
-  // Debug overlay for ?start=diable: shows timestamp and tuning
-  // values so you know you're running the latest build.
-  if (startedAtDiable) {
-    const now = new Date();
-    const debugEl = document.createElement('div');
-    debugEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#000;color:#0f0;padding:20px;font-family:monospace;font-size:16px;z-index:99999;border:3px solid #0f0;border-radius:8px;text-align:center;max-width:90%;';
-    debugEl.innerHTML = `
-      <div style="font-size:24px;margin-bottom:10px;">🔧 DIABLE DEBUG 🔧</div>
-      <div>BUILD: ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}</div>
-      <div>TOUCH: DZ=0.15 TH=0.45</div>
-      <div>LATERAL: INSTANT (12u/s)</div>
-      <div style="margin-top:10px;color:#ff0;">Mobile: ${isTouchPrimary() ? 'YES' : 'NO'}</div>
-    `;
-    document.body.appendChild(debugEl);
-    // Auto-hide after 5 seconds
-    setTimeout(() => debugEl.remove(), 5000);
-  }
 
   // Lets the index.html error handler word later crashes as "running the
   // game" rather than "loading the game".
