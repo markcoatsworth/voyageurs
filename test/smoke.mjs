@@ -67,6 +67,7 @@ function makeUi(minimap) {
     hud: el('hud'), hudScore: el('hud-score'), hudSpeedFill: el('speed'),
     hudHealthFill: el('health'), hudBlockade: el('blk'), hudBlockadeFill: el('blkfill'),
     damageFlash: el('flash'), titleScreen: el('title'), gameoverScreen: el('over'),
+    gameoverTitle: el('over-title'),
     finalStats: el('stats'), restartBtn: el('restart'), pauseScreen: el('pause'),
     milestoneBanner: el('banner'), weaponPad: el('weapon-dpad'), layoutWeaponPad: () => {},
     minimap,
@@ -302,7 +303,20 @@ await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
     g.game.update(1 / 30);
   }
   if (g.game.chasseGalerie.getAltitude() > 0.6) throw new Error('canoe never glided back down after the fight');
-  notes.push(`  note diable fight won after ${deaths} death(s)`);
+
+  // Paddle on past Gatineau — the run must roll off lawrenceWest onto the
+  // made-up Rideau leg (either by docking at the winter camp or, here, just
+  // crossing its flowDistance), not dead-end in the gorge.
+  let onRideau = false;
+  for (let i = 0; i < 4000 && !onRideau; i++) {
+    g.input.state.up = true;
+    g.game.health = 100; // this leg is about the segment hand-off, not the obstacle run
+    g.game.update(1 / 30);
+    if (g.game.mode === 'village') g.game.leaveVillage(); // walked onto Gatineau's dock
+    if (g.game.segment === 'rideau') onRideau = true;
+  }
+  if (!onRideau) throw new Error('past Le Diable the run never reached the Rideau leg toward Kingston');
+  notes.push(`  note diable fight won after ${deaths} death(s); rolled onto the Rideau at ${g.game.flowDistance | 0}`);
 });
 
 // --- scenario 4f: vertical dodge while the Diable arena holds the river ----
@@ -338,6 +352,83 @@ await step('diable: up/down move the canoe without unlocking the river', () => {
   for (let i = 0; i < 90; i++) g.game.update(1 / 30);
   const backAlt = g.game.chasseGalerie.getAltitude();
   if (backAlt <= lowAlt + 0.3) throw new Error(`canoe never eased back up after releasing "down" (${lowAlt.toFixed(2)} -> ${backAlt.toFixed(2)})`);
+});
+
+// --- scenario 4g: the Rideau leg — Gatineau junction through to Kingston --
+
+await step('gatineau: casting off from the winter camp jumps onto the Rideau', () => {
+  const gatineau = VILLAGES.find((v) => v.name === 'Gatineau');
+  if (!gatineau) throw new Error('no "Gatineau" in VILLAGES — a name/lookup drifted');
+  const g = newGame(gatineau.segment, gatineau.flowDistance - 20);
+  g.game.enterVillage(gatineau);
+  g.game.leaveVillage();
+  if (g.game.segment !== 'rideau') throw new Error(`leaving Gatineau should jump onto the Rideau, still on ${g.game.segment}`);
+  if (g.game.mode !== 'river') throw new Error('leaveVillage did not return to river mode');
+  if (g.game.diable.isActive()) throw new Error('the Diable fight reactivated on the Rideau leg');
+  // The Devil is behind you — a capsize now respawns on the Rideau, not the arena.
+  if (g.game.startSegment !== 'rideau') throw new Error('the Rideau did not become the respawn checkpoint');
+  run(g, 300, 1 / 30, (s) => { s.up = true; });
+  if (g.game.segment !== 'rideau') throw new Error('drifted off the Rideau leg while paddling it');
+});
+
+await step('rideau: paddle the whole leg and reach Kingston -> won', () => {
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  if (!kingston) throw new Error('no "Kingston" in VILLAGES — a name/lookup drifted');
+  if (kingston.segment !== 'rideau') throw new Error(`Kingston should be on the Rideau leg, got ${kingston.segment}`);
+  const g = newGame('rideau', SEGMENT_SHAPE_OFFSET.rideau + 2);
+  let won = false;
+  let sawApproachBanner = false;
+  let maxWidthSeen = 0;
+  // This exercises the leg's *plumbing* end to end — the bespoke width curve
+  // (path.js rideauWidthAt), the approach banner, and the Kingston finish
+  // line — so hull damage is neutralised each frame to guarantee traversal.
+  // The leg's difficulty is the shared obstacle system at the same density
+  // as the rest of the game, covered by the other scenarios.
+  for (let i = 0; i < 12000 && !won; i++) {
+    g.input.state.up = true;
+    const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
+    g.input.state.left = err > 0.4;
+    g.input.state.right = err < -0.4;
+    g.game.health = 100;
+    g.game.invulnTimer = Math.max(g.game.invulnTimer, 0.1);
+    g.game.update(1 / 30);
+    maxWidthSeen = Math.max(maxWidthSeen, widthAt(g.game.flowDistance));
+    if (g.game.ui.milestoneBanner.textContent.includes('KINGSTON')) sawApproachBanner = true;
+    if (g.game.state === 'won') won = true;
+    if (g.game.state === 'gameover') throw new Error('capsized despite pinned health — a non-collision death on the Rideau');
+  }
+  if (!won) throw new Error('paddling the Rideau never reached the Kingston finish line — stuck or mis-wired');
+  if (!sawApproachBanner) throw new Error('no Kingston approach banner before the finish');
+  if (maxWidthSeen < 40) throw new Error(`Kingston harbour never opened up (max width seen ${maxWidthSeen.toFixed(1)})`);
+  if (g.game.ui.gameoverTitle.textContent !== "JOURNEY'S END") {
+    throw new Error(`won the run but the end screen said "${g.game.ui.gameoverTitle.textContent}"`);
+  }
+  if (!/reached Kingston/.test(g.game.ui.finalStats.innerHTML)) {
+    throw new Error(`victory stats missing the arrival line: "${g.game.ui.finalStats.innerHTML}"`);
+  }
+  // A restart from the victory screen replays the whole journey from the put-in.
+  g.game.start();
+  if (g.game.segment !== 'fjord' || g.game.flowDistance !== 0) {
+    throw new Error('"Play Again" from the win screen did not return to the put-in');
+  }
+  if (g.game.state !== 'playing') throw new Error('restart after winning did not resume play');
+});
+
+await step('rideau: reaching Kingston by its dock also wins', () => {
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  const g = newGame('rideau', kingston.flowDistance - 12);
+  // Steer onto Kingston's own bank so the dock check catches the canoe
+  // before it crosses the finish line on its own.
+  let won = false;
+  for (let i = 0; i < 1500 && !won; i++) {
+    g.input.state.up = true;
+    g.input.state[kingston.side === 1 ? 'right' : 'left'] = true;
+    g.game.health = 100; // testing the dock->win path, not the obstacle run
+    g.game.update(1 / 30);
+    if (g.game.mode === 'village') throw new Error('Kingston opened its on-foot scene instead of ending the run');
+    if (g.game.state === 'won') won = true;
+  }
+  if (!won) throw new Error('never won despite paddling into Kingston');
 });
 
 // --- scenario 4c: casting off from Montreal doesn't loop back in ----------
@@ -430,7 +521,7 @@ await step('village: dock, walk, trade, cast off', () => {
 
 // --- scenario 6: every village enter/leave individually -------------------
 
-await step('village: enter+tick each of the 19 villages', () => {
+await step(`village: enter+tick each of the ${VILLAGES.length} villages`, () => {
   for (const v of VILLAGES) {
     const g = newGame(v.segment, v.flowDistance - 20);
     g.game.enterVillage(v);

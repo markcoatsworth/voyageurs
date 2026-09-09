@@ -61,7 +61,20 @@
 //   Rigaud                45°29′N   74°18′W       https://en.wikipedia.org/wiki/Rigaud,_Quebec
 //   Carillon              45°34′N   74°22′W       https://en.wikipedia.org/wiki/Carillon,_Quebec
 //   Gatineau              45°26′N   75°42′W       https://en.wikipedia.org/wiki/Gatineau
-import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from './path.js';
+//   The Rideau leg (Gatineau -> Kingston) — a made-up fourth segment. There
+//   is no continuous river running Ottawa to Kingston; this stands in for
+//   the Rideau canoe corridor (Rideau River, the Rideau Lakes, the
+//   Cataraqui) that the Rideau Canal would later canalize. Real towns along
+//   that line, so the minimap arm plots somewhere plausible:
+//   Manotick              45°13′N   75°41′W       https://en.wikipedia.org/wiki/Manotick
+//   Kars                  45°08′N   75°38′W       https://en.wikipedia.org/wiki/Kars,_Ontario
+//   Merrickville          44°55′N   75°50′W       https://en.wikipedia.org/wiki/Merrickville
+//   Smiths Falls          44°54′N   76°01′W       https://en.wikipedia.org/wiki/Smiths_Falls
+//   Newboro               44°39′N   76°19′W       https://en.wikipedia.org/wiki/Newboro
+//   Jones Falls           44°33′N   76°14′W       https://en.wikipedia.org/wiki/Jones_Falls,_Ontario
+//   Kingston Mills        44°18′N   76°27′W       https://en.wikipedia.org/wiki/Kingston_Mills
+//   Kingston              44°14′N   76°29′W       https://en.wikipedia.org/wiki/Kingston,_Ontario
+import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './path.js';
 
 // labelPos hand-places each minimap label clear of the route line and the
 // widget's edges. Unused outside minimap.js.
@@ -136,6 +149,25 @@ const LAWRENCE_WEST_WAYPOINTS = [
   { name: 'Gatineau', lat: 45.4300, lon: -75.7000, label: 'Gatineau', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
 ];
 
+// The Rideau leg — Gatineau south to Kingston (see the module comment: a
+// made-up segment standing in for the Rideau canoe corridor). Same pattern
+// as the two Saint Lawrence lists: index 0 is its own start (Gatineau, local
+// d=0, you leave from there rather than arrive at it) with its own
+// cumulative-distance math. Kingston is the end of the whole game.
+const RIDEAU_WAYPOINTS = [
+  { name: 'Gatineau', lat: 45.4300, lon: -75.7000 },
+  { name: 'Manotick', lat: 45.2250, lon: -75.6830, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Kars', lat: 45.1280, lon: -75.6390, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Merrickville', lat: 44.9150, lon: -75.8380, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Smiths Falls', lat: 44.9000, lon: -76.0210, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Newboro', lat: 44.6470, lon: -76.3100, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  { name: 'Jones Falls', lat: 44.5450, lon: -76.2380, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Kingston Mills', lat: 44.3010, lon: -76.4570, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  // Journey's end — Fort Frontenac / Cataraqui, the gateway to the Great
+  // Lakes. game.js declares the run won on reaching it.
+  { name: 'Kingston', lat: 44.2310, lon: -76.4860, label: 'Kingston', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+];
+
 // How far (game-world units) each segment takes to cross, end to end. Real
 // distance isn't scaled 1:1 into these — cumulativeForLocalFlowDistance
 // below reparametrizes real distance onto whatever span is picked here, so
@@ -151,11 +183,14 @@ export const ESTUARY_SPAN_DISTANCE = 2400; // Tadoussac -> Sept-Îles, ~400km re
 // commercial capital.
 export const LAWRENCE_WEST_SPAN_DISTANCE = 3035;
 
-// Equirectangular projection, longitude compressed by cos(latitude) — every
-// waypoint across all three segments spans well under a degree of latitude,
-// so this is accurate to well within a pixel at minimap scale. One shared
-// reference point (rather than one per segment) is what lets the minimap
-// plot all three segments in a single consistent picture.
+// Equirectangular projection, longitude compressed by cos(latitude) at one
+// shared reference point (rather than one per segment) — that's what lets
+// the minimap plot every segment in a single consistent picture. The three
+// original arms all sit within a degree or so of LAT_REF, where this is
+// accurate to well within a pixel; the made-up Rideau leg runs ~4° further
+// south, so its longitudes are compressed a few percent too hard — a slight
+// east-west squash of that one arm on a decorative widget, not a real
+// problem.
 const LAT_REF = FJORD_WAYPOINTS[0].lat;
 const LON_REF = FJORD_WAYPOINTS[0].lon;
 const KM_PER_LAT = 111.0;
@@ -233,6 +268,7 @@ export const SEGMENTS = {
   fjord: makeSegment('fjord', FJORD_WAYPOINTS, MOUTH_DISTANCE),
   lawrenceEast: makeSegment('lawrenceEast', LAWRENCE_EAST_WAYPOINTS, ESTUARY_SPAN_DISTANCE),
   lawrenceWest: makeSegment('lawrenceWest', LAWRENCE_WEST_WAYPOINTS, LAWRENCE_WEST_SPAN_DISTANCE),
+  rideau: makeSegment('rideau', RIDEAU_WAYPOINTS, RIDEAU_SPAN_DISTANCE),
 };
 
 // A decorative lake shape for the minimap only — never touched by any
@@ -265,6 +301,7 @@ export const ALL_POINTS = [
   ...SEGMENTS.fjord.points,
   ...SEGMENTS.lawrenceEast.points,
   ...SEGMENTS.lawrenceWest.points,
+  ...SEGMENTS.rideau.points,
 ];
 
 // Flat, cross-segment village list — villages.js/game.js iterate this
@@ -277,4 +314,5 @@ export const VILLAGES = [
   ...SEGMENTS.fjord.villages,
   ...SEGMENTS.lawrenceEast.villages,
   ...SEGMENTS.lawrenceWest.villages,
+  ...SEGMENTS.rideau.villages,
 ].map((v, i) => ({ ...v, seed: i + 1 }));

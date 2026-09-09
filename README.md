@@ -68,6 +68,22 @@ few seconds while the run is already underway.
 - Run into a dock and you'll go ashore at that village instead of taking
   damage — see "Villages" below.
 
+## The journey
+
+The full route runs Lac Saint-Jean → the Saguenay Fjord → Tadoussac → up
+the Saint Lawrence past Québec City (the British blockade) and Montréal →
+the Chasse-galerie flight up the Ottawa gorge to Gatineau, breaking Le
+Diable's pact at the head of it → and then a made-up final leg: **the
+Rideau**, standing in for the Rideau Lakes canoe corridor, from Gatineau
+south to **Kingston** on Lake Ontario. No real river runs Ottawa to
+Kingston — this segment is invented (see `src/world/river/route.js`), a
+calm, wide denouement after the Devil: the channel swells into open lake
+reaches, pinches through the Cataraqui narrows, then flares wide into
+Kingston harbour. Reaching Kingston — by its wharf or just by crossing into
+it — **wins the run** ("Journey's End"), the game's only actual ending.
+`?start=rideau` drops you at the head of that leg; `?start=kingston` a
+short paddle from the finish.
+
 ## History
 
 This started as a full 3D (Three.js) build with a third-person camera

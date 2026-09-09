@@ -65,11 +65,27 @@ const WIDTH_EASE_DISTANCE = 1700;
 // on rapidsStrength() right at its own start, rather than dropping the
 // player into near-peak whitewater the instant they commit to this branch
 // at Tadoussac's dock.
+//
+// rideau's offset is picked the same way (scanned for a calm rapids patch
+// at its start and no braid island right on the launch point) and sits well
+// past lawrenceWest's whole range *and* past the Ottawa gorge trigger in
+// widthAt() below — which is why widthAt() checks the rideau branch first.
+// The Rideau is the made-up Ottawa-to-Kingston leg (see river/route.js): no
+// real river runs that line, so it gets its own bespoke width profile
+// rather than borrowing the shared estuary curve.
 export const SEGMENT_SHAPE_OFFSET = {
   fjord: 0,
   lawrenceEast: MOUTH_DISTANCE,
   lawrenceWest: 60000,
+  rideau: 94080,
 };
+
+// How long the Rideau leg takes to paddle end to end, game-world units —
+// same role LAWRENCE_WEST_SPAN_DISTANCE plays for that segment (see
+// river/route.js). Shorter than the earlier legs on purpose: it's the
+// journey's denouement after Le Diable, not another full act.
+export const RIDEAU_SPAN_DISTANCE = 1700;
+const RIDEAU_OFFSET = SEGMENT_SHAPE_OFFSET.rideau;
 
 // Past this width the water reads as open estuary rather than fjord — used
 // to decide when belugas start showing up. Corresponds to roughly the last
@@ -95,7 +111,39 @@ export function estuaryProgress(d) {
   return Math.min(1, Math.max(0, d) / WIDTH_EASE_DISTANCE);
 }
 
+// The Rideau's width, purely as a function of position along the leg: a
+// plain river leaving the Ottawa, swelling into the broad Rideau Lake
+// reaches through the middle, pinching down through the Cataraqui narrows,
+// then flaring wide open into Kingston harbour on Lake Ontario for the
+// arrival. Nothing here models a real channel — it's shaped for the ride.
+function rideauWidthAt(d) {
+  const frac = Math.min(1, Math.max(0, (d - RIDEAU_OFFSET) / RIDEAU_SPAN_DISTANCE));
+  // The last sixth of the leg is the harbour opening up; everything before
+  // it is river -> lakes -> narrows.
+  const HARBOUR_FROM = 0.84;
+  let trend;
+  if (frac < HARBOUR_FROM) {
+    // A half-sine bell: ~12-unit river at each end, ~42-unit open lake in
+    // the middle.
+    const p = frac / HARBOUR_FROM;
+    trend = 12 + 30 * Math.sin(Math.PI * p);
+  } else {
+    // Smooth flare from the narrows out to a touch wider than the estuary —
+    // the widest water in the game, so Kingston reads as arriving on a lake.
+    const p = (frac - HARBOUR_FROM) / (1 - HARBOUR_FROM);
+    const eased = p * p * (3 - 2 * p);
+    trend = 12 + (ESTUARY_WIDTH + 6 - 12) * eased;
+  }
+  const wobble = Math.sin(d * 0.05 + 4) * 1.6 + Math.sin(d * 0.13) * 0.8;
+  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + wobble));
+}
+
 export function widthAt(d) {
+  // The Rideau leg (river/route.js) — its own profile, checked first because
+  // its shape offset sits past the Ottawa gorge trigger just below and would
+  // otherwise be swallowed by it.
+  if (d >= RIDEAU_OFFSET) return rideauWidthAt(d);
+
   // Ottawa River (Chasse-galerie section) — a tight gorge, so the big church
   // steeples cutting in from the banks leave only a narrow thread to fly.
   // Starts just before Montreal on lawrenceWest (offset ~2150 past that

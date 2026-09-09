@@ -90,6 +90,14 @@ const FIGHT_LATERAL_SPEED = isTouchPrimary() ? 28 : 15;
 // it if you never walked up to the Montréal gunsmith) — the Diable fight
 // ahead can't be done unarmed.
 const MONTREAL_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Montreal')?.flowDistance ?? Infinity;
+// Gatineau is the last lawrenceWest waypoint and the junction onto the
+// made-up Rideau leg (world/river/route.js) — crossing its flowDistance, or
+// casting off from its dock, drops the canoe onto that segment (see
+// enterRideau()), the same way crossing MOUTH_DISTANCE does at Tadoussac.
+const GATINEAU_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Gatineau')?.flowDistance ?? Infinity;
+// Kingston is the end of the whole journey — reaching it (by dock or by
+// simply crossing its flowDistance on the Rideau) wins the run.
+const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flowDistance ?? Infinity;
 const EDGE_MARGIN = 0.55;
 const ISLAND_HIT_MARGIN = 0.35;
 const LOG_PENALTY_SPEED = 4;
@@ -229,6 +237,10 @@ const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 const SEGMENT_FLOOR = {
   fjord: 0,
   lawrenceWest: SEGMENT_SHAPE_OFFSET.lawrenceWest,
+  // Same reasoning as lawrenceWest — the Rideau leg's numbering (see
+  // SEGMENT_SHAPE_OFFSET) sits off on its own, and there's nothing behind
+  // its start but an unrelated stretch of the shape functions' number line.
+  rideau: SEGMENT_SHAPE_OFFSET.rideau,
 };
 
 // What this.speed drifts back toward with no Up/Down input (see
@@ -341,6 +353,7 @@ export class Game {
     this.invulnTimer = SPAWN_INVULN_TIME;
     this.mouthAnnounced = false;
     this.troisRivieresAnnounced = false;
+    this.kingstonAnnounced = false;
     this.tilt = 0;
     this.paused = false;
     this.ui.pauseScreen?.classList.add('hidden');
@@ -407,6 +420,10 @@ export class Game {
     clearTimeout(this._damageFlashTimeout);
     this.ui.damageFlash.classList.remove('show');
     this.ui.gameoverScreen.classList.add('hidden');
+    // win() borrows the game-over screen with a triumphant title and its own
+    // button label — put both back for an ordinary run.
+    if (this.ui.gameoverTitle) this.ui.gameoverTitle.textContent = 'CAPSIZED';
+    if (this.ui.restartBtn) this.ui.restartBtn.textContent = 'Try Again';
     this.ui.hud.classList.remove('hidden');
     // No-ops if music hasn't been started yet (e.g. the very first launch,
     // before any keypress/click) — see music.resume()'s own guard.
@@ -490,6 +507,50 @@ export class Game {
     this.obstacles.reset();
   }
 
+  // Gatineau (the winter camp, end of the Chasse-galerie) is the junction
+  // onto the made-up Rideau leg toward Kingston — see world/river/route.js.
+  // Like Tadoussac -> lawrenceWest, this is a real segment jump onto a
+  // disjoint slice of the shape-math number line, not a resume-in-place, so
+  // both cast-off and the "just paddled past it" catch in update() route
+  // through here. Also becomes the run's checkpoint: the Devil is behind
+  // you now, so a capsize on the Rideau respawns at its start, not back at
+  // the Diable arena.
+  enterRideau() {
+    this._diableCheckpoint = false;
+    this.diable.reset();
+    this.diablePct = null;
+    this.chasseGalerie.reset();
+    this._chasseGalerieBannerShown = true; // no flight on the Rideau
+    const start = SEGMENT_SHAPE_OFFSET.rideau + 0.5;
+    this.startSegment = 'rideau';
+    this.startFlowDistance = start;
+    this.mode = 'river';
+    this.currentVillage = null;
+    this.enterSegment('rideau', start);
+    this.music?.endBossTrack();
+    this.showBanner('The storm breaks — the Rideau, and Kingston beyond');
+  }
+
+  // Reaching Kingston, whether by touching its dock or just crossing its
+  // flowDistance on the Rideau: the run is won. Borrows the game-over screen
+  // (a frozen update loop, the same restart button) with a triumphant title
+  // and stats, and points a restart back at the very put-in rather than the
+  // Rideau checkpoint — "Play Again" means the whole journey.
+  win() {
+    this.state = 'won';
+    this.ui.hud.classList.add('hidden');
+    this.ui.hudDiable?.classList.add('hidden');
+    if (this.ui.gameoverTitle) this.ui.gameoverTitle.textContent = "JOURNEY'S END";
+    this.ui.finalStats.innerHTML =
+      `You reached Kingston with ${this.furs} fur${this.furs === 1 ? '' : 's'}.`;
+    if (this.ui.restartBtn) this.ui.restartBtn.textContent = 'Play Again';
+    this.ui.gameoverScreen.classList.remove('hidden');
+    this.startSegment = 'fjord';
+    this.startFlowDistance = 0;
+    // Let the fiddle tune keep playing under the victory card — this isn't a
+    // death, so no capsize horn and no music.stop().
+  }
+
   leaveVillage() {
     this.mode = 'river';
     if (this.currentVillage.name === 'Tadoussac') {
@@ -499,6 +560,8 @@ export class Game {
       // resume in place like every other village's cast-off below).
       this.enterSegment('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
       this.showBanner('Paddling upriver toward Québec City — fight the current');
+    } else if (this.currentVillage.name === 'Gatineau') {
+      this.enterRideau();
     } else {
       // Push just past the dock's own trigger zone — otherwise the instant
       // control returns to the canoe, it's still sitting in the exact spot
@@ -922,8 +985,36 @@ export class Game {
       (this._castOffGrace > 0 && dockHit === this._castOffGraceVillage) ||
       this.chasseGalerie.isActive();
     if (dockHit && !suppressed) {
+      // Kingston's dock is the finish line, not a village to walk around.
+      if (dockHit.name === 'Kingston') {
+        this.win();
+        return;
+      }
       this.enterVillage(dockHit);
       return;
+    }
+
+    // Gatineau is the junction onto the Rideau (world/river/route.js). Same
+    // shape as the mouth crossing just below: if the canoe reaches Gatineau's
+    // flowDistance without steering into its dock, it rolls straight on onto
+    // the Rideau leg toward Kingston.
+    if (this.segment === 'lawrenceWest' && this.flowDistance >= GATINEAU_FLOW_DISTANCE) {
+      this.enterRideau();
+      return;
+    }
+
+    // Journey's end — reaching Kingston on the Rideau wins the run. An
+    // approach banner first (the harbour is already opening up around you by
+    // now — see path.js's rideauWidthAt), then the win a short stretch later.
+    if (this.segment === 'rideau') {
+      if (!this.kingstonAnnounced && this.flowDistance >= KINGSTON_FLOW_DISTANCE - 70) {
+        this.kingstonAnnounced = true;
+        this.showBanner('KINGSTON — Fort Frontenac ahead');
+      }
+      if (this.flowDistance >= KINGSTON_FLOW_DISTANCE) {
+        this.win();
+        return;
+      }
     }
 
     // Crossing the mouth always continues upriver toward Québec City now —
@@ -1127,7 +1218,12 @@ export class Game {
     // below.) Only the steeples on the banks matter up there.
     if (!isFlying) {
       drawCurrentEffects(ctx, this.time, this.flowDistance, this.rapids);
-      drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
+      // Belugas are a Tadoussac-estuary sight — the wide Rideau Lake reaches
+      // and Kingston harbour are inland fresh water, so no whales there even
+      // where the channel opens past the beluga width threshold.
+      if (this.segment !== 'rideau') {
+        drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
+      }
       this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     }
     // Same lawrenceWest-only guard as the update() call above.

@@ -72,10 +72,17 @@ function normalizeStartName(s) {
 // game.js's armDiableCheckpoint() (called below) hands over the pistol so
 // you can actually fight him. A capsize then respawns right here, not at
 // Montréal.
+//
+// "rideau" drops the canoe at the head of the made-up Ottawa-to-Kingston
+// leg (world/river/route.js) — past Le Diable, the storm gone, on the calm
+// wide water heading for the finish. "kingston" itself is a real village
+// name, so it already works as a ?start= target the normal way (a short
+// paddle short of the finish line).
 const START_KEYWORDS = {
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'lawrenceWest' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
+  [normalizeStartName('rideau')]: { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' },
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
