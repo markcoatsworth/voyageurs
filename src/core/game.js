@@ -161,10 +161,11 @@ const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
 const WOLF_DAMAGE = 16;
 // Le Wendigo's raking blow (bossfights/wendigo.js) when it catches you still
 // working the paddle as it listens. The very first encounter in the game and
-// a freeze-or-flee teaching beat — lighter even than the loup-garou, and the
-// first listen never strikes at all. ~9 clean hits to sink, and a player who
-// reads the tell eats one or two at most.
-const WENDIGO_DAMAGE = 11;
+// a freeze-or-flee beat — lighter than the loup-garou, and the first listen
+// never strikes at all. ~8 clean hits to sink; a player who reads the tell
+// eats one or two at most. Nudged 11 -> 12 with the cadence, to put it a
+// little more on the attack.
+const WENDIGO_DAMAGE = 12;
 // The Chasse-galerie's glide speed — slow and stately, so the flight up the
 // Ottawa runs several minutes and there's plenty of time to read each
 // church and slide into the next gap.
@@ -1168,20 +1169,19 @@ export class Game {
     // Le Wendigo — the famine-spirit on the far shore of the lower fjord, on
     // the lonely reach down to Tadoussac. Fjord only: TRIGGER_DISTANCE is a
     // number on this segment's own line (same reasoning as the loup-garou /
-    // blockade). Down (brake) is a legal way to hold still; it's Up/Left/Right
+    // blockade). Down (brake) is a legal way to go still; it's Up/Left/Right
     // — actively working the canoe — that it hears.
     if (this.segment === 'fjord') {
       const s = this.input.state;
       const stirring = !!(s.up || s.left || s.right);
       this.wendigo.update(dt, this.flowDistance, stirring, (entry) => this.handleHit(entry));
+      // No "hold still" prompts — the tell is the telegraph (it rears, the
+      // eyes flare, the drawn breath) and the first listen never strikes.
       if (this.wendigo.consumeJustSpotted()) {
-        this.showBanner('WENDIGO — go still when it stops to listen');
+        this.showBanner('WENDIGO');
         playWendigoBreath();
       }
-      if (this.wendigo.consumeJustListening()) {
-        this.showBanner('HOLD STILL');
-        playWendigoBreath();
-      }
+      if (this.wendigo.consumeJustListening()) playWendigoBreath();
       if (this.wendigo.consumeJustLunged()) playWendigoShriek();
       if (this.wendigo.consumeJustDelivered()) {
         this.showBanner('The mouth opens ahead — the Wendigo turns back');

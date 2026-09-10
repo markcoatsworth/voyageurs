@@ -5,15 +5,16 @@
 // Saguenay and paces the far cliff on the long lonely reach between
 // Petit-Saguenay and the mouth at Tadoussac.
 //
-// The first "fight" in the game, and deliberately the gentlest. No
-// projectiles, nothing to kill it with, no killing it anyway. It paces the
-// shore (PROWL) and every so often stops dead to LISTEN — and in that
-// window you take your hands off the paddle and go still in the water. Down
-// (brake / backwater) is fine, that reads as bracing to a stop; it's
-// Up/Left/Right — actively working the canoe — that it hears. Hold still
-// until it moves on. Do that a couple of times and you drift out to the
-// Saint Lawrence, where it won't follow. The very first LISTEN never strikes
-// — it's a taught dry run so the tell is learned before it costs anything.
+// The first "fight" in the game, and deliberately gentle. No projectiles,
+// nothing to kill it with, no killing it anyway. It paces the shore (PROWL)
+// and every so often rears up and stops dead to LISTEN — and in that window
+// you take your hands off the paddle and go still in the water. Down (brake
+// / backwater) is fine, that reads as bracing to a stop; it's Up/Left/Right
+// — actively working the canoe — that it hears. There's no on-screen prompt:
+// the tell is the telegraph (it rears, the eyes flare, a long drawn breath)
+// and the very first LISTEN never strikes, a free dry run. Ride it out a
+// couple of times and you drift to the Saint Lawrence, where it won't
+// follow.
 //
 // Cold-white render (frostIntensityAt) — the fjord going bloodless and
 // silent, the far end of the palette from Le Diable's hellstorm.
@@ -33,14 +34,16 @@ export const DELIVERANCE_DISTANCE = MOUTH_DISTANCE - 50;
 const FROST_FADE_IN = 58;   // ~from Petit-Saguenay's dock
 const FROST_FADE_OUT = 42;  // clear again just before the mouth
 
-// PROWL: safe, it paces. LISTEN: a telegraph (eyes up, breath, the "HOLD
-// STILL" cue — react, no punishment yet), then the hot window (be off the
-// paddle), then it turns away. One cycle ~7.4s, so the ~17s fight is two or
-// three listens, the first of them free.
-const PROWL_TIME = 3.1;
-const LISTEN_TELEGRAPH = 1.5;
-const LISTEN_HOT = 1.9;
-const LISTEN_RECOVER = 0.9;
+// PROWL: safe, it paces. LISTEN: a telegraph (it rears up, eyes flare, a
+// drawn breath — react, no punishment yet), then the hot window (be off the
+// paddle), then it turns away. No on-screen instruction — the tell is the
+// telegraph and the first listen is a free dry run. One cycle ~6.6s, so the
+// ~17s fight is three or so listens, the first free. Tightened once from
+// 3.1/1.5/1.9 to put it a little more on the attack.
+const PROWL_TIME = 2.6;
+const LISTEN_TELEGRAPH = 1.3;
+const LISTEN_HOT = 2.0;
+const LISTEN_RECOVER = 0.8;
 // A failsafe end for a capped/edge case where the player never reaches the
 // mouth (mirrors the loup-garou's clock > 42) — it can't hound them forever.
 const MAX_CLOCK = 40;
@@ -99,7 +102,7 @@ export function createWendigo() {
 
   // 0 while prowling, ramps to 1 across the telegraph, holds through the hot
   // window, eases back over the recover. game.js drives the frost glare and
-  // the "hold still" cue off this.
+  // the telegraph glare off this.
   function listenGlare() {
     if (phase !== 'stalking' || sub !== 'listen') return 0;
     if (subT < LISTEN_TELEGRAPH) return smoothstep(subT / LISTEN_TELEGRAPH);
@@ -181,9 +184,13 @@ export function createWendigo() {
 
       lunge = Math.max(0, lunge - dt / 0.45);
 
-      // It paces the shore while prowling and goes rigid the instant it
-      // listens — the stillness is half the tell.
-      if (!(phase === 'stalking' && sub === 'listen')) {
+      // It paces the shore while prowling; the instant it listens it goes
+      // rigid (the stillness is half the tell) and turns to face straight
+      // down the channel — sway eases to centre so it's squared on the canoe
+      // by the time the jaws come.
+      if (phase === 'stalking' && sub === 'listen') {
+        sway *= Math.max(0, 1 - dt * 2.4);
+      } else {
         sway = Math.sin(clock * TAU / SWAY_PERIOD) * SWAY_PX
           + Math.sin(clock * 0.7 + 1.1) * SWAY_PX * 0.28;
       }
@@ -206,10 +213,11 @@ export function createWendigo() {
       // listens, drives down toward the canoe on a lunge, and rises back
       // into the cliff on the retreat.
       const bx = clamp(CANVAS_WIDTH / 2 + sway, 44, CANVAS_WIDTH - 44);
-      // On the far shore it hangs high and a little small; as it listens it
-      // leans down, and on a lunge it drops and swells right over the canoe.
-      const groundY = 32 + glare * 6 + lunge * 74 - retreatT * 30;
-      const scale = 0.8 + glare * 0.05 + lunge * 0.4;
+      // On the far shore it stands tall and cold; as it listens it rears and
+      // leans down the channel, and on a lunge it drops and swells right over
+      // the canoe.
+      const groundY = 26 + glare * 6 + lunge * 60 - retreatT * 30;
+      const scale = 1.02 + glare * 0.08 + lunge * 0.4;
       drawWendigo(ctx, { bx, groundY, glare, lunge, alpha, clock, scale });
     },
   };
@@ -245,11 +253,13 @@ function claw(ctx, x, y, dx, dy, len) {
   ctx.fill();
 }
 
-// The wendigo: a gaunt, over-tall silhouette on the far cliff — spindly legs
-// fading into the dark shore, a narrow ribbed torso, arms hanging past the
-// knees, a long lowered skull crowned with bare antlers, hollow eyes that
-// hold a faint cold light and flare white when it listens or lunges. Barely
-// any interior detail; the shape, the rim light and the breath do the work.
+// The wendigo: a huge, starved silhouette on the far cliff — long spindly
+// legs fading into the dark shore, a hollow ribbed torso hunched high at the
+// shoulders, arms hanging well past the knees, a low thrust-forward skull
+// with a gaping maw and heavy horns that curl up, back and hook forward
+// again. Hollow eyes hold a faint cold light and flare white when it listens
+// or lunges. Little interior detail; the shape, the rim light and the breath
+// carry it.
 function drawWendigo(ctx, p) {
   const { bx, groundY, glare, lunge, alpha, clock, scale } = p;
   ctx.save();
@@ -261,78 +271,123 @@ function drawWendigo(ctx, p) {
   ctx.translate(-bx, -groundY);
 
   const drift = Math.sin(clock * 1.3) * 2;
-  const head = { x: bx + drift, y: groundY + 6 };
-  const neck = { x: bx + drift * 0.6, y: groundY + 20 };
-  const chest = { x: bx, y: groundY + 40 };
-  const pelvis = { x: bx - drift * 0.5, y: groundY + 66 };
+  // How far the head/neck thrust forward and down — small at rest, more as it
+  // rears to listen, hard on a lunge.
+  const thrust = 0.35 + glare * 0.35 + lunge * 0.7;
+
+  const pelvis = { x: bx - drift * 0.5, y: groundY + 82 };
+  const chest = { x: bx + drift * 0.4, y: groundY + 46 };
+  const withers = { x: bx + drift * 0.4, y: groundY + 30 };            // high hunched back
+  const neck = { x: bx + drift + 7 * thrust, y: groundY + 24 + thrust * 12 };
+  const head = { x: neck.x + 7 + thrust * 6, y: neck.y + 6 + thrust * 9 };
 
   ctx.fillStyle = S;
 
-  // --- legs: spindly, planted, fading into the dark shore
-  for (const s of [-1, 1]) {
-    const knee = { x: pelvis.x + s * 7, y: pelvis.y + 24 };
-    const foot = { x: pelvis.x + s * 3, y: pelvis.y + 48 };
-    limb(ctx, pelvis.x, pelvis.y, knee.x, knee.y, 5, 3.2);
-    limb(ctx, knee.x, knee.y, foot.x, foot.y, 3.2, 2);
+  // --- body mist: a low pale haze it stands in, swelling as it listens
+  const breath = Math.max(glare, lunge);
+  if (breath > 0.03) {
+    ctx.globalAlpha = alpha * 0.16 * breath;
+    ctx.fillStyle = '#dff0f6';
+    ctx.beginPath();
+    ctx.ellipse(bx, groundY + 78, 34, 16, 0, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = S;
   }
 
-  // --- torso: pelvis -> chest -> a narrow shoulder yoke
-  limb(ctx, pelvis.x, pelvis.y, chest.x, chest.y, 8, 9);
-  const shL = { x: chest.x - 12, y: chest.y - 2 };
-  const shR = { x: chest.x + 12, y: chest.y - 2 };
-  limb(ctx, shL.x, shL.y, shR.x, shR.y, 4, 4);
+  // --- legs: long, spindly, planted, fading into the dark shore
+  for (const s of [-1, 1]) {
+    const knee = { x: pelvis.x + s * 9, y: pelvis.y + 30 };
+    const foot = { x: pelvis.x + s * 4, y: pelvis.y + 60 };
+    limb(ctx, pelvis.x, pelvis.y, knee.x, knee.y, 5.5, 3.4);
+    limb(ctx, knee.x, knee.y, foot.x, foot.y, 3.4, 2);
+  }
 
-  // --- arms: long, hanging past the knees; thrown forward and down on a lunge
+  // --- torso: pelvis -> chest -> a high hunched withers, then a narrow yoke
+  limb(ctx, pelvis.x, pelvis.y, chest.x, chest.y, 9, 10);
+  limb(ctx, chest.x, chest.y, withers.x, withers.y, 10, 8);
+  const shL = { x: withers.x - 16, y: withers.y + 1 };
+  const shR = { x: withers.x + 16, y: withers.y + 1 };
+  limb(ctx, shL.x, shL.y, shR.x, shR.y, 4.5, 4.5);
+
+  // --- arms: gaunt, hanging past the knees; thrown forward and down on a lunge
   for (const s of [-1, 1]) {
     const sh = s < 0 ? shL : shR;
-    const rElbow = { x: sh.x + s * 6, y: sh.y + 26 };
-    const rHand = { x: sh.x + s * 2, y: sh.y + 52 };
-    const lElbow = { x: sh.x + s * 10, y: sh.y + 30 + lunge * 12 };
-    const lHand = { x: sh.x + s * 6, y: sh.y + 66 + lunge * 40 };
+    const rElbow = { x: sh.x + s * 7, y: sh.y + 32 };
+    const rHand = { x: sh.x + s * 3, y: sh.y + 64 };
+    const lElbow = { x: sh.x + s * 12, y: sh.y + 34 + lunge * 14 };
+    const lHand = { x: sh.x + s * 8, y: sh.y + 78 + lunge * 52 };
     const elbow = { x: lerp(rElbow.x, lElbow.x, lunge), y: lerp(rElbow.y, lElbow.y, lunge) };
     const hand = { x: lerp(rHand.x, lHand.x, lunge), y: lerp(rHand.y, lHand.y, lunge) };
-    limb(ctx, sh.x, sh.y, elbow.x, elbow.y, 3.4, 2.6);
-    limb(ctx, elbow.x, elbow.y, hand.x, hand.y, 2.6, 1.8);
-    for (let c = -1; c <= 1; c++) claw(ctx, hand.x + c * 2, hand.y, c * 0.3, 1, 6 + lunge * 4);
+    limb(ctx, sh.x, sh.y, elbow.x, elbow.y, 3.6, 2.7);
+    limb(ctx, elbow.x, elbow.y, hand.x, hand.y, 2.7, 1.8);
+    for (let c = -1; c <= 1; c++) claw(ctx, hand.x + c * 2.4, hand.y, c * 0.32, 1, 8 + lunge * 5);
   }
 
-  // --- neck + gaunt lowered head
-  limb(ctx, chest.x, chest.y - 2, neck.x, neck.y, 4, 3);
-  limb(ctx, neck.x, neck.y, head.x, head.y, 3, 2.2);
+  // --- neck + low thrust-forward skull
+  limb(ctx, withers.x, withers.y + 2, neck.x, neck.y, 5, 3.6);
+  limb(ctx, neck.x, neck.y, head.x, head.y, 3.6, 2.6);
   ctx.beginPath();
-  ctx.ellipse(head.x, head.y - 2, 6, 8, 0, 0, TAU);
+  ctx.ellipse(head.x, head.y - 1, 6.5, 8.5, 0, 0, TAU);
   ctx.fill();
-  if (lunge > 0.05) { // the jaw drops open on a lunge
+
+  // --- maw: a dark gape under the skull, always a little open, wide on a lunge
+  const gape = 3 + glare * 3 + lunge * 13;
+  ctx.fillStyle = '#05070a';
+  ctx.beginPath();
+  ctx.moveTo(head.x - 4.5, head.y + 2);
+  ctx.lineTo(head.x + 5.5, head.y + 2);
+  ctx.lineTo(head.x + 3, head.y + 2 + gape);
+  ctx.lineTo(head.x - 3, head.y + 2 + gape);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(220, 232, 238, 0.72)'; // a ragged tooth row
+  for (let t = -2; t <= 2; t++) {
     ctx.beginPath();
-    ctx.moveTo(head.x - 4, head.y + 3);
-    ctx.lineTo(head.x + 4, head.y + 3);
-    ctx.lineTo(head.x + 2, head.y + 6 + lunge * 7);
-    ctx.lineTo(head.x - 2, head.y + 6 + lunge * 7);
+    ctx.moveTo(head.x + t * 2.1 - 0.8, head.y + 2);
+    ctx.lineTo(head.x + t * 2.1, head.y + 4 + (t % 2 ? 1.4 : 0));
+    ctx.lineTo(head.x + t * 2.1 + 0.8, head.y + 2);
     ctx.closePath();
     ctx.fill();
   }
 
-  // --- antlers: a bare-branch crown, the shape everyone reads as "wendigo"
+  // --- horns: heavy and curling — they rise off the crown, sweep out and
+  // back in a broad arc, then the tips hook back down and outward, like a
+  // bison's or a twisted ram's. One forked tine off the outer sweep. Never
+  // meeting over the head — the curl opens outward, away from the face.
   ctx.strokeStyle = S;
-  ctx.lineWidth = 2.2;
   ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   for (const s of [-1, 1]) {
+    const cx = head.x + s * 3, cy = head.y - 6;             // root at the crown
+    ctx.lineWidth = 4.6;                                    // thick rising base, out and up
     ctx.beginPath();
-    ctx.moveTo(head.x + s * 2, head.y - 7);
-    ctx.lineTo(head.x + s * 8, head.y - 20);
-    ctx.moveTo(head.x + s * 5, head.y - 14);
-    ctx.lineTo(head.x + s * 13, head.y - 16);
-    ctx.moveTo(head.x + s * 6, head.y - 16);
-    ctx.lineTo(head.x + s * 9, head.y - 27);
+    ctx.moveTo(cx, cy);
+    ctx.quadraticCurveTo(head.x + s * 20, head.y - 14, head.x + s * 26, head.y - 30);
+    ctx.stroke();
+    ctx.lineWidth = 3.1;                                    // the crown of the arc, sweeping back over
+    ctx.beginPath();
+    ctx.moveTo(head.x + s * 26, head.y - 30);
+    ctx.quadraticCurveTo(head.x + s * 27, head.y - 46, head.x + s * 16, head.y - 50);
+    ctx.stroke();
+    ctx.lineWidth = 1.9;                                    // the tip, hooking back down and outward
+    ctx.beginPath();
+    ctx.moveTo(head.x + s * 16, head.y - 50);
+    ctx.quadraticCurveTo(head.x + s * 10, head.y - 44, head.x + s * 18, head.y - 38);
+    ctx.stroke();
+    ctx.lineWidth = 1.7;                                    // forked tine off the outer sweep
+    ctx.beginPath();
+    ctx.moveTo(head.x + s * 24, head.y - 24);
+    ctx.quadraticCurveTo(head.x + s * 34, head.y - 24, head.x + s * 38, head.y - 34);
     ctx.stroke();
   }
 
-  // --- ribcage: a few cold-lit arcs across the chest
+  // --- ribcage: a few cold-lit arcs across the hollow chest
   ctx.strokeStyle = RIM(0.5 * alpha);
   ctx.lineWidth = 1;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     ctx.beginPath();
-    ctx.arc(chest.x, chest.y + i * 6, 8 - i * 0.6, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.arc(chest.x, chest.y - 6 + i * 6, 9 - i * 0.7, Math.PI * 1.12, Math.PI * 1.88);
     ctx.stroke();
   }
 
@@ -341,23 +396,22 @@ function drawWendigo(ctx, p) {
   ctx.lineWidth = 1.3;
   ctx.beginPath();
   ctx.moveTo(shL.x - 3, shL.y);
-  ctx.lineTo(chest.x - 4, chest.y);
-  ctx.lineTo(pelvis.x - 5, pelvis.y);
+  ctx.lineTo(chest.x - 5, chest.y);
+  ctx.lineTo(pelvis.x - 6, pelvis.y);
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(head.x, head.y - 2, 7, Math.PI * 0.9, Math.PI * 1.7);
+  ctx.arc(head.x, head.y - 1, 8, Math.PI * 0.9, Math.PI * 1.7);
   ctx.stroke();
 
-  // --- breath: a pale plume that swells as it listens / lunges
-  const breath = Math.max(glare, lunge);
+  // --- breath: a pale plume out of the maw that swells as it listens / lunges
   if (breath > 0.03) {
-    ctx.globalAlpha = alpha * 0.5 * breath;
-    ctx.fillStyle = '#dff0f6';
-    for (let i = 0; i < 3; i++) {
-      const px = head.x + (2 + i * 3) + Math.sin(clock * 2 + i) * 2;
-      const py = head.y + 6 + i * 5 + lunge * 20;
+    ctx.globalAlpha = alpha * 0.55 * breath;
+    ctx.fillStyle = '#e4f2f8';
+    for (let i = 0; i < 4; i++) {
+      const px = head.x + (2 + i * 4) + Math.sin(clock * 2 + i) * 2.5;
+      const py = head.y + 8 + i * 6 + lunge * 26;
       ctx.beginPath();
-      ctx.ellipse(px, py, 3 + i * 2, 2 + i, 0, 0, TAU);
+      ctx.ellipse(px, py, 3.5 + i * 2.4, 2.4 + i * 1.2, 0, 0, TAU);
       ctx.fill();
     }
     ctx.globalAlpha = alpha;
@@ -367,16 +421,16 @@ function drawWendigo(ctx, p) {
   // listen and the lunge
   const eg = Math.max(0.12, glare, lunge);
   for (const s of [-1, 1]) {
-    const ex = head.x + s * 2.4;
-    const ey = head.y - 3;
+    const ex = head.x + s * 2.6;
+    const ey = head.y - 2.5;
     if (eg > 0.2) {
-      ctx.fillStyle = `rgba(210, 240, 255, ${0.5 * eg})`;
+      ctx.fillStyle = `rgba(210, 240, 255, ${0.55 * eg})`;
       ctx.beginPath();
-      ctx.arc(ex, ey, 1.4 + eg * 2.4, 0, TAU);
+      ctx.arc(ex, ey, 1.6 + eg * 3, 0, TAU);
       ctx.fill();
     }
     ctx.fillStyle = eg > 0.5 ? '#eaf7ff' : 'rgba(190, 224, 240, 0.85)';
-    ctx.fillRect(ex - 0.8, ey - 0.8, 1.6, 1.6);
+    ctx.fillRect(ex - 0.9, ey - 0.9, 1.8, 1.8);
   }
 
   ctx.restore();
