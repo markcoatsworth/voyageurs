@@ -1,8 +1,9 @@
-// Le Loup-garou — but not the folk-tale farmer-turned-dog: a diabolical
-// myth-wolf, huge, that hangs in the air over the river on the run into
-// Québec City, spectral hindquarters trailing away into shadow, and strikes
-// down at the canoe with its jaws. A man who skipped his Easter confession
-// seven years running is cursed to this until someone draws his blood; here
+// Le Loup-garou — but not the folk-tale farmer-turned-dog: a wide spectral
+// apparition, the glowing head and forequarters of a myth-wolf hanging over
+// the river on the run into Québec City, that levels its long muzzle at the
+// canoe and lunges its jaws down at the water. A man who skipped his Easter
+// confession seven years running is cursed to this until someone draws his
+// blood; here
 // there's nothing to draw it with (the pistol is a long way off) and no
 // projectiles anywhere — the whole encounter is reading the wind-up, then
 // steering or braking out from under the maw while you hold a line up the
@@ -34,12 +35,11 @@ const FIGHT_LENGTH = DELIVERANCE_DISTANCE - TRIGGER_DISTANCE;
 const NIGHT_FADE_IN = 55;
 const NIGHT_FADE_OUT = 45;
 
-// It's a screen-space presence (like Le Diable), hanging over the middle of
-// the view against the moon — not pinned to a world point. It drifts a
-// little side to side; the strike still reaches a real spot on the water.
-const SWAY_PX = 26;        // how far its body drifts either side of centre
+// A screen-space apparition (like Le Diable) hanging over the middle of the
+// view, not pinned to a world point — it drifts a little side to side while
+// the strike still reaches a real spot on the water.
+const SWAY_PX = 26;        // how far it drifts either side of centre
 const SWAY_PERIOD = 6.2;   // seconds for a full drift
-const BASE_Y = 118;        // screen y of the haunch line (the moon sits behind)
 
 // Strike cadence and reach, eased from the start of the stretch to the end.
 // Big deliberate boss, not a yappy dog — a few weighty strikes, each with a
@@ -219,32 +219,36 @@ export function createLoupGarou() {
       if (!spotted) return;
       if (!active && (phase !== 'delivered' || retreatT >= 1)) return;
 
-      const bob = Math.sin(clock * 1.6) * 3 + Math.sin(clock * 0.8) * 2;
-      const bodyX = clamp(CANVAS_WIDTH / 2 + swayPx, 118, CANVAS_WIDTH - 118);
-      const baseY = BASE_Y - bob - retreatT * 46; // haunch line, screen-space
-      const alpha = clamp(phase === 'delivered' ? 1 - retreatT : 1, 0, 1);
+      const drift = Math.sin(clock * 1.4) * 3 + Math.sin(clock * 0.7) * 2;
+      const cx = clamp(CANVAS_WIDTH / 2 + swayPx, 96, CANVAS_WIDTH - 96);
+      const cy = 100 - drift - retreatT * 42; // vertical centre of the apparition
+      const fade = clamp(phase === 'delivered' ? 1 - retreatT : 1, 0, 1);
 
       const { ext, jaws, glow } = strikePhase();
-      const plunge = clamp(ext, 0, 1);        // 0 reared/hovering .. 1 jaws at the water
-      const rear = clamp(-ext / 0.28, 0, 1);  // the wind-up coil
+      const plunge = clamp(ext, 0, 1);
+      const rear = clamp(-ext / 0.28, 0, 1);
+      // How solid it is right now — it thins between strikes and gathers to
+      // lunge. Never fully opaque; it's a ghost.
+      const presence = fade * (0.5 + 0.13 * Math.sin(clock * 1.7) + 0.32 * plunge + 0.16 * rear);
 
-      // The strike's real landing spot on the water (its z scrolls it down
-      // into view over the wind-up); the head and forelimbs reach for it.
-      let ringX = bodyX, ringY = baseY + 120;
+      // The strike's real spot on the water — scrolls down into view over the
+      // wind-up as the canoe closes; the head reaches for it.
+      let ringX = cx;
+      let ringY = cy + 90;
       if (strike) {
         const tp = worldToScreen(strike.targetX, worldDistance - strike.targetD, cameraWorldX);
-        ringX = clamp(tp.x, 26, CANVAS_WIDTH - 26);
-        ringY = clamp(tp.y, 34, CANVAS_HEIGHT - 6);
+        ringX = clamp(tp.x, 24, CANVAS_WIDTH - 24);
+        ringY = clamp(tp.y, 40, CANVAS_HEIGHT - 6);
         if (strike.t < strike.windup + HOT_TIME) {
           const warn = clamp(strike.t / strike.windup, 0, 1);
           const rPx = HIT_DX * PIXELS_PER_UNIT;
           ctx.save();
-          ctx.globalAlpha = alpha;
-          ctx.fillStyle = `rgba(3, 4, 8, ${0.12 + warn * 0.16})`;
+          ctx.globalAlpha = fade;
+          ctx.fillStyle = `rgba(3, 4, 8, ${0.12 + warn * 0.15})`;
           ctx.beginPath();
           ctx.ellipse(ringX, ringY, rPx * (2.4 - warn * 1.4), rPx * 0.5, 0, 0, TAU);
           ctx.fill();
-          ctx.strokeStyle = `rgba(158, 44, 38, ${0.3 + warn * 0.5})`;
+          ctx.strokeStyle = `rgba(120, 170, 205, ${0.3 + warn * 0.5})`;
           ctx.lineWidth = 1 + warn * 2;
           ctx.beginPath();
           ctx.ellipse(ringX, ringY, rPx, rPx * 0.58, 0, 0, TAU);
@@ -253,248 +257,169 @@ export function createLoupGarou() {
         }
       }
 
-      // Pose: hunched howler when calm — head thrown up and back over the
-      // shoulders — driving the whole front half down at the ring on a strike.
-      const sh = {
-        x: lerp(bodyX - 2, ringX, plunge * 0.5),
-        y: lerp(baseY - 40, ringY - 46, plunge) - rear * 9,
+      // Anchors. Wide low mass; the head sits forward-low with a long snout
+      // pointed at the canoe, thrown up and back on the wind-up, driven down
+      // at the ring on the strike.
+      const head = {
+        x: lerp(cx, ringX, plunge * 0.85),
+        y: lerp(cy + 4, ringY - 16, plunge) - rear * 15,
       };
-      const hd = {
-        x: lerp(bodyX - 6, ringX, plunge * 0.9),
-        y: lerp(sh.y - 15, ringY - 12, plunge) - rear * 12,
-      };
-      // The muzzle points down-forward at the canoe when calm (a wolf head
-      // squared at you, jaws parted), thrusting at the ring on a strike; the
-      // wind-up rears it up and back.
       const snout = {
-        x: lerp(hd.x + 4, ringX + 2, plunge) - rear * 10,
-        y: lerp(hd.y + 17, ringY + 1, plunge) - rear * 24,
+        x: lerp(head.x + 3, ringX + 2, plunge) - rear * 9,
+        y: lerp(head.y + 22, ringY + 1, plunge) - rear * 26,
       };
-      drawDemonWolf(ctx, {
-        hip: { x: bodyX, y: baseY }, sh, hd, snout,
-        ringX, ringY, plunge, rear, jaws, glow, alpha, clock,
+      drawGhostWolf(ctx, {
+        cx, cy, hw: 96, head, snout,
+        ringX, ringY, plunge, rear, jaws, glow, presence, clock,
       });
     },
   };
 }
 
 const fract = (v) => v - Math.floor(v);
-const rand = (i, seed) => fract(Math.sin(i * 12.9898 + seed * 4.1) * 43758.5453);
+const rand = (i, s) => fract(Math.sin(i * 12.9898 + s * 4.1) * 43758.5453);
 
-// A fur-edged tapered mass from A (width w0) to B (width w1) — the workhorse
-// for limbs, neck and torso. Jitter on the edge kills the smooth-cartoon read.
-function furTaper(ctx, ax, ay, w0, bx, by, w1, spike, seed) {
+// A soft filled ellipse in the current fill style — the ghost is built from
+// stacked haze, not hard edges.
+function haze(ctx, x, y, rx, ry, rot = 0) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, Math.max(0.5, rx), Math.max(0.5, ry), rot, 0, TAU);
+  ctx.fill();
+}
+
+// A tapering curved wisp from A through a bend to a fine tip at B.
+function wisp(ctx, ax, ay, bx, by, cxb, cyb, w) {
+  const mx1 = (ax + bx) / 2, my1 = (ay + by) / 2;
   let dx = bx - ax, dy = by - ay;
-  const L = Math.hypot(dx, dy) || 1;
-  dx /= L; dy /= L;
+  const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
   const nx = -dy, ny = dx;
-  const N = 5;
   ctx.beginPath();
-  for (let i = 0; i <= N; i++) {
-    const t = i / N;
-    const w = lerp(w0, w1, t) / 2 + (i % 2 ? spike * (0.4 + rand(i, seed)) : -spike * 0.3);
-    ctx.lineTo(lerp(ax, bx, t) + nx * w, lerp(ay, by, t) + ny * w);
-  }
-  for (let i = N; i >= 0; i--) {
-    const t = i / N;
-    const w = lerp(w0, w1, t) / 2 + (i % 2 ? spike * (0.4 + rand(i + 20, seed)) : -spike * 0.3);
-    ctx.lineTo(lerp(ax, bx, t) - nx * w, lerp(ay, by, t) - ny * w);
-  }
+  ctx.moveTo(ax + nx * w, ay + ny * w);
+  ctx.quadraticCurveTo(cxb + nx * w * 0.5, cyb + ny * w * 0.5, bx, by);
+  ctx.quadraticCurveTo(cxb - nx * w * 0.5, cyb - ny * w * 0.5, ax - nx * w, ay - ny * w);
   ctx.closePath();
   ctx.fill();
+  void mx1; void my1;
 }
 
-// A single fur tuft / claw — a thin triangle poking out of an edge in
-// direction (dx, dy).
-function spike(ctx, x, y, dx, dy, len, w) {
-  const l = Math.hypot(dx, dy) || 1;
-  const ux = dx / l, uy = dy / l;
-  ctx.beginPath();
-  ctx.moveTo(x - uy * w, y + ux * w);
-  ctx.lineTo(x + ux * len, y + uy * len);
-  ctx.lineTo(x + uy * w, y - ux * w);
-  ctx.closePath();
-  ctx.fill();
-}
+// Le Loup-garou as a wide spectral apparition over the river: the head and
+// forequarters of a wolf in cold pale light — big pointed ears, a long
+// muzzle levelled at the canoe, a spectral ruff spreading wide to both
+// sides, forelegs reaching down. Drawn as a glowing contour over a faint
+// translucent fill, edges fraying into drift. It casts its own light — there
+// is no moon.
+function drawGhostWolf(ctx, p) {
+  const { cx, cy, hw, head, snout, ringX, ringY, plunge, jaws, glow, presence, clock } = p;
+  if (presence <= 0.02) return;
+  const A = presence;
+  const ang = Math.atan2(snout.y - head.y, snout.x - head.x); // toward the muzzle
 
-// The demon-wolf: a big black silhouette hung over the river against the
-// moon — an upright, hunched myth-wolf with a long thrown-back snout, sharp
-// ears, a spiked mane and long clawed arms; the spectral hindquarters fray
-// into shadow. On a strike the whole front half drives down at the water.
-// Almost no interior detail — the shape and the moon do the work, with a
-// cold rim to lift it off the night and eyes that catch light on the wind-up.
-function drawDemonWolf(ctx, p) {
-  const { hip, sh, hd, snout, ringX, ringY, plunge, rear, jaws, glow, alpha, clock } = p;
-  const S = '#0c0d16';  // silhouette
-  const D = '#050609';   // darkest — fray, ears, mane
   ctx.save();
-  ctx.globalAlpha = alpha;
 
-  // --- tail: a curved ragged plume, up and back, behind everything
-  ctx.fillStyle = S;
-  ctx.beginPath();
-  ctx.moveTo(hip.x + 8, hip.y + 2);
-  ctx.quadraticCurveTo(hip.x + 34, hip.y - 4, hip.x + 28, hip.y - 34);
-  ctx.quadraticCurveTo(hip.x + 22, hip.y - 18, hip.x + 12, hip.y - 3);
-  ctx.closePath();
-  ctx.fill();
-  for (let i = 0; i < 4; i++) spike(ctx, hip.x + 18 + i * 3, hip.y - 8 - i * 7, 0.5, -0.9, 8, 2);
+  // --- ambient aura: its own cold light on the dark, additive
+  ctx.globalCompositeOperation = 'lighter';
+  const aura = ctx.createRadialGradient(cx, cy, 6, cx, cy, hw * 1.15);
+  aura.addColorStop(0, `rgba(96, 142, 198, ${0.13 * A})`);
+  aura.addColorStop(0.6, `rgba(64, 100, 152, ${0.05 * A})`);
+  aura.addColorStop(1, 'rgba(64, 100, 152, 0)');
+  ctx.fillStyle = aura;
+  ctx.fillRect(cx - hw * 1.3, cy - hw, hw * 2.6, hw * 1.9);
+  ctx.globalCompositeOperation = 'source-over';
 
-  // --- spectral fray hanging off the hips, drifting
-  ctx.globalAlpha = alpha * 0.5;
-  ctx.fillStyle = D;
-  for (let i = 0; i < 8; i++) {
-    const w = Math.sin(clock * 1.3 + i * 1.2) * 4;
-    const fx = hip.x - 24 + i * 6 + w;
-    const h = 12 + (i % 3) * 11 + Math.sin(clock * 2 + i) * 5;
-    ctx.beginPath();
-    ctx.moveTo(fx - 3, hip.y + 6);
-    ctx.lineTo(fx + w * 0.5, hip.y + 6 + h);
-    ctx.lineTo(fx + 3, hip.y + 6);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.globalAlpha = alpha;
-
-  // --- hind legs: digitigrade — thigh down, shin back, foot forward
-  ctx.fillStyle = S;
+  // --- wide spectral ruff behind the head — soft blobs spreading sideways,
+  // this is the "wide"
+  ctx.fillStyle = `rgba(118, 152, 202, ${0.09 * A})`;
   for (const s of [-1, 1]) {
-    const knee = { x: hip.x + s * 13, y: hip.y + 22 };
-    const ankle = { x: hip.x + s * 7, y: hip.y + 40 };
-    const toe = { x: hip.x + s * 17, y: hip.y + 46 };
-    furTaper(ctx, hip.x + s * 8, hip.y + 4, 15, knee.x, knee.y, 10, 1.4, s * 3);
-    furTaper(ctx, knee.x, knee.y, 10, ankle.x, ankle.y, 6, 1.2, s * 5);
-    furTaper(ctx, ankle.x, ankle.y, 6, toe.x, toe.y, 4, 1, s * 7);
-  }
-
-  // --- hips
-  ctx.fillStyle = S;
-  ctx.beginPath();
-  ctx.ellipse(hip.x, hip.y, 21, 19, 0, 0, TAU);
-  ctx.fill();
-
-  // --- torso: hips -> shoulders (stretches long on a strike)
-  furTaper(ctx, hip.x, hip.y - 8, 33, sh.x, sh.y + 6, 40, 2, 11);
-
-  // --- shoulder hump
-  ctx.beginPath();
-  ctx.ellipse(sh.x, sh.y, 26, 21, 0, 0, TAU);
-  ctx.fill();
-
-  // --- mane: a spiked ridge along the hunched back, tallest over the
-  // shoulders and easing off before the head so it never crowds the skull
-  ctx.fillStyle = D;
-  const N = 8;
-  for (let i = 0; i <= N; i++) {
-    const f = i / N;
-    const bx = lerp(hip.x - 15, sh.x - 12, f);
-    const by = lerp(hip.y - 13, sh.y - 15, f);
-    const h = (6 + rand(i, 3) * 8 + Math.sin(f * Math.PI) * 10) * (1 - f * 0.45);
-    ctx.beginPath();
-    ctx.moveTo(bx - 5, by + 6);
-    ctx.lineTo(bx - 1 + rand(i, 9) * 3, by - h);
-    ctx.lineTo(bx + 5, by + 6);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // --- arms: far arm raised with claws splayed (howl) / near arm forward;
-  // both sweep down to the ring on a strike
-  ctx.fillStyle = S;
-  for (const s of [-1, 1]) {
-    const sho = { x: sh.x + s * 16, y: sh.y + 2 };
-    const rest = s < 0
-      ? { x: sh.x - 27, y: sh.y - 26 - rear * 6 }
-      : { x: sh.x + 27, y: sh.y + 6 };
-    const hitH = { x: ringX + s * 13, y: ringY - 3 };
-    const hand = { x: lerp(rest.x, hitH.x, plunge), y: lerp(rest.y, hitH.y, plunge) };
-    const elbow = { x: (sho.x + hand.x) / 2 + s * 7, y: (sho.y + hand.y) / 2 + (s < 0 ? -3 : 8) };
-    furTaper(ctx, sho.x, sho.y, 13, elbow.x, elbow.y, 10, 1.4, s * 12);
-    furTaper(ctx, elbow.x, elbow.y, 10, hand.x, hand.y, 6, 1.2, s * 15);
-    const cdx = plunge > 0.35 ? 0 : (s < 0 ? -0.35 : 0.45);
-    const cdy = plunge > 0.35 ? 1 : -0.9;
-    for (let c = -1; c <= 1; c++) spike(ctx, hand.x + c * 3, hand.y, cdx + c * 0.22, cdy, 9, 1.6);
-  }
-
-  // --- neck + head
-  ctx.fillStyle = S;
-  furTaper(ctx, sh.x - 2, sh.y - 8, 18, hd.x, hd.y + 2, 13, 1.4, 21);
-  ctx.beginPath();
-  ctx.ellipse(hd.x, hd.y, 12, 11, 0, 0, TAU);
-  ctx.fill();
-
-  // ears: two clean pointed triangles up off the skull, angled back
-  ctx.fillStyle = D;
-  for (const s of [-1, 1]) {
-    ctx.beginPath();
-    ctx.moveTo(hd.x + s * 3, hd.y - 6);
-    ctx.lineTo(hd.x + s * 11, hd.y - 4);
-    ctx.lineTo(hd.x + s * 6 - 3, hd.y - 20);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // --- snout: a long unmistakable wedge off the skull toward `snout`, split
-  // into an upper and lower jaw swung apart by `jaws` (perp to its axis).
-  const sdx = snout.x - hd.x, sdy = snout.y - hd.y;
-  const sl = Math.hypot(sdx, sdy) || 1;
-  const nx = -sdy / sl, ny = sdx / sl;   // perpendicular
-  const g = 2 + jaws * 8;
-  ctx.fillStyle = S; // upper jaw
-  ctx.beginPath();
-  ctx.moveTo(hd.x + nx * 6, hd.y + ny * 6);
-  ctx.lineTo(hd.x - nx * 3, hd.y - ny * 3);
-  ctx.lineTo(snout.x - nx * 1.5, snout.y - ny * 1.5);
-  ctx.lineTo(snout.x + nx * g, snout.y + ny * g);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = D; // lower jaw, swung open
-  ctx.beginPath();
-  ctx.moveTo(hd.x - nx * 6, hd.y - ny * 6);
-  ctx.lineTo(hd.x + nx * 2, hd.y + ny * 2);
-  ctx.lineTo(snout.x + nx * 1.5, snout.y + ny * 1.5);
-  ctx.lineTo(snout.x - nx * g, snout.y - ny * g);
-  ctx.closePath();
-  ctx.fill();
-  // fangs at the jaw line
-  ctx.fillStyle = 'rgba(226, 224, 214, 0.85)';
-  for (const s of [-1, 1]) {
-    const fx = lerp(hd.x, snout.x, 0.55) + nx * s * 1.5;
-    const fy = lerp(hd.y, snout.y, 0.55) + ny * s * 1.5;
-    spike(ctx, fx, fy, sdx / sl, sdy / sl, 4, 1);
-  }
-  if (jaws > 0.3) {
-    ctx.fillStyle = `rgba(184, 70, 46, ${0.32 * (jaws - 0.3)})`;
-    ctx.beginPath();
-    ctx.ellipse(lerp(hd.x, snout.x, 0.5), lerp(hd.y, snout.y, 0.5), 3, g * 0.7, 0, 0, TAU);
-    ctx.fill();
-  }
-
-  // --- cold rim on the moonward (upper) edge
-  ctx.strokeStyle = `rgba(140, 172, 214, ${0.22 * alpha})`;
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.moveTo(sh.x - 24, sh.y - 4);
-  ctx.quadraticCurveTo(sh.x - 4, sh.y - 26, sh.x + 18, sh.y - 6);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(hd.x, hd.y, 11, Math.PI * 1.1, Math.PI * 2);
-  ctx.stroke();
-
-  // --- eyes: two points, a faint ember always, flaring pale-gold on the
-  // wind-up
-  for (const s of [-1, 1]) {
-    const ex = hd.x + s * 4 + (snout.x - hd.x) * 0.12;
-    const ey = hd.y - 1 + (snout.y - hd.y) * 0.12;
-    if (glow > 0.05) {
-      ctx.fillStyle = `rgba(255, 206, 120, ${0.55 * glow})`;
-      ctx.beginPath();
-      ctx.arc(ex, ey, 1.6 + glow * 2.6, 0, TAU);
-      ctx.fill();
+    for (let i = 0; i < 4; i++) {
+      const dr = Math.sin(clock * 1.1 + i * 1.5 + s) * 6;
+      haze(ctx, head.x + s * (22 + i * 22), head.y - 4 - i * 3 + dr, 27 - i * 4, 19 - i * 3, s * 0.22);
     }
-    ctx.fillStyle = glow > 0.45 ? '#ffe6a0' : 'rgba(210, 150, 90, 0.8)';
-    ctx.fillRect(ex - 0.9, ey - 0.9, 1.8, 1.8);
   }
+  // rising tendrils off the crown
+  ctx.fillStyle = `rgba(134, 168, 212, ${0.08 * A})`;
+  for (let i = 0; i < 5; i++) {
+    const bx = head.x + lerp(-44, 44, i / 4) + Math.sin(clock * 0.9 + i) * 4;
+    const rise = 22 + rand(i, 2) * 30 + Math.sin(clock * 1.6 + i * 2) * 6;
+    wisp(ctx, bx, head.y - 24, bx + Math.sin(clock + i) * 10, head.y - 24 - rise,
+      bx, head.y - 24 - rise * 0.5, 3);
+  }
+
+  // --- forelegs: reaching down wide; the near one drives at the ring on a strike
+  ctx.fillStyle = `rgba(132, 166, 210, ${0.11 * A})`;
+  for (const s of [-1, 1]) {
+    const strikeLeg = plunge > 0.35 && s === (ringX >= head.x ? 1 : -1);
+    const paw = strikeLeg
+      ? { x: ringX + s * 7, y: ringY - 2 }
+      : { x: head.x + s * hw * 0.52, y: head.y + 46 + Math.sin(clock * 1.3 + s) * 3 };
+    wisp(ctx, head.x + s * 14, head.y + 16, paw.x, paw.y,
+      (head.x + paw.x) / 2 + s * 10, (head.y + paw.y) / 2 + 6, 6);
+    ctx.strokeStyle = `rgba(180, 206, 238, ${0.22 * A})`;
+    ctx.lineWidth = 1.3;
+    ctx.lineCap = 'round';
+    for (let c = -1; c <= 1; c++) {
+      ctx.beginPath();
+      ctx.moveTo(paw.x + c * 3, paw.y);
+      ctx.lineTo(paw.x + c * 4 + s * 2, paw.y + 7);
+      ctx.stroke();
+    }
+  }
+
+  // --- the head, in a local frame where local +y points down the muzzle
+  ctx.save();
+  ctx.translate(head.x, head.y);
+  ctx.rotate(ang - Math.PI / 2);
+  const jr = jaws * 8;
+
+  const contour = () => {
+    ctx.beginPath();
+    ctx.moveTo(-30, -6);                       // left ear outer base
+    ctx.lineTo(-25, -42);                      // left ear tip
+    ctx.lineTo(-12, -15);                      // left ear inner notch
+    ctx.quadraticCurveTo(0, -21, 12, -15);     // brow
+    ctx.lineTo(25, -42);                       // right ear tip
+    ctx.lineTo(30, -6);                        // right ear outer base
+    ctx.quadraticCurveTo(25, 8, 15, 18);       // right cheek
+    ctx.quadraticCurveTo(12, 32, 6, 42 + jr);  // to the nose
+    ctx.lineTo(-6, 42 + jr);
+    ctx.quadraticCurveTo(-12, 32, -15, 18);
+    ctx.quadraticCurveTo(-25, 8, -30, -6);
+    ctx.closePath();
+  };
+
+  ctx.fillStyle = `rgba(150, 182, 222, ${0.12 * A})`;
+  contour(); ctx.fill();
+  ctx.fillStyle = `rgba(172, 202, 238, ${0.1 * A})`;
+  ctx.beginPath(); ctx.ellipse(0, 6, 17, 22, 0, 0, TAU); ctx.fill();
+
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = `rgba(148, 214, 252, ${0.48 * A})`;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  contour(); ctx.stroke();
+  ctx.lineWidth = 1.1;
+  ctx.strokeStyle = `rgba(148, 214, 252, ${0.28 * A})`;
+  ctx.beginPath();
+  ctx.moveTo(-23, -35); ctx.lineTo(-14, -14);
+  ctx.moveTo(23, -35); ctx.lineTo(14, -14);
+  ctx.stroke();
+  if (jaws > 0.18) {
+    ctx.beginPath();
+    ctx.moveTo(-9, 22); ctx.quadraticCurveTo(0, 25 + jr * 0.6, 9, 22);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // eyes — slanted glowing points
+  const g2 = clamp(0.35 + 0.8 * glow, 0, 1);
+  for (const s of [-1, 1]) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `rgba(150, 224, 255, ${0.5 * g2 * A})`;
+    haze(ctx, s * 8, -2, 2 + g2 * 3.5, 2 + g2 * 3.5);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(230, 250, 255, ${(0.45 + 0.55 * g2) * A})`;
+    haze(ctx, s * 8, -2, 1.5, 2, s * 0.5);
+  }
+  ctx.restore(); // out of the head frame
 
   ctx.restore();
 }
