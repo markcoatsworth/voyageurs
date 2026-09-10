@@ -1227,27 +1227,26 @@ export class Game {
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Night sky — deep cold blue overhead easing to a lighter slate at the
-    // horizon, with a bone moon high on the right once it's properly dark.
+    // Night sky for the Loup-garou stretch — a deep cold blue-black, with a
+    // dusting of pale grain (the big moon itself is drawn later, behind the
+    // beast). Darker than the earlier draft; the moon does the lifting.
     if (night > 0) {
       const g = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-      g.addColorStop(0, '#080d1a');
-      g.addColorStop(0.55, '#111a2c');
-      g.addColorStop(1, '#20304a');
+      g.addColorStop(0, '#050810');
+      g.addColorStop(0.55, '#0b1220');
+      g.addColorStop(1, '#141f33');
       ctx.save();
-      ctx.globalAlpha = 0.74 * night;
+      ctx.globalAlpha = 0.82 * night;
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.restore();
-      if (night > 0.35) {
-        ctx.save();
-        ctx.globalAlpha = (night - 0.35) / 0.65;
-        ctx.fillStyle = '#dfe4ee';
-        ctx.beginPath();
-        ctx.arc(CANVAS_WIDTH - 42, 26, 8.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+      ctx.globalAlpha = 0.5 * night;
+      ctx.fillStyle = '#8fa4c4';
+      for (let i = 0; i < 40; i++) {
+        const gx = (i * 79.7 + 13) % CANVAS_WIDTH;
+        const gy = (i * 43.3 + 7) % (CANVAS_HEIGHT * 0.7);
+        ctx.fillRect(gx, gy, 1, 1);
       }
+      ctx.restore();
     }
 
     // Hellstorm sky, faded in by `storm` — all but pure black overhead with
@@ -1293,12 +1292,16 @@ export class Game {
       ctx.restore();
     }
 
-    // A lighter, cold version of the same for the Loup-garou night — the
-    // banks fall to shapes in the dark, the channel stays legible.
+    // Loup-garou night — drown the scene to near-black so the whole frame is
+    // the moon and a silhouette (see the reference art). The moon (drawn
+    // below, behind the beast) is what lifts it back out.
     if (night > 0) {
       ctx.save();
-      ctx.globalAlpha = 0.42 * night;
-      ctx.fillStyle = '#060911';
+      ctx.globalAlpha = 0.86 * night;
+      ctx.fillStyle = '#03040a';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.globalAlpha = 0.28 * night; // a cold blue cast over it
+      ctx.fillStyle = '#0a1836';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
     }
@@ -1317,9 +1320,61 @@ export class Game {
       }
       this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     }
+
+    // Loup-garou night: a final wash over the obstacles/whales too, so
+    // nothing on the water stays lit — the frame is the moon and shadows.
+    if (night > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.5 * night;
+      ctx.fillStyle = '#04050c';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+
     // Same segment guards as the update() calls above.
     if (this.segment === 'rideau') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
-    if (this.segment === 'lawrenceWest') this.loupGarou.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+    if (this.segment === 'lawrenceWest') {
+      // The full moon the Loup-garou is silhouetted against — big, upper
+      // centre, drawn here (over the dark water) so it always reads and the
+      // beast has something to cut a shape out of. Bats drift across it.
+      if (night > 0) {
+        const mx = CANVAS_WIDTH * 0.5;
+        const my = 84;
+        ctx.save();
+        ctx.globalAlpha = night;
+        const halo = ctx.createRadialGradient(mx, my, 10, mx, my, 130);
+        halo.addColorStop(0, 'rgba(206, 222, 242, 0.6)');
+        halo.addColorStop(0.35, 'rgba(120, 152, 196, 0.3)');
+        halo.addColorStop(1, 'rgba(120, 152, 196, 0)');
+        ctx.fillStyle = halo;
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.fillStyle = '#eef1f7';
+        ctx.beginPath();
+        ctx.arc(mx, my, 64, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(150, 168, 198, 0.32)'; // mottling
+        for (const [dx, dy, r] of [[-22, -16, 10], [16, 10, 13], [-8, 24, 8], [28, -20, 7], [-32, 12, 6], [6, -30, 5]]) {
+          ctx.beginPath();
+          ctx.arc(mx + dx, my + dy, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(5, 7, 13, 0.92)';
+        for (let i = 0; i < 4; i++) {
+          const bx = (mx - 78 + ((this.time * 15 + i * 96) % 210));
+          const by = my - 40 + Math.sin(this.time * 1.5 + i * 2) * 24 + i * 7;
+          const bs = 3 + (i % 2);
+          ctx.beginPath();
+          ctx.moveTo(bx - bs * 2, by);
+          ctx.quadraticCurveTo(bx - bs, by - bs, bx, by);
+          ctx.quadraticCurveTo(bx + bs, by - bs, bx + bs * 2, by);
+          ctx.quadraticCurveTo(bx + bs, by + bs * 0.6, bx, by + bs * 0.3);
+          ctx.quadraticCurveTo(bx - bs, by + bs * 0.6, bx - bs * 2, by);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      this.loupGarou.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+    }
     // Draw the Chasse-galerie churches cutting into the gorge
     if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX);
 

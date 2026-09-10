@@ -133,28 +133,28 @@ await step('loup-garou: the demon-wolf strikes, then Québec City checks it', ()
     throw new Error('loup-garou distances look wrong');
   }
 
-  // Hold one speed and one line straight through — the strike is led at
-  // where a canoe holding that speed will be, so it lands (a fight where
-  // nothing can touch you isn't a fight). Hull pinned so obstacle damage
-  // doesn't muddy the "did the *maw* connect" read.
-  const idle = newGame('lawrenceWest', LOUP_GAROU_TRIGGER - 15);
+  // Sit still in the beast's reach and take the hits — the strike is led at
+  // your current speed, so a canoe that isn't changing pace or line is in
+  // the jaws every time (a fight where nothing can touch you isn't a fight).
+  // Hull pinned so obstacle damage doesn't muddy the "did the *maw* connect"
+  // read; paddle just enough to hold station against the upstream current.
+  const idle = newGame('lawrenceWest', LOUP_GAROU_TRIGGER + 8);
   let sawBeast = false;
   let idleHits = 0;
-  let idleDelivered = false;
   idle.game.handleHit = ((orig) => (e) => {
     if (e && e.type === 'wolf') idleHits++;
     return orig(e);
   })(idle.game.handleHit.bind(idle.game));
-  for (let i = 0; i < 2500; i++) {
-    idle.input.state.up = true;
+  for (let i = 0; i < 1400; i++) {
+    // nudge forward only when the current has pushed us back past the start,
+    // so net flow position barely moves and speed stays near zero
+    idle.input.state.up = idle.game.flowDistance < LOUP_GAROU_TRIGGER + 8;
     idle.game.health = 100;
     idle.game.update(1 / 30);
     if (idle.game.loupGarou.isActive()) sawBeast = true;
-    if (idle.game.flowDistance >= LOUP_GAROU_DELIVERANCE && !idle.game.loupGarou.isActive()) { idleDelivered = true; break; }
   }
   if (!sawBeast) throw new Error('the loup-garou never activated on the approach to Québec City');
-  if (!idleDelivered) throw new Error('never reached Québec City holding a straight line through the loup-garou');
-  if (idleHits === 0) throw new Error('a held straight line took no strike — the maw never connects');
+  if (idleHits < 2) throw new Error(`sitting in the beast's reach for ~45s took only ${idleHits} strikes — the maw barely connects`);
 
   // The intended counter — steer clear of the marked spot when it rears
   // back — should shrug off almost every strike while keeping pace up the
