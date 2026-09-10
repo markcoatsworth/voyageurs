@@ -323,18 +323,62 @@ export function getDockHit(flowDistance, canoeWorldX) {
 
 const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;
 
-export function drawVillages(ctx, worldDistance, cameraWorldX) {
+export function drawVillages(ctx, worldDistance, cameraWorldX, time = 0) {
   VILLAGES.forEach((v, i) => {
     const z = worldDistance - v.flowDistance;
     if (Math.abs(z) > VISIBLE_Z_RANGE) return;
-    if (Math.abs(z) < 5 && (v.name === 'Trois-Rivieres' || v.name === 'Batiscan')) {
-      console.log(`[DRAW] Drawing ${v.name} at z=${z.toFixed(1)}, worldDistance=${worldDistance.toFixed(1)}`);
-    }
-    drawOneVillage(ctx, v, i, worldDistance, cameraWorldX);
+    drawOneVillage(ctx, v, i, worldDistance, cameraWorldX, time);
   });
 }
 
-function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
+// A little figure at the foot of each dock, waving the canoe in — drawn
+// straight with ctx (not a sprite) so the raised arm actually moves. Coat
+// colour and wave timing vary off the village seed so they don't all wave in
+// lockstep.
+const GREETER_COATS = ['#9c3f34', '#3f6f8a', '#b98a3c', '#4f8a52', '#8a6f3a', '#7a5a8a'];
+function drawDockGreeter(ctx, feetX, feetY, time, seed) {
+  const coat = GREETER_COATS[seed % GREETER_COATS.length];
+  const phase = (seed % 9) * 0.8;
+  const wave = Math.sin(time * 7 + phase);            // -1..1, the arm swing
+  const x = Math.round(feetX);
+  const y = Math.round(feetY + Math.sin(time * 3.4 + phase) * 0.4); // slight bob
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + 1, 4, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#2b2620';                          // legs
+  ctx.fillRect(x - 2, y - 4, 1.6, 4);
+  ctx.fillRect(x + 0.5, y - 4, 1.6, 4);
+
+  ctx.fillStyle = coat;                               // coat + slack arm
+  ctx.fillRect(x - 2.4, y - 10, 4.8, 6.4);
+  ctx.fillRect(x - 3.4, y - 9.4, 1.4, 4);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';              // shaded side, a little form
+  ctx.fillRect(x - 2.4, y - 10, 1.2, 6.4);
+
+  ctx.fillStyle = '#e2b688';                          // head
+  ctx.fillRect(x - 1.6, y - 13.4, 3.2, 3.2);
+  ctx.fillStyle = '#241d16';                          // hat
+  ctx.fillRect(x - 2.4, y - 14.4, 4.8, 1.9);
+
+  const hx = x + 3.2 + wave * 2;                       // raised waving arm
+  const hy = y - 12 - Math.abs(wave) * 1.6;
+  ctx.strokeStyle = coat;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + 1.8, y - 8.8);
+  ctx.lineTo(hx, hy);
+  ctx.stroke();
+  ctx.fillStyle = '#e2b688';                          // hand
+  ctx.fillRect(hx - 1, hy - 1, 2, 2);
+  ctx.restore();
+}
+
+function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   const layout = villageLayout(v.seed);
   const edge = bankEdge(v.flowDistance, v.side);
   const inner = edge - v.side * dockReach(v);
@@ -489,5 +533,15 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX) {
     } else {
       ctx.drawImage(s.sprite, p.x - s.sprite.width / 2, dy);
     }
+  }
+
+  // The dock greeter — stands a short way out on the planks (clear of where
+  // the canoe ties up at the outer end) and waves you in. Drawn last so the
+  // buildings behind never paint over it; the dock sticks out toward the
+  // viewer, so it reads as being in front of the whole village anyway.
+  {
+    const gWorldX = edge - v.side * dockReach(v) * 0.32;
+    const g = toScreen(gWorldX, z0, cameraWorldX);
+    drawDockGreeter(ctx, g.x, g.y, time, v.seed);
   }
 }

@@ -1333,7 +1333,7 @@ export class Game {
 
     // While flying the Chasse-galerie there are no docks or town buildings
     // below — the riverbank parishes read as steeples only (drawn later).
-    drawBanks(ctx, this.flowDistance, cameraWorldX, { hideVillages: isFlying });
+    drawBanks(ctx, this.flowDistance, cameraWorldX, { hideVillages: isFlying, time: this.time });
     if (this.water) {
       this.water.render(this.time, this.flowDistance, cameraWorldX);
     } else {
