@@ -127,50 +127,65 @@ await step('lawrenceWest: fight the current 90s', () => {
 
 // --- scenario 3b: the Loup-garou, on the run into Québec City -------------
 
-await step('loup-garou: the beast lunges, then Québec City checks it', () => {
+await step('loup-garou: the demon-wolf strikes, then Québec City checks it', () => {
   if (LOUP_GAROU_TRIGGER < SEGMENT_SHAPE_OFFSET.lawrenceWest
     || LOUP_GAROU_DELIVERANCE <= LOUP_GAROU_TRIGGER) {
     throw new Error('loup-garou distances look wrong');
   }
 
-  // Dawdle through the stretch taking the hits — proves the lunges connect
-  // at all (a fight where nothing can touch you isn't a fight).
+  // Hold one speed and one line straight through — the strike is led at
+  // where a canoe holding that speed will be, so it lands (a fight where
+  // nothing can touch you isn't a fight). Hull pinned so obstacle damage
+  // doesn't muddy the "did the *maw* connect" read.
   const idle = newGame('lawrenceWest', LOUP_GAROU_TRIGGER - 15);
   let sawBeast = false;
-  let tookHit = false;
-  const hp0 = idle.game.health;
-  for (let i = 0; i < 1400; i++) {
-    idle.input.state.up = i % 10 < 6; // creep forward so it activates but slowly
+  let idleHits = 0;
+  let idleDelivered = false;
+  idle.game.handleHit = ((orig) => (e) => {
+    if (e && e.type === 'wolf') idleHits++;
+    return orig(e);
+  })(idle.game.handleHit.bind(idle.game));
+  for (let i = 0; i < 2500; i++) {
+    idle.input.state.up = true;
+    idle.game.health = 100;
     idle.game.update(1 / 30);
     if (idle.game.loupGarou.isActive()) sawBeast = true;
-    if (idle.game.health < hp0) tookHit = true;
-    if (idle.game.state === 'gameover') idle.game.start();
+    if (idle.game.flowDistance >= LOUP_GAROU_DELIVERANCE && !idle.game.loupGarou.isActive()) { idleDelivered = true; break; }
   }
   if (!sawBeast) throw new Error('the loup-garou never activated on the approach to Québec City');
-  if (!tookHit) throw new Error('drifting the whole loup-garou stretch took no damage — the lunges never connect');
+  if (!idleDelivered) throw new Error('never reached Québec City holding a straight line through the loup-garou');
+  if (idleHits === 0) throw new Error('a held straight line took no strike — the maw never connects');
 
-  // The intended counter — juke away from the beast when it crouches, keep
-  // paddling — makes Québec City without capsizing. It's an early fight; it
-  // should be survivable this cheaply.
+  // The intended counter — steer clear of the marked spot when it rears
+  // back — should shrug off almost every strike while keeping pace up the
+  // current. Hull pinned: this checks "is it dodgeable", not obstacle luck.
   const g = newGame('lawrenceWest', LOUP_GAROU_TRIGGER - 15);
+  let dodgeHits = 0;
   let delivered = false;
   let sawDeliverBanner = false;
+  g.game.handleHit = ((orig) => (e) => {
+    if (e && e.type === 'wolf') dodgeHits++;
+    return orig(e);
+  })(g.game.handleHit.bind(g.game));
   for (let i = 0; i < 4000 && !delivered; i++) {
     g.input.state.up = true;
-    const crouch = g.game.loupGarou.isLunging();
-    const away = -g.game.loupGarou.beastSide(); // dodge away from the wolf
-    const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
-    g.input.state.left = crouch ? away < 0 : err > 0.6;
-    g.input.state.right = crouch ? away > 0 : err < -0.6;
+    g.game.health = 100;
+    const strikeX = g.game.loupGarou.strikeTargetX();
+    if (strikeX != null) {
+      g.input.state.left = g.game.canoeWorldX <= strikeX;
+      g.input.state.right = g.game.canoeWorldX > strikeX;
+    } else {
+      const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
+      g.input.state.left = err > 0.6;
+      g.input.state.right = err < -0.6;
+    }
     g.game.update(1 / 30);
     if (g.game.ui.milestoneBanner.textContent.includes('beast falls back')) sawDeliverBanner = true;
-    if (g.game.state === 'gameover') {
-      throw new Error(`capsized to the loup-garou at ${g.game.flowDistance | 0} — too punishing for the first encounter`);
-    }
     if (g.game.flowDistance >= LOUP_GAROU_DELIVERANCE && !g.game.loupGarou.isActive()) delivered = true;
   }
-  if (!delivered) throw new Error('never got past the loup-garou to Québec City');
+  if (!delivered) throw new Error('a steer-away dodge never got past the loup-garou to Québec City');
   if (!sawDeliverBanner) throw new Error('no deliverance banner at Québec City');
+  if (dodgeHits > 1) throw new Error(`steering clear of the marked spot still ate ${dodgeHits} strikes — not dodgeable enough for the first encounter`);
 
   // And the wolf is inert everywhere else (its trigger is a lawrenceWest number).
   const elsewhere = newGame('fjord', 0);
