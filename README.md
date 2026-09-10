@@ -68,6 +68,28 @@ few seconds while the run is already underway.
 - Run into a dock and you'll go ashore at that village instead of taking
   damage — see "Villages" below.
 
+## The journey
+
+The full route runs Lac Saint-Jean → the Saguenay Fjord → Tadoussac → up
+the Saint Lawrence: on the Beaupré shore at nightfall a **loup-garou**
+paces the canoe and lunges from the water until the lights of Québec City
+check it (dodge it, then dock at the King's Wharf and trade furs for hull
+repairs) → on past Montréal → the Chasse-galerie flight up the Ottawa
+gorge to Gatineau, breaking Le Diable's pact at the head of it → and then
+a made-up final leg: **the Rideau**, standing in for
+the Rideau Lakes canoe corridor, from Gatineau south to **Kingston** on
+Lake Ontario. No real river runs Ottawa to Kingston — this segment is
+invented (see `src/world/river/route.js`): the channel swells into open
+lake reaches, where a Royal Navy frigate holds the water (the **British
+blockade** — run the gauntlet, thread the gap, outrun the pursuit), then
+narrows through the Cataraqui and flares wide into Kingston harbour.
+Reaching Kingston — by its wharf or just by crossing into it — **wins the
+run** ("Journey's End"), the game's only actual ending.
+
+`?start=loup-garou` drops you on the Beaupré shore just before the beast;
+`?start=rideau` at the head of the final leg; `?start=british-blockade` at
+the frigate; `?start=kingston` a short paddle from the finish.
+
 ## History
 
 This started as a full 3D (Three.js) build with a third-person camera

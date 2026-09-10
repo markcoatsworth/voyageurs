@@ -4,3 +4,4 @@ dist
 *.log
 # Local design/reference images (see .gitignore) — never part of the deploy
 *.jpg
+*.webp

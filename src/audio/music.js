@@ -301,8 +301,8 @@ export function createMusic({ onTrack } = {}) {
     // calls this unconditionally on every restart, boss fight or not, to
     // guarantee a restart never leaves it playing).
     endBossTrack() {
-      console.log('[music] endBossTrack called, special:', special);
-      if (!special) return;
+      if (!special) return; // shuffle's already back — nothing to cut short
+      debug('endBossTrack — dropping the boss track back into the shuffle');
       special = false;
       generation++;
       playCurrent();

@@ -11,6 +11,7 @@ import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
 import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
 import { TRIGGER_DISTANCE as CHASSE_GALERIE_FLOW_DISTANCE } from './bossfights/chasseGalerie.js';
 import { DIABLE_FLOW_DISTANCE } from './bossfights/diable.js';
+import { TRIGGER_DISTANCE as LOUP_GAROU_FLOW_DISTANCE } from './bossfights/loupGarou.js';
 
 const app = document.getElementById('app');
 
@@ -53,12 +54,12 @@ function normalizeStartName(s) {
 // normalizeStartName() is applied to
 // these keys too, so "british-blockade", "british blockade", and
 // "british+blockade" all work, same as every real village name already
-// does. "british-blockade" drops the canoe already within firing range of
-// the Château Gauntlet instead of needing to paddle the ~30 units past
-// Québec City's dock it'd normally take to reach it — 90 units short of the
-// ship, comfortably inside APPROACH_RANGE (190) so cannon fire starts
-// immediately, but with real room left to practice finding the gap before
-// the hull itself.
+// does. "british-blockade" drops the canoe on the Rideau already within
+// firing range of the Château Gauntlet (now on the run into Kingston — see
+// bossfights/blockade.js) instead of paddling the whole leg to reach it —
+// 90 units short of the ship, comfortably inside APPROACH_RANGE (190) so
+// cannon fire starts immediately, but with real room left to practice
+// finding the gap before the hull itself.
 //
 // "chasse-galerie" drops the canoe a few units *past* chasseGalerie.js's
 // TRIGGER_DISTANCE so the flight is already active on the first frame — the
@@ -72,10 +73,30 @@ function normalizeStartName(s) {
 // game.js's armDiableCheckpoint() (called below) hands over the pistol so
 // you can actually fight him. A capsize then respawns right here, not at
 // Montréal.
+//
+// "loup-garou" drops the canoe on the Beaupré shore a short calm paddle
+// before the beast is spotted (bossfights/loupGarou.js) — the last encounter
+// before Québec City.
+//
+// "rideau" (and "gatineau", which resolves to the same spot) drops the
+// canoe at the head of the made-up Ottawa-to-Kingston leg
+// (world/river/route.js) — past Le Diable, the storm gone, on the calm wide
+// water heading for the finish. Gatineau sits on the lawrenceWest number
+// line too (it's that segment's last waypoint), but "?start=gatineau" as a
+// plain village lookup would land just *short* of the Devil's arena and get
+// clamped straight into the fight — almost certainly not what someone
+// typing "start me at Gatineau" wants — so it's a keyword pointing at the
+// Rideau start instead, which is the same real place. "kingston" is a real
+// village name and already works the normal way (a short paddle short of
+// the finish line).
+const RIDEAU_START = { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' };
 const START_KEYWORDS = {
-  [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'lawrenceWest' },
+  [normalizeStartName('loup-garou')]: { flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
+  [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
+  [normalizeStartName('rideau')]: RIDEAU_START,
+  [normalizeStartName('gatineau')]: RIDEAU_START,
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
@@ -232,7 +253,11 @@ function resize() {
   //   - Desktop: it's a "how to play" cue — fill the sidebar column beside
   //     the game, as wide as fits without running into the minimap above.
   if (isTouchPrimary()) {
-    const key = Math.round(Math.max(44, Math.min(60, window.innerWidth * 0.12)));
+    // Bigger targets — the pad is what people are actually dodging with, and
+    // small keys were costing hits. Scales with the viewport's short side
+    // (so portrait doesn't blow it up) and stays in a thumb-friendly band.
+    const shortSide = Math.min(window.innerWidth, window.innerHeight);
+    const key = Math.round(Math.max(58, Math.min(80, shortSide * 0.22)));
     document.documentElement.style.setProperty('--key', `${key}px`);
   } else {
     const byWidth = (sidebarWidth - 24) / 3.32;

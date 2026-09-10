@@ -40,6 +40,10 @@ const SEGMENT_STYLE = {
   fjord: { outline: '#245a78', fill: '#5fa8d9', outlineWidth: 2.6, fillWidth: 1.7 },
   lawrenceEast: { outline: '#1e4f6e', fill: '#3d84b8', outlineWidth: 3.2, fillWidth: 2.2 },
   lawrenceWest: { outline: '#3a1e6e', fill: '#7d5fd9', outlineWidth: 3.2, fillWidth: 2.2 },
+  // The Rideau leg forks off lawrenceWest at Gatineau, so — like lawrenceWest
+  // vs. lawrenceEast at Tadoussac — it needs its own hue to read as a
+  // separate arm right at the split. Green, clear of the blues and purple.
+  rideau: { outline: '#1f5e3a', fill: '#41b06d', outlineWidth: 3.0, fillWidth: 2.0 },
 };
 
 const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');

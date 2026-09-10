@@ -3,12 +3,13 @@ import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEI
 import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
 import { createCanoeSprites } from '../world/canoe.js';
-import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import { createBlockade } from '../bossfights/blockade.js';
 import { createChasseGalerie, lightningFlash, BOSS_HOVER_HEIGHT } from '../bossfights/chasseGalerie.js';
 import { createDiable, DIABLE_FLOW_DISTANCE } from '../bossfights/diable.js';
+import { createLoupGarou } from '../bossfights/loupGarou.js';
 import { createWeapons } from './weapons.js';
 import { isTouchPrimary } from './touchControls.js';
 
@@ -86,10 +87,26 @@ const STEER_DAMPING = 6;
 // with no analog magnitude, so the only "sensitivity" knob is this number,
 // and dodging fireballs on a phone needs it to really move.
 const FIGHT_LATERAL_SPEED = isTouchPrimary() ? 28 : 15;
+// The Diable fight sits at the head of the Ottawa gorge, where the river
+// itself is only ~6-10 units across (path.js's Ottawa branch) — far too
+// tight to dodge aimed hellfire in. The held fight gets its own lateral
+// arena instead: this half-width, decoupled from the channel, with the
+// camera pinned dead-centre so the dodge maps straight to the screen (see
+// the isHolding() branches in update()). ~7 units = ~112px each way, so the
+// canoe can slip clear of the Devil's reach without leaving the screen.
+const DIABLE_ARENA_HALF = 7;
 // Past this point on lawrenceWest the pistol is guaranteed (update() grants
 // it if you never walked up to the Montréal gunsmith) — the Diable fight
 // ahead can't be done unarmed.
 const MONTREAL_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Montreal')?.flowDistance ?? Infinity;
+// Gatineau is the last lawrenceWest waypoint and the junction onto the
+// made-up Rideau leg (world/river/route.js) — crossing its flowDistance, or
+// casting off from its dock, drops the canoe onto that segment (see
+// enterRideau()), the same way crossing MOUTH_DISTANCE does at Tadoussac.
+const GATINEAU_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Gatineau')?.flowDistance ?? Infinity;
+// Kingston is the end of the whole journey — reaching it (by dock or by
+// simply crossing its flowDistance on the Rideau) wins the run.
+const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flowDistance ?? Infinity;
 const EDGE_MARGIN = 0.55;
 const ISLAND_HIT_MARGIN = 0.35;
 const LOG_PENALTY_SPEED = 4;
@@ -107,23 +124,19 @@ const ROCK_DAMAGE = 32;
 const LOG_DAMAGE = 12;
 const BANK_DAMAGE = 8;
 // The Château Gauntlet (bossfights/blockade.js) — a cannon splash used to cost as
-// much as a rock (30), but combined with how many volleys a real approach
-// exposes you to, that added up to dying to cannon fire before ever
-// reaching the ship — the fight's actual climax. Dropped so a run of bad
-// luck during the approach costs real health without being able to end the
-// run on its own before the hull is even reached. Reported as still too
-// punishing overall (the fight felt unbeatable even once the gap-finding
-// was understood), so dropped further from 16.
-const CANNON_DAMAGE = 11;
+// much as a rock (30), then 16, now 12. Combined with how many volleys a
+// real approach exposes you to, the higher numbers added up to the approach
+// killing runs before the ship — the fight's actual climax — was ever
+// reached. Kept low enough that a bad patch of luck on the way in costs
+// real health without ending the run on its own.
+const CANNON_DAMAGE = 12;
 // The hull itself is a solid wall, not a one-off "you clipped it" penalty
 // (see the isHullBlocking check in update()) — outside the gap you simply
 // can't push through it at all, taking this (the single hardest hit in the
 // game) on repeat every INVULN_TIME while you're pinned against it, plus a
 // heavy speed penalty that keeps sapping your paddling the whole time
-// you're in contact, same shape as BANK_PENALTY_SPEED just harder. Was 40
-// (three hits from full health was a kill) — eased alongside CANNON_DAMAGE
-// so a brief graze against the hull doesn't end the run outright.
-const SHIP_HULL_DAMAGE = 28;
+// you're in contact, same shape as BANK_PENALTY_SPEED just harder.
+const SHIP_HULL_DAMAGE = 30;
 const SHIP_HULL_PENALTY_SPEED = 6;
 // A church steeple clipped mid-flight in the Chasse-galerie. A real bite —
 // just under a cannon hit, ~8 clips (one INVULN_TIME apart) ends a full
@@ -139,6 +152,11 @@ const STEEPLE_DAMAGE = 13;
 // straying wide still bleeds you noticeably faster than a tight weave does.
 const TREE_DAMAGE = 7;
 const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
+// Le Loup-garou's lunge (bossfights/loupGarou.js). Deliberately light — this
+// is the first encounter, well before the pistol, and shouldn't be
+// punishing. ~7 clean hits to sink, so a player who eats three or four and
+// still makes Québec City can trade furs for repairs and carry on.
+const WOLF_DAMAGE = 13;
 // The Chasse-galerie's glide speed — slow and stately, so the flight up the
 // Ottawa runs several minutes and there's plenty of time to read each
 // church and slide into the next gap.
@@ -233,6 +251,10 @@ const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 const SEGMENT_FLOOR = {
   fjord: 0,
   lawrenceWest: SEGMENT_SHAPE_OFFSET.lawrenceWest,
+  // Same reasoning as lawrenceWest — the Rideau leg's numbering (see
+  // SEGMENT_SHAPE_OFFSET) sits off on its own, and there's nothing behind
+  // its start but an unrelated stretch of the shape functions' number line.
+  rideau: SEGMENT_SHAPE_OFFSET.rideau,
 };
 
 // What this.speed drifts back toward with no Up/Down input (see
@@ -276,10 +298,16 @@ export class Game {
     this.chasseGalerie = createChasseGalerie();
     this.diable = createDiable();
     this.diablePct = null; // null hides the HUD bar; his HP% while the fight runs
+    this.loupGarou = createLoupGarou(); // the night beast just before Québec City
     // Set once the Devil looms up (or by ?start=diable): a capsize then
     // respawns just before the fight with the pistol, not all the way back
     // at Montréal — see start() and update()'s consumeJustAppeared branch.
     this._diableCheckpoint = false;
+    // True from the moment the frigate is spotted (Rule Britannia cued) until
+    // the whole blockade encounter is over — approach *and* pursuit. Any way
+    // that ends (thread the gap, escape the chase, or just retreat back out
+    // of range) drops the boss track back to the shuffle exactly once.
+    this._bossTrackCued = false;
     // Canoe altitude while the Diable fight holds the river locked — driven
     // by up/down for a vertical dodge, eased back to BOSS_HOVER_HEIGHT idle.
     this._bossHoverAlt = BOSS_HOVER_HEIGHT;
@@ -340,12 +368,14 @@ export class Game {
     this.invulnTimer = SPAWN_INVULN_TIME;
     this.mouthAnnounced = false;
     this.troisRivieresAnnounced = false;
+    this.kingstonAnnounced = false;
     this.tilt = 0;
     this.paused = false;
     this.ui.pauseScreen?.classList.add('hidden');
     this.mode = 'river';
     this.currentVillage = null;
     this.blockadeCrossCurrent = 0;
+    this._bossTrackCued = false;
     this._castOffGrace = 0;
     this._castOffGraceVillage = null;
 
@@ -381,6 +411,7 @@ export class Game {
     this.obstacles.reset();
     this.blockade.reset();
     this.blockadePct = null;
+    this.loupGarou.reset();
     this.chasseGalerie.reset();
     this.diable.reset();
     this.diablePct = null;
@@ -405,6 +436,10 @@ export class Game {
     clearTimeout(this._damageFlashTimeout);
     this.ui.damageFlash.classList.remove('show');
     this.ui.gameoverScreen.classList.add('hidden');
+    // win() borrows the game-over screen with a triumphant title and its own
+    // button label — put both back for an ordinary run.
+    if (this.ui.gameoverTitle) this.ui.gameoverTitle.textContent = 'CAPSIZED';
+    if (this.ui.restartBtn) this.ui.restartBtn.textContent = 'Try Again';
     this.ui.hud.classList.remove('hidden');
     // No-ops if music hasn't been started yet (e.g. the very first launch,
     // before any keypress/click) — see music.resume()'s own guard.
@@ -416,10 +451,13 @@ export class Game {
     this.ui.hud.classList.add('hidden');
     this.ui.hudDiable?.classList.add('hidden');
     this.ui.finalStats.innerHTML = '';
-    // Losing to the Devil is losing your soul, not just the canoe.
+    // Losing to the Devil is losing your soul, not just the canoe; the beast
+    // drags you under.
     const byDiable = !!this.diable?.isActive();
+    const byWolf = !byDiable && !!this.loupGarou?.isActive();
     if (this.ui.gameoverTitle) {
-      this.ui.gameoverTitle.textContent = byDiable ? 'THE DEVIL COLLECTS' : 'CAPSIZED';
+      this.ui.gameoverTitle.textContent =
+        byDiable ? 'THE DEVIL COLLECTS' : byWolf ? 'THE BEAST TAKES YOU' : 'CAPSIZED';
     }
     this.ui.gameoverScreen.classList.remove('hidden');
     playCapsizeHorn();
@@ -488,6 +526,55 @@ export class Game {
     this.obstacles.reset();
   }
 
+  // Gatineau (the winter camp, end of the Chasse-galerie) is the junction
+  // onto the made-up Rideau leg toward Kingston — see world/river/route.js.
+  // Like Tadoussac -> lawrenceWest, this is a real segment jump onto a
+  // disjoint slice of the shape-math number line, not a resume-in-place, so
+  // both cast-off and the "just paddled past it" catch in update() route
+  // through here. Also becomes the run's checkpoint: the Devil is behind
+  // you now, so a capsize on the Rideau respawns at its start, not back at
+  // the Diable arena.
+  enterRideau() {
+    this._diableCheckpoint = false;
+    this.diable.reset();
+    this.diablePct = null;
+    this.blockade.reset(); // the blockade lives on this leg now — start it fresh
+    this.blockadePct = null;
+    this.chasseGalerie.reset();
+    this._chasseGalerieBannerShown = true; // no flight on the Rideau
+    const start = SEGMENT_SHAPE_OFFSET.rideau + 0.5;
+    this.startSegment = 'rideau';
+    this.startFlowDistance = start;
+    this.mode = 'river';
+    this.currentVillage = null;
+    this.enterSegment('rideau', start);
+    this.music?.endBossTrack();
+    this.showBanner('The storm breaks — the Rideau, and Kingston beyond');
+  }
+
+  // Reaching Kingston, whether by touching its dock or just crossing its
+  // flowDistance on the Rideau: the run is won. Borrows the game-over screen
+  // (a frozen update loop, the same restart button) with a triumphant title
+  // and stats, and points a restart back at the very put-in rather than the
+  // Rideau checkpoint — "Play Again" means the whole journey.
+  win() {
+    this.state = 'won';
+    this.ui.hud.classList.add('hidden');
+    this.ui.hudDiable?.classList.add('hidden');
+    if (this.ui.gameoverTitle) this.ui.gameoverTitle.textContent = "JOURNEY'S END";
+    this.ui.finalStats.innerHTML =
+      `You reached Kingston with ${this.furs} fur${this.furs === 1 ? '' : 's'}.`;
+    if (this.ui.restartBtn) this.ui.restartBtn.textContent = 'Play Again';
+    this.ui.gameoverScreen.classList.remove('hidden');
+    this.startSegment = 'fjord';
+    this.startFlowDistance = 0;
+    // Let the fiddle tune keep playing under the victory card — this isn't a
+    // death, so no capsize horn and no music.stop(). But if the player blitzed
+    // into Kingston while the blockade chase was still on, drop Rule Britannia
+    // back to the shuffle so it isn't what's frozen under the card.
+    this.music?.endBossTrack();
+  }
+
   leaveVillage() {
     this.mode = 'river';
     if (this.currentVillage.name === 'Tadoussac') {
@@ -497,27 +584,27 @@ export class Game {
       // resume in place like every other village's cast-off below).
       this.enterSegment('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
       this.showBanner('Paddling upriver toward Québec City — fight the current');
+    } else if (this.currentVillage.name === 'Gatineau') {
+      this.enterRideau();
     } else {
-      // Push just past the dock's own trigger zone — otherwise the instant
-      // control returns to the canoe, it's still sitting in the exact spot
-      // that triggered docking, and the very next frame docks it again.
-      const clearance = dockHitZ(this.currentVillage) + 0.5;
+      // Re-boarding drops the canoe right where it triggered the dock. Two
+      // things then push it straight back in: on lawrenceWest the current
+      // itself runs backward (upriver, toward the dock), and everywhere a
+      // "down" key still held from walking down to the re-board zone reverses
+      // the canoe for a beat. So on *every* cast-off: put real separation
+      // between the canoe and the dock, and ignore that one dock for a few
+      // seconds (see update()'s getDockHit check) — long enough to paddle
+      // clear or let go of the key — instead of an instant loop back into
+      // the same village.
+      const past = dockHitZ(this.currentVillage);
       if (this.segment === 'lawrenceWest') {
-        // The current here runs *backward* (upriver, toward the dock), so a
-        // half-unit nudge is dragged straight back into the trigger zone
-        // before the player can react — worst at Montreal and Québec City,
-        // whose docks reach most of the way across the channel, so steering
-        // clear laterally doesn't help either. Give the canoe real upstream
-        // separation plus forward momentum, and ignore this one dock for a
-        // few seconds (see update()'s getDockHit check) so casting off isn't
-        // an instant loop back into the same village.
-        this.flowDistance = this.currentVillage.flowDistance + dockHitZ(this.currentVillage) + 6;
-        this.speed = Math.max(this.speed, BASE_SPEED);
-        this._castOffGraceVillage = this.currentVillage;
-        this._castOffGrace = 3;
+        this.flowDistance = this.currentVillage.flowDistance + past + 6;
+        this.speed = Math.max(this.speed, BASE_SPEED); // forward momentum vs. the backward current
       } else {
-        this.flowDistance = this.currentVillage.flowDistance + clearance;
+        this.flowDistance = this.currentVillage.flowDistance + past + 3;
       }
+      this._castOffGraceVillage = this.currentVillage;
+      this._castOffGrace = 3;
       this.world.distance = this.flowDistance;
       this.showBanner('Casting off');
     }
@@ -545,6 +632,11 @@ export class Game {
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'diable') {
       this.takeDamage(entry.damage ?? 18);
+      this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'wolf') {
+      // A lunge that connects knocks the canoe back a beat, then it springs off.
+      this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - 3.5);
+      this.takeDamage(WOLF_DAMAGE);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'tree') {
       this.takeDamage(TREE_DAMAGE);
@@ -756,7 +848,7 @@ export class Game {
     // the world-X check (this frame's isn't computed until just below) is a
     // one-frame-stale approximation, same tradeoff the bank check already
     // makes implicitly — lateralOffset can't move far in one frame.
-    if (this.segment === 'lawrenceWest') {
+    if (this.segment === 'rideau') {
       const tentativeWorldX = centerX(proposedFlowDistance) + this.lateralOffset;
       if (this.blockade.isHullBlocking(proposedFlowDistance, tentativeWorldX)) {
         proposedFlowDistance = this.flowDistance; // held in place, not pushed through
@@ -826,8 +918,11 @@ export class Game {
     const waterEdge = widthAt(this.flowDistance) / 2 - EDGE_MARGIN;
     // In the air the hard clamp sits a hair past the water so there's no
     // invisible wall at the edge — but that shallow strip is the bank
-    // treetops (see below), not free sky.
-    const half = waterEdge + (flying ? this.chasseGalerie.lateralMargin() : 0);
+    // treetops (see below), not free sky. The held Diable fight ignores the
+    // channel entirely and uses its own wide arena (DIABLE_ARENA_HALF).
+    const half = this.diable.isHolding()
+      ? DIABLE_ARENA_HALF
+      : waterEdge + (flying ? this.chasseGalerie.lateralMargin() : 0);
     const proposed = this.lateralOffset + this.lateralVX * dt;
     if (proposed > half || proposed < -half) {
       this.lateralOffset = clamp(proposed, -half, half);
@@ -842,10 +937,11 @@ export class Game {
     // every INVULN_TIME you're in there, plus a shove back toward the
     // channel — so the flight stays fenced to the water even though you're
     // airborne.
-    if (flying && Math.abs(this.lateralOffset) > waterEdge) {
+    if (flying && !this.diable.isHolding() && Math.abs(this.lateralOffset) > waterEdge) {
       this.lateralVX -= Math.sign(this.lateralOffset) * TREE_PUSHBACK * dt;
-      // During the Diable fight the treetops still fence you into the channel
-      // (the pushback), but they don't bite — dodging his fire is enough.
+      // Outside the held fight, the treetops still fence and bite (dodging
+      // Diable's fire while he's holding is challenge enough — the arena is
+      // its own wide space, not the gorge channel).
       if (!this.diable.isActive()) this.handleHit({ type: 'tree' });
     }
 
@@ -856,12 +952,20 @@ export class Game {
     // nears the edge of the canvas (see CAMERA_DEAD_ZONE's own comment).
     const lateralExcess = this.lateralOffset - clamp(this.lateralOffset, -CAMERA_DEAD_ZONE, CAMERA_DEAD_ZONE);
     this.cameraLateralPull = lerp(this.cameraLateralPull, lateralExcess, CAMERA_LATERAL_SMOOTH);
-    this.cameraWorldX = this.cameraCenterX + this.cameraLateralPull;
-    // The hard backstop (see its comment above) — clamps how far the canoe's
-    // final on-screen position can end up from center, independent of
-    // whatever the two lerps above are still catching up on.
-    const onscreenOffset = clamp(this.canoeWorldX - this.cameraWorldX, -CAMERA_MAX_ONSCREEN_OFFSET, CAMERA_MAX_ONSCREEN_OFFSET);
-    this.cameraWorldX = this.canoeWorldX - onscreenOffset;
+    if (this.diable.isHolding()) {
+      // Arena fight: pin the camera to the channel centre so the dodge maps
+      // one-to-one to screen position — none of the follow lag or the
+      // on-screen-offset backstop below, both of which would drag the canoe
+      // back toward centre and fight the player's input.
+      this.cameraWorldX = this.cameraCenterX;
+    } else {
+      this.cameraWorldX = this.cameraCenterX + this.cameraLateralPull;
+      // The hard backstop (see its comment above) — clamps how far the canoe's
+      // final on-screen position can end up from center, independent of
+      // whatever the two lerps above are still catching up on.
+      const onscreenOffset = clamp(this.canoeWorldX - this.cameraWorldX, -CAMERA_MAX_ONSCREEN_OFFSET, CAMERA_MAX_ONSCREEN_OFFSET);
+      this.cameraWorldX = this.canoeWorldX - onscreenOffset;
+    }
     this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
 
     // Diable fight: the river is locked, but up/down move the canoe
@@ -920,8 +1024,36 @@ export class Game {
       (this._castOffGrace > 0 && dockHit === this._castOffGraceVillage) ||
       this.chasseGalerie.isActive();
     if (dockHit && !suppressed) {
+      // Kingston's dock is the finish line, not a village to walk around.
+      if (dockHit.name === 'Kingston') {
+        this.win();
+        return;
+      }
       this.enterVillage(dockHit);
       return;
+    }
+
+    // Gatineau is the junction onto the Rideau (world/river/route.js). Same
+    // shape as the mouth crossing just below: if the canoe reaches Gatineau's
+    // flowDistance without steering into its dock, it rolls straight on onto
+    // the Rideau leg toward Kingston.
+    if (this.segment === 'lawrenceWest' && this.flowDistance >= GATINEAU_FLOW_DISTANCE) {
+      this.enterRideau();
+      return;
+    }
+
+    // Journey's end — reaching Kingston on the Rideau wins the run. An
+    // approach banner first (the harbour is already opening up around you by
+    // now — see path.js's rideauWidthAt), then the win a short stretch later.
+    if (this.segment === 'rideau') {
+      if (!this.kingstonAnnounced && this.flowDistance >= KINGSTON_FLOW_DISTANCE - 70) {
+        this.kingstonAnnounced = true;
+        this.showBanner('KINGSTON — Fort Frontenac ahead');
+      }
+      if (this.flowDistance >= KINGSTON_FLOW_DISTANCE) {
+        this.win();
+        return;
+      }
     }
 
     // Crossing the mouth always continues upriver toward Québec City now —
@@ -997,10 +1129,24 @@ export class Game {
       !airborne,
     );
 
-    // Only meaningful on lawrenceWest — SHIP_FLOW_DISTANCE is a number on
-    // that segment's own line, and could coincidentally fall in range of an
-    // unrelated flowDistance on the fjord or lawrenceEast otherwise.
+    // Le Loup-garou — the night beast pacing the Beaupré shore, just before
+    // Québec City. lawrenceWest only, same reasoning as the blockade below:
+    // TRIGGER_DISTANCE is a number on this segment's own line.
     if (this.segment === 'lawrenceWest') {
+      this.loupGarou.update(dt, this.flowDistance, this.canoeWorldX, effectiveSpeed, (entry) => this.handleHit(entry));
+      if (this.loupGarou.consumeJustSpotted()) {
+        this.showBanner('LOUP-GAROU');
+        playWolfHowl();
+      }
+      if (this.loupGarou.consumeJustDelivered()) {
+        this.showBanner('The lights of Québec City — the beast falls back');
+      }
+    }
+
+    // Only meaningful on the Rideau — SHIP_FLOW_DISTANCE is a number on that
+    // segment's own line (see bossfights/blockade.js), and could coincidentally
+    // fall in range of an unrelated flowDistance on another segment otherwise.
+    if (this.segment === 'rideau') {
       const blockade = this.blockade.update(dt, this.flowDistance, this.canoeWorldX, effectiveSpeed, (entry) => this.handleHit(entry));
       this.blockadePct = blockade.active ? blockade.progressPct : null;
       this.blockadeCrossCurrent = blockade.crossCurrent || 0;
@@ -1013,9 +1159,21 @@ export class Game {
         this.showBanner('BRITISH BLOCKADE');
         this.music?.start(); // Ensure music system is initialized
         this.music?.playBossTrack();
+        this._bossTrackCued = true;
       }
       if (this.blockade.consumeJustCleared()) {
-        // Music continues through chase - don't stop it here
+        // Past the frigate itself — drop Rule Britannia back to the normal
+        // shuffle here rather than blaring it through the whole pursuit. The
+        // chase is a footnote now, not the boss.
+        this.music?.endBossTrack();
+      }
+      // Catch-all: the instant the encounter is no longer active at all —
+      // approach abandoned, chase escaped, whatever — make sure the boss
+      // track isn't still going. endBossTrack() is a no-op if the shuffle's
+      // already back, so the _bossTrackCued flag keeps this to one real call.
+      if (this._bossTrackCued && !blockade.active) {
+        this.music?.endBossTrack();
+        this._bossTrackCued = false;
       }
       if (this.blockade.consumeJustStartedChase()) {
         this.showBanner('PURSUIT');
@@ -1061,8 +1219,36 @@ export class Game {
     // The Diable fight sits at full storm regardless of where along the fade
     // curve its flowDistance happens to land — his darkness, held.
     const storm = this.diable.isActive() ? 1 : this.chasseGalerie.stormIntensityAt(this.flowDistance);
+    // Cold-blue nightfall for the Loup-garou stretch before Québec City —
+    // its own thing, gentler than the Devil's hellstorm (this is early). Only
+    // ever non-zero on lawrenceWest; a pure function of position.
+    const night = this.segment === 'lawrenceWest'
+      ? this.loupGarou.nightIntensity(this.flowDistance) : 0;
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Night sky for the Loup-garou stretch — a deep cold blue-black with a
+    // scatter of faint stars. No moon: the beast is a ghost and casts its
+    // own pale light (see loupGarou.draw).
+    if (night > 0) {
+      const g = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+      g.addColorStop(0, '#04060e');
+      g.addColorStop(0.55, '#080e1a');
+      g.addColorStop(1, '#101a2c');
+      ctx.save();
+      ctx.globalAlpha = 0.84 * night;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      for (let i = 0; i < 46; i++) {
+        const sx = (i * 79.7 + 13) % CANVAS_WIDTH;
+        const sy = (i * 43.3 + 7) % (CANVAS_HEIGHT * 0.72);
+        const tw = 0.4 + 0.6 * ((Math.sin(this.time * 0.7 + i * 2.3) + 1) / 2);
+        ctx.globalAlpha = night * (i % 7 ? 0.4 : 0.75) * tw;
+        ctx.fillStyle = i % 7 ? '#9fb2ce' : '#dfe8f5';
+        ctx.fillRect(sx, sy, i % 7 ? 1 : 2, i % 7 ? 1 : 2);
+      }
+      ctx.restore();
+    }
 
     // Hellstorm sky, faded in by `storm` — all but pure black overhead with
     // the faintest dead-violet cast, sinking to a low, smothered smear of
@@ -1107,28 +1293,97 @@ export class Game {
       ctx.restore();
     }
 
+    // Loup-garou night — drown the scene to near-black so the whole frame is
+    // the moon and a silhouette (see the reference art). The moon (drawn
+    // below, behind the beast) is what lifts it back out.
+    if (night > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.86 * night;
+      ctx.fillStyle = '#03040a';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.globalAlpha = 0.28 * night; // a cold blue cast over it
+      ctx.fillStyle = '#0a1836';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+
     // Airborne in the Chasse-galerie, the river below is just backdrop —
     // don't draw the rocks, logs, pelts, whitewater or whales the canoe is
     // flying over. (They still can't touch it either — see obstacles.update
     // below.) Only the steeples on the banks matter up there.
     if (!isFlying) {
       drawCurrentEffects(ctx, this.time, this.flowDistance, this.rapids);
-      drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
+      // Belugas are a Tadoussac-estuary sight — the wide Rideau Lake reaches
+      // and Kingston harbour are inland fresh water, so no whales there even
+      // where the channel opens past the beluga width threshold.
+      if (this.segment !== 'rideau') {
+        drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
+      }
       this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     }
-    // Same lawrenceWest-only guard as the update() call above.
-    if (this.segment === 'lawrenceWest') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+
+    // Loup-garou night: a final wash over the obstacles/whales too, so
+    // nothing on the water stays lit — the frame is the dark and the ghost.
+    if (night > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.55 * night;
+      ctx.fillStyle = '#03040a';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+
+    // Same segment guards as the update() calls above.
+    if (this.segment === 'rideau') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+    if (this.segment === 'lawrenceWest') {
+      // The moon for the Loup-garou night — hung high and mostly off the top
+      // of the frame (the far distance up-river reads as the horizon/sky), so
+      // it's a light in the sky, not a disc sitting on the river. Its glow
+      // washes down over the dark water; the beast's ears and wings cut into
+      // its lower edge.
+      if (night > 0) {
+        const mx = CANVAS_WIDTH * 0.5;
+        const my = 2;
+        ctx.save();
+        ctx.globalAlpha = night;
+        const glow = ctx.createRadialGradient(mx, my, 10, mx, my, 150);
+        glow.addColorStop(0, 'rgba(198, 214, 238, 0.5)');
+        glow.addColorStop(0.35, 'rgba(120, 150, 194, 0.22)');
+        glow.addColorStop(1, 'rgba(120, 150, 194, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.fillStyle = '#e4e9f2';
+        ctx.beginPath();
+        ctx.arc(mx, my, 62, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(148, 166, 196, 0.3)'; // craters on the visible lower arc
+        for (const [dx, dy, r] of [[-20, 34, 10], [18, 42, 12], [-6, 52, 7], [30, 26, 6], [-34, 40, 5]]) {
+          ctx.beginPath();
+          ctx.arc(mx + dx, my + dy, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(6, 8, 14, 0.9)'; // a couple of bats
+        for (let i = 0; i < 3; i++) {
+          const bx = mx - 84 + ((this.time * 14 + i * 110) % 220);
+          const by = 30 + Math.sin(this.time * 1.4 + i * 2) * 12 + i * 8;
+          const bs = 3 + (i % 2);
+          ctx.beginPath();
+          ctx.moveTo(bx - bs * 2, by);
+          ctx.quadraticCurveTo(bx - bs, by - bs, bx, by);
+          ctx.quadraticCurveTo(bx + bs, by - bs, bx + bs * 2, by);
+          ctx.quadraticCurveTo(bx + bs, by + bs * 0.6, bx, by + bs * 0.3);
+          ctx.quadraticCurveTo(bx - bs, by + bs * 0.6, bx - bs * 2, by);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      this.loupGarou.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+    }
     // Draw the Chasse-galerie churches cutting into the gorge
     if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX);
 
     if (this.canoeVisible !== false) {
       const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;
       const canoeScreenX = CANOE_SCREEN_X + (this.canoeWorldX - cameraWorldX) * PIXELS_PER_UNIT;
-
-      // Debug: log if canoe is rendering off-screen during lawrenceWest
-      if (this.segment === 'lawrenceWest' && this.blockadePct !== null) {
-        console.log('[RENDER] Canoe screen pos:', canoeScreenX.toFixed(1), 'World pos:', this.canoeWorldX.toFixed(1), 'Camera:', cameraWorldX.toFixed(1));
-      }
 
       // Flying effects (Chasse-galerie) — everything scales with `lift`, so
       // the canoe rises, tilts and lights its trail gradually on take-off.
@@ -1197,8 +1452,6 @@ export class Game {
 
       ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
       ctx.restore();
-    } else if (this.segment === 'lawrenceWest' && this.blockadePct !== null) {
-      console.log('[RENDER] Canoe NOT visible! canoeVisible:', this.canoeVisible);
     }
 
     // Draw bullets

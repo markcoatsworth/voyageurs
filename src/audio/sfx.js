@@ -195,6 +195,39 @@ export function playDiableRoar() {
 
 // His death: the roar in reverse — a rising shriek that cuts out hard, then
 // a last low collapse.
+// Le Loup-garou (bossfights/loupGarou.js). A howl the moment the beast is
+// spotted: two reedy voices a fifth apart that glide up, hold, then a long
+// slide back down — thinner and higher than the Diable growl, more lonely
+// than menacing. Same synth-it approach as everything else here.
+export function playWolfHowl() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  for (const [mult, level] of [[1, 1], [1.5, 0.55], [2.01, 0.22]]) {
+    const osc = c.createOscillator();
+    osc.type = 'sawtooth';
+    const f = 300 * mult;
+    osc.frequency.setValueAtTime(f * 0.72, t0);
+    osc.frequency.linearRampToValueAtTime(f, t0 + 0.45);
+    osc.frequency.setValueAtTime(f, t0 + 1.05);
+    osc.frequency.exponentialRampToValueAtTime(f * 0.5, t0 + 1.95);
+
+    const filter = c.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 850;
+    filter.Q.value = 3.5;
+
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.16 * level, t0 + 0.3);
+    gain.gain.setValueAtTime(0.16 * level, t0 + 1.15);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.0);
+
+    osc.connect(filter).connect(gain).connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + 2.05);
+  }
+}
+
 export function playDiableDefeat() {
   const c = getCtx();
   const t0 = c.currentTime;

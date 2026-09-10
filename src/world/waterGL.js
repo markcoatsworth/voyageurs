@@ -13,7 +13,7 @@
 // JS function to the GPU — keep the two in sync if you retune the course.
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT, AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
-import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction } from './river/path.js';
+import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './river/path.js';
 
 const VERT_SRC = `
 attribute vec2 a_pos;
@@ -48,6 +48,8 @@ const float BRAID_PERIOD = ${BRAID_PERIOD.toFixed(2)};
 const float BRAID_LENGTH = ${BRAID_LENGTH.toFixed(2)};
 const float RAPIDS_PERIOD = ${RAPIDS_PERIOD.toFixed(2)};
 const float RAPIDS_LENGTH = ${RAPIDS_LENGTH.toFixed(2)};
+const float RIDEAU_OFFSET = ${SEGMENT_SHAPE_OFFSET.rideau.toFixed(2)};
+const float RIDEAU_SPAN = ${RIDEAU_SPAN_DISTANCE.toFixed(2)};
 
 // --- river course, mirrors world/river/path.js — keep in sync by hand ---
 float centerX(float d) {
@@ -58,7 +60,30 @@ float estuaryProgress(float d) {
   // itself sits) — see world/river/path.js's comment on why those are different.
   return clamp(d / 1700.0, 0.0, 1.0);
 }
+// Mirrors world/river/path.js's rideauWidthAt() — the made-up Ottawa-to-
+// Kingston leg's bespoke profile (river -> Rideau Lake reaches -> Cataraqui
+// narrows -> Kingston harbour). Must stay >= the JS version everywhere:
+// terrain.js draws the banks from the JS one and this shader only fills the
+// hole they leave, so a narrower shader river would show a dry gap.
+float rideauWidthAt(float d) {
+  float frac = clamp((d - RIDEAU_OFFSET) / RIDEAU_SPAN, 0.0, 1.0);
+  float HARBOUR_FROM = 0.84;
+  float trend;
+  if (frac < HARBOUR_FROM) {
+    float p = frac / HARBOUR_FROM;
+    trend = 12.0 + 30.0 * sin(3.14159265 * p);
+  } else {
+    float p = (frac - HARBOUR_FROM) / (1.0 - HARBOUR_FROM);
+    float eased = p * p * (3.0 - 2.0 * p);
+    trend = 12.0 + (48.0 + 6.0 - 12.0) * eased;
+  }
+  float wobble = sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.13) * 0.8;
+  return clamp(trend + wobble, 6.5, 62.0);
+}
 float widthAt(float d) {
+  // The Rideau leg — checked first, same as the JS widthAt(), because its
+  // offset sits past everything else on the shared number line.
+  if (d >= RIDEAU_OFFSET) return rideauWidthAt(d);
   // Cubic ease-in, mirroring world/river/path.js's widthAt() — see its comment
   // for why this isn't just a linear ramp to ESTUARY_WIDTH.
   float t = estuaryProgress(d);

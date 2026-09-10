@@ -1,29 +1,33 @@
-// The Château Gauntlet — a scripted, one-time encounter shortly after
-// leaving Québec City: a Royal Navy frigate holding a lane in the channel,
-// firing on the canoe as it closes the distance. No new controls at all —
-// the whole fight is dodging (steering) and closing the distance (the same
-// up/down speed control the whole river already uses). There's no way to
-// attack it: this is deliberately the bottom of a "weapons unlock further
-// upriver" arc (see the design discussion this came out of), so winning
-// means surviving and getting past, not defeating the ship.
+// The Château Gauntlet — a scripted, one-time encounter on the wide Rideau
+// Lake reaches, the last real fight before Kingston: a Royal Navy frigate
+// holding a lane in the channel, firing on the canoe as it closes the
+// distance. No new controls at all — the whole fight is dodging (steering)
+// and closing the distance (the same up/down speed control the whole river
+// already uses). There's no way to attack it: this is deliberately the
+// bottom of a "weapons unlock further along" arc (see the design discussion
+// this came out of), so winning means surviving and getting past, not
+// defeating the ship.
 //
-// Positioned relative to Québec City's own flowDistance rather than a fixed
-// number, so it automatically follows if that village's position (or the
-// segment's shape offset) ever changes again — one lookup at module load,
-// not duplicated geography.
+// It used to sit just past Québec City; it was moved onto the run into
+// Kingston (a British naval station in this era — the frigate fits the
+// harbour approach better than the St. Lawrence capital). Québec City will
+// get its own encounter later. Positioned relative to Kingston's own
+// flowDistance rather than a fixed number, so it follows if that village's
+// position (or the Rideau segment's shape offset) ever changes — one lookup
+// at module load, not duplicated geography.
 import { centerX, widthAt } from '../world/river/path.js';
 import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../shared/config.js';
 import { VILLAGES } from '../world/villages.js';
 
-const QUEBEC_CITY = VILLAGES.find((v) => v.name === 'Quebec City');
-// How far past the capital the frigate sits — far enough that casting off
-// doesn't drop the player straight into cannon fire, close enough that it's
-// clearly part of leaving Québec City, not a random later encounter. Needs
-// to clear APPROACH_RANGE below plus real room to spare — see that
-// constant's own comment for why it's much bigger than it looks like it
-// should be.
-const SHIP_D_OFFSET = 230;
-export const SHIP_FLOW_DISTANCE = QUEBEC_CITY.flowDistance + SHIP_D_OFFSET;
+const KINGSTON = VILLAGES.find((v) => v.name === 'Kingston');
+// How far before Kingston the frigate sits. Tuned so the gauntlet
+// (APPROACH_RANGE of cannon fire) and the chase (CHASE_DISTANCE) both fall
+// in the open Rideau Lake water *between* two riverbank towns — a village
+// dock landing inside the approach corridor would let the player walk
+// ashore mid-fight — with a real stretch of clear channel left before the
+// harbour narrows toward the arrival.
+const SHIP_D_OFFSET = 700;
+export const SHIP_FLOW_DISTANCE = KINGSTON.flowDistance - SHIP_D_OFFSET;
 
 // How far before the ship cannon fire starts, and how much room the player
 // gets to relocate across the channel to find the gap. This looks huge for
@@ -65,7 +69,7 @@ const CLEAR_MARGIN = 3; // how far past the ship counts as "in the clear"
 // CANNON_DAMAGE in game.js) — still a real, escalating fight, just not one
 // that can end the run before its actual climax.
 const VOLLEY_INTERVAL_FAR = 2.3;
-const VOLLEY_INTERVAL_NEAR = 0.75;
+const VOLLEY_INTERVAL_NEAR = 0.95;
 const SPLASH_WARN_TIME = 0.65; // telegraph before it's dangerous
 const SPLASH_HOT_TIME = 0.3; // the actual damaging window
 const SPLASH_FADE_TIME = 0.15;
@@ -183,9 +187,9 @@ export function createBlockade() {
     update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit) {
       const distToShip = SHIP_FLOW_DISTANCE - playerFlowDistance;
 
-      // If player starts well past the entire blockade+chase range (e.g., via
-      // ?start=batiscan), auto-resolve it as if they already escaped cleanly —
-      // prevents chase phase from activating when starting downstream.
+      // If the player starts well past the entire blockade+chase range (e.g.
+      // ?start=kingston), auto-resolve it as if they'd already escaped cleanly
+      // — stops the chase phase activating from a downstream spawn.
       const wellPastBlockade = playerFlowDistance > SHIP_FLOW_DISTANCE + CHASE_DISTANCE + 50;
       if (wellPastBlockade && !resolved) {
         resolved = true;
@@ -224,7 +228,7 @@ export function createBlockade() {
           const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
           volleyTimer -= dt;
           if (volleyTimer <= 0) {
-            const shots = progress > 0.85 ? 3 : progress > 0.5 ? 2 : 1;
+            const shots = progress > 0.9 ? 3 : progress > 0.55 ? 2 : 1;
             const spread = SPLASH_SPREAD_MIN + (SPLASH_SPREAD_MAX - SPLASH_SPREAD_MIN) * progress;
             for (let i = 0; i < shots; i++) {
               // Evenly-spaced lanes across the fan, not independent random
@@ -280,24 +284,26 @@ export function createBlockade() {
       }
       hazards = hazards.filter((h) => h.t < SPLASH_WARN_TIME + SPLASH_HOT_TIME + SPLASH_FADE_TIME);
 
-      // Chase phase: battleship pursuing from behind
+      // Chase phase: gunboat pursuing from behind
       if (chasePhase) {
-        // Ship advances at CHASE_SHIP_SPEED
         chaseShipDistance += CHASE_SHIP_SPEED * dt;
+        // It hounds from behind — never let it overtake and sail off ahead
+        // of the canoe, which is exactly what a boat slower than
+        // CHASE_SHIP_SPEED (anyone on mobile) would otherwise watch happen.
+        chaseShipDistance = Math.min(chaseShipDistance, playerFlowDistance - 4);
 
-        // Check if player escaped (got far enough ahead)
-        const leadDistance = playerFlowDistance - chaseShipDistance;
-        console.log('[CHASE] Player:', playerFlowDistance.toFixed(1), 'Chase ship:', chaseShipDistance.toFixed(1), 'Lead:', leadDistance.toFixed(1));
-
-        if (leadDistance > CHASE_DISTANCE) {
+        // Escape is a fixed distance made good past the frigate's own line,
+        // not a lead over a pursuer that can be faster than you — the old
+        // lead check never resolved for a slower boat, so the fight (and its
+        // music) ran forever.
+        const madeGood = playerFlowDistance - SHIP_FLOW_DISTANCE - CLEAR_MARGIN;
+        if (madeGood > CHASE_DISTANCE) {
           chasePhase = false;
           chaseEscaped = true;
           console.log('[CHASE] Escaped!');
         }
-        // No cannon fire during chase - pure pursuit/escape mechanic
 
-        // Return chase progress (how far ahead you are vs how far needed)
-        const chaseProgressPct = Math.min(100, (leadDistance / CHASE_DISTANCE) * 100);
+        const chaseProgressPct = clamp((madeGood / CHASE_DISTANCE) * 100, 0, 100);
         return { active: true, progressPct: chaseProgressPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance };
       }
 
@@ -305,7 +311,7 @@ export function createBlockade() {
       const progressPct = distToShip <= 0 ? 100 : (1 - clamp(distToShip / APPROACH_RANGE, 0, 1)) * 100;
       // Cross-current pushes you away from the gap side, getting stronger as you approach
       const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
-      const crossCurrent = -gapSide * progress * 7; // negative gap side means push away from gap
+      const crossCurrent = -gapSide * progress * 5.5; // negative gap side means push away from gap
       return { active: true, progressPct, boomCount, crossCurrent, gapSide };
     },
 
