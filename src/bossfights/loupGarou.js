@@ -43,17 +43,20 @@ const BASE_Y = 118;        // screen y of the haunch line (the moon sits behind)
 
 // Strike cadence and reach, eased from the start of the stretch to the end.
 // Big deliberate boss, not a yappy dog — a few weighty strikes, each with a
-// readable wind-up (the head rearing back) and a generous dodge.
-const FIRST_STRIKE_DELAY = 1.1;
-const STRIKE_INTERVAL_FAR = 2.1;
-const STRIKE_INTERVAL_NEAR = 1.4;
+// readable wind-up (the head rearing back) and a generous dodge. Tightened
+// once from 2.1/1.4 cadence and 1.25/0.95 wind-up: the fight read a shade too
+// easy, so the strikes come a touch quicker and land a touch sooner — still
+// well inside "read it and steer aside," just less forgiving of dawdling.
+const FIRST_STRIKE_DELAY = 1.05;
+const STRIKE_INTERVAL_FAR = 2.0;
+const STRIKE_INTERVAL_NEAR = 1.3;
 // The wind-up: the head rears back and the landing ring is marked on the
 // water — aimed where the canoe will be if it holds this speed and line.
 // The whole wind-up is your window to leave the ring by *any* means:
 // steer aside, brake short, or gun it past. Do nothing and the jaws find
 // you (light chip damage — first encounter).
-const WINDUP_FAR = 1.25;
-const WINDUP_NEAR = 0.95;
+const WINDUP_FAR = 1.2;
+const WINDUP_NEAR = 0.9;
 const HOT_TIME = 0.3;      // jaws-down: the damaging window
 const RECOVER_TIME = 0.34; // hauling the head back up to the hover
 const HIT_DX = 2.0;        // maw half-width — a second of steering clears it
