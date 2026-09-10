@@ -326,15 +326,48 @@ function drawGhostWolf(ctx, p) {
   ctx.fillRect(cx - hw * 1.3, cy - hw, hw * 2.6, hw * 1.9);
   ctx.globalCompositeOperation = 'source-over';
 
-  // --- wide spectral ruff behind the head — soft blobs spreading sideways,
-  // this is the "wide"
-  ctx.fillStyle = `rgba(118, 152, 202, ${0.09 * A})`;
+  // --- wings: swept-back leathery membranes spreading wide off the
+  // shoulders — this is the "wide", and what makes it read as a flying thing.
+  // Anchored near the body centre so they stay up and beating while the head
+  // lunges out on a strike.
+  const wa = { x: lerp(cx, head.x, 0.4), y: lerp(cy - 4, head.y, 0.35) };
   for (const s of [-1, 1]) {
-    for (let i = 0; i < 4; i++) {
-      const dr = Math.sin(clock * 1.1 + i * 1.5 + s) * 6;
-      haze(ctx, head.x + s * (22 + i * 22), head.y - 4 - i * 3 + dr, 27 - i * 4, 19 - i * 3, s * 0.22);
-    }
+    const beat = Math.sin(clock * 2.3 + s * 0.4) * 6;
+    const root = { x: wa.x + s * 10, y: wa.y - 2 };
+    const wristX = wa.x + s * (hw * 0.7);
+    const wristY = wa.y - 20 + beat;
+    const tipX = wa.x + s * (hw * 1.02);
+    const tipY = wa.y + 6 - beat * 0.5;
+    ctx.fillStyle = `rgba(40, 58, 92, ${0.28 * A})`;
+    ctx.beginPath();
+    ctx.moveTo(root.x, root.y);
+    ctx.quadraticCurveTo(wa.x + s * hw * 0.4, wa.y - 30 + beat, wristX, wristY);
+    ctx.lineTo(tipX, tipY);
+    // scalloped trailing edge back to the shoulder
+    ctx.quadraticCurveTo(wa.x + s * hw * 0.55, wa.y + 18, wa.x + s * hw * 0.32, wa.y + 12);
+    ctx.quadraticCurveTo(wa.x + s * hw * 0.18, wa.y + 20, root.x + s * 4, root.y + 16);
+    ctx.closePath();
+    ctx.fill();
+    // finger-struts + glowing leading edge
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(120, 170, 220, ${0.3 * A})`;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(root.x, root.y);
+    ctx.quadraticCurveTo(wa.x + s * hw * 0.4, wa.y - 30 + beat, tipX, tipY);
+    ctx.moveTo(wristX, wristY);
+    ctx.lineTo(wa.x + s * hw * 0.5, wa.y + 14);
+    ctx.moveTo(wristX, wristY);
+    ctx.lineTo(wa.x + s * hw * 0.72, wa.y + 16);
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
   }
+
+  // --- neck: a dark sinew from the winged body out to the skull, so the
+  // head reads as lunging on a neck rather than floating free
+  ctx.fillStyle = `rgba(9, 13, 22, ${0.5 * A})`;
+  wisp(ctx, wa.x, wa.y + 4, head.x, head.y, (wa.x + head.x) / 2, (wa.y + head.y) / 2 - 4, 11);
+
   // rising tendrils off the crown
   ctx.fillStyle = `rgba(134, 168, 212, ${0.08 * A})`;
   for (let i = 0; i < 5; i++) {
@@ -373,23 +406,34 @@ function drawGhostWolf(ctx, p) {
   const contour = () => {
     ctx.beginPath();
     ctx.moveTo(-30, -6);                       // left ear outer base
-    ctx.lineTo(-25, -42);                      // left ear tip
-    ctx.lineTo(-12, -15);                      // left ear inner notch
-    ctx.quadraticCurveTo(0, -21, 12, -15);     // brow
-    ctx.lineTo(25, -42);                       // right ear tip
+    ctx.lineTo(-25, -44);                      // left ear tip
+    ctx.lineTo(-12, -14);                      // left ear inner notch
+    ctx.lineTo(-5, -18);                       // brow, dipped low in the middle
+    ctx.lineTo(5, -18);                        //   — a scowl, not a smooth arc
+    ctx.lineTo(12, -14);
+    ctx.lineTo(25, -44);                       // right ear tip
     ctx.lineTo(30, -6);                        // right ear outer base
-    ctx.quadraticCurveTo(25, 8, 15, 18);       // right cheek
-    ctx.quadraticCurveTo(12, 32, 6, 42 + jr);  // to the nose
-    ctx.lineTo(-6, 42 + jr);
-    ctx.quadraticCurveTo(-12, 32, -15, 18);
-    ctx.quadraticCurveTo(-25, 8, -30, -6);
+    ctx.quadraticCurveTo(26, 8, 15, 18);       // right cheek
+    ctx.quadraticCurveTo(13, 32, 7, 42 + jr);  // to the nose
+    ctx.lineTo(-7, 42 + jr);
+    ctx.quadraticCurveTo(-13, 32, -15, 18);
+    ctx.quadraticCurveTo(-26, 8, -30, -6);
     ctx.closePath();
   };
 
-  ctx.fillStyle = `rgba(150, 182, 222, ${0.12 * A})`;
+  // a solid dark body under the glow — it has mass, it isn't only light
+  ctx.fillStyle = `rgba(7, 10, 18, ${0.55 * A})`;
   contour(); ctx.fill();
-  ctx.fillStyle = `rgba(172, 202, 238, ${0.1 * A})`;
-  ctx.beginPath(); ctx.ellipse(0, 6, 17, 22, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, 8, 15, 20, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = `rgba(150, 182, 222, ${0.14 * A})`;
+  contour(); ctx.fill();
+  // brow shadow — heavy over the eyes
+  ctx.fillStyle = `rgba(4, 6, 12, ${0.5 * A})`;
+  ctx.beginPath();
+  ctx.moveTo(-15, -14); ctx.lineTo(-4, -17); ctx.lineTo(4, -17); ctx.lineTo(15, -14);
+  ctx.lineTo(13, -4); ctx.lineTo(-13, -4);
+  ctx.closePath();
+  ctx.fill();
 
   ctx.globalCompositeOperation = 'lighter';
   ctx.strokeStyle = `rgba(148, 214, 252, ${0.48 * A})`;
@@ -408,6 +452,17 @@ function drawGhostWolf(ctx, p) {
     ctx.stroke();
   }
   ctx.globalCompositeOperation = 'source-over';
+
+  // bared fangs along the jaw line
+  ctx.fillStyle = `rgba(224, 240, 250, ${(0.5 + 0.4 * jaws) * A})`;
+  for (const [fx, up] of [[-7, 20], [-3, 26], [3, 26], [7, 20]]) {
+    ctx.beginPath();
+    ctx.moveTo(fx - 1.4, up);
+    ctx.lineTo(fx + 1.4, up);
+    ctx.lineTo(fx, up + 5 + jr * 0.5);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   // eyes — slanted glowing points
   const g2 = clamp(0.35 + 0.8 * glow, 0, 1);
