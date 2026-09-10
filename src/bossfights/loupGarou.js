@@ -27,6 +27,11 @@ export const DELIVERANCE_DISTANCE = QUEBEC_CITY.flowDistance - 28;
 // Deliberately a short fight — this is early in the game and shouldn't be
 // punishing yet. ~145 units / ~13s vs. the blockade's ~340.
 const FIGHT_LENGTH = DELIVERANCE_DISTANCE - TRIGGER_DISTANCE;
+// How long with zero net forward progress before the stall failsafe below
+// mercy-delivers the player — generous, since it only needs to catch someone
+// genuinely stuck (see the failsafe's own comment by bestD/stallClock).
+const STALL_TIME_LIMIT = 10;
+const STALL_PROGRESS_EPS = 0.05; // world units — ignores noise, not real advance
 
 // The cold-blue nightfall fades in over this many units before the trigger
 // and out after deliverance — same shape as chasseGalerie's stormIntensityAt,
@@ -94,6 +99,19 @@ export function createLoupGarou() {
   let strikeTimer = FIRST_STRIKE_DELAY;
   let retreatT = 0;          // 0..1 once delivered, the beast dissolving up-shore
 
+  // Stall failsafe: tracks the furthest flowDistance actually reached, and
+  // how long it's been since that record last advanced — not a flat
+  // wall-clock timer. A fixed "42 seconds since spotted" assumed a desktop
+  // pace covering the ~144-unit approach; on touch devices (MOBILE_SPEED_SCALE
+  // and the halved steering in game.js) that same distance can genuinely take
+  // longer even while dodging cleanly, so a flat timer fired mid-approach and
+  // "delivered" the player while they were still far short of the city. This
+  // only trips for someone making no real headway (braking through every
+  // strike, or pinned by the current), regardless of how fast their device
+  // moves — real progress, at any pace, always resolves by proximity instead.
+  let bestD = 0;
+  let stallClock = 0;
+
   function reset() {
     phase = 'idle';
     active = false;
@@ -105,6 +123,8 @@ export function createLoupGarou() {
     strike = null;
     strikeTimer = FIRST_STRIKE_DELAY;
     retreatT = 0;
+    bestD = 0;
+    stallClock = 0;
   }
 
   // How wide the jaws are gaping (0..1) and how hot the eyes burn (0..1) right
@@ -153,15 +173,23 @@ export function createLoupGarou() {
         justSpotted = true;
         clock = 0;
         strikeTimer = FIRST_STRIKE_DELAY;
+        bestD = playerFlowDistance;
+        stallClock = 0;
       }
 
       if (spotted) clock += dt; // drives drift, cadence, and the hover animation
 
       if (phase === 'stalking') {
-        // Deliverance is normally reaching the city; the clock is also a
+        // Deliverance is normally reaching the city; stallClock is the
         // failsafe for a player who brakes on every wind-up and stalls
         // against the upstream current — it can't hound them forever.
-        if (playerFlowDistance >= DELIVERANCE_DISTANCE || clock > 42) {
+        if (playerFlowDistance > bestD + STALL_PROGRESS_EPS) {
+          bestD = playerFlowDistance;
+          stallClock = 0;
+        } else {
+          stallClock += dt;
+        }
+        if (playerFlowDistance >= DELIVERANCE_DISTANCE || stallClock > STALL_TIME_LIMIT) {
           phase = 'delivered';
           justDelivered = true;
           active = false;
