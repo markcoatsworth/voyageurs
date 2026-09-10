@@ -379,10 +379,12 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
 
   // The flight stays fenced to the river: steering hard into a bank the
   // whole time clips the treetops (damage) and never lets the canoe escape
-  // out over the land.
+  // far out over the land. Measured against the *local* water edge, not a
+  // fixed offset — the channel eases from wide (just off Montréal) down to
+  // the tight gorge over the first stretch of the flight (path.js widthAt).
   const t = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE + 3);
   let treeDamage = false;
-  let maxOffset = 0;
+  let maxEscape = 0;
   for (let i = 0; i < 3000; i++) {
     t.input.state.up = true;
     t.input.state.left = true; // fly straight at the bank
@@ -390,12 +392,13 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
     t.game.update(1 / 30);
     if (t.game.chasseGalerie.isActive()) {
       if (t.game.health < hpBefore) treeDamage = true;
-      maxOffset = Math.max(maxOffset, Math.abs(t.game.lateralOffset));
+      const overEdge = Math.abs(t.game.lateralOffset) - widthAt(t.game.flowDistance) / 2;
+      maxEscape = Math.max(maxEscape, overEdge);
     }
     if (t.game.state === 'gameover') break;
   }
   if (!treeDamage) throw new Error('flying into the bank mid-flight never clipped the treetops');
-  if (maxOffset > 12) throw new Error(`canoe escaped out over the land mid-flight (offset ${maxOffset.toFixed(1)})`);
+  if (maxEscape > 4) throw new Error(`canoe escaped ${maxEscape.toFixed(1)} units past the water's edge out over the land mid-flight`);
 
   notes.push(`  note chasse-galerie ran; max altitude ${maxAltitude.toFixed(1)}, reached the Diable arena at ${hpAtArena | 0} hull`);
 });

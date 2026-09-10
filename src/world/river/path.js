@@ -138,21 +138,30 @@ function rideauWidthAt(d) {
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + wobble));
 }
 
+// Ottawa River gorge (Chasse-galerie): once the flight is clear of Montréal
+// the channel closes down to a tight gorge, so the big church steeples
+// cutting in from the banks leave only a narrow thread to fly. This used to
+// be a hard `if (d > offset)` swap, which drew a straight horizontal edge
+// across the river the instant it kicked in — right in front of Montréal,
+// since the trigger (~offset 2150) sat a few units *upstream* of the city
+// itself. Now it eases in over OTTAWA_EASE_LEN, starting just past the last
+// of Montréal's waterfront (its buildings span ~±28 of its flowDistance
+// ~2168) and after the Chasse-galerie has already lifted off
+// (chasseGalerie.js TRIGGER_DISTANCE = Montréal + 20), so the closing gorge
+// is only ever seen from the air.
+export const OTTAWA_EASE_START = SEGMENT_SHAPE_OFFSET.lawrenceWest + 2200;
+export const OTTAWA_EASE_LEN = 120;
+
+function gorgeWidthAt(d) {
+  const w = 8 + Math.sin(d * 0.09) * 1.4 + Math.sin(d * 0.037 + 2) * 0.9;
+  return Math.max(6.2, w); // ~6-10.5 units wide (vs 20-44 normally)
+}
+
 export function widthAt(d) {
   // The Rideau leg (river/route.js) — its own profile, checked first because
-  // its shape offset sits past the Ottawa gorge trigger just below and would
-  // otherwise be swallowed by it.
+  // its shape offset sits past the Ottawa gorge ease below and would
+  // otherwise blend into it.
   if (d >= RIDEAU_OFFSET) return rideauWidthAt(d);
-
-  // Ottawa River (Chasse-galerie section) — a tight gorge, so the big church
-  // steeples cutting in from the banks leave only a narrow thread to fly.
-  // Starts just before Montreal on lawrenceWest (offset ~2150 past that
-  // segment's shape offset — Montreal's own flowDistance).
-  const OTTAWA_FLOW = SEGMENT_SHAPE_OFFSET.lawrenceWest + 2150;
-  if (d > OTTAWA_FLOW) {
-    const ottawaWidth = 8 + Math.sin(d * 0.09) * 1.4 + Math.sin(d * 0.037 + 2) * 0.9;
-    return Math.max(6.2, ottawaWidth); // ~6-10.5 units wide (vs 20-44 normally)
-  }
 
   // Cubic ease-in, not the raw linear progress — the fjord should stay
   // close to its own width for most of the approach and only really open up
@@ -170,7 +179,14 @@ export function widthAt(d) {
   const ampScale = 1 + (ESTUARY_AMP_SCALE - 1) * eased;
   const pinch = Math.sin(d * 0.023 + 1.2) * 2.6 * ampScale;
   const wobble = (Math.sin(d * 0.05 + 4) * 1.6 + Math.sin(d * 0.12) * 0.6) * ampScale;
-  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + pinch + wobble));
+  const river = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + pinch + wobble));
+
+  if (d > OTTAWA_EASE_START) {
+    const p = Math.min(1, (d - OTTAWA_EASE_START) / OTTAWA_EASE_LEN);
+    const k = p * p * (3 - 2 * p); // smoothstep
+    return river + (gorgeWidthAt(d) - river) * k;
+  }
+  return river;
 }
 
 // --- braided channels: short stretches where the river splits around a

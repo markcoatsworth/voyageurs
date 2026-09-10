@@ -13,7 +13,7 @@
 // JS function to the GPU — keep the two in sync if you retune the course.
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT, AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
-import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './river/path.js';
+import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE, OTTAWA_EASE_START, OTTAWA_EASE_LEN } from './river/path.js';
 
 const VERT_SRC = `
 attribute vec2 a_pos;
@@ -50,6 +50,8 @@ const float RAPIDS_PERIOD = ${RAPIDS_PERIOD.toFixed(2)};
 const float RAPIDS_LENGTH = ${RAPIDS_LENGTH.toFixed(2)};
 const float RIDEAU_OFFSET = ${SEGMENT_SHAPE_OFFSET.rideau.toFixed(2)};
 const float RIDEAU_SPAN = ${RIDEAU_SPAN_DISTANCE.toFixed(2)};
+const float OTTAWA_EASE_START = ${OTTAWA_EASE_START.toFixed(2)};
+const float OTTAWA_EASE_LEN = ${OTTAWA_EASE_LEN.toFixed(2)};
 
 // --- river course, mirrors world/river/path.js — keep in sync by hand ---
 float centerX(float d) {
@@ -80,6 +82,11 @@ float rideauWidthAt(float d) {
   float wobble = sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.13) * 0.8;
   return clamp(trend + wobble, 6.5, 62.0);
 }
+// Mirrors world/river/path.js's gorgeWidthAt() — the tight Ottawa gorge the
+// Chasse-galerie flies through.
+float gorgeWidthAt(float d) {
+  return max(6.2, 8.0 + sin(d * 0.09) * 1.4 + sin(d * 0.037 + 2.0) * 0.9);
+}
 float widthAt(float d) {
   // The Rideau leg — checked first, same as the JS widthAt(), because its
   // offset sits past everything else on the shared number line.
@@ -92,7 +99,14 @@ float widthAt(float d) {
   float ampScale = 1.0 + (2.8 - 1.0) * eased;
   float pinch = sin(d * 0.023 + 1.2) * 2.6 * ampScale;
   float wobble = (sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.12) * 0.6) * ampScale;
-  return clamp(trend + pinch + wobble, 6.5, 62.0);
+  float river = clamp(trend + pinch + wobble, 6.5, 62.0);
+  // Ottawa gorge — eased in past Montréal (see path.js's widthAt() comment).
+  if (d > OTTAWA_EASE_START) {
+    float p = clamp((d - OTTAWA_EASE_START) / OTTAWA_EASE_LEN, 0.0, 1.0);
+    float k = p * p * (3.0 - 2.0 * p);
+    return mix(river, gorgeWidthAt(d), k);
+  }
+  return river;
 }
 
 // Looks up the CPU-computed offset for whichever of the two candidate
