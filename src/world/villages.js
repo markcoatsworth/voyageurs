@@ -344,6 +344,12 @@ function drawDockGreeter(ctx, feetX, feetY, time, seed) {
   const y = Math.round(feetY + Math.sin(time * 3.4 + phase) * 0.4); // slight bob
 
   ctx.save();
+  // Scale the whole figure up about its feet — the base shape below is drawn
+  // at ~14px tall, this brings it to a readable dock-hand size.
+  const SCALE = 1.7;
+  ctx.translate(x, y);
+  ctx.scale(SCALE, SCALE);
+  ctx.translate(-x, -y);
   ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
   ctx.beginPath();
   ctx.ellipse(x, y + 1, 4, 1.5, 0, 0, Math.PI * 2);
