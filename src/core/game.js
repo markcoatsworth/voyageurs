@@ -3,12 +3,13 @@ import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEI
 import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
 import { createCanoeSprites } from '../world/canoe.js';
-import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import { createBlockade } from '../bossfights/blockade.js';
 import { createChasseGalerie, lightningFlash, BOSS_HOVER_HEIGHT } from '../bossfights/chasseGalerie.js';
 import { createDiable, DIABLE_FLOW_DISTANCE } from '../bossfights/diable.js';
+import { createLoupGarou } from '../bossfights/loupGarou.js';
 import { createWeapons } from './weapons.js';
 import { isTouchPrimary } from './touchControls.js';
 
@@ -151,6 +152,11 @@ const STEEPLE_DAMAGE = 13;
 // straying wide still bleeds you noticeably faster than a tight weave does.
 const TREE_DAMAGE = 7;
 const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
+// Le Loup-garou's lunge (bossfights/loupGarou.js). Deliberately light — this
+// is the first encounter, well before the pistol, and shouldn't be
+// punishing. ~7 clean hits to sink, so a player who eats three or four and
+// still makes Québec City can trade furs for repairs and carry on.
+const WOLF_DAMAGE = 13;
 // The Chasse-galerie's glide speed — slow and stately, so the flight up the
 // Ottawa runs several minutes and there's plenty of time to read each
 // church and slide into the next gap.
@@ -292,6 +298,7 @@ export class Game {
     this.chasseGalerie = createChasseGalerie();
     this.diable = createDiable();
     this.diablePct = null; // null hides the HUD bar; his HP% while the fight runs
+    this.loupGarou = createLoupGarou(); // the night beast just before Québec City
     // Set once the Devil looms up (or by ?start=diable): a capsize then
     // respawns just before the fight with the pistol, not all the way back
     // at Montréal — see start() and update()'s consumeJustAppeared branch.
@@ -404,6 +411,7 @@ export class Game {
     this.obstacles.reset();
     this.blockade.reset();
     this.blockadePct = null;
+    this.loupGarou.reset();
     this.chasseGalerie.reset();
     this.diable.reset();
     this.diablePct = null;
@@ -443,10 +451,13 @@ export class Game {
     this.ui.hud.classList.add('hidden');
     this.ui.hudDiable?.classList.add('hidden');
     this.ui.finalStats.innerHTML = '';
-    // Losing to the Devil is losing your soul, not just the canoe.
+    // Losing to the Devil is losing your soul, not just the canoe; the beast
+    // drags you under.
     const byDiable = !!this.diable?.isActive();
+    const byWolf = !byDiable && !!this.loupGarou?.isActive();
     if (this.ui.gameoverTitle) {
-      this.ui.gameoverTitle.textContent = byDiable ? 'THE DEVIL COLLECTS' : 'CAPSIZED';
+      this.ui.gameoverTitle.textContent =
+        byDiable ? 'THE DEVIL COLLECTS' : byWolf ? 'THE BEAST TAKES YOU' : 'CAPSIZED';
     }
     this.ui.gameoverScreen.classList.remove('hidden');
     playCapsizeHorn();
@@ -621,6 +632,11 @@ export class Game {
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'diable') {
       this.takeDamage(entry.damage ?? 18);
+      this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'wolf') {
+      // A lunge that connects knocks the canoe back a beat, then it springs off.
+      this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - 3.5);
+      this.takeDamage(WOLF_DAMAGE);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'tree') {
       this.takeDamage(TREE_DAMAGE);
@@ -1113,6 +1129,20 @@ export class Game {
       !airborne,
     );
 
+    // Le Loup-garou — the night beast pacing the Beaupré shore, just before
+    // Québec City. lawrenceWest only, same reasoning as the blockade below:
+    // TRIGGER_DISTANCE is a number on this segment's own line.
+    if (this.segment === 'lawrenceWest') {
+      this.loupGarou.update(dt, this.flowDistance, this.canoeWorldX, effectiveSpeed, (entry) => this.handleHit(entry));
+      if (this.loupGarou.consumeJustSpotted()) {
+        this.showBanner('LOUP-GAROU');
+        playWolfHowl();
+      }
+      if (this.loupGarou.consumeJustDelivered()) {
+        this.showBanner('The lights of Québec City — the beast falls back');
+      }
+    }
+
     // Only meaningful on the Rideau — SHIP_FLOW_DISTANCE is a number on that
     // segment's own line (see bossfights/blockade.js), and could coincidentally
     // fall in range of an unrelated flowDistance on another segment otherwise.
@@ -1189,8 +1219,36 @@ export class Game {
     // The Diable fight sits at full storm regardless of where along the fade
     // curve its flowDistance happens to land — his darkness, held.
     const storm = this.diable.isActive() ? 1 : this.chasseGalerie.stormIntensityAt(this.flowDistance);
+    // Cold-blue nightfall for the Loup-garou stretch before Québec City —
+    // its own thing, gentler than the Devil's hellstorm (this is early). Only
+    // ever non-zero on lawrenceWest; a pure function of position.
+    const night = this.segment === 'lawrenceWest'
+      ? this.loupGarou.nightIntensity(this.flowDistance) : 0;
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Night sky — deep cold blue overhead easing to a lighter slate at the
+    // horizon, with a bone moon high on the right once it's properly dark.
+    if (night > 0) {
+      const g = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+      g.addColorStop(0, '#080d1a');
+      g.addColorStop(0.55, '#111a2c');
+      g.addColorStop(1, '#20304a');
+      ctx.save();
+      ctx.globalAlpha = 0.74 * night;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+      if (night > 0.35) {
+        ctx.save();
+        ctx.globalAlpha = (night - 0.35) / 0.65;
+        ctx.fillStyle = '#dfe4ee';
+        ctx.beginPath();
+        ctx.arc(CANVAS_WIDTH - 42, 26, 8.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
 
     // Hellstorm sky, faded in by `storm` — all but pure black overhead with
     // the faintest dead-violet cast, sinking to a low, smothered smear of
@@ -1235,6 +1293,16 @@ export class Game {
       ctx.restore();
     }
 
+    // A lighter, cold version of the same for the Loup-garou night — the
+    // banks fall to shapes in the dark, the channel stays legible.
+    if (night > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.42 * night;
+      ctx.fillStyle = '#060911';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+
     // Airborne in the Chasse-galerie, the river below is just backdrop —
     // don't draw the rocks, logs, pelts, whitewater or whales the canoe is
     // flying over. (They still can't touch it either — see obstacles.update
@@ -1251,6 +1319,7 @@ export class Game {
     }
     // Same segment guards as the update() calls above.
     if (this.segment === 'rideau') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+    if (this.segment === 'lawrenceWest') this.loupGarou.draw(ctx, this.flowDistance, cameraWorldX, this.time);
     // Draw the Chasse-galerie churches cutting into the gorge
     if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX);
 

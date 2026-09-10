@@ -61,10 +61,14 @@ src/
                        cumulative-distance model → each village's flowDistance. VILLAGES export.
                        rideau (Gatineau→Kingston) is a made-up leg — no real river there.
   bossfights/
+    loupGarou.js       Le Loup-garou — the night beast just before Québec City (lawrenceWest,
+                       TRIGGER_DISTANCE = QC − 172 .. DELIVERANCE_DISTANCE = QC − 28). No projectiles:
+                       it paces the near bank and lunges (telegraphed, led like the blockade shots);
+                       juke away / brake to dodge. You don't kill it — you reach the city, which
+                       checks it. Cold-blue night render (nightIntensityAt). MVP — one phase.
     blockade.js        "Château Gauntlet": Royal Navy frigate holding the channel, dodge-only, survive
                        & pass. Now on the RIDEAU segment (SHIP_FLOW_DISTANCE = Kingston − 700), the last
                        fight before the Kingston finish. Guarded by `segment === 'rideau'` in game.js.
-                       (Québec City gets its own encounter later.)
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
                        TRIGGER_DISTANCE, FLIGHT_END.
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging
@@ -91,10 +95,15 @@ src/
   cast-off or on crossing `GATINEAU_FLOW_DISTANCE`).
 - **Modes**: `river` / `village` (on-foot). Boss fights are states within the
   river mode, not separate modes. `state` is `playing` / `gameover` / `won`
-  (`won` = reached Kingston; `win()` borrows the game-over screen).
+  (`won` = reached Kingston; `win()` borrows the game-over screen). Game-over
+  title varies by killer: Devil / beast / plain capsize.
+- **Boss fights, in route order**: Loup-garou (before Québec City, lawrenceWest),
+  Chasse-galerie steeples + Le Diable (past Montréal, lawrenceWest), British
+  blockade (before Kingston, rideau). Each is `segment ===`-gated and
+  distance-triggered off a village's flowDistance.
 - **`?start=<name>`** (main.js): dev cheat, one-shot (stripped from URL after
   use). Real village names (accent/hyphen-insensitive, incl. `kingston`) plus
-  keywords `british-blockade`, `chasse-galerie`, `diable`, `rideau`.
+  keywords `loup-garou`, `british-blockade`, `chasse-galerie`, `diable`, `rideau`.
   `?start=diable` also arms a checkpoint (hands over the pistol, respawn returns
   there); `enterRideau()` clears that checkpoint and moves it to the Rideau start.
 - **Mobile**: `isTouchPrimary()` (CSS `hover:none` + `pointer:coarse`) scales

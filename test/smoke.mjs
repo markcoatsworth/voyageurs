@@ -61,6 +61,7 @@ const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import(
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
 const { DIABLE_FLOW_DISTANCE } = await import('../src/bossfights/diable.js');
+const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
 
 function makeUi(minimap) {
   const el = (id) => makeElement(id);
@@ -122,6 +123,59 @@ await step('mouth crossing: fjord -> lawrenceWest', () => {
 await step('lawrenceWest: fight the current 90s', () => {
   const g = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
   run(g, 2700, 1 / 30, (s, i) => { s.up = true; s.down = i % 300 > 260; });
+});
+
+// --- scenario 3b: the Loup-garou, on the run into Québec City -------------
+
+await step('loup-garou: the beast lunges, then Québec City checks it', () => {
+  if (LOUP_GAROU_TRIGGER < SEGMENT_SHAPE_OFFSET.lawrenceWest
+    || LOUP_GAROU_DELIVERANCE <= LOUP_GAROU_TRIGGER) {
+    throw new Error('loup-garou distances look wrong');
+  }
+
+  // Dawdle through the stretch taking the hits — proves the lunges connect
+  // at all (a fight where nothing can touch you isn't a fight).
+  const idle = newGame('lawrenceWest', LOUP_GAROU_TRIGGER - 15);
+  let sawBeast = false;
+  let tookHit = false;
+  const hp0 = idle.game.health;
+  for (let i = 0; i < 1400; i++) {
+    idle.input.state.up = i % 10 < 6; // creep forward so it activates but slowly
+    idle.game.update(1 / 30);
+    if (idle.game.loupGarou.isActive()) sawBeast = true;
+    if (idle.game.health < hp0) tookHit = true;
+    if (idle.game.state === 'gameover') idle.game.start();
+  }
+  if (!sawBeast) throw new Error('the loup-garou never activated on the approach to Québec City');
+  if (!tookHit) throw new Error('drifting the whole loup-garou stretch took no damage — the lunges never connect');
+
+  // The intended counter — juke away from the beast when it crouches, keep
+  // paddling — makes Québec City without capsizing. It's an early fight; it
+  // should be survivable this cheaply.
+  const g = newGame('lawrenceWest', LOUP_GAROU_TRIGGER - 15);
+  let delivered = false;
+  let sawDeliverBanner = false;
+  for (let i = 0; i < 4000 && !delivered; i++) {
+    g.input.state.up = true;
+    const crouch = g.game.loupGarou.isLunging();
+    const away = -g.game.loupGarou.beastSide(); // dodge away from the wolf
+    const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
+    g.input.state.left = crouch ? away < 0 : err > 0.6;
+    g.input.state.right = crouch ? away > 0 : err < -0.6;
+    g.game.update(1 / 30);
+    if (g.game.ui.milestoneBanner.textContent.includes('beast falls back')) sawDeliverBanner = true;
+    if (g.game.state === 'gameover') {
+      throw new Error(`capsized to the loup-garou at ${g.game.flowDistance | 0} — too punishing for the first encounter`);
+    }
+    if (g.game.flowDistance >= LOUP_GAROU_DELIVERANCE && !g.game.loupGarou.isActive()) delivered = true;
+  }
+  if (!delivered) throw new Error('never got past the loup-garou to Québec City');
+  if (!sawDeliverBanner) throw new Error('no deliverance banner at Québec City');
+
+  // And the wolf is inert everywhere else (its trigger is a lawrenceWest number).
+  const elsewhere = newGame('fjord', 0);
+  run(elsewhere, 200, 1 / 30, (s) => { s.up = true; });
+  if (elsewhere.game.loupGarou.isActive()) throw new Error('the loup-garou activated on the fjord');
 });
 
 // --- scenario 4: the blockade boss fight (now on the Rideau, before Kingston) --
