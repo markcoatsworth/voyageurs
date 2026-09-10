@@ -61,6 +61,13 @@ src/
                        cumulative-distance model → each village's flowDistance. VILLAGES export.
                        rideau (Gatineau→Kingston) is a made-up leg — no real river there.
   bossfights/
+    wendigo.js         Le Wendigo — famine-spirit on the far shore of the lower fjord, the
+                       first fight in the game (fjord, TRIGGER_DISTANCE = MOUTH_DISTANCE − 170 ..
+                       DELIVERANCE_DISTANCE = MOUTH_DISTANCE − 50). No projectiles, freeze-or-flee:
+                       it PROWLs the bank, then stops to LISTEN (telegraphed) — release Up/Left/Right
+                       (Down/brake is allowed) and go still until it moves on. First LISTEN never
+                       strikes (taught dry run). You outlast it to the mouth at Tadoussac.
+                       Cold-white render (frostIntensityAt). Guarded by `segment === 'fjord'`.
     loupGarou.js       Le Loup-garou — the night beast just before Québec City (lawrenceWest,
                        TRIGGER_DISTANCE = QC − 172 .. DELIVERANCE_DISTANCE = QC − 28). No projectiles:
                        it paces the near bank and lunges (telegraphed, led like the blockade shots);
@@ -97,13 +104,15 @@ src/
   river mode, not separate modes. `state` is `playing` / `gameover` / `won`
   (`won` = reached Kingston; `win()` borrows the game-over screen). Game-over
   title varies by killer: Devil / beast / plain capsize.
-- **Boss fights, in route order**: Loup-garou (before Québec City, lawrenceWest),
-  Chasse-galerie steeples + Le Diable (past Montréal, lawrenceWest), British
-  blockade (before Kingston, rideau). Each is `segment ===`-gated and
-  distance-triggered off a village's flowDistance.
+- **Boss fights, in route order**: Wendigo (lower fjord, before Tadoussac),
+  Loup-garou (before Québec City, lawrenceWest), Chasse-galerie steeples + Le
+  Diable (past Montréal, lawrenceWest), British blockade (before Kingston,
+  rideau). Each is `segment ===`-gated and distance-triggered off
+  MOUTH_DISTANCE or a village's flowDistance.
 - **`?start=<name>`** (main.js): dev cheat, one-shot (stripped from URL after
   use). Real village names (accent/hyphen-insensitive, incl. `kingston`) plus
-  keywords `loup-garou`, `british-blockade`, `chasse-galerie`, `diable`, `rideau`.
+  keywords `wendigo`, `loup-garou`, `british-blockade`, `chasse-galerie`,
+  `diable`, `rideau`.
   `?start=diable` also arms a checkpoint (hands over the pistol, respawn returns
   there); `enterRideau()` clears that checkpoint and moves it to the Rideau start.
 - **Mobile**: `isTouchPrimary()` (CSS `hover:none` + `pointer:coarse`) scales

@@ -62,6 +62,7 @@ const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
 const { DIABLE_FLOW_DISTANCE } = await import('../src/bossfights/diable.js');
 const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
+const { TRIGGER_DISTANCE: WENDIGO_TRIGGER, DELIVERANCE_DISTANCE: WENDIGO_DELIVERANCE } = await import('../src/bossfights/wendigo.js');
 
 function makeUi(minimap) {
   const el = (id) => makeElement(id);
@@ -123,6 +124,67 @@ await step('mouth crossing: fjord -> lawrenceWest', () => {
 await step('lawrenceWest: fight the current 90s', () => {
   const g = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
   run(g, 2700, 1 / 30, (s, i) => { s.up = true; s.down = i % 300 > 260; });
+});
+
+// --- scenario 3a: the Wendigo, freeze-or-flee on the lower fjord ----------
+
+await step('wendigo: it listens, you go still, the mouth checks it', () => {
+  if (WENDIGO_TRIGGER < 0 || WENDIGO_DELIVERANCE <= WENDIGO_TRIGGER
+    || WENDIGO_DELIVERANCE >= MOUTH_DISTANCE) {
+    throw new Error('wendigo distances look wrong');
+  }
+
+  // A: keep working the paddle through every LISTEN and the raking blows
+  // land. Position pinned in its reach (the fjord current would otherwise
+  // carry a paddling canoe out to the mouth before a second listen) and
+  // hull pinned so bank scrapes don't muddy the "did the *lunge* connect"
+  // read — same idea as the loup-garou scenario's held-station player.
+  const caught = newGame('fjord', WENDIGO_TRIGGER + 6);
+  let sawBeast = false;
+  let caughtHits = 0;
+  caught.game.handleHit = ((orig) => (e) => {
+    if (e && e.type === 'wendigo') caughtHits++;
+    return orig(e);
+  })(caught.game.handleHit.bind(caught.game));
+  for (let i = 0; i < 1500; i++) {
+    caught.input.state.up = true; // never lets off — "stirring" every frame
+    caught.game.health = 100;
+    caught.game.update(1 / 30);
+    if (caught.game.wendigo.isActive()) sawBeast = true;
+    if (caught.game.flowDistance > WENDIGO_TRIGGER + 16) caught.game.flowDistance = WENDIGO_TRIGGER + 16;
+  }
+  if (!sawBeast) throw new Error('the wendigo never activated on the lower fjord');
+  // First listen is a free dry run, so >=2 real listens must have connected.
+  if (caughtHits < 2) throw new Error(`caught working the paddle through every listen for ~50s and it only struck ${caughtHits}x`);
+
+  // B: go still (release everything) whenever it's listening, paddle between
+  // — the intended play should take zero blows and still reach the mouth.
+  const g = newGame('fjord', WENDIGO_TRIGGER - 12);
+  let dodgeHits = 0;
+  let delivered = false;
+  let sawDeliverBanner = false;
+  g.game.handleHit = ((orig) => (e) => {
+    if (e && e.type === 'wendigo') dodgeHits++;
+    return orig(e);
+  })(g.game.handleHit.bind(g.game));
+  for (let i = 0; i < 4000 && !delivered; i++) {
+    g.game.health = 100;
+    const listening = g.game.wendigo.isListening();
+    g.input.state.up = !listening;
+    g.input.state.left = false;
+    g.input.state.right = false;
+    g.game.update(1 / 30);
+    if (g.game.ui.milestoneBanner.textContent.includes('turns back')) sawDeliverBanner = true;
+    if (g.game.flowDistance >= WENDIGO_DELIVERANCE && !g.game.wendigo.isActive()) delivered = true;
+  }
+  if (!delivered) throw new Error('going still for the wendigo never got past it to the mouth');
+  if (!sawDeliverBanner) throw new Error('no deliverance banner as the mouth opened');
+  if (dodgeHits > 0) throw new Error(`held still through every listen and still took ${dodgeHits} blow(s)`);
+
+  // C: inert on another segment (its trigger is a fjord number).
+  const elsewhere = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 4);
+  run(elsewhere, 300, 1 / 30, (s) => { s.up = true; });
+  if (elsewhere.game.wendigo.isActive()) throw new Error('the wendigo activated on lawrenceWest');
 });
 
 // --- scenario 3b: the Loup-garou, on the run into Québec City -------------

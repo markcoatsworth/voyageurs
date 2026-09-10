@@ -228,6 +228,71 @@ export function playWolfHowl() {
   }
 }
 
+// Le Wendigo (bossfights/wendigo.js). Its tell: a long, dry, rasping
+// inhale — filtered white noise swelling through a rising band, over a
+// barely-there sub drone. Nothing musical, nothing brassy; it should read
+// as a held breath drawn in through the trees, the cue to stop paddling.
+export function playWendigoBreath() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  const dur = 1.6;
+
+  const bufferSize = Math.max(1, Math.floor(c.sampleRate * dur));
+  const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const noise = c.createBufferSource();
+  noise.buffer = buffer;
+
+  const band = c.createBiquadFilter();
+  band.type = 'bandpass';
+  band.Q.value = 1.4;
+  band.frequency.setValueAtTime(320, t0);
+  band.frequency.exponentialRampToValueAtTime(1500, t0 + dur * 0.8);
+
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(0.0001, t0);
+  ng.gain.exponentialRampToValueAtTime(0.16, t0 + dur * 0.75);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  noise.connect(band).connect(ng).connect(c.destination);
+  noise.start(t0);
+  noise.stop(t0 + dur + 0.02);
+
+  const sub = c.createOscillator();
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime(58, t0);
+  sub.frequency.linearRampToValueAtTime(46, t0 + dur);
+  const sg = c.createGain();
+  sg.gain.setValueAtTime(0.0001, t0);
+  sg.gain.exponentialRampToValueAtTime(0.12, t0 + dur * 0.6);
+  sg.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  sub.connect(sg).connect(c.destination);
+  sub.start(t0);
+  sub.stop(t0 + dur + 0.02);
+}
+
+// Its lunge connecting — a short, hard shriek: a sawtooth snapping upward
+// then cut, with a noise crack on top. Only when a blow actually lands.
+export function playWendigoShriek() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  const osc = c.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(420, t0);
+  osc.frequency.exponentialRampToValueAtTime(1650, t0 + 0.16);
+  const filter = c.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = 300;
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(0.24, t0 + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+  osc.connect(filter).connect(gain).connect(c.destination);
+  osc.start(t0);
+  osc.stop(t0 + 0.3);
+  noiseBurst(c, t0, 0.22, 3000);
+}
+
 export function playDiableDefeat() {
   const c = getCtx();
   const t0 = c.currentTime;

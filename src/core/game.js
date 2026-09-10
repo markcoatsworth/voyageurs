@@ -3,13 +3,14 @@ import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEI
 import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
 import { createCanoeSprites } from '../world/canoe.js';
-import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import { createBlockade } from '../bossfights/blockade.js';
 import { createChasseGalerie, lightningFlash, BOSS_HOVER_HEIGHT } from '../bossfights/chasseGalerie.js';
 import { createDiable, DIABLE_FLOW_DISTANCE } from '../bossfights/diable.js';
 import { createLoupGarou } from '../bossfights/loupGarou.js';
+import { createWendigo } from '../bossfights/wendigo.js';
 import { createWeapons } from './weapons.js';
 import { isTouchPrimary } from './touchControls.js';
 
@@ -158,6 +159,12 @@ const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
 // still makes Québec City can trade furs for repairs and carry on. Nudged up
 // from 13 once the fight read as a touch too easy — still not brutal.
 const WOLF_DAMAGE = 16;
+// Le Wendigo's raking blow (bossfights/wendigo.js) when it catches you still
+// working the paddle as it listens. The very first encounter in the game and
+// a freeze-or-flee teaching beat — lighter even than the loup-garou, and the
+// first listen never strikes at all. ~9 clean hits to sink, and a player who
+// reads the tell eats one or two at most.
+const WENDIGO_DAMAGE = 11;
 // The Chasse-galerie's glide speed — slow and stately, so the flight up the
 // Ottawa runs several minutes and there's plenty of time to read each
 // church and slide into the next gap.
@@ -300,6 +307,7 @@ export class Game {
     this.diable = createDiable();
     this.diablePct = null; // null hides the HUD bar; his HP% while the fight runs
     this.loupGarou = createLoupGarou(); // the night beast just before Québec City
+    this.wendigo = createWendigo(); // the famine-spirit on the far fjord shore, before Tadoussac
     // Set once the Devil looms up (or by ?start=diable): a capsize then
     // respawns just before the fight with the pistol, not all the way back
     // at Montréal — see start() and update()'s consumeJustAppeared branch.
@@ -413,6 +421,7 @@ export class Game {
     this.blockade.reset();
     this.blockadePct = null;
     this.loupGarou.reset();
+    this.wendigo.reset();
     this.chasseGalerie.reset();
     this.diable.reset();
     this.diablePct = null;
@@ -456,9 +465,14 @@ export class Game {
     // drags you under.
     const byDiable = !!this.diable?.isActive();
     const byWolf = !byDiable && !!this.loupGarou?.isActive();
+    // Losing on the ice to the Wendigo isn't drowning — it's being caught.
+    const byWendigo = !byDiable && !byWolf && !!this.wendigo?.isActive();
     if (this.ui.gameoverTitle) {
       this.ui.gameoverTitle.textContent =
-        byDiable ? 'THE DEVIL COLLECTS' : byWolf ? 'THE BEAST TAKES YOU' : 'CAPSIZED';
+        byDiable ? 'THE DEVIL COLLECTS'
+          : byWolf ? 'THE BEAST TAKES YOU'
+            : byWendigo ? 'THE HUNGER TAKES YOU'
+              : 'CAPSIZED';
     }
     this.ui.gameoverScreen.classList.remove('hidden');
     playCapsizeHorn();
@@ -638,6 +652,13 @@ export class Game {
       // A lunge that connects knocks the canoe back a beat, then it springs off.
       this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - 3.5);
       this.takeDamage(WOLF_DAMAGE);
+      this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'wendigo') {
+      // Caught still working the paddle as it listened — a cold raking blow
+      // out of the trees that dumps your way and bleeds some hull. Meant to
+      // teach the freeze, not to end the run.
+      this.speed = Math.max(MIN_SPEED - 1, this.speed - 3);
+      this.takeDamage(WENDIGO_DAMAGE);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'tree') {
       this.takeDamage(TREE_DAMAGE);
@@ -1144,6 +1165,29 @@ export class Game {
       }
     }
 
+    // Le Wendigo — the famine-spirit on the far shore of the lower fjord, on
+    // the lonely reach down to Tadoussac. Fjord only: TRIGGER_DISTANCE is a
+    // number on this segment's own line (same reasoning as the loup-garou /
+    // blockade). Down (brake) is a legal way to hold still; it's Up/Left/Right
+    // — actively working the canoe — that it hears.
+    if (this.segment === 'fjord') {
+      const s = this.input.state;
+      const stirring = !!(s.up || s.left || s.right);
+      this.wendigo.update(dt, this.flowDistance, stirring, (entry) => this.handleHit(entry));
+      if (this.wendigo.consumeJustSpotted()) {
+        this.showBanner('WENDIGO — go still when it stops to listen');
+        playWendigoBreath();
+      }
+      if (this.wendigo.consumeJustListening()) {
+        this.showBanner('HOLD STILL');
+        playWendigoBreath();
+      }
+      if (this.wendigo.consumeJustLunged()) playWendigoShriek();
+      if (this.wendigo.consumeJustDelivered()) {
+        this.showBanner('The mouth opens ahead — the Wendigo turns back');
+      }
+    }
+
     // Only meaningful on the Rideau — SHIP_FLOW_DISTANCE is a number on that
     // segment's own line (see bossfights/blockade.js), and could coincidentally
     // fall in range of an unrelated flowDistance on another segment otherwise.
@@ -1237,6 +1281,11 @@ export class Game {
     // ever non-zero on lawrenceWest; a pure function of position.
     const night = this.segment === 'lawrenceWest'
       ? this.loupGarou.nightIntensity(this.flowDistance) : 0;
+    // Bloodless cold for the Wendigo's reach on the lower fjord — the far end
+    // of the palette from the hellstorm. Only ever non-zero on the fjord; a
+    // pure function of position, plus an extra glare while it listens.
+    const frost = this.segment === 'fjord'
+      ? this.wendigo.frostIntensity(this.flowDistance) : 0;
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -1393,6 +1442,29 @@ export class Game {
     }
     // Draw the Chasse-galerie churches cutting into the gorge
     if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX);
+
+    // The Wendigo on the far fjord shore, then the cold closing in over the
+    // whole frame — a pale desaturating wash and an icy vignette that bites
+    // in hard while it listens, so "something is different NOW" reads even
+    // without the banner.
+    if (frost > 0) {
+      this.wendigo.draw(ctx);
+      const glare = this.wendigo.listenGlare();
+      ctx.save();
+      ctx.globalAlpha = (0.08 + 0.15 * glare) * frost;
+      ctx.fillStyle = '#e3eff5';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      const v = ctx.createRadialGradient(
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.56, 40,
+        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.56, CANVAS_WIDTH * 0.74);
+      v.addColorStop(0, 'rgba(214, 236, 245, 0)');
+      v.addColorStop(0.6, `rgba(202, 230, 242, ${(0.04 + 0.18 * glare) * frost})`);
+      v.addColorStop(1, `rgba(228, 241, 248, ${(0.30 + 0.34 * glare) * frost})`);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = v;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
 
     if (this.canoeVisible !== false) {
       const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;

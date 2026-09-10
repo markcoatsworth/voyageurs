@@ -70,8 +70,11 @@ few seconds while the run is already underway.
 
 ## The journey
 
-The full route runs Lac Saint-Jean → the Saguenay Fjord → Tadoussac → up
-the Saint Lawrence: on the Beaupré shore at nightfall a **loup-garou**
+The full route runs Lac Saint-Jean → the Saguenay Fjord — where, on the
+lonely lower reach before the mouth, a **wendigo** paces the far cliff and
+stops to listen: go dead still in the water each time it does (stop
+paddling — braking is fine) and you outlast it to open water → Tadoussac →
+up the Saint Lawrence: on the Beaupré shore at nightfall a **loup-garou**
 paces the canoe and lunges from the water until the lights of Québec City
 check it (dodge it, then dock at the King's Wharf and trade furs for hull
 repairs) → on past Montréal → the Chasse-galerie flight up the Ottawa
@@ -86,6 +89,7 @@ narrows through the Cataraqui and flares wide into Kingston harbour.
 Reaching Kingston — by its wharf or just by crossing into it — **wins the
 run** ("Journey's End"), the game's only actual ending.
 
+`?start=wendigo` drops you on the lower fjord just before the famine-spirit;
 `?start=loup-garou` drops you on the Beaupré shore just before the beast;
 `?start=rideau` at the head of the final leg; `?start=british-blockade` at
 the frigate; `?start=kingston` a short paddle from the finish.

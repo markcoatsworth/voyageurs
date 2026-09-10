@@ -12,6 +12,7 @@ import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
 import { TRIGGER_DISTANCE as CHASSE_GALERIE_FLOW_DISTANCE } from './bossfights/chasseGalerie.js';
 import { DIABLE_FLOW_DISTANCE } from './bossfights/diable.js';
 import { TRIGGER_DISTANCE as LOUP_GAROU_FLOW_DISTANCE } from './bossfights/loupGarou.js';
+import { TRIGGER_DISTANCE as WENDIGO_FLOW_DISTANCE } from './bossfights/wendigo.js';
 
 const app = document.getElementById('app');
 
@@ -74,6 +75,10 @@ function normalizeStartName(s) {
 // you can actually fight him. A capsize then respawns right here, not at
 // Montréal.
 //
+// "wendigo" drops the canoe on the lower Saguenay a short calm paddle
+// before the famine-spirit stirs (bossfights/wendigo.js) — the first
+// encounter in the game, on the lonely reach down to Tadoussac.
+//
 // "loup-garou" drops the canoe on the Beaupré shore a short calm paddle
 // before the beast is spotted (bossfights/loupGarou.js) — the last encounter
 // before Québec City.
@@ -91,6 +96,7 @@ function normalizeStartName(s) {
 // the finish line).
 const RIDEAU_START = { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' };
 const START_KEYWORDS = {
+  [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FLOW_DISTANCE - 24, segment: 'fjord' },
   [normalizeStartName('loup-garou')]: { flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
