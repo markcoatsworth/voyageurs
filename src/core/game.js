@@ -154,9 +154,10 @@ const TREE_DAMAGE = 7;
 const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
 // Le Loup-garou's lunge (bossfights/loupGarou.js). Deliberately light — this
 // is the first encounter, well before the pistol, and shouldn't be
-// punishing. ~7 clean hits to sink, so a player who eats three or four and
-// still makes Québec City can trade furs for repairs and carry on.
-const WOLF_DAMAGE = 13;
+// punishing. ~6 clean hits to sink, so a player who eats three or four and
+// still makes Québec City can trade furs for repairs and carry on. Nudged up
+// from 13 once the fight read as a touch too easy — still not brutal.
+const WOLF_DAMAGE = 16;
 // The Chasse-galerie's glide speed — slow and stately, so the flight up the
 // Ottawa runs several minutes and there's plenty of time to read each
 // church and slide into the next gap.
