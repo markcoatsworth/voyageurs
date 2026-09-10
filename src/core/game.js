@@ -111,15 +111,19 @@ const BANK_DAMAGE = 8;
 // exposes you to, that added up to dying to cannon fire before ever
 // reaching the ship — the fight's actual climax. Dropped so a run of bad
 // luck during the approach costs real health without being able to end the
-// run on its own before the hull is even reached.
-const CANNON_DAMAGE = 16;
+// run on its own before the hull is even reached. Reported as still too
+// punishing overall (the fight felt unbeatable even once the gap-finding
+// was understood), so dropped further from 16.
+const CANNON_DAMAGE = 11;
 // The hull itself is a solid wall, not a one-off "you clipped it" penalty
 // (see the isHullBlocking check in update()) — outside the gap you simply
 // can't push through it at all, taking this (the single hardest hit in the
 // game) on repeat every INVULN_TIME while you're pinned against it, plus a
 // heavy speed penalty that keeps sapping your paddling the whole time
-// you're in contact, same shape as BANK_PENALTY_SPEED just harder.
-const SHIP_HULL_DAMAGE = 40;
+// you're in contact, same shape as BANK_PENALTY_SPEED just harder. Was 40
+// (three hits from full health was a kill) — eased alongside CANNON_DAMAGE
+// so a brief graze against the hull doesn't end the run outright.
+const SHIP_HULL_DAMAGE = 28;
 const SHIP_HULL_PENALTY_SPEED = 6;
 // A church steeple clipped mid-flight in the Chasse-galerie. A real bite —
 // just under a cannon hit, ~8 clips (one INVULN_TIME apart) ends a full
