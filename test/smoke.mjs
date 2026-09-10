@@ -124,11 +124,16 @@ await step('lawrenceWest: fight the current 90s', () => {
   run(g, 2700, 1 / 30, (s, i) => { s.up = true; s.down = i % 300 > 260; });
 });
 
-// --- scenario 4: the blockade boss fight, start to escape ------------------
+// --- scenario 4: the blockade boss fight (now on the Rideau, before Kingston) --
 
-await step('blockade: approach -> pursuit -> escape', () => {
+await step('blockade: approach -> pursuit -> escape -> on to Kingston', () => {
+  if (SHIP_FLOW_DISTANCE < SEGMENT_SHAPE_OFFSET.rideau
+    || SHIP_FLOW_DISTANCE > SEGMENT_SHAPE_OFFSET.rideau + 1700) {
+    throw new Error(`blockade ship @ ${SHIP_FLOW_DISTANCE | 0} isn't on the Rideau leg any more`);
+  }
+
   // Part 1 — the approach activates as you close on the frigate.
-  const approach = newGame('lawrenceWest', SHIP_FLOW_DISTANCE - 80);
+  const approach = newGame('rideau', SHIP_FLOW_DISTANCE - 80);
   let sawFight = false;
   for (let i = 0; i < 5000 && !sawFight; i++) {
     approach.input.state.up = true;
@@ -142,12 +147,13 @@ await step('blockade: approach -> pursuit -> escape', () => {
   // ship never "got ahead", so the chase and its Rule Britannia ran
   // forever). Drop the canoe already through the frigate's hull depth and
   // lined up in the gap, so this exercises the chase, not the gauntlet.
-  const g = newGame('lawrenceWest', SHIP_FLOW_DISTANCE + 2);
+  const g = newGame('rideau', SHIP_FLOW_DISTANCE + 2);
   g.game.lateralOffset = widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // gap centre
   let clearedFrigate = false;
   let escaped = false;
   for (let i = 0; i < 6000 && !escaped; i++) {
     g.input.state.up = true;
+    g.game.health = 100;
     g.game.update(1 / 30);
     if (g.game.flowDistance > SHIP_FLOW_DISTANCE + 5) clearedFrigate = true;
     if (clearedFrigate && g.game.blockadePct === null) escaped = true;
@@ -155,7 +161,21 @@ await step('blockade: approach -> pursuit -> escape', () => {
   }
   if (!clearedFrigate) throw new Error('never got past the frigate through an open gap');
   if (!escaped) throw new Error('the pursuit never resolved — chase (and its music) would run forever');
-  notes.push(`  note blockade approach ran; chase resolved @ ${g.game.flowDistance - SHIP_FLOW_DISTANCE | 0} past the frigate`);
+
+  // Part 3 — past the blockade, the Rideau carries you the rest of the way
+  // to the Kingston finish (the blockade is the last fight, not a dead end).
+  let won = false;
+  for (let i = 0; i < 12000 && !won; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
+    g.input.state.left = err > 0.4;
+    g.input.state.right = err < -0.4;
+    g.game.update(1 / 30);
+    if (g.game.state === 'won') won = true;
+  }
+  if (!won) throw new Error('escaped the blockade but never reached Kingston — the run home is broken');
+  notes.push('  note blockade ran on the Rideau; chase resolved, then reached the Kingston finish');
 });
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---
@@ -397,13 +417,18 @@ await step('rideau: paddle the whole leg and reach Kingston -> won', () => {
   let sawApproachBanner = false;
   let maxWidthSeen = 0;
   // This exercises the leg's *plumbing* end to end — the bespoke width curve
-  // (path.js rideauWidthAt), the approach banner, and the Kingston finish
-  // line — so hull damage is neutralised each frame to guarantee traversal.
-  // The leg's difficulty is the shared obstacle system at the same density
-  // as the rest of the game, covered by the other scenarios.
+  // (path.js rideauWidthAt), the blockade sitting on it, the approach banner,
+  // and the Kingston finish line — so cannon damage is neutralised each frame
+  // to guarantee traversal. The leg's obstacle difficulty and the blockade
+  // gauntlet itself are covered by the other scenarios; here the hull wall
+  // still has to be threaded (health can't shortcut a solid wall), so a
+  // failure to find the gap fails this test loudly.
+  const gapX = centerX(SHIP_FLOW_DISTANCE) + widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // right-side lane
   for (let i = 0; i < 12000 && !won; i++) {
     g.input.state.up = true;
-    const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
+    const threading = g.game.blockadePct !== null && g.game.flowDistance < SHIP_FLOW_DISTANCE + 6;
+    const wantX = threading ? gapX : centerX(g.game.flowDistance);
+    const err = g.game.canoeWorldX - wantX;
     g.input.state.left = err > 0.4;
     g.input.state.right = err < -0.4;
     g.game.health = 100;

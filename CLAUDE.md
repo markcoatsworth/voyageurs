@@ -61,8 +61,10 @@ src/
                        cumulative-distance model → each village's flowDistance. VILLAGES export.
                        rideau (Gatineau→Kingston) is a made-up leg — no real river there.
   bossfights/
-    blockade.js        "Château Gauntlet" after Québec City: Royal Navy frigate, dodge-only, survive & pass.
-                       SHIP_FLOW_DISTANCE derived from Québec City's flowDistance.
+    blockade.js        "Château Gauntlet": Royal Navy frigate holding the channel, dodge-only, survive
+                       & pass. Now on the RIDEAU segment (SHIP_FLOW_DISTANCE = Kingston − 700), the last
+                       fight before the Kingston finish. Guarded by `segment === 'rideau'` in game.js.
+                       (Québec City gets its own encounter later.)
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
                        TRIGGER_DISTANCE, FLIGHT_END.
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging

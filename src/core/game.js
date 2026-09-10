@@ -527,6 +527,8 @@ export class Game {
     this._diableCheckpoint = false;
     this.diable.reset();
     this.diablePct = null;
+    this.blockade.reset(); // the blockade lives on this leg now — start it fresh
+    this.blockadePct = null;
     this.chasseGalerie.reset();
     this._chasseGalerieBannerShown = true; // no flight on the Rideau
     const start = SEGMENT_SHAPE_OFFSET.rideau + 0.5;
@@ -556,7 +558,10 @@ export class Game {
     this.startSegment = 'fjord';
     this.startFlowDistance = 0;
     // Let the fiddle tune keep playing under the victory card — this isn't a
-    // death, so no capsize horn and no music.stop().
+    // death, so no capsize horn and no music.stop(). But if the player blitzed
+    // into Kingston while the blockade chase was still on, drop Rule Britannia
+    // back to the shuffle so it isn't what's frozen under the card.
+    this.music?.endBossTrack();
   }
 
   leaveVillage() {
@@ -827,7 +832,7 @@ export class Game {
     // the world-X check (this frame's isn't computed until just below) is a
     // one-frame-stale approximation, same tradeoff the bank check already
     // makes implicitly — lateralOffset can't move far in one frame.
-    if (this.segment === 'lawrenceWest') {
+    if (this.segment === 'rideau') {
       const tentativeWorldX = centerX(proposedFlowDistance) + this.lateralOffset;
       if (this.blockade.isHullBlocking(proposedFlowDistance, tentativeWorldX)) {
         proposedFlowDistance = this.flowDistance; // held in place, not pushed through
@@ -1108,10 +1113,10 @@ export class Game {
       !airborne,
     );
 
-    // Only meaningful on lawrenceWest — SHIP_FLOW_DISTANCE is a number on
-    // that segment's own line, and could coincidentally fall in range of an
-    // unrelated flowDistance on the fjord or lawrenceEast otherwise.
-    if (this.segment === 'lawrenceWest') {
+    // Only meaningful on the Rideau — SHIP_FLOW_DISTANCE is a number on that
+    // segment's own line (see bossfights/blockade.js), and could coincidentally
+    // fall in range of an unrelated flowDistance on another segment otherwise.
+    if (this.segment === 'rideau') {
       const blockade = this.blockade.update(dt, this.flowDistance, this.canoeWorldX, effectiveSpeed, (entry) => this.handleHit(entry));
       this.blockadePct = blockade.active ? blockade.progressPct : null;
       this.blockadeCrossCurrent = blockade.crossCurrent || 0;
@@ -1244,19 +1249,14 @@ export class Game {
       }
       this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     }
-    // Same lawrenceWest-only guard as the update() call above.
-    if (this.segment === 'lawrenceWest') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+    // Same segment guards as the update() calls above.
+    if (this.segment === 'rideau') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
     // Draw the Chasse-galerie churches cutting into the gorge
     if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX);
 
     if (this.canoeVisible !== false) {
       const sprite = this.paddleSide > 0 ? this.canoeSprites.right : this.canoeSprites.left;
       const canoeScreenX = CANOE_SCREEN_X + (this.canoeWorldX - cameraWorldX) * PIXELS_PER_UNIT;
-
-      // Debug: log if canoe is rendering off-screen during lawrenceWest
-      if (this.segment === 'lawrenceWest' && this.blockadePct !== null) {
-        console.log('[RENDER] Canoe screen pos:', canoeScreenX.toFixed(1), 'World pos:', this.canoeWorldX.toFixed(1), 'Camera:', cameraWorldX.toFixed(1));
-      }
 
       // Flying effects (Chasse-galerie) — everything scales with `lift`, so
       // the canoe rises, tilts and lights its trail gradually on take-off.
@@ -1325,8 +1325,6 @@ export class Game {
 
       ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
       ctx.restore();
-    } else if (this.segment === 'lawrenceWest' && this.blockadePct !== null) {
-      console.log('[RENDER] Canoe NOT visible! canoeVisible:', this.canoeVisible);
     }
 
     // Draw bullets

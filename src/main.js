@@ -53,12 +53,12 @@ function normalizeStartName(s) {
 // normalizeStartName() is applied to
 // these keys too, so "british-blockade", "british blockade", and
 // "british+blockade" all work, same as every real village name already
-// does. "british-blockade" drops the canoe already within firing range of
-// the Château Gauntlet instead of needing to paddle the ~30 units past
-// Québec City's dock it'd normally take to reach it — 90 units short of the
-// ship, comfortably inside APPROACH_RANGE (190) so cannon fire starts
-// immediately, but with real room left to practice finding the gap before
-// the hull itself.
+// does. "british-blockade" drops the canoe on the Rideau already within
+// firing range of the Château Gauntlet (now on the run into Kingston — see
+// bossfights/blockade.js) instead of paddling the whole leg to reach it —
+// 90 units short of the ship, comfortably inside APPROACH_RANGE (190) so
+// cannon fire starts immediately, but with real room left to practice
+// finding the gap before the hull itself.
 //
 // "chasse-galerie" drops the canoe a few units *past* chasseGalerie.js's
 // TRIGGER_DISTANCE so the flight is already active on the first frame — the
@@ -86,7 +86,7 @@ function normalizeStartName(s) {
 // the finish line).
 const RIDEAU_START = { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' };
 const START_KEYWORDS = {
-  [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'lawrenceWest' },
+  [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
