@@ -1,12 +1,16 @@
 // The Château Gauntlet — a scripted, one-time encounter on the wide Rideau
 // Lake reaches, the last real fight before Kingston: a Royal Navy frigate
 // holding a lane in the channel, firing on the canoe as it closes the
-// distance. No new controls at all — the whole fight is dodging (steering)
-// and closing the distance (the same up/down speed control the whole river
-// already uses). There's no way to attack it: this is deliberately the
-// bottom of a "weapons unlock further along" arc (see the design discussion
-// this came out of), so winning means surviving and getting past, not
-// defeating the ship.
+// distance. Steering to dodge and close the distance is still the whole
+// fight — the hull itself is never destroyed, so finding and threading the
+// gap is still mandatory — but by the time this encounter comes up the
+// player already has the pistol (guaranteed past Montréal, well before
+// Gatineau/the Rideau), so it now shoots back: see the hull hit-test below.
+// Landing hits on the hull suppresses its broadside, a real dogfight on top
+// of the dodging, not a substitute for it. The chase-phase gunboat is NOT
+// shootable — weapons.js only ever fires bullets forward (increasing
+// flowDistance), and the chase ship is behind the canoe by construction, so
+// there's no way to aim a shot at it with the current weapon system.
 //
 // It used to sit just past Québec City; it was moved onto the run into
 // Kingston (a British naval station in this era — the frigate fits the
@@ -104,6 +108,19 @@ function gapBounds(gapSide) {
   return { gapLo: leftBank, gapHi: leftBank + GAP_WIDTH, hullLo: leftBank + GAP_WIDTH, hullHi: rightBank };
 }
 
+// Dogfight: pistol hits on the hull suppress the broadside. Only reachable
+// once close enough that a bullet's own BULLET_LIFETIME (weapons.js, 2s at
+// 35 u/s = 70 units) can actually cross the remaining distance to the ship —
+// so this only comes alive in roughly the final third of the approach, real
+// close-quarters gunnery rather than pop-shots from first sighting.
+const SHIP_HULL_HP = 120;
+const BULLET_DAMAGE_TO_HULL = 8; // 15 solid hits silences the guns
+// Extra world-units of slack on top of the hull's own depth (SHIP_DEPTH_Z)
+// so a bullet advancing in discrete dt-sized steps can't tunnel through the
+// band between two frames without ever landing inside it.
+const HULL_HIT_D_TOLERANCE = 1.5;
+const SPARK_LIFETIME = 0.35;
+
 const CHASE_DISTANCE = 150; // how far you must get ahead to escape
 const CHASE_SHIP_SPEED = 15.5; // gunboat chases FAST - nearly matches max player speed
 const CHASE_VOLLEY_INTERVAL = 1.3; // bow cannon fires rapidly
@@ -119,6 +136,13 @@ export function createBlockade() {
   let justCleared = false;
   let justSpotted = false;
 
+  // Dogfight: hull HP the pistol chips away at, and the resulting hit
+  // sparks (drawn, not gameplay-relevant beyond feedback).
+  let hullHP = SHIP_HULL_HP;
+  let gunsSilenced = false;
+  let justGunsSilenced = false;
+  let sparks = [];
+
   // Chase phase: after clearing the gap, a battleship pursues
   let chasePhase = false;
   let chaseShipDistance = 0; // flowDistance of the pursuing ship
@@ -132,6 +156,10 @@ export function createBlockade() {
     hazards = [];
     justCleared = false;
     justSpotted = false;
+    hullHP = SHIP_HULL_HP;
+    gunsSilenced = false;
+    justGunsSilenced = false;
+    sparks = [];
     chasePhase = false;
     chaseShipDistance = 0;
     chaseEscaped = false;
@@ -164,6 +192,11 @@ export function createBlockade() {
       justCleared = false;
       return v;
     },
+    consumeJustGunsSilenced() {
+      const v = justGunsSilenced;
+      justGunsSilenced = false;
+      return v;
+    },
     consumeJustStartedChase() {
       const v = justStartedChase;
       justStartedChase = false;
@@ -183,8 +216,14 @@ export function createBlockade() {
     // damage amount, same pattern as every other hazard type. effectiveSpeed
     // is needed to lead each shot's target ahead of the canoe's current
     // position (see the spawn site's own comment) — without it, every shot
-    // whiffs by construction, not because it was dodged.
-    update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit) {
+    // whiffs by construction, not because it was dodged. `bullets` is the
+    // player's live pistol shots (weapons.js's getBullets(), world-space
+    // {worldX, flowDistance}) — checked against the hull below. Returns
+    // hitBullets: [ref] (shots that struck the hull this frame) alongside
+    // the usual fields, same contract as bossfights/diable.js's update(),
+    // for game.js to remove from the weapon pool.
+    update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit, bullets = []) {
+      const hitBullets = [];
       const distToShip = SHIP_FLOW_DISTANCE - playerFlowDistance;
 
       // If the player starts well past the entire blockade+chase range (e.g.
@@ -224,7 +263,30 @@ export function createBlockade() {
           hazards = [];
           console.log('[BLOCKADE] Chase started. Player:', playerFlowDistance, 'Chase ship:', chaseShipDistance);
         }
-        if (distToShip > 0) {
+
+        // Dogfight: pistol shots that land on the hull (not through the
+        // gap — that's open water, nothing to hit) chip away at hullHP.
+        // Firing into the hull means *not* sitting in the safe lane, so
+        // suppressing the guns is a real trade against staying dodged —
+        // not a free action on top of threading the gap.
+        if (!gunsSilenced && gapSide !== null) {
+          const { hullLo, hullHi } = gapBounds(gapSide);
+          const half = SHIP_DEPTH_Z / 2 + HULL_HIT_D_TOLERANCE;
+          for (const b of bullets) {
+            if (Math.abs(b.flowDistance - SHIP_FLOW_DISTANCE) < half && b.worldX > hullLo && b.worldX < hullHi) {
+              hitBullets.push(b);
+              hullHP -= BULLET_DAMAGE_TO_HULL;
+              sparks.push({ x: b.worldX, d: SHIP_FLOW_DISTANCE, t: 0 });
+              if (hullHP <= 0) {
+                hullHP = 0;
+                gunsSilenced = true;
+                justGunsSilenced = true;
+              }
+            }
+          }
+        }
+
+        if (distToShip > 0 && !gunsSilenced) {
           const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
           volleyTimer -= dt;
           if (volleyTimer <= 0) {
@@ -284,6 +346,11 @@ export function createBlockade() {
       }
       hazards = hazards.filter((h) => h.t < SPLASH_WARN_TIME + SPLASH_HOT_TIME + SPLASH_FADE_TIME);
 
+      // Hit sparks: pure visual feedback for a landed shot, ticked the same
+      // unconditional way as hazards above.
+      for (const s of sparks) s.t += dt;
+      sparks = sparks.filter((s) => s.t < SPARK_LIFETIME);
+
       // Chase phase: gunboat pursuing from behind
       if (chasePhase) {
         chaseShipDistance += CHASE_SHIP_SPEED * dt;
@@ -304,15 +371,15 @@ export function createBlockade() {
         }
 
         const chaseProgressPct = clamp((madeGood / CHASE_DISTANCE) * 100, 0, 100);
-        return { active: true, progressPct: chaseProgressPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance };
+        return { active: true, progressPct: chaseProgressPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance, hitBullets };
       }
 
-      if (!engaged) return { active: false, progressPct: 0, boomCount, crossCurrent: 0, gapSide: null };
+      if (!engaged) return { active: false, progressPct: 0, boomCount, crossCurrent: 0, gapSide: null, hitBullets };
       const progressPct = distToShip <= 0 ? 100 : (1 - clamp(distToShip / APPROACH_RANGE, 0, 1)) * 100;
       // Cross-current pushes you away from the gap side, getting stronger as you approach
       const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
       const crossCurrent = -gapSide * progress * 5.5; // negative gap side means push away from gap
-      return { active: true, progressPct, boomCount, crossCurrent, gapSide };
+      return { active: true, progressPct, boomCount, crossCurrent, gapSide, hitBullets };
     },
 
     // Rendering doesn't care whether the encounter is currently "active" by
@@ -349,6 +416,12 @@ export function createBlockade() {
       for (const h of hazards) {
         const z = worldDistance - h.d;
         if (Math.abs(z) < VISIBLE_Z_RANGE) drawHazard(ctx, h, z, cameraWorldX);
+      }
+
+      // Hull hit sparks - a landed pistol shot
+      for (const s of sparks) {
+        const z = worldDistance - s.d;
+        if (Math.abs(z) < VISIBLE_Z_RANGE) drawSpark(ctx, s, z, cameraWorldX);
       }
 
       // Chase ship: pursuing gunboat (only during chase)
@@ -584,6 +657,34 @@ function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
   ctx.fillStyle = '#C8102E';
   ctx.fillRect(flagX + flagW / 2 - 0.75, flagY, 1.5, flagH);
   ctx.fillRect(flagX, flagY + flagH / 2 - 0.5, flagW, 1);
+}
+
+// A landed pistol shot on the hull: a quick bright burst that fades over
+// SPARK_LIFETIME, no lingering mark — reads as gunfire striking wood, not a
+// persistent hole (there's no scarring the hull sprite for real).
+function drawSpark(ctx, s, z, cameraWorldX) {
+  const p = worldToScreen(s.x, z, cameraWorldX);
+  const k = clamp(1 - s.t / SPARK_LIFETIME, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = k;
+  ctx.fillStyle = '#fff4c2';
+  ctx.shadowColor = '#ffb347';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 2 + (1 - k) * 3, 0, Math.PI * 2);
+  ctx.fill();
+  const spokes = 4;
+  ctx.strokeStyle = `rgba(255, 200, 110, ${k * 0.8})`;
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < spokes; i++) {
+    const ang = (i / spokes) * Math.PI * 2 + s.t * 6;
+    const len = 3 + (1 - k) * 6;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + Math.cos(ang) * len, p.y + Math.sin(ang) * len);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawHazard(ctx, h, z, cameraWorldX) {

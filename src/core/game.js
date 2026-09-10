@@ -1147,7 +1147,16 @@ export class Game {
     // segment's own line (see bossfights/blockade.js), and could coincidentally
     // fall in range of an unrelated flowDistance on another segment otherwise.
     if (this.segment === 'rideau') {
-      const blockade = this.blockade.update(dt, this.flowDistance, this.canoeWorldX, effectiveSpeed, (entry) => this.handleHit(entry));
+      // Pistol shots feed in the same way Diable's do (updateDiable above) —
+      // the hull can be shot at now that the player is guaranteed to already
+      // have the pistol by this point in the run (see blockade.js's own
+      // module comment). hitBullets are removed from the pool below, same
+      // contract as diable.update()'s res.hitBullets.
+      const blockade = this.blockade.update(
+        dt, this.flowDistance, this.canoeWorldX, effectiveSpeed,
+        (entry) => this.handleHit(entry), this.weapons.getBullets(),
+      );
+      for (const ref of blockade.hitBullets) this.weapons.removeBullet(ref);
       this.blockadePct = blockade.active ? blockade.progressPct : null;
       this.blockadeCrossCurrent = blockade.crossCurrent || 0;
       // One boom per impact, hit or miss — a volley landing several shots
@@ -1160,6 +1169,9 @@ export class Game {
         this.music?.start(); // Ensure music system is initialized
         this.music?.playBossTrack();
         this._bossTrackCued = true;
+      }
+      if (this.blockade.consumeJustGunsSilenced()) {
+        this.showBanner('GUNS SILENCED — find the gap!');
       }
       if (this.blockade.consumeJustCleared()) {
         // Past the frigate itself — drop Rule Britannia back to the normal
