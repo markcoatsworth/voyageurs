@@ -1335,6 +1335,47 @@ export class Game {
     // Same segment guards as the update() calls above.
     if (this.segment === 'rideau') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
     if (this.segment === 'lawrenceWest') {
+      // The moon for the Loup-garou night — hung high and mostly off the top
+      // of the frame (the far distance up-river reads as the horizon/sky), so
+      // it's a light in the sky, not a disc sitting on the river. Its glow
+      // washes down over the dark water; the beast's ears and wings cut into
+      // its lower edge.
+      if (night > 0) {
+        const mx = CANVAS_WIDTH * 0.5;
+        const my = 2;
+        ctx.save();
+        ctx.globalAlpha = night;
+        const glow = ctx.createRadialGradient(mx, my, 10, mx, my, 150);
+        glow.addColorStop(0, 'rgba(198, 214, 238, 0.5)');
+        glow.addColorStop(0.35, 'rgba(120, 150, 194, 0.22)');
+        glow.addColorStop(1, 'rgba(120, 150, 194, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.fillStyle = '#e4e9f2';
+        ctx.beginPath();
+        ctx.arc(mx, my, 62, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(148, 166, 196, 0.3)'; // craters on the visible lower arc
+        for (const [dx, dy, r] of [[-20, 34, 10], [18, 42, 12], [-6, 52, 7], [30, 26, 6], [-34, 40, 5]]) {
+          ctx.beginPath();
+          ctx.arc(mx + dx, my + dy, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(6, 8, 14, 0.9)'; // a couple of bats
+        for (let i = 0; i < 3; i++) {
+          const bx = mx - 84 + ((this.time * 14 + i * 110) % 220);
+          const by = 30 + Math.sin(this.time * 1.4 + i * 2) * 12 + i * 8;
+          const bs = 3 + (i % 2);
+          ctx.beginPath();
+          ctx.moveTo(bx - bs * 2, by);
+          ctx.quadraticCurveTo(bx - bs, by - bs, bx, by);
+          ctx.quadraticCurveTo(bx + bs, by - bs, bx + bs * 2, by);
+          ctx.quadraticCurveTo(bx + bs, by + bs * 0.6, bx, by + bs * 0.3);
+          ctx.quadraticCurveTo(bx - bs, by + bs * 0.6, bx - bs * 2, by);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
       this.loupGarou.draw(ctx, this.flowDistance, cameraWorldX, this.time);
     }
     // Draw the Chasse-galerie churches cutting into the gorge

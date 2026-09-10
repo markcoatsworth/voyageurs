@@ -221,7 +221,7 @@ export function createLoupGarou() {
 
       const drift = Math.sin(clock * 1.4) * 3 + Math.sin(clock * 0.7) * 2;
       const cx = clamp(CANVAS_WIDTH / 2 + swayPx, 96, CANVAS_WIDTH - 96);
-      const cy = 100 - drift - retreatT * 42; // vertical centre of the apparition
+      const cy = 90 - drift - retreatT * 42; // vertical centre — high, up against the moon
       const fade = clamp(phase === 'delivered' ? 1 - retreatT : 1, 0, 1);
 
       const { ext, jaws, glow } = strikePhase();
