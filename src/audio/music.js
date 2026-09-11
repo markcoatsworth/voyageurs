@@ -56,7 +56,22 @@ const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel
 // modern Québécois atmospheric black metal, not a period fiddle reel — which
 // suits a flying, storm-lit, pact-with-the-devil sequence a lot better than
 // another jig would.
-const CHASSE_GALERIE_TRACK = { src: '/audio/forteresse-untitled-i.mp3', title: 'Untitled I', artist: 'Forteresse' };
+//
+// startAt skips the track's own ~85s intro (a fade-in into a much quieter,
+// moderate-loudness build — measured with ffmpeg's ebur128 filter, not
+// guessed: momentary loudness sits around -17 LUFS from ~15s to ~88s, then
+// ramps hard into a sustained ~-13 LUFS wall of sound for several minutes).
+// The flight only gets ~231s before Le Diable's own track cuts in, so
+// starting at 0 spent more than a third of that on the quiet build and
+// landed less than two-thirds of it in the actually intense part — exactly
+// backwards for a liftoff moment that's supposed to hit immediately.
+// Starting a few seconds ahead of the ramp instead means the intensity
+// arrives within ~5s of leaving the water, and the flight's whole ~231s
+// window lands almost entirely in the loud section instead of a bit over
+// half of it.
+const CHASSE_GALERIE_TRACK = {
+  src: '/audio/forteresse-untitled-i.mp3', title: 'Untitled I', artist: 'Forteresse', startAt: 85,
+};
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -201,6 +216,11 @@ export function createMusic({ onTrack } = {}) {
   // instead of wherever the shuffle currently points — see BOSS_TRACK's own
   // comment. Bumps generation so any in-flight normal playCurrent() fetch
   // (or a previous playSpecial()) can't land after this one and undo it.
+  // An optional track.startAt (seconds) seeks past a track's own intro
+  // before playing — see CHASSE_GALERIE_TRACK's comment for why. Set right
+  // after src so it's queued before the first frame renders; these are
+  // fully-fetched blob: URLs (see prefetch()), so metadata is available
+  // essentially immediately and the seek isn't racing a network fetch.
   async function playSpecial(track) {
     special = true;
     generation++;
@@ -208,6 +228,7 @@ export function createMusic({ onTrack } = {}) {
     const src = await prefetch(track.src);
     if (generation !== requestedGeneration) return;
     audio.src = src;
+    if (track.startAt) audio.currentTime = track.startAt;
     audio.play().then(
       () => {
         started = true;
