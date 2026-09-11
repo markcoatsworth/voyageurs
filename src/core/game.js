@@ -1180,6 +1180,10 @@ export class Game {
       if (this.wendigo.consumeJustSpotted()) {
         this.showBanner('WENDIGO');
         playWendigoBreath();
+        // A musical cue that something's changed — no reserved boss track
+        // for this one (it's meant to be gentle, not a set piece), just a
+        // jump to a different song in the shuffle right now.
+        this.music?.skipToNext();
       }
       if (this.wendigo.consumeJustListening()) playWendigoBreath();
       if (this.wendigo.consumeJustLunged()) playWendigoShriek();

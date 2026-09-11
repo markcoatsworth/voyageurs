@@ -48,6 +48,15 @@ const LISTEN_RECOVER = 0.8;
 // mouth (mirrors the loup-garou's clock > 42) — it can't hound them forever.
 const MAX_CLOCK = 40;
 
+// It used to just pop onto the screen at full opacity the instant it was
+// spotted — jarring for the very first encounter in the game. Now it
+// materializes gradually over SPAWN_FADE seconds (see draw()'s spawnIn), and
+// the first PROWL runs long enough (PROWL_TIME + FIRST_PROWL_EXTRA) that it's
+// fully solid *before* it first rears up to listen, instead of telegraphing
+// while still half a ghost.
+const SPAWN_FADE = 5.0;
+const FIRST_PROWL_EXTRA = 2.6;
+
 const SWAY_PX = 62;        // how far it ranges along the far shore
 const SWAY_PERIOD = 7.4;
 
@@ -157,7 +166,8 @@ export function createWendigo() {
       if (phase === 'stalking') {
         subT += dt;
         if (sub === 'prowl') {
-          if (subT >= PROWL_TIME) {
+          const prowlNeeded = listenCount === 0 ? PROWL_TIME + FIRST_PROWL_EXTRA : PROWL_TIME;
+          if (subT >= prowlNeeded) {
             sub = 'listen';
             subT = 0;
             struck = false;
@@ -208,7 +218,12 @@ export function createWendigo() {
       if (!active && (phase !== 'delivered' || retreatT >= 1)) return;
 
       const glare = listenGlare();
-      const alpha = clamp(phase === 'delivered' ? 1 - retreatT : 1, 0, 1);
+      // Materializes slowly rather than popping in — see SPAWN_FADE's
+      // comment. clock is already well past SPAWN_FADE by the time
+      // deliverance/retreat can happen, so multiplying it in here never
+      // rushes the retreat fade.
+      const spawnIn = smoothstep(clock / SPAWN_FADE);
+      const alpha = clamp((phase === 'delivered' ? 1 - retreatT : 1) * spawnIn, 0, 1);
       // Far shore, upper part of the frame. Leans out over the water as it
       // listens, drives down toward the canoe on a lunge, and rises back
       // into the cliff on the retreat.

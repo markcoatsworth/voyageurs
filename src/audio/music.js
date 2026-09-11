@@ -307,5 +307,22 @@ export function createMusic({ onTrack } = {}) {
       generation++;
       playCurrent();
     },
+    // Jumps to the next track in the shuffle right now, mid-song, rather
+    // than waiting for the current one to end — a plain "something changed"
+    // musical cue for a moment that doesn't warrant its own reserved track
+    // (see BOSS_TRACK/DIABLE_TRACK for the ones that do). Which track it
+    // lands on genuinely doesn't matter, so this just reuses the same
+    // shuffle-advance logic as the 'ended' handler above. A no-op while a
+    // boss track is playing — that's a bigger cue already in progress.
+    skipToNext() {
+      if (special) return;
+      generation++;
+      index++;
+      if (index >= order.length) {
+        order = shuffled(PLAYLIST);
+        index = 0;
+      }
+      playCurrent();
+    },
   };
 }
