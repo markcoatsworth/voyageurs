@@ -416,6 +416,19 @@ export class Game {
     this._bannerTimeout = setTimeout(() => el.classList.remove('show'), 4200);
   }
 
+  // The big, one-off dramatic title card (#boss-banner) — separate from the
+  // small milestone banner above so a set-piece moment can get real fanfare
+  // without every ordinary callout suddenly demanding the same. Shorter
+  // hold than the milestone banner (it's a beat, not something to read at
+  // length) and gameplay keeps running right underneath it.
+  showBossBanner(text) {
+    clearTimeout(this._bossBannerTimeout);
+    const el = this.ui.bossBanner;
+    el.textContent = text;
+    el.classList.add('show');
+    this._bossBannerTimeout = setTimeout(() => el.classList.remove('show'), 2400);
+  }
+
   start() {
     this.reset();
     this.obstacles.reset();
@@ -444,6 +457,8 @@ export class Game {
     this.state = 'playing';
     clearTimeout(this._bannerTimeout);
     this.ui.milestoneBanner.classList.remove('show');
+    clearTimeout(this._bossBannerTimeout);
+    this.ui.bossBanner.classList.remove('show');
     clearTimeout(this._damageFlashTimeout);
     this.ui.damageFlash.classList.remove('show');
     this.ui.gameoverScreen.classList.add('hidden');
@@ -1211,11 +1226,11 @@ export class Game {
       // at once fires this the same number of times in the same frame.
       for (let i = 0; i < blockade.boomCount; i++) playCannonBoom();
       if (this.blockade.consumeJustSpotted()) {
-        // Deliberately doesn't say which side is clear — finding the gap is
-        // the point, not something to hand the player in a banner. The name
-        // is just flavour (see blockade.js's module comment) — a voyageur's
-        // nickname for the last stretch of water between you and Kingston.
-        this.showBanner('THE RIVER STYX — BRITISH BLOCKADE');
+        // The big title card (#boss-banner), not the small milestone one —
+        // the last real fight before the finish earns more fanfare. Still
+        // deliberately doesn't say which side is clear; finding the gap is
+        // the point, not something to hand the player in a banner.
+        this.showBossBanner('BRITISH BLOCKADE');
         this.music?.start(); // Ensure music system is initialized
         this.music?.playBossTrack();
         this._bossTrackCued = true;

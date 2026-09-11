@@ -20,8 +20,10 @@
 // position (or the Rideau segment's shape offset) ever changes — one lookup
 // at module load, not duplicated geography.
 //
-// "The River Styx" — flavour only, requested as a nickname for this exact
-// stretch (the game.js banner says it; nothing here keys off the name).
+// "The River Styx" — a small fun detail, a nickname for this exact stretch
+// kept here in the comments rather than shown to the player (game.js's
+// banner just says "BRITISH BLOCKADE" — see its own big #boss-banner
+// treatment). Nothing in the code keys off the name.
 // SHIP_D_OFFSET/SHIP_FLOW_DISTANCE below are unchanged: the fight's
 // APPROACH_RANGE + CHASE_DISTANCE (~350 units of clear water, no dock
 // inside it) genuinely don't fit any gap closer to Kingston than this one

@@ -73,12 +73,14 @@ src/
                        it paces the near bank and lunges (telegraphed, led like the blockade shots);
                        juke away / brake to dodge. You don't kill it — you reach the city, which
                        checks it. Cold-blue night render (nightIntensityAt). MVP — one phase.
-    blockade.js        "Château Gauntlet"/"the River Styx" (the latter a flavour name only, in the
-                       game.js banner — no code keys off it): Royal Navy frigate holding the channel,
-                       dodge-only, survive & pass. RIDEAU segment (SHIP_FLOW_DISTANCE = Kingston − 700),
-                       the last fight before the finish — already the closest-to-Kingston spot the
-                       fight's ~350-unit footprint can fit without overlapping a village dock; see the
-                       module comment before moving it further in. Guarded by `segment === 'rideau'`.
+    blockade.js        "Château Gauntlet"/"the River Styx" (the latter a small fun detail kept in
+                       the comments only — the player-facing banner just says "BRITISH BLOCKADE",
+                       shown big via #boss-banner, not the small milestone one): Royal Navy frigate
+                       holding the channel, dodge-only, survive & pass. RIDEAU segment
+                       (SHIP_FLOW_DISTANCE = Kingston − 700), the last fight before the finish —
+                       already the closest-to-Kingston spot the fight's ~350-unit footprint can fit
+                       without overlapping a village dock; see the module comment before moving it
+                       further in. Guarded by `segment === 'rideau'`.
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
                        TRIGGER_DISTANCE, FLIGHT_END.
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging

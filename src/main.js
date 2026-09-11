@@ -360,6 +360,7 @@ const ui = {
   restartBtn: document.getElementById('restart-btn'),
   pauseScreen: document.getElementById('pause-screen'),
   milestoneBanner: document.getElementById('milestone-banner'),
+  bossBanner: document.getElementById('boss-banner'),
   weaponPad: weaponDpad,
   // Called by game.js right after it un-hides the weapon pad, so the pad is
   // positioned immediately instead of waiting for the next window resize.

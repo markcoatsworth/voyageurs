@@ -72,7 +72,7 @@ function makeUi(minimap) {
     damageFlash: el('flash'), titleScreen: el('title'), gameoverScreen: el('over'),
     gameoverTitle: el('over-title'),
     finalStats: el('stats'), restartBtn: el('restart'), pauseScreen: el('pause'),
-    milestoneBanner: el('banner'), weaponPad: el('weapon-dpad'), layoutWeaponPad: () => {},
+    milestoneBanner: el('banner'), bossBanner: el('boss-banner'), weaponPad: el('weapon-dpad'), layoutWeaponPad: () => {},
     minimap,
   };
 }
