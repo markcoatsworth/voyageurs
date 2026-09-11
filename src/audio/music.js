@@ -49,29 +49,6 @@ const DIABLE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diab
 // Appalachian old-time jam session — see README.md's Music section), which
 // is exactly why it reads as "something's different" the moment it cuts in.
 const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel", artist: 'Joe Dobbs & The 1937 Flood' };
-// The Chasse-galerie flight — cued the instant the canoe lifts off (see its
-// own banner in game.js) and cut short by Le Diable's own track the moment
-// he appears at the head of the gorge, same as any other special track
-// overriding another. A genuine tonal swing from the rest of the catalog —
-// modern Québécois atmospheric black metal, not a period fiddle reel — which
-// suits a flying, storm-lit, pact-with-the-devil sequence a lot better than
-// another jig would.
-//
-// startAt skips the track's own ~85s intro (a fade-in into a much quieter,
-// moderate-loudness build — measured with ffmpeg's ebur128 filter, not
-// guessed: momentary loudness sits around -17 LUFS from ~15s to ~88s, then
-// ramps hard into a sustained ~-13 LUFS wall of sound for several minutes).
-// The flight only gets ~231s before Le Diable's own track cuts in, so
-// starting at 0 spent more than a third of that on the quiet build and
-// landed less than two-thirds of it in the actually intense part — exactly
-// backwards for a liftoff moment that's supposed to hit immediately.
-// Starting a few seconds ahead of the ramp instead means the intensity
-// arrives within ~5s of leaving the water, and the flight's whole ~231s
-// window lands almost entirely in the loud section instead of a bit over
-// half of it.
-const CHASSE_GALERIE_TRACK = {
-  src: '/audio/forteresse-untitled-i.mp3', title: 'Untitled I', artist: 'Forteresse', startAt: 85,
-};
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -153,7 +130,6 @@ export function createMusic({ onTrack } = {}) {
   prefetch(BOSS_TRACK.src);
   prefetch(DIABLE_TRACK.src);
   prefetch(WENDIGO_TRACK.src);
-  prefetch(CHASSE_GALERIE_TRACK.src);
 
   // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
   // now, or null before the first successful play(). onTrack — passed by
@@ -216,11 +192,6 @@ export function createMusic({ onTrack } = {}) {
   // instead of wherever the shuffle currently points — see BOSS_TRACK's own
   // comment. Bumps generation so any in-flight normal playCurrent() fetch
   // (or a previous playSpecial()) can't land after this one and undo it.
-  // An optional track.startAt (seconds) seeks past a track's own intro
-  // before playing — see CHASSE_GALERIE_TRACK's comment for why. Set right
-  // after src so it's queued before the first frame renders; these are
-  // fully-fetched blob: URLs (see prefetch()), so metadata is available
-  // essentially immediately and the seek isn't racing a network fetch.
   async function playSpecial(track) {
     special = true;
     generation++;
@@ -228,7 +199,6 @@ export function createMusic({ onTrack } = {}) {
     const src = await prefetch(track.src);
     if (generation !== requestedGeneration) return;
     audio.src = src;
-    if (track.startAt) audio.currentTime = track.startAt;
     audio.play().then(
       () => {
         started = true;
@@ -338,12 +308,6 @@ export function createMusic({ onTrack } = {}) {
     // back into the shuffle same as the other two.
     playWendigoTrack() {
       playSpecial(WENDIGO_TRACK);
-    },
-    // The Chasse-galerie flight's cue — same cut-in-now behaviour. Cued on
-    // liftoff, and naturally overridden (not stopped — just replaced, same
-    // playSpecial() mechanism) the instant Le Diable's own track cuts in.
-    playChasseGalerieTrack() {
-      playSpecial(CHASSE_GALERIE_TRACK);
     },
     // Cuts the boss track short and drops back into the normal shuffle —
     // called the moment the fight resolves, rather than waiting out the

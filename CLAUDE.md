@@ -86,12 +86,8 @@ src/
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging
                        fireballs. game.js clamps flowDistance while diable.isHolding(). DIABLE_FLOW_DISTANCE.
   audio/
-    music.js           shuffled playlist (16 tracks) + 4 reserved boss tracks, one per fight that has
-                       a dedicated cue (Rule Britannia/blockade, a diable reel/diable, St. Anne's
-                       Reel/wendigo, a Forteresse black-metal track/chasse-galerie) — each plays via
-                       playSpecial() the instant its fight starts, replacing whatever's playing, and
-                       endBossTrack() drops back into the shuffle once it resolves. Player-facing
-                       title/artist strings; see README.md's Music section for sourcing/rights notes.
+    music.js           shuffled playlist (14 tracks) + reserved boss tracks (Rule Britannia, a diable reel).
+                       Player-facing title/artist strings.
     sfx.js             Web Audio synthesized cues (capsize horn, pelt chime, etc.) — no asset files
 ```
 
