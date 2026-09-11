@@ -32,12 +32,6 @@ const PLAYLIST = [
   { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du Terreur', artist: 'Jos Bouchard' },
   { src: '/audio/avec-les-ruine-babine.mp3', title: 'Avec les Ruine-Babine', artist: 'Louis « Pitou » Boudreault' },
   { src: '/audio/les-batteux.mp3', title: 'Les Batteux', artist: 'Louis « Pitou » Boudreault' },
-  // The one outlier in this list: a French-Canadian standard (also played as
-  // "Reel de Sainte-Anne"), but this recording is an Appalachian old-time
-  // string band's 2009 jam session, not a period Québécois 78/LP like
-  // everything else here — kept in for the tune itself and because it still
-  // sits comfortably in the same fiddle-reel shuffle.
-  { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel", artist: 'Joe Dobbs & The 1937 Flood' },
 ];
 
 // Not part of the shuffle above — this only ever plays on cue, the moment
@@ -50,6 +44,11 @@ const BOSS_TRACK = { src: '/audio/rule-britannia.mp3', title: 'Rule, Britannia!'
 // Devil is a fiddler, so his fight gets a reel. Reserved for that fight
 // only; kept out of the shuffle so it never turns up on its own elsewhere.
 const DIABLE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' };
+// The Wendigo's cue — reserved rather than left in the shuffle. It's the one
+// recording in this catalog that isn't a period Québécois source (an
+// Appalachian old-time jam session — see README.md's Music section), which
+// is exactly why it reads as "something's different" the moment it cuts in.
+const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel", artist: 'Joe Dobbs & The 1937 Flood' };
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -130,6 +129,7 @@ export function createMusic({ onTrack } = {}) {
   // instant the frigate is spotted / the Devil looms up, not fetching then.
   prefetch(BOSS_TRACK.src);
   prefetch(DIABLE_TRACK.src);
+  prefetch(WENDIGO_TRACK.src);
 
   // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
   // now, or null before the first successful play(). onTrack — passed by
@@ -304,6 +304,11 @@ export function createMusic({ onTrack } = {}) {
     playDiableTrack() {
       playSpecial(DIABLE_TRACK);
     },
+    // The Wendigo's cue — same cut-in-now behaviour; endBossTrack() drops it
+    // back into the shuffle same as the other two.
+    playWendigoTrack() {
+      playSpecial(WENDIGO_TRACK);
+    },
     // Cuts the boss track short and drops back into the normal shuffle —
     // called the moment the fight resolves, rather than waiting out the
     // rest of a ~2.5-minute track after a ~15-second fight. A no-op if the
@@ -315,23 +320,6 @@ export function createMusic({ onTrack } = {}) {
       debug('endBossTrack — dropping the boss track back into the shuffle');
       special = false;
       generation++;
-      playCurrent();
-    },
-    // Jumps to the next track in the shuffle right now, mid-song, rather
-    // than waiting for the current one to end — a plain "something changed"
-    // musical cue for a moment that doesn't warrant its own reserved track
-    // (see BOSS_TRACK/DIABLE_TRACK for the ones that do). Which track it
-    // lands on genuinely doesn't matter, so this just reuses the same
-    // shuffle-advance logic as the 'ended' handler above. A no-op while a
-    // boss track is playing — that's a bigger cue already in progress.
-    skipToNext() {
-      if (special) return;
-      generation++;
-      index++;
-      if (index >= order.length) {
-        order = shuffled(PLAYLIST);
-        index = 0;
-      }
       playCurrent();
     },
   };

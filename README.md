@@ -32,13 +32,14 @@ it's not the same running order every session:
   Diable boss fight, not in the regular shuffle), performed by Jos Bouchard;
   "Avec les Ruine-Babine" and "Les Batteux," performed by Louis « Pitou »
   Boudreault.
-- "St. Anne's Reel," performed by Joe Dobbs with The 1937 Flood — the one
-  outlier in the playlist. It's a genuine French-Canadian standard (also
-  played as "Reel de Sainte-Anne"), but this particular recording is an
-  Appalachian old-time string band's 2009 jam session
+- "St. Anne's Reel," performed by Joe Dobbs with The 1937 Flood — reserved
+  for the Wendigo encounter (the first fight in the game, on the lower
+  fjord), not in the regular shuffle. It's a genuine French-Canadian
+  standard (also played as "Reel de Sainte-Anne"), but this particular
+  recording is an Appalachian old-time string band's 2009 jam session
   ([source](https://www.1937flood.com/audio/podcasts/floodcast34.mp3)), not
-  a period Québécois recording like everything else here. Kept for the tune,
-  not the pedigree.
+  a period Québécois recording like everything else here — the mismatch is
+  exactly why it reads as "something's different" the moment it cuts in.
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
