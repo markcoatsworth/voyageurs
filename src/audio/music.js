@@ -22,12 +22,22 @@ const PLAYLIST = [
   { src: '/audio/le-violon-en-discorde.mp3', title: 'Le Violon en Discorde', artist: 'Jean Carignan' },
   { src: '/audio/reel-des-forets.mp3', title: 'Reel des Forêts', artist: 'Tommy Duchesne' },
   { src: '/audio/reel-canadienne.mp3', title: 'Reel Canadienne', artist: 'Jean Carignan' },
+  // Same LP as the two Carignan tracks above (Songs and Dances of Quebec) —
+  // full ensemble credit off that record's own ID3 tags, not just Carignan.
+  { src: '/audio/le-reel-de-l-harmonica.mp3', title: 'Le Reel de l\'Harmonica', artist: 'Jean Carignan, Aldor Morin & Edgar Morin' },
   { src: '/audio/gigue-du-poteau-blanc.mp3', title: 'Gigue du Poteau Blanc', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-acadien.mp3', title: 'Quadrille Acadien', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-francais.mp3', title: 'Quadrille Français', artist: 'Joseph Allard' },
+  { src: '/audio/reel-de-la-tuque-bleue.mp3', title: 'Reel de la Tuque Bleue', artist: 'Joseph Allard' },
   { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du Terreur', artist: 'Jos Bouchard' },
   { src: '/audio/avec-les-ruine-babine.mp3', title: 'Avec les Ruine-Babine', artist: 'Louis « Pitou » Boudreault' },
   { src: '/audio/les-batteux.mp3', title: 'Les Batteux', artist: 'Louis « Pitou » Boudreault' },
+  // The one outlier in this list: a French-Canadian standard (also played as
+  // "Reel de Sainte-Anne"), but this recording is an Appalachian old-time
+  // string band's 2009 jam session, not a period Québécois 78/LP like
+  // everything else here — kept in for the tune itself and because it still
+  // sits comfortably in the same fiddle-reel shuffle.
+  { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel", artist: 'Joe Dobbs & The 1937 Flood' },
 ];
 
 // Not part of the shuffle above — this only ever plays on cue, the moment

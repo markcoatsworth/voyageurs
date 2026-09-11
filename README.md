@@ -21,17 +21,40 @@ it's not the same running order every session:
   performed by Tommy Duchesne, sourced from Library and Archives Canada's
   [Virtual Gramophone](https://www.bac-lac.gc.ca/eng/discover/films-videos-sound-recordings/virtual-gramophone/Pages/introduction.aspx)
   collection of historical 78rpm recordings.
+- "Le Reel de l'Harmonica" and "Reel Canadienne," performed by Jean
+  Carignan with Aldor Morin & Edgar Morin, and "Le Violon en Discorde,"
+  performed by Jean Carignan alone, all from the LP *Songs and Dances of
+  Quebec*, sourced from [Internet Archive](https://archive.org/details/lp_songs-and-dances-of-quebec_jean-carignan-aldor-morin-edgar-morin-b).
+- "Gigue du Poteau Blanc," "Quadrille Acadien," "Quadrille Français," and
+  "Reel de la Tuque Bleue," performed by Joseph Allard, sourced from Library
+  and Archives Canada.
+- "La Reel du Terreur" and "Le Reel du Diable" (the latter reserved for the
+  Diable boss fight, not in the regular shuffle), performed by Jos Bouchard;
+  "Avec les Ruine-Babine" and "Les Batteux," performed by Louis « Pitou »
+  Boudreault.
+- "St. Anne's Reel," performed by Joe Dobbs with The 1937 Flood — the one
+  outlier in the playlist. It's a genuine French-Canadian standard (also
+  played as "Reel de Sainte-Anne"), but this particular recording is an
+  Appalachian old-time string band's 2009 jam session
+  ([source](https://www.1937flood.com/audio/podcasts/floodcast34.mp3)), not
+  a period Québécois recording like everything else here. Kept for the tune,
+  not the pedigree.
 
-**Rights note:** none of these five recordings are confirmed public domain.
+**Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
 1923–1946 enter the public domain 100 years after publication — for the
 1931 Soucy recordings, that's 2032, not now, and they're also hosted under
 Internet Archive's Great 78 Project, the subject of ongoing, unresolved
 litigation from major record labels over exactly this kind of use. The
-Duchesne recordings' copyright status hasn't been separately researched —
-they're the same era of Quebec 78rpm recording as the Soucy tracks, so
-there's no reason to assume they're any more settled. All five are included
-as a deliberate, informed choice for casual/personal use, not because the
+Duchesne, Carignan, Allard, Bouchard, and Boudreault recordings' copyright
+status hasn't been separately researched — most are the same era of Quebec
+78rpm/LP recording as the Soucy tracks, so there's no reason to assume
+they're any more settled. St. Anne's Reel is a different case again: a
+2009 recording, clearly still under whatever copyright the band/podcast
+holds, used here on the assumption that a jam-session recording shared
+publicly on the band's own podcast feed is low-risk for casual/personal
+use — not the same thing as a rights clearance. All are included as a
+deliberate, informed choice for casual/personal use, not because the
 rights are clean — swap the `public/audio/*.mp3` files for something with
 airtight licensing before this ships anywhere beyond that.
 
