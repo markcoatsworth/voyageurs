@@ -318,6 +318,10 @@ export class Game {
     // that ends (thread the gap, escape the chase, or just retreat back out
     // of range) drops the boss track back to the shuffle exactly once.
     this._bossTrackCued = false;
+    // Same idea for the Chasse-galerie's own track (see the catch-all where
+    // it's checked) — true from liftoff until either Le Diable's track takes
+    // over or the flight ends on its own.
+    this._chasseGalerieTrackCued = false;
     // Canoe altitude while the Diable fight holds the river locked — driven
     // by up/down for a vertical dodge, eased back to BOSS_HOVER_HEIGHT idle.
     this._bossHoverAlt = BOSS_HOVER_HEIGHT;
@@ -386,6 +390,7 @@ export class Game {
     this.currentVillage = null;
     this.blockadeCrossCurrent = 0;
     this._bossTrackCued = false;
+    this._chasseGalerieTrackCued = false;
     this._castOffGrace = 0;
     this._castOffGraceVillage = null;
 
@@ -1039,6 +1044,18 @@ export class Game {
       if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
         this.showBanner('LA CHASSE-GALERIE — thread the steeples!');
         this._chasseGalerieBannerShown = true;
+        this.music?.start(); // safe even if a ?start= cheat drops in before a gesture
+        this.music?.playChasseGalerieTrack();
+        this._chasseGalerieTrackCued = true;
+      }
+      // Catch-all, same pattern as the blockade's own: if the flight ends
+      // (lands at Gatineau) without Le Diable's own track ever having taken
+      // over — shouldn't happen in normal play, his arena clamps flowDistance
+      // until he's beaten, but a future change or an odd ?start= landing
+      // shouldn't be able to leave this track playing into the Rideau.
+      if (this._chasseGalerieTrackCued && !this.chasseGalerie.isActive()) {
+        this.music?.endBossTrack();
+        this._chasseGalerieTrackCued = false;
       }
     }
     const airborne = this.chasseGalerie.isActive();

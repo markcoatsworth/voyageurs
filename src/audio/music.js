@@ -49,6 +49,14 @@ const DIABLE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diab
 // Appalachian old-time jam session — see README.md's Music section), which
 // is exactly why it reads as "something's different" the moment it cuts in.
 const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel", artist: 'Joe Dobbs & The 1937 Flood' };
+// The Chasse-galerie flight — cued the instant the canoe lifts off (see its
+// own banner in game.js) and cut short by Le Diable's own track the moment
+// he appears at the head of the gorge, same as any other special track
+// overriding another. A genuine tonal swing from the rest of the catalog —
+// modern Québécois atmospheric black metal, not a period fiddle reel — which
+// suits a flying, storm-lit, pact-with-the-devil sequence a lot better than
+// another jig would.
+const CHASSE_GALERIE_TRACK = { src: '/audio/forteresse-untitled-i.mp3', title: 'Untitled I', artist: 'Forteresse' };
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -130,6 +138,7 @@ export function createMusic({ onTrack } = {}) {
   prefetch(BOSS_TRACK.src);
   prefetch(DIABLE_TRACK.src);
   prefetch(WENDIGO_TRACK.src);
+  prefetch(CHASSE_GALERIE_TRACK.src);
 
   // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
   // now, or null before the first successful play(). onTrack — passed by
@@ -308,6 +317,12 @@ export function createMusic({ onTrack } = {}) {
     // back into the shuffle same as the other two.
     playWendigoTrack() {
       playSpecial(WENDIGO_TRACK);
+    },
+    // The Chasse-galerie flight's cue — same cut-in-now behaviour. Cued on
+    // liftoff, and naturally overridden (not stopped — just replaced, same
+    // playSpecial() mechanism) the instant Le Diable's own track cuts in.
+    playChasseGalerieTrack() {
+      playSpecial(CHASSE_GALERIE_TRACK);
     },
     // Cuts the boss track short and drops back into the normal shuffle —
     // called the moment the fight resolves, rather than waiting out the

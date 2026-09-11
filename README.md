@@ -40,6 +40,12 @@ it's not the same running order every session:
   ([source](https://www.1937flood.com/audio/podcasts/floodcast34.mp3)), not
   a period Québécois recording like everything else here — the mismatch is
   exactly why it reads as "something's different" the moment it cuts in.
+- "Untitled I," performed by Forteresse, from the 2010 album *Par hauts
+  bois et vastes plaines* — reserved for the Chasse-galerie flight (cued on
+  liftoff, replaced by Le Reel du Diable the moment he appears at the head
+  of the gorge), not in the regular shuffle. Modern Québécois atmospheric
+  black metal, the biggest tonal swing in the catalog — picked deliberately
+  for a flying, storm-lit, pact-with-the-devil sequence.
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
@@ -54,10 +60,15 @@ they're any more settled. St. Anne's Reel is a different case again: a
 2009 recording, clearly still under whatever copyright the band/podcast
 holds, used here on the assumption that a jam-session recording shared
 publicly on the band's own podcast feed is low-risk for casual/personal
-use — not the same thing as a rights clearance. All are included as a
-deliberate, informed choice for casual/personal use, not because the
-rights are clean — swap the `public/audio/*.mp3` files for something with
-airtight licensing before this ships anywhere beyond that.
+use — not the same thing as a rights clearance. "Untitled I" is the least
+defensible of all of them on rights grounds: a 2010 studio recording by an
+active band, unambiguously under full copyright for decades yet to come,
+with no low-risk framing available the way the jam-session recording
+above has — it's here purely as a deliberate, informed choice for
+casual/personal use of this project, not because the rights are remotely
+clean. All are included on that same basis — swap the
+`public/audio/*.mp3` files for something with airtight licensing before
+this ships anywhere beyond that.
 
 ## Running it
 
