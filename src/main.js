@@ -395,9 +395,10 @@ function showFatalError(err, context, { fatal = true } = {}) {
 // "Now playing" card (bottom-left, #now-playing in index.html). Built here
 // rather than in music.js so the audio layer stays DOM-free — music.js just
 // calls onTrack({ title, artist }) whenever a new track actually starts.
+// Stays up for as long as that track plays (used to auto-hide after 7s —
+// left up now so the song credit is always readable, not just glimpsed),
+// and gets replaced in place the moment the next track starts.
 const nowPlayingEl = document.getElementById('now-playing');
-const NOW_PLAYING_LINGER = 7000;
-let nowPlayingHideTimer;
 function showNowPlaying(track) {
   if (!track || !nowPlayingEl) return;
   nowPlayingEl.textContent = '';
@@ -419,8 +420,6 @@ function showNowPlaying(track) {
   nowPlayingEl.append(head, title, artist);
 
   nowPlayingEl.classList.add('show');
-  clearTimeout(nowPlayingHideTimer);
-  nowPlayingHideTimer = setTimeout(() => nowPlayingEl.classList.remove('show'), NOW_PLAYING_LINGER);
 }
 
 // Background music — browsers block autoplay until a real user gesture, so
