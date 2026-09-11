@@ -19,6 +19,16 @@
 // flowDistance rather than a fixed number, so it follows if that village's
 // position (or the Rideau segment's shape offset) ever changes — one lookup
 // at module load, not duplicated geography.
+//
+// "The River Styx" — flavour only, requested as a nickname for this exact
+// stretch (the game.js banner says it; nothing here keys off the name).
+// SHIP_D_OFFSET/SHIP_FLOW_DISTANCE below are unchanged: the fight's
+// APPROACH_RANGE + CHASE_DISTANCE (~350 units of clear water, no dock
+// inside it) genuinely don't fit any gap closer to Kingston than this one
+// — both remaining gaps (Newboro-Jones Falls, Jones Falls-Kingston Mills)
+// are too short — so this is already the closest-to-Kingston spot the fight
+// can hold. Fitting, if accidental: cross this water and Kingston, the far
+// shore, is what's left.
 import { centerX, widthAt } from '../world/river/path.js';
 import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../shared/config.js';
 import { VILLAGES } from '../world/villages.js';
@@ -814,12 +824,14 @@ function drawFog(ctx, distToShip) {
 
   if (opacity < 0.05) return; // skip if basically invisible
 
-  // Full-screen fog overlay with vertical gradient (thicker at top/bottom)
+  // Full-screen fog overlay with vertical gradient (thicker at top/bottom).
+  // Tinted a shade sickly-green rather than plain grey — "the River Styx"
+  // is only ever a name in a banner, so this is the one actual pixel of it.
   const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  gradient.addColorStop(0, `rgba(95, 105, 115, ${opacity * 0.9})`);
-  gradient.addColorStop(0.3, `rgba(85, 95, 105, ${opacity * 0.7})`);
-  gradient.addColorStop(0.7, `rgba(85, 95, 105, ${opacity * 0.7})`);
-  gradient.addColorStop(1, `rgba(95, 105, 115, ${opacity * 0.9})`);
+  gradient.addColorStop(0, `rgba(88, 102, 92, ${opacity * 0.9})`);
+  gradient.addColorStop(0.3, `rgba(78, 92, 82, ${opacity * 0.7})`);
+  gradient.addColorStop(0.7, `rgba(78, 92, 82, ${opacity * 0.7})`);
+  gradient.addColorStop(1, `rgba(88, 102, 92, ${opacity * 0.9})`);
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }

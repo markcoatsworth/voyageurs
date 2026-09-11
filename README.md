@@ -107,9 +107,12 @@ a made-up final leg: **the Rideau**, standing in for
 the Rideau Lakes canoe corridor, from Gatineau south to **Kingston** on
 Lake Ontario. No real river runs Ottawa to Kingston — this segment is
 invented (see `src/world/river/route.js`): the channel swells into open
-lake reaches, where a Royal Navy frigate holds the water (the **British
-blockade** — run the gauntlet, thread the gap, outrun the pursuit), then
-narrows through the Cataraqui and flares wide into Kingston harbour.
+lake reaches, where a Royal Navy frigate holds the water on the stretch a
+voyageur's nickname might call **the River Styx** (the **British
+blockade** — run the gauntlet, thread the gap, outrun the pursuit; it's the
+last real fight, so crossing it really is what stands between you and the
+far shore), then narrows through the Cataraqui and flares wide into
+Kingston harbour.
 Reaching Kingston — by its wharf or just by crossing into it — **wins the
 run** ("Journey's End"), the game's only actual ending.
 
