@@ -116,32 +116,41 @@ export function createPineTreeSprite(variant = 0) {
   });
 }
 
+// Filled polygon helper, points given relative to (cx, cy) — the workhorse
+// for the rock's angular facets below.
+function poly(ctx, cx, cy, pts, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  pts.forEach(([px, py], i) => {
+    const x = cx + px, y = cy + py;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  ctx.fill();
+}
+
+// Hard and angular on purpose — flat polygon facets instead of a rounded
+// blob, so it reads as broken stone rather than the soft lump it used to
+// share with the fur pelt below. Cool, desaturated grey-blue throughout,
+// deliberately no warm tones and no bright specular glint: matte and dead,
+// the opposite number of the pelt's shine.
 export function createRockSprite() {
   const w = 18, h = 16;
   return makeSprite(w, h, (ctx) => {
     const cx = w / 2, cy = h / 2 + 1;
     waterRipple(ctx, cx, cy + 4, 8, 3);
-    ctx.fillStyle = '#33322d';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, 7.6, 5.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#6c6b62';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, 6.6, 4.9, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#54534b';
-    ctx.beginPath();
-    ctx.ellipse(cx + 2, cy + 1.6, 4.2, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#9c9a8c';
-    ctx.beginPath();
-    ctx.ellipse(cx - 2.2, cy - 1.8, 2.6, 1.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#403f38';
+
+    poly(ctx, cx, cy, [[-8, -1], [-5, -6], [1, -8], [7, -4], [8, 2], [3, 7], [-3, 6], [-7, 3]], '#20242a'); // outline
+    poly(ctx, cx, cy, [[-6.6, -1], [-4, -5], [1, -6.8], [6, -3.2], [6.6, 1.6], [2.6, 5.8], [-2.6, 5.2], [-6, 2.2]], '#5b6570'); // base facet
+    poly(ctx, cx, cy, [[0, -1], [6, -3.2], [6.6, 1.6], [2.6, 5.8], [-2.6, 5.2], [-3, 1]], '#454e58'); // shadow facet, lower-right
+    poly(ctx, cx, cy, [[-6.6, -1], [-4, -5], [1, -6.8], [3, -3], [-1, -1], [-4, 1]], '#7c8891'); // sunlit facet, upper-left
+    poly(ctx, cx, cy, [[-4.4, -3.2], [-2.4, -4.8], [-0.6, -4], [-2, -2.2]], '#9aa4ac'); // small cold fleck, never warm
+
+    ctx.strokeStyle = '#171a1e';
     ctx.lineWidth = 0.8;
     ctx.beginPath();
-    ctx.moveTo(cx - 1, cy - 2);
-    ctx.lineTo(cx + 1.5, cy + 1.5);
+    ctx.moveTo(cx - 1, cy - 3);
+    ctx.lineTo(cx + 2, cy + 3);
     ctx.stroke();
   });
 }
@@ -241,33 +250,51 @@ export function createIslandSprite() {
   });
 }
 
+// A stretched fur hide, not a lump: a fringe of small tufts around the edge
+// (the shape cue "soft and furry", vs. the rock's hard angular facets) and a
+// saturated warm gold/amber throughout — pushed deliberately far from the
+// rock's cold grey so the two don't share a value range even in a dark wash.
+// The animated sparkle that makes it read as "valuable, collect me" is drawn
+// per-frame over this static sprite (see obstacles.js's draw()).
 export function createPeltSprite() {
-  const w = 13, h = 17;
+  const w = 15, h = 19;
   return makeSprite(w, h, (ctx) => {
     const cx = w / 2, cy = h / 2;
-    waterRipple(ctx, cx, cy + 5, 6, 2);
-    ctx.fillStyle = '#4a2f18';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, 5.6, 7.6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#7a4e2a';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, 4.6, 6.6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#a06a3a';
-    ctx.beginPath();
-    ctx.ellipse(cx - 1, cy - 1, 2.8, 4.6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#5a3a20';
+    waterRipple(ctx, cx, cy + 6, 6, 2);
+
+    // Fringe: short, fine fur tufts poking out past the hide's own outline —
+    // fuzzy, not spiky (a uniform ring of long sharp points reads as legs,
+    // not fur). Drawn first so the hide body overlaps their bases.
+    ctx.fillStyle = '#4a2c0f';
+    const TUFTS = 14;
+    for (let i = 0; i < TUFTS; i++) {
+      const a = (i / TUFTS) * Math.PI * 2 + 0.3;
+      const jitter = 0.82 + ((i * 37) % 5) * 0.08; // varies tuft length a little
+      const rx = Math.cos(a) * 4.1, ry = Math.sin(a) * 6.9;
+      const tx = Math.cos(a) * (5.0 * jitter), ty = Math.sin(a) * (7.6 * jitter);
+      const nx = -Math.sin(a) * 0.5, ny = Math.cos(a) * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + rx - nx, cy + ry - ny);
+      ctx.lineTo(cx + tx, cy + ty);
+      ctx.lineTo(cx + rx + nx, cy + ry + ny);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    poly(ctx, cx, cy, [[0, -7.6], [3.2, -4.2], [4.2, 0], [3.2, 4.2], [0, 7.6], [-3.2, 4.2], [-4.2, 0], [-3.2, -4.2]], '#5c3712'); // outline
+    poly(ctx, cx, cy, [[0, -6.6], [2.6, -3.6], [3.4, 0], [2.6, 3.6], [0, 6.6], [-2.6, 3.6], [-3.4, 0], [-2.6, -3.6]], '#a3661f'); // base
+    poly(ctx, cx, cy, [[-1, -5.6], [1, -5.6], [2, -1], [1.6, 3.4], [-1.2, 4], [-2.4, -1]], '#d99a3a'); // highlight sweep
+
+    ctx.strokeStyle = '#7a4e1a';
     ctx.lineWidth = 0.6;
     for (let i = -2; i <= 2; i++) {
       ctx.beginPath();
-      ctx.moveTo(cx + i, cy - 5);
-      ctx.lineTo(cx + i, cy + 5);
+      ctx.moveTo(cx + i * 1.3, cy - 5.6);
+      ctx.lineTo(cx + i * 1.3, cy + 5.6);
       ctx.stroke();
     }
-    ctx.fillStyle = '#c68f5c';
-    ctx.fillRect(cx - 2, cy - 4, 1, 3);
+    ctx.fillStyle = '#f0c877'; // a bright worked-leather tab at the head end
+    ctx.fillRect(cx - 1.6, cy - 6.8, 3.2, 2.2);
   });
 }
 

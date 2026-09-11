@@ -23,6 +23,34 @@ const sprites = {
   [PELT]: createPeltSprite(),
 };
 
+// An 8-point twinkle, drawn over the pelt sprite each frame (not baked into
+// the static sprite, which is cached once) — the universal "valuable, pick
+// this up" cue that a flat sprite alone can't give. Rocks stay matte/static
+// by contrast, on purpose: only good things sparkle.
+function sparkle(ctx, x, y, size, alpha, color) {
+  if (alpha <= 0.02) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const r = i % 2 === 0 ? size : size * 0.32;
+    const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+// Two glints per pelt, offset in position and timing so they don't blink in
+// lockstep across the whole field; raised to a power so each twinkle snaps
+// on and fades rather than breathing smoothly like the bob/squash below.
+const SPARKLE_SPOTS = [
+  { x: -2.6, y: -4.4, freq: 3.1, size: 2.2 },
+  { x: 2.4, y: 2.6, freq: 3.8, size: 1.6 },
+];
+
 // A braided-channel island (world/river/path.js) is a real geography feature, not
 // a random obstacle — skip spawning the (unrelated) floating island prop
 // during a braid so there's never a confusing second island stacked on it.
@@ -145,6 +173,10 @@ export function createObstacleField(world) {
           ctx.translate(sx, sy + bob);
           ctx.scale(squash, 1);
           ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
+          for (const s of SPARKLE_SPOTS) {
+            const tw = Math.pow(Math.max(0, Math.sin(time * s.freq + entry.spinPhase)), 6);
+            sparkle(ctx, s.x, s.y, s.size, tw, '#fff2c4');
+          }
           ctx.restore();
         } else {
           ctx.drawImage(sprite, sx - sprite.width / 2, sy - sprite.height / 2);
