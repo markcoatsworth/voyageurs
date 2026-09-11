@@ -911,8 +911,15 @@ export class Game {
     // Guaranteed pistol past Montréal — whether or not you stopped in town
     // and walked up to the gunsmith. acquirePistol() no-ops if you already
     // have it, so this just backstops the case where you sailed on by.
-    if (this.segment === 'lawrenceWest' && this.flowDistance > MONTREAL_FLOW_DISTANCE
-      && !this.weapons.has('pistol')) {
+    // Also unconditional on the Rideau: there's no path onto that segment
+    // (normal play or any ?start= cheat — rideau/gatineau/kars/kingston/
+    // british-blockade/...) that doesn't already imply "past Montréal," but
+    // a cheat drops straight there without ever ticking update() while
+    // segment === 'lawrenceWest', so the check above alone would never fire
+    // and the British Blockade (which assumes the pistol is a given) would
+    // be unwinnable — no gun, no way to suppress its guns.
+    if (((this.segment === 'lawrenceWest' && this.flowDistance > MONTREAL_FLOW_DISTANCE)
+      || this.segment === 'rideau') && !this.weapons.has('pistol')) {
       this.acquirePistol();
     }
 

@@ -731,6 +731,19 @@ await step('montreal: leave town without visiting the gunsmith -> pistol auto-gr
   if (g.game.ui.weaponPad.classList.contains('hidden')) throw new Error('weapon pad still hidden after the auto-grant');
 });
 
+await step('rideau: a ?start= cheat straight onto the leg still gets the pistol', () => {
+  // Any ?start= landing directly on the Rideau (rideau/gatineau/kars/
+  // kingston/british-blockade/...) never ticks update() while
+  // segment === 'lawrenceWest', so the "past Montréal" backstop above
+  // never fires on its own — this is exactly the bug report: no gun, no
+  // way to suppress the British Blockade's cannons.
+  const g = newGame('rideau', SEGMENT_SHAPE_OFFSET.rideau + 3);
+  if (g.game.weapons.has('pistol')) throw new Error('pistol already unlocked before the first frame ran');
+  g.game.update(1 / 30);
+  if (!g.game.weapons.has('pistol')) throw new Error('landed on the Rideau via a cheat start and never got the pistol');
+  if (g.game.ui.weaponPad.classList.contains('hidden')) throw new Error('weapon pad still hidden after the auto-grant');
+});
+
 // --- scenario 5: a village visit ----------------------------------------
 
 await step('village: dock, walk, trade, cast off', () => {
