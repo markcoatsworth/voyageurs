@@ -25,9 +25,8 @@ it's not the same running order every session:
   Carignan with Aldor Morin & Edgar Morin, and "Le Violon en Discorde,"
   performed by Jean Carignan alone, all from the LP *Songs and Dances of
   Quebec*, sourced from [Internet Archive](https://archive.org/details/lp_songs-and-dances-of-quebec_jean-carignan-aldor-morin-edgar-morin-b).
-- "Gigue du Poteau Blanc," "Quadrille Acadien," "Quadrille Français," and
-  "Reel de la Tuque Bleue," performed by Joseph Allard, sourced from Library
-  and Archives Canada.
+- "Gigue du Poteau Blanc," "Quadrille Acadien," and "Quadrille Français,"
+  performed by Joseph Allard, sourced from Library and Archives Canada.
 - "La Reel du Terreur" and "Le Reel du Diable" (the latter reserved for the
   Diable boss fight, not in the regular shuffle), performed by Jos Bouchard;
   "Avec les Ruine-Babine" and "Les Batteux," performed by Louis « Pitou »
