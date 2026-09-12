@@ -126,8 +126,10 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // shore, and its dock/fortifications are hand-authored to that side.
   { name: 'Quebec City', lat: 46.8083, lon: -71.2080, label: 'Quebec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
   // Historic trading post between Quebec City and Trois-Rivières — a
-  // checkpoint on the upriver slog toward Montréal.
-  { name: 'Batiscan', lat: 46.5000, lon: -72.2500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  // checkpoint on the upriver slog toward Montréal. Pinned to the
+  // right/north bank (side: 1) — real Batiscan sits on the St. Lawrence's
+  // north shore, not wherever the alternating pattern would land it.
+  { name: 'Batiscan', lat: 46.5000, lon: -72.2500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
   { name: 'Trois-Rivieres', lat: 46.3500, lon: -72.5500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
   // Port at the confluence of the Richelieu and St. Lawrence rivers,
   // strategic location between Trois-Rivières and Montreal.
