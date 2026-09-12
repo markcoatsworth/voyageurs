@@ -72,7 +72,7 @@ function makeUi(minimap) {
     damageFlash: el('flash'), titleScreen: el('title'), gameoverScreen: el('over'),
     gameoverTitle: el('over-title'),
     finalStats: el('stats'), restartBtn: el('restart'), pauseScreen: el('pause'),
-    milestoneBanner: el('banner'), weaponPad: el('weapon-dpad'), layoutWeaponPad: () => {},
+    milestoneBanner: el('banner'), bossBanner: el('boss-banner'), weaponPad: el('weapon-dpad'), layoutWeaponPad: () => {},
     minimap,
   };
 }
@@ -728,6 +728,19 @@ await step('montreal: leave town without visiting the gunsmith -> pistol auto-gr
   }
   if (!armed) throw new Error('left Montreal past the dock but never got the pistol on the river');
   if (g.game.flowDistance <= montreal.flowDistance) throw new Error('granted the pistol before actually passing Montreal');
+  if (g.game.ui.weaponPad.classList.contains('hidden')) throw new Error('weapon pad still hidden after the auto-grant');
+});
+
+await step('rideau: a ?start= cheat straight onto the leg still gets the pistol', () => {
+  // Any ?start= landing directly on the Rideau (rideau/gatineau/kars/
+  // kingston/british-blockade/...) never ticks update() while
+  // segment === 'lawrenceWest', so the "past Montréal" backstop above
+  // never fires on its own — this is exactly the bug report: no gun, no
+  // way to suppress the British Blockade's cannons.
+  const g = newGame('rideau', SEGMENT_SHAPE_OFFSET.rideau + 3);
+  if (g.game.weapons.has('pistol')) throw new Error('pistol already unlocked before the first frame ran');
+  g.game.update(1 / 30);
+  if (!g.game.weapons.has('pistol')) throw new Error('landed on the Rideau via a cheat start and never got the pistol');
   if (g.game.ui.weaponPad.classList.contains('hidden')) throw new Error('weapon pad still hidden after the auto-grant');
 });
 

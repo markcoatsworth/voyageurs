@@ -78,6 +78,15 @@ import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './pa
 
 // labelPos hand-places each minimap label clear of the route line and the
 // widget's edges. Unused outside minimap.js.
+// Every fjord/St. Lawrence/Ottawa River village below has its `side` pinned
+// to its *real* bank now (1 = north/Route-172-side of the Saguenay, or north
+// shore of the St. Lawrence/Ottawa; -1 = south/Route-170-side, or south
+// shore) — verified against real geography, not left to makeSegment()'s
+// alternating default (see its own comment). That default used to be all
+// most of these had, which is exactly why roughly half of them were on the
+// wrong bank: an "i % 2" alternation has no idea which side a real town is
+// actually on, it just happened to agree with reality as often as a coin
+// flip would.
 const FJORD_WAYPOINTS = [
   // Really La Baie's own coordinates, kept as-is rather than moved to Lac
   // Saint-Jean's actual location — this point is index 0 of makeSegment()'s
@@ -90,65 +99,81 @@ const FJORD_WAYPOINTS = [
   // the lake the player launches onto reads as sitting right where they
   // start, without touching the real-distance math at all.
   { name: 'Lac Saint-Jean', lat: 48.4283, lon: -71.0622, label: 'Lac Saint-Jean', labelPos: { dx: -15, dy: -3, anchor: 'middle' } },
-  { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Riviere-Eternite', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: "L'Anse-Saint-Jean", lat: 48.2330, lon: -70.2000, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, label: 'Tadoussac', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
+  // North shore (Route 172) — the name says so, and so does the map.
+  { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  // South shore (Route 170) — in Fjord-du-Saguenay National Park's Baie
+  // Éternité sector.
+  { name: 'Riviere-Eternite', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 },
+  { name: "L'Anse-Saint-Jean", lat: 48.2330, lon: -70.2000, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1 }, // south shore, Route 170
+  { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 }, // south shore, Route 170
+  // North shore — reached via Route 172, not the Route 170/ferry side.
+  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, label: 'Tadoussac', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
 ];
 // Each Saint Lawrence segment starts from Tadoussac itself (index 0 — its
 // own local d=0, same role FJORD_WAYPOINTS[0]/La Baie plays for the fjord)
 // rather than sharing FJORD_WAYPOINTS' single copy of it — every segment
 // needs its own independent cumulative-distance math starting from wherever
 // *it* begins.
+// Every stop on this arm is a genuine Côte-Nord (North Shore) municipality —
+// the St. Lawrence is far too wide out here for a facing south-shore town to
+// exist opposite any of them, so unlike the other two Saint Lawrence arms
+// this one doesn't actually alternate in reality: all side: 1. (Moot for
+// gameplay today — lawrenceEast isn't a live destination, see the module
+// comment — but fixed anyway since it's still real geography rendered by
+// villages.js the moment anyone does reach it, e.g. via ?start=sept-iles.)
 const LAWRENCE_EAST_WAYPOINTS = [
   { name: 'Tadoussac', lat: 48.1500, lon: -69.7170 },
-  { name: 'Les Escoumins', lat: 48.3514, lon: -69.4075, labelPos: { dx: -1.4, dy: 0.9, anchor: 'end' } },
-  { name: 'Forestville', lat: 48.7425, lon: -69.0900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Baie-Comeau', lat: 49.2200, lon: -68.1500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Godbout', lat: 49.2900, lon: -67.5900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Baie-Trinite', lat: 49.4200, lon: -67.3400, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Port-Cartier', lat: 50.0300, lon: -66.8700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Sept-Îles', lat: 50.2000, lon: -66.3800, label: 'Sept-Îles', labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Les Escoumins', lat: 48.3514, lon: -69.4075, labelPos: { dx: -1.4, dy: 0.9, anchor: 'end' }, side: 1 },
+  { name: 'Forestville', lat: 48.7425, lon: -69.0900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  { name: 'Baie-Comeau', lat: 49.2200, lon: -68.1500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
+  { name: 'Godbout', lat: 49.2900, lon: -67.5900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  { name: 'Baie-Trinite', lat: 49.4200, lon: -67.3400, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
+  { name: 'Port-Cartier', lat: 50.0300, lon: -66.8700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  { name: 'Sept-Îles', lat: 50.2000, lon: -66.3800, label: 'Sept-Îles', labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
 ];
 const LAWRENCE_WEST_WAYPOINTS = [
   { name: 'Tadoussac', lat: 48.1500, lon: -69.7170 },
   // North shore (side: 1) — real La Malbaie sits on the Charlevoix coast,
   // the river's north bank, not the alternating pattern's south.
   { name: 'La Malbaie', lat: 47.6500, lon: -70.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
-  { name: 'Baie-Saint-Paul', lat: 47.4400, lon: -70.5000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
+  { name: 'Baie-Saint-Paul', lat: 47.4400, lon: -70.5000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 }, // Charlevoix, north shore
   // A short hop downriver of Quebec City itself — mainly here to give
   // testers (and anyone who capsizes right at the capital) a closer
   // ?start= point than doubling all the way back to Baie-Saint-Paul.
-  { name: 'Beaupre', lat: 47.0431, lon: -70.8914, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  // North shore (Côte-de-Beaupré).
+  { name: 'Beaupre', lat: 47.0431, lon: -70.8914, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
   // Pinned to the right/north bank (side: 1) rather than left to the
   // alternating pattern — real Quebec City sits on the river's north
   // shore, and its dock/fortifications are hand-authored to that side.
   { name: 'Quebec City', lat: 46.8083, lon: -71.2080, label: 'Quebec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
   // Historic trading post between Quebec City and Trois-Rivières — a
-  // checkpoint on the upriver slog toward Montréal. Pinned to the
-  // right/north bank (side: 1) — real Batiscan sits on the St. Lawrence's
-  // north shore, not wherever the alternating pattern would land it.
+  // checkpoint on the upriver slog toward Montréal. North shore (Mauricie).
   { name: 'Batiscan', lat: 46.5000, lon: -72.2500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
   { name: 'Trois-Rivieres', lat: 46.3500, lon: -72.5500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
   // Port at the confluence of the Richelieu and St. Lawrence rivers,
-  // strategic location between Trois-Rivières and Montreal.
-  { name: 'Sorel-Tracy', lat: 46.0500, lon: -73.1167, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  // Charlemagne — a village on the north shore just upriver from Montreal,
-  // gives players a close starting point for testing the final destination.
-  { name: 'Charlemagne', lat: 45.7167, lon: -73.4833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  // strategic location between Trois-Rivières and Montreal. South shore —
+  // real Sorel-Tracy sits opposite the north-shore towns above it.
+  { name: 'Sorel-Tracy', lat: 46.0500, lon: -73.1167, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 },
+  // Charlemagne — a village on the north shore just upriver from Montreal
+  // (on the Rivière des Prairies side, same north bank as Montréal itself,
+  // not Sorel-Tracy's south shore), gives players a close starting point
+  // for testing the final destination.
+  { name: 'Charlemagne', lat: 45.7167, lon: -73.4833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
   // Final destination — New France's commercial heart and the great inland
   // port. The river continues past Montreal too (ultimately toward the Great
   // Lakes), but this marks the end of the current journey. North shore (side: 1)
   // like Quebec City — the real city sits on the north bank.
   { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
 
-  // The Ottawa River — Chasse-galerie flight path toward Gatineau
-  { name: 'Ile-Perrot', lat: 45.3800, lon: -73.9500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Hudson', lat: 45.4500, lon: -74.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Rigaud', lat: 45.4800, lon: -74.3000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Carillon', lat: 45.5600, lon: -74.3700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Gatineau', lat: 45.4300, lon: -75.7000, label: 'Gatineau', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' } },
+  // The Ottawa River — Chasse-galerie flight path toward Gatineau. Real
+  // Île-Perrot/Hudson/Rigaud all sit on the south side of Lake of Two
+  // Mountains/the Ottawa (Montérégie/Vaudreuil-Soulanges); Carillon and
+  // Gatineau are both on the north shore, same side as Montréal.
+  { name: 'Ile-Perrot', lat: 45.3800, lon: -73.9500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 },
+  { name: 'Hudson', lat: 45.4500, lon: -74.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1 },
+  { name: 'Rigaud', lat: 45.4800, lon: -74.3000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 },
+  { name: 'Carillon', lat: 45.5600, lon: -74.3700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  { name: 'Gatineau', lat: 45.4300, lon: -75.7000, label: 'Gatineau', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
 ];
 
 // The Rideau leg — Gatineau south to Kingston (see the module comment: a
@@ -156,6 +181,17 @@ const LAWRENCE_WEST_WAYPOINTS = [
 // as the two Saint Lawrence lists: index 0 is its own start (Gatineau, local
 // d=0, you leave from there rather than arrive at it) with its own
 // cumulative-distance math. Kingston is the end of the whole game.
+//
+// Unlike the Saguenay/St. Lawrence lists above, `side` here is deliberately
+// left on makeSegment()'s alternating default rather than pinned to real
+// geography — there isn't a reliable "real bank" to pin most of these to in
+// the first place: Manotick sits on Long Island, split by both branches of
+// the Rideau; Newboro/Jones Falls/Kingston Mills are lake reaches and lock
+// stations, not two-bank river towns. Layered onto a genuinely invented
+// channel (no continuous river actually runs Gatineau to Kingston), forcing
+// a "correct" side per town would be presenting a guess as researched fact.
+// Kingston is the one exception — its own real shore (north, on Lake
+// Ontario) is well documented, hence its explicit pin below.
 const RIDEAU_WAYPOINTS = [
   { name: 'Gatineau', lat: 45.4300, lon: -75.7000 },
   { name: 'Manotick', lat: 45.2250, lon: -75.6830, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
@@ -253,10 +289,15 @@ function makeSegment(id, waypoints, spanDistance) {
     name: w.label || w.name,
     segment: id,
     flowDistance: shapeOffset + localFlowDistanceForCumulative(cumulative[i + 1]),
-    // A waypoint can pin its own side (see Quebec City below) instead of
-    // taking whatever the alternating pattern lands on — otherwise
-    // inserting a new stop earlier in the same list (as Beaupre just was)
-    // silently flips every later village's bank.
+    // A waypoint can pin its own side to its real bank (every fjord/
+    // lawrenceEast/lawrenceWest waypoint now does — see their own list
+    // comments) instead of taking whatever this alternating fallback lands
+    // on. The fallback only actually matters for the Rideau any more (its
+    // waypoints are deliberately left unpinned — see RIDEAU_WAYPOINTS'
+    // comment on why a real bank can't be honestly assigned there) — it's
+    // not a substitute for research, just cosmetic variety for a stop no
+    // one's pinned. Also why inserting a new stop earlier in an unpinned
+    // list would silently flip every later village's bank.
     side: w.side ?? (i % 2 === 0 ? -1 : 1),
   }));
 

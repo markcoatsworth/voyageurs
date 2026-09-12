@@ -80,6 +80,10 @@
 
     <div id="milestone-banner"></div>
 
+    <!-- A big, one-off dramatic title card — see style.css's own comment.
+         Currently only the British Blockade coming into range uses it. -->
+    <div id="boss-banner"></div>
+
     <!-- "Now playing" card, bottom-left. Filled and shown/hidden by
          main.js as the music playlist (src/audio/music.js) advances. -->
     <div id="now-playing" aria-live="polite"></div>
@@ -261,7 +265,7 @@
        by scripts/postbuild.mjs with the real UTC build time + git short SHA,
        so what you see in the corner is exactly what got deployed — if it's
        stale, the browser (or a proxy) is serving an old index.html. -->
-  <div id="build-version" style="position:fixed;bottom:2px;right:2px;font-family:monospace;font-size:10px;color:rgba(0,255,0,0.7);z-index:99999;pointer-events:none;background:rgba(0,0,0,0.5);padding:2px 4px;border-radius:2px;">
+  <div id="build-version" style="position:fixed;bottom:4px;right:4px;font-family:monospace;font-size:15px;font-weight:bold;color:rgba(60,255,60,0.9);z-index:99999;pointer-events:none;background:rgba(0,0,0,0.65);padding:4px 8px;border-radius:3px;">
     BUILD: __BUILD_STAMP__
   </div>
   <script type="module" src="/src/main.js"></script>

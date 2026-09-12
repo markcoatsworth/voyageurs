@@ -44,7 +44,7 @@ const ui = {
   hud: el('hud'), hudScore: el('s'), hudSpeedFill: el('sp'), hudHealthFill: el('h'),
   hudBlockade: el('b'), hudBlockadeFill: el('bf'), damageFlash: el('f'), titleScreen: el('t'),
   gameoverScreen: el('o'), gameoverTitle: el('ot'), finalStats: el('st'), restartBtn: el('r'),
-  pauseScreen: el('p'), milestoneBanner: el('mb'), weaponPad: el('w'), layoutWeaponPad: () => {},
+  pauseScreen: el('p'), milestoneBanner: el('mb'), bossBanner: el('bb'), weaponPad: el('w'), layoutWeaponPad: () => {},
   minimap: createMinimap(),
 };
 const world = { distance: 0 };

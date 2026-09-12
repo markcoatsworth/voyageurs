@@ -22,6 +22,9 @@ const PLAYLIST = [
   { src: '/audio/le-violon-en-discorde.mp3', title: 'Le Violon en Discorde', artist: 'Jean Carignan' },
   { src: '/audio/reel-des-forets.mp3', title: 'Reel des Forêts', artist: 'Tommy Duchesne' },
   { src: '/audio/reel-canadienne.mp3', title: 'Reel Canadienne', artist: 'Jean Carignan' },
+  // Same LP as the two Carignan tracks above (Songs and Dances of Quebec) —
+  // full ensemble credit off that record's own ID3 tags, not just Carignan.
+  { src: '/audio/le-reel-de-l-harmonica.mp3', title: 'Le Reel de l\'Harmonica', artist: 'Jean Carignan, Aldor Morin & Edgar Morin' },
   { src: '/audio/gigue-du-poteau-blanc.mp3', title: 'Gigue du Poteau Blanc', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-acadien.mp3', title: 'Quadrille Acadien', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-francais.mp3', title: 'Quadrille Français', artist: 'Joseph Allard' },
@@ -40,6 +43,11 @@ const BOSS_TRACK = { src: '/audio/rule-britannia.mp3', title: 'Rule, Britannia!'
 // Devil is a fiddler, so his fight gets a reel. Reserved for that fight
 // only; kept out of the shuffle so it never turns up on its own elsewhere.
 const DIABLE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' };
+// The Wendigo's cue — reserved rather than left in the shuffle. It's the one
+// recording in this catalog that isn't a period Québécois source (an
+// Appalachian old-time jam session — see README.md's Music section), which
+// is exactly why it reads as "something's different" the moment it cuts in.
+const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel", artist: 'Joe Dobbs & The 1937 Flood' };
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -120,6 +128,7 @@ export function createMusic({ onTrack } = {}) {
   // instant the frigate is spotted / the Devil looms up, not fetching then.
   prefetch(BOSS_TRACK.src);
   prefetch(DIABLE_TRACK.src);
+  prefetch(WENDIGO_TRACK.src);
 
   // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
   // now, or null before the first successful play(). onTrack — passed by
@@ -293,6 +302,11 @@ export function createMusic({ onTrack } = {}) {
     // endBossTrack() drops either one back into the shuffle.
     playDiableTrack() {
       playSpecial(DIABLE_TRACK);
+    },
+    // The Wendigo's cue — same cut-in-now behaviour; endBossTrack() drops it
+    // back into the shuffle same as the other two.
+    playWendigoTrack() {
+      playSpecial(WENDIGO_TRACK);
     },
     // Cuts the boss track short and drops back into the normal shuffle —
     // called the moment the fight resolves, rather than waiting out the

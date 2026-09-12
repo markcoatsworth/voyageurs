@@ -416,6 +416,19 @@ export class Game {
     this._bannerTimeout = setTimeout(() => el.classList.remove('show'), 4200);
   }
 
+  // The big, one-off dramatic title card (#boss-banner) — separate from the
+  // small milestone banner above so a set-piece moment can get real fanfare
+  // without every ordinary callout suddenly demanding the same. Shorter
+  // hold than the milestone banner (it's a beat, not something to read at
+  // length) and gameplay keeps running right underneath it.
+  showBossBanner(text) {
+    clearTimeout(this._bossBannerTimeout);
+    const el = this.ui.bossBanner;
+    el.textContent = text;
+    el.classList.add('show');
+    this._bossBannerTimeout = setTimeout(() => el.classList.remove('show'), 2400);
+  }
+
   start() {
     this.reset();
     this.obstacles.reset();
@@ -444,6 +457,8 @@ export class Game {
     this.state = 'playing';
     clearTimeout(this._bannerTimeout);
     this.ui.milestoneBanner.classList.remove('show');
+    clearTimeout(this._bossBannerTimeout);
+    this.ui.bossBanner.classList.remove('show');
     clearTimeout(this._damageFlashTimeout);
     this.ui.damageFlash.classList.remove('show');
     this.ui.gameoverScreen.classList.add('hidden');
@@ -896,8 +911,15 @@ export class Game {
     // Guaranteed pistol past Montréal — whether or not you stopped in town
     // and walked up to the gunsmith. acquirePistol() no-ops if you already
     // have it, so this just backstops the case where you sailed on by.
-    if (this.segment === 'lawrenceWest' && this.flowDistance > MONTREAL_FLOW_DISTANCE
-      && !this.weapons.has('pistol')) {
+    // Also unconditional on the Rideau: there's no path onto that segment
+    // (normal play or any ?start= cheat — rideau/gatineau/kars/kingston/
+    // british-blockade/...) that doesn't already imply "past Montréal," but
+    // a cheat drops straight there without ever ticking update() while
+    // segment === 'lawrenceWest', so the check above alone would never fire
+    // and the British Blockade (which assumes the pistol is a given) would
+    // be unwinnable — no gun, no way to suppress its guns.
+    if (((this.segment === 'lawrenceWest' && this.flowDistance > MONTREAL_FLOW_DISTANCE)
+      || this.segment === 'rideau') && !this.weapons.has('pistol')) {
       this.acquirePistol();
     }
 
@@ -1180,11 +1202,14 @@ export class Game {
       if (this.wendigo.consumeJustSpotted()) {
         this.showBanner('WENDIGO');
         playWendigoBreath();
+        this.music?.start(); // safe even if ?start=wendigo drops in before a gesture
+        this.music?.playWendigoTrack();
       }
       if (this.wendigo.consumeJustListening()) playWendigoBreath();
       if (this.wendigo.consumeJustLunged()) playWendigoShriek();
       if (this.wendigo.consumeJustDelivered()) {
         this.showBanner('The mouth opens ahead — the Wendigo turns back');
+        this.music?.endBossTrack();
       }
     }
 
@@ -1208,9 +1233,11 @@ export class Game {
       // at once fires this the same number of times in the same frame.
       for (let i = 0; i < blockade.boomCount; i++) playCannonBoom();
       if (this.blockade.consumeJustSpotted()) {
-        // Deliberately doesn't say which side is clear — finding the gap is
+        // The big title card (#boss-banner), not the small milestone one —
+        // the last real fight before the finish earns more fanfare. Still
+        // deliberately doesn't say which side is clear; finding the gap is
         // the point, not something to hand the player in a banner.
-        this.showBanner('BRITISH BLOCKADE');
+        this.showBossBanner('BRITISH BLOCKADE');
         this.music?.start(); // Ensure music system is initialized
         this.music?.playBossTrack();
         this._bossTrackCued = true;
