@@ -59,10 +59,16 @@ export const BOSS_HOVER_HEIGHT = 3.0;
 // Gatineau, so neither end is an abrupt switch.
 const CLIMB_DISTANCE = 80;
 const DESCENT_DISTANCE = 110;
-// The hellstorm look fades in and out over a longer stretch still, so the
-// world darkens around you as you climb the Ottawa rather than snapping.
-// Nonzero from TRIGGER_DISTANCE to a little past FLIGHT_END (STORM_TAIL).
-const STORM_FADE_IN = 220;
+// The hellstorm look fades in and out, so the world darkens around you
+// rather than snapping. Nonzero from TRIGGER_DISTANCE to a little past
+// FLIGHT_END (STORM_TAIL). The fade-in used to be 220 — at
+// FLIGHT_CRUISE_SPEED (game.js) that's the better part of a minute before
+// the sky visibly darkens, easily long enough that a player never connects
+// "the canoe lifted off" with anything actually changing on screen. Cut
+// to 50 (~15s) so the palette shift reads as part of taking flight, not a
+// separate thing that happens later. Fade-out stays slow — there's no
+// equivalent "wait, when did that happen?" risk on the way back down.
+const STORM_FADE_IN = 50;
 const STORM_FADE_OUT = 150;
 const STORM_TAIL = 70;
 
