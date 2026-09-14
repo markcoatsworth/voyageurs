@@ -3,7 +3,7 @@
 // — run the canoe into one and game.js sends the player ashore instead of
 // taking damage — plus a handful of log buildings on the bank behind it.
 import { CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
-import { centerX, widthAt } from './river/path.js';
+import { centerX, widthAt, braidAt } from './river/path.js';
 import { hashRange } from '../shared/hash.js';
 import { VILLAGES } from './river/route.js';
 import {
@@ -265,8 +265,26 @@ function buildQuebecCityCitadel() {
 }
 const QUEBEC_CITY_CITADEL = buildQuebecCityCitadel();
 
-function bankEdge(d, side) {
+// The near shoreline at d, on the given side. `isMontreal` is a real
+// exception, not just another `side`-pinned mainland town: it sits ON the
+// Island of Montreal (river/islands.js), so its shore is the *island's*
+// edge, not the ambient outer bank — using the outer bank (as every other
+// village correctly does) put its dock and buildings on the mainland
+// riverbank across the channel from the island it created, which is wrong
+// regardless of which side that island splits toward. Every other village
+// (including Charlemagne, whose flowDistance also falls inside the
+// island's span but which is a real mainland town near its east tip)
+// keeps using the true outer bank.
+function shoreEdgeAt(d, side, isMontreal) {
+  if (isMontreal) {
+    const island = braidAt(d);
+    if (island) return island.centerX + side * island.halfWidth;
+  }
   return centerX(d) + side * widthAt(d) / 2;
+}
+
+function bankEdge(v) {
+  return shoreEdgeAt(v.flowDistance, v.side, v.name === 'Montreal');
 }
 
 function toScreen(worldX, z, cameraWorldX) {
@@ -289,6 +307,20 @@ export function isNearVillage(d, side) {
     if (v.side === side && Math.abs(d - v.flowDistance) < halfD) return true;
   }
   return false;
+}
+
+// Which lateral direction "into open water, away from shore" points, as a
+// sign to multiply dockReach(v) by. For every ordinary outer-bank village
+// this is -side (the shore sits at the side's own extreme, so open water —
+// and the rest of the channel — is toward the opposite side). Montreal is
+// the opposite: its "shore" is the island's edge facing side, but the
+// island's own bulk continues in that same side direction (see
+// river/islands.js's offset, which leans the island toward the north to
+// make the south channel the wide one) — so the water on Montreal's south
+// side is further south still, i.e. reach must go *with* side, not against
+// it, or the dock would point back into the island instead of the channel.
+function reachSign(v) {
+  return v.name === 'Montreal' ? v.side : -v.side;
 }
 
 function dockReach(v) {
@@ -315,8 +347,8 @@ export function dockHitZ(v) {
 export function getDockHit(flowDistance, canoeWorldX) {
   for (const v of VILLAGES) {
     if (Math.abs(flowDistance - v.flowDistance) > dockHitZ(v)) continue;
-    const edge = bankEdge(v.flowDistance, v.side);
-    const inner = edge - v.side * dockReach(v);
+    const edge = bankEdge(v);
+    const inner = edge + reachSign(v) * dockReach(v);
     const lo = Math.min(edge, inner);
     const hi = Math.max(edge, inner);
     if (canoeWorldX >= lo && canoeWorldX <= hi) return v;
@@ -389,8 +421,8 @@ function drawDockGreeter(ctx, feetX, feetY, time, seed) {
 
 function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   const layout = villageLayout(v.seed);
-  const edge = bankEdge(v.flowDistance, v.side);
-  const inner = edge - v.side * dockReach(v);
+  const edge = bankEdge(v);
+  const inner = edge + reachSign(v) * dockReach(v);
   const z0 = worldDistance - v.flowDistance;
 
   // Dock: a plank deck with pilings, drawn as an axis-aligned rectangle in
@@ -421,9 +453,14 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
     ctx.lineTo(px, bottom);
     ctx.stroke();
   }
-  // pilings at the outer (water) end
+  // pilings at the outer (water) end — i.e. wherever `inner` (the end
+  // reaching into the channel, vs. `edge` at the shore) landed on screen.
+  // Compared directly rather than inferred from v.side: Montreal's
+  // reachSign() flip (see its comment) means inner can land on either
+  // side of edge depending on the village, unlike every other village
+  // where side alone always predicted it.
   ctx.fillStyle = '#3f2b1a';
-  const pilingX = v.side > 0 ? left : right;
+  const pilingX = toScreen(inner, z0, cameraWorldX).x < toScreen(edge, z0, cameraWorldX).x ? left : right;
   ctx.fillRect(pilingX - 1, top - 1, 2, bottom - top + 2);
 
   const isQuebecCity = v.name === 'Quebec City';
@@ -453,7 +490,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
     scenery = MONTREAL_BUILDINGS.map((b) => {
       const d = v.flowDistance + b.dOffset;
       const z = worldDistance - d;
-      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
+      const worldX = shoreEdgeAt(d, v.side, true) + v.side * (BUILDING_SHORE_OFFSET + b.depth);
       return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
     });
   } else {
@@ -475,7 +512,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   {
     const d = v.flowDistance + REPAIR_SHOP_D_OFFSET;
     const z = worldDistance - d;
-    const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + REPAIR_SHOP_DEPTH);
+    const worldX = shoreEdgeAt(d, v.side, isMontreal) + v.side * (BUILDING_SHORE_OFFSET + REPAIR_SHOP_DEPTH);
     scenery.push({ z, worldX, sprite: repairShopSprite, mirror: false, anchor: 0.85 });
   }
 
@@ -513,7 +550,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
     {
       const d = v.flowDistance + MONTREAL_CHURCH.dOffset;
       const z = worldDistance - d;
-      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + MONTREAL_CHURCH.depth);
+      const worldX = shoreEdgeAt(d, v.side, true) + v.side * (BUILDING_SHORE_OFFSET + MONTREAL_CHURCH.depth);
       scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
     }
   } else {
@@ -549,7 +586,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   // buildings behind never paint over it; the dock sticks out toward the
   // viewer, so it reads as being in front of the whole village anyway.
   {
-    const gWorldX = edge - v.side * dockReach(v) * 0.32;
+    const gWorldX = edge + reachSign(v) * dockReach(v) * 0.32;
     const g = toScreen(gWorldX, z0, cameraWorldX);
     drawDockGreeter(ctx, g.x, g.y, time, v.seed);
   }

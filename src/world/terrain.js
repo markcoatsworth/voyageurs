@@ -41,12 +41,14 @@ const MOUNT_ROYAL_D = 60000 + 2110; // the island's widest keyframe — "at the 
 // spriteVariant is a plain fixed index (not hashed) — each point is
 // already an explicit, hand-placed coordinate, so which of the three
 // near-identical pine sprites it uses is just as authored as where it is.
+// Kept clear of local 2140-2196 (Montreal's own MONTREAL_SPAN footprint,
+// see villages.js) so a tree never lands on top of a building there.
 const ISLAND_TREE_POINTS = [
   { d: 60000 + 2020, fracFromCenter: 0.35, spriteVariant: 0 },
   { d: 60000 + 2070, fracFromCenter: -0.45, spriteVariant: 1 },
   { d: 60000 + 2090, fracFromCenter: 0.55, spriteVariant: 2 },
-  { d: 60000 + 2140, fracFromCenter: -0.35, spriteVariant: 0 },
-  { d: 60000 + 2190, fracFromCenter: 0.4, spriteVariant: 1 },
+  { d: 60000 + 2125, fracFromCenter: -0.4, spriteVariant: 0 },
+  { d: 60000 + 2225, fracFromCenter: 0.4, spriteVariant: 1 },
   { d: 60000 + 2260, fracFromCenter: -0.55, spriteVariant: 2 },
 ];
 
