@@ -12,7 +12,7 @@
 // re-evaluated every frame.
 
 import { hashRange } from '../../shared/hash.js';
-import { featureIslandAt, FEATURE_ISLAND_RANGE, lachineRapidsAt, LACHINE_RAPIDS_RANGE } from './islands.js';
+import { featureIslandAt, FEATURE_ISLAND_RANGE, lachineRapidsAt, LACHINE_RAPIDS_RANGE, montrealWidthBoostAt, MONTREAL_WIDTH_BOOST_RANGE } from './islands.js';
 
 export const FJORD_WIDTH = 8;
 // The real Saint Lawrence off Tadoussac dwarfs the fjord — this is what
@@ -182,7 +182,15 @@ export function widthAt(d) {
   const ampScale = 1 + (ESTUARY_AMP_SCALE - 1) * eased;
   const pinch = Math.sin(d * 0.023 + 1.2) * 2.6 * ampScale;
   const wobble = (Math.sin(d * 0.05 + 4) * 1.6 + Math.sin(d * 0.12) * 0.6) * ampScale;
-  const river = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + pinch + wobble));
+  let river = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + pinch + wobble));
+
+  // The Island of Montreal (river/islands.js) widens the whole corridor
+  // here, on top of the clamp above rather than folded into it — the real
+  // water off Montreal reads as dramatically bigger than a typical reach,
+  // not just "at the formula's usual ceiling."
+  if (d >= MONTREAL_WIDTH_BOOST_RANGE[0] && d <= MONTREAL_WIDTH_BOOST_RANGE[1]) {
+    river += montrealWidthBoostAt(d);
+  }
 
   if (d > OTTAWA_EASE_START) {
     const p = Math.min(1, (d - OTTAWA_EASE_START) / OTTAWA_EASE_LEN);

@@ -38,11 +38,12 @@ const QUEBEC_CITY_DOCK_HIT_Z = 7; // vs. 1.3 everywhere else
 
 // Montreal's dock — the great inland port, commercial heart of New France.
 // Sits in the south (main) channel now that the Island of Montreal splits
-// the river here (river/islands.js) — 18 units comfortably fits the south
-// channel's ~22-unit minimum clearance across the whole island span (see
-// that module's comment) with room to spare, while still reaching much
-// further than the default DOCK_LENGTH (6) the way Quebec City's does.
-const MONTREAL_DOCK_REACH = 18;
+// the river here (river/islands.js) — that channel widens to ~37-50 units
+// across the island's span (the whole corridor gets a deliberate width
+// boost there, see islands.js's MONTREAL_WIDTH_BOOST_KEYFRAMES comment), so
+// 30 units reaches nearly as far as Quebec City's own dock with room to
+// spare, matching its status as the busiest port on the river.
+const MONTREAL_DOCK_REACH = 30;
 const MONTREAL_DOCK_WIDTH_Z = 14; // wider along the shore
 const MONTREAL_DOCK_HIT_Z = 8; // generous hit zone
 
@@ -323,6 +324,17 @@ function reachSign(v) {
   return v.name === 'Montreal' ? v.side : -v.side;
 }
 
+// The opposite direction from reachSign(v) — "inland, away from the
+// water" instead of "out into it." Buildings/church/repair-shop placement
+// all measure depth from the shore in this direction; for Montreal that's
+// -side (toward the island's own bulk/Mount Royal), same flip as reachSign
+// and for the same reason (see its comment) — everywhere else it's just
+// +side, same as using v.side directly, which is what every non-Montreal
+// call site below still does.
+function inlandSign(v) {
+  return -reachSign(v);
+}
+
 function dockReach(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_REACH;
   if (v.name === 'Montreal') return MONTREAL_DOCK_REACH;
@@ -490,7 +502,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
     scenery = MONTREAL_BUILDINGS.map((b) => {
       const d = v.flowDistance + b.dOffset;
       const z = worldDistance - d;
-      const worldX = shoreEdgeAt(d, v.side, true) + v.side * (BUILDING_SHORE_OFFSET + b.depth);
+      const worldX = shoreEdgeAt(d, v.side, true) + inlandSign(v) * (BUILDING_SHORE_OFFSET + b.depth);
       return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
     });
   } else {
@@ -512,7 +524,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   {
     const d = v.flowDistance + REPAIR_SHOP_D_OFFSET;
     const z = worldDistance - d;
-    const worldX = shoreEdgeAt(d, v.side, isMontreal) + v.side * (BUILDING_SHORE_OFFSET + REPAIR_SHOP_DEPTH);
+    const worldX = shoreEdgeAt(d, v.side, isMontreal) + inlandSign(v) * (BUILDING_SHORE_OFFSET + REPAIR_SHOP_DEPTH);
     scenery.push({ z, worldX, sprite: repairShopSprite, mirror: false, anchor: 0.85 });
   }
 
@@ -550,7 +562,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
     {
       const d = v.flowDistance + MONTREAL_CHURCH.dOffset;
       const z = worldDistance - d;
-      const worldX = shoreEdgeAt(d, v.side, true) + v.side * (BUILDING_SHORE_OFFSET + MONTREAL_CHURCH.depth);
+      const worldX = shoreEdgeAt(d, v.side, true) + inlandSign(v) * (BUILDING_SHORE_OFFSET + MONTREAL_CHURCH.depth);
       scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
     }
   } else {

@@ -59,18 +59,62 @@ function interpKeyframes(keyframes, d, fields, clampOutside) {
 // positive offset shifts it toward the north/Charlemagne (side:1) edge,
 // narrowing the Rivière-des-Prairies channel there and widening the south
 // one, matching reality.
+// offset/half are scaled up from an earlier, narrower pass in step with
+// MONTREAL_WIDTH_BOOST_KEYFRAMES below (same scale factor — newTotal/
+// oldTotal — applied to both, at each of these same d points), which is
+// why they don't look like "round" authored numbers: the shape itself
+// (proportions of south channel : island : north channel) is still hand-
+// picked, just carried through the widening algebraically rather than
+// re-eyeballed from scratch. See that table's comment for why the corridor
+// widens here at all.
 const MONTREAL_ISLAND_KEYFRAMES = [
-  { d: LAWRENCE_WEST + 1980, offset: 0, half: 0 },    // east tip, just before Charlemagne
-  { d: LAWRENCE_WEST + 2010, offset: 3, half: 2.2 },
-  { d: LAWRENCE_WEST + 2041, offset: 5, half: 3.4 },  // abeam Charlemagne/Repentigny
-  { d: LAWRENCE_WEST + 2070, offset: 7, half: 4.6 },
-  { d: LAWRENCE_WEST + 2110, offset: 8, half: 5.0 },  // widest, ~Mount Royal
-  { d: LAWRENCE_WEST + 2140, offset: 8, half: 4.6 },
-  { d: LAWRENCE_WEST + 2168, offset: 7, half: 4.0 },  // abeam Montreal's dock
-  { d: LAWRENCE_WEST + 2200, offset: 6, half: 3.2 },
-  { d: LAWRENCE_WEST + 2240, offset: 5, half: 2.4 },
-  { d: LAWRENCE_WEST + 2280, offset: 3.5, half: 1.4 },
-  { d: LAWRENCE_WEST + 2318, offset: 0, half: 0 },    // west tip, Lake of Two Mountains
+  { d: LAWRENCE_WEST + 1980, offset: 0, half: 0 },        // east tip, just before Charlemagne
+  { d: LAWRENCE_WEST + 2010, offset: 4.12, half: 3.02 },
+  { d: LAWRENCE_WEST + 2041, offset: 7.95, half: 5.40 },  // abeam Charlemagne/Repentigny
+  { d: LAWRENCE_WEST + 2070, offset: 12.52, half: 8.23 },
+  { d: LAWRENCE_WEST + 2110, offset: 15.88, half: 9.93 }, // widest, ~Mount Royal
+  { d: LAWRENCE_WEST + 2140, offset: 16.09, half: 9.25 },
+  { d: LAWRENCE_WEST + 2168, offset: 13.42, half: 7.67 }, // abeam Montreal's dock
+  { d: LAWRENCE_WEST + 2200, offset: 11.17, half: 5.96 },
+  { d: LAWRENCE_WEST + 2240, offset: 7.64, half: 3.66 },
+  { d: LAWRENCE_WEST + 2280, offset: 4.09, half: 1.64 },
+  { d: LAWRENCE_WEST + 2318, offset: 0, half: 0 },        // west tip, Lake of Two Mountains
+];
+
+// The ambient ("normal-river") width formula (river/path.js's widthAt())
+// reads like every other stretch of the Saint Lawrence — but the real
+// water off Montreal is dramatically wider than a typical reach (the
+// harbour, Lake St. Louis just upstream), and the island split above was
+// eating so much of the *ambient* width that even the main south channel
+// read as a squeeze right at the arrival — the opposite of "reaching a
+// grand metropolis." This adds extra width on top of the ambient formula,
+// only across the island's own span, ramping from 0 at both ends (so it
+// blends seamlessly into the normal river just outside — no seam) up to
+// nearly double at the peak, abeam the dock and Mount Royal. widthAt()
+// applies it; the island keyframes above were scaled up to match so the
+// south/island/north proportions stay the same, just bigger.
+const MONTREAL_WIDTH_BOOST_KEYFRAMES = [
+  { d: LAWRENCE_WEST + 1980, boost: 0 },
+  { d: LAWRENCE_WEST + 2010, boost: 22 },
+  { d: LAWRENCE_WEST + 2041, boost: 34 },
+  { d: LAWRENCE_WEST + 2070, boost: 40 },
+  { d: LAWRENCE_WEST + 2110, boost: 44 },
+  { d: LAWRENCE_WEST + 2140, boost: 44 },
+  { d: LAWRENCE_WEST + 2168, boost: 42 },
+  { d: LAWRENCE_WEST + 2200, boost: 34 },
+  { d: LAWRENCE_WEST + 2240, boost: 24 },
+  { d: LAWRENCE_WEST + 2280, boost: 10 },
+  { d: LAWRENCE_WEST + 2318, boost: 0 },
+];
+
+export function montrealWidthBoostAt(d) {
+  const kf = interpKeyframes(MONTREAL_WIDTH_BOOST_KEYFRAMES, d, ['boost'], false);
+  return kf ? kf.boost : 0;
+}
+
+export const MONTREAL_WIDTH_BOOST_RANGE = [
+  MONTREAL_WIDTH_BOOST_KEYFRAMES[0].d,
+  MONTREAL_WIDTH_BOOST_KEYFRAMES[MONTREAL_WIDTH_BOOST_KEYFRAMES.length - 1].d,
 ];
 
 const MONTREAL_ISLAND_MIN_HALF = 0.12; // below this, treat as "no island" (matches path.js's braidAt taper cutoff)
@@ -141,4 +185,4 @@ export const LACHINE_RAPIDS_RANGE = [
 // generate its GLSL mirror straight from these numbers (a small JS
 // codegen step at module-eval time) instead of hand-retyping them —
 // the shape stays authored in exactly one place.
-export { MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL, LACHINE_RAPIDS_KEYFRAMES };
+export { MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL, LACHINE_RAPIDS_KEYFRAMES, MONTREAL_WIDTH_BOOST_KEYFRAMES };

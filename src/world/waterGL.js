@@ -17,6 +17,7 @@ import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFr
 import {
   MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL,
   LACHINE_RAPIDS_KEYFRAMES, FEATURE_ISLAND_RANGE, LACHINE_RAPIDS_RANGE,
+  MONTREAL_WIDTH_BOOST_KEYFRAMES, MONTREAL_WIDTH_BOOST_RANGE,
 } from './river/islands.js';
 
 // Generates a GLSL if/else-if chain doing the same linear-keyframe lookup
@@ -84,6 +85,8 @@ const float MONTREAL_ISLAND_MIN_HALF = ${MONTREAL_ISLAND_MIN_HALF.toFixed(4)};
 const float MONTREAL_ISLAND_MIN_SUBCHANNEL = ${MONTREAL_ISLAND_MIN_SUBCHANNEL.toFixed(4)};
 const float LACHINE_D_MIN = ${LACHINE_RAPIDS_RANGE[0].toFixed(2)};
 const float LACHINE_D_MAX = ${LACHINE_RAPIDS_RANGE[1].toFixed(2)};
+const float WIDTH_BOOST_D_MIN = ${MONTREAL_WIDTH_BOOST_RANGE[0].toFixed(2)};
+const float WIDTH_BOOST_D_MAX = ${MONTREAL_WIDTH_BOOST_RANGE[1].toFixed(2)};
 
 // --- river course, mirrors world/river/path.js — keep in sync by hand ---
 float centerX(float d) {
@@ -119,6 +122,15 @@ float rideauWidthAt(float d) {
 float gorgeWidthAt(float d) {
   return max(6.2, 8.0 + sin(d * 0.09) * 1.4 + sin(d * 0.037 + 2.0) * 0.9);
 }
+// Mirrors world/river/islands.js's montrealWidthBoostAt() — codegen'd, see
+// featureIslandAt() above.
+float montrealWidthBoostAt(float d) {
+  if (d < WIDTH_BOOST_D_MIN || d > WIDTH_BOOST_D_MAX) return 0.0;
+  float boost = 0.0;
+${glslKeyframeChain('d', MONTREAL_WIDTH_BOOST_KEYFRAMES, ['boost'], { boost: 'boost' })}
+  return boost;
+}
+
 float widthAt(float d) {
   // The Rideau leg — checked first, same as the JS widthAt(), because its
   // offset sits past everything else on the shared number line.
@@ -132,6 +144,11 @@ float widthAt(float d) {
   float pinch = sin(d * 0.023 + 1.2) * 2.6 * ampScale;
   float wobble = (sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.12) * 0.6) * ampScale;
   float river = clamp(trend + pinch + wobble, 6.5, 62.0);
+  // The Island of Montreal widens the whole corridor here, same as the JS
+  // mirror in river/path.js — on top of the clamp above, not folded into it.
+  if (d >= WIDTH_BOOST_D_MIN && d <= WIDTH_BOOST_D_MAX) {
+    river += montrealWidthBoostAt(d);
+  }
   // Ottawa gorge — eased in past Montréal (see path.js's widthAt() comment).
   if (d > OTTAWA_EASE_START) {
     float p = clamp((d - OTTAWA_EASE_START) / OTTAWA_EASE_LEN, 0.0, 1.0);
