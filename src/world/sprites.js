@@ -250,6 +250,43 @@ export function createIslandSprite() {
   });
 }
 
+// Mount Royal — the hill at the centre of the Island of Montreal (see
+// world/river/islands.js), drawn top-down as a big rounded forested mound
+// (same shading-band approach as createIslandSprite, just much bigger, and
+// no water ripple — it sits on dry land, not in the channel) with the real
+// illuminated cross at its peak as a small pale accent. A landmark, not a
+// hazard: terrain.js draws it well clear of either channel.
+export function createMountRoyalSprite() {
+  const w = 96, h = 76;
+  return makeSprite(w, h, (ctx) => {
+    const cx = w / 2, cy = h / 2 + 6;
+    groundShadow(ctx, cx, cy + 20, 40, 12);
+    ctx.fillStyle = '#16300f';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 2, 42, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#2b4d24';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 38, 25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3c6b35';
+    ctx.beginPath();
+    ctx.ellipse(cx - 4, cy - 6, 28, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#54874a';
+    ctx.beginPath();
+    ctx.ellipse(cx - 10, cy - 12, 14, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // The cross atop the peak — small, pale, unmistakably a landmark rather
+    // than more forest.
+    ctx.fillStyle = '#e8e8e0';
+    ctx.fillRect(cx - 1, cy - 22, 2, 10);
+    ctx.fillRect(cx - 4, cy - 19, 8, 2);
+    blob(ctx, cx, cy - 17, 2.4, 'rgba(255, 250, 220, 0.55)');
+  });
+}
+
 // A stretched fur hide, not a lump: a fringe of small tufts around the edge
 // (the shape cue "soft and furry", vs. the rock's hard angular facets) and a
 // saturated warm gold/amber throughout — pushed deliberately far from the

@@ -14,6 +14,32 @@
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT, AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
 import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE, OTTAWA_EASE_START, OTTAWA_EASE_LEN } from './river/path.js';
+import {
+  MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL,
+  LACHINE_RAPIDS_KEYFRAMES, FEATURE_ISLAND_RANGE, LACHINE_RAPIDS_RANGE,
+} from './river/islands.js';
+
+// Generates a GLSL if/else-if chain doing the same linear-keyframe lookup
+// as river/islands.js's interpKeyframes(), straight from that file's own
+// keyframe arrays — so the baked shapes (the Island of Montreal, the
+// Lachine Rapids) stay authored in exactly one place instead of being
+// hand-retyped into the shader too, unlike the rest of this file's
+// (formula-based, genuinely hand-mirrored) river shape.
+function glslKeyframeChain(d_expr, keyframes, fields, outVars) {
+  const lines = [];
+  for (let i = 1; i < keyframes.length; i++) {
+    const a = keyframes[i - 1], b = keyframes[i];
+    // Keyframes are sorted by d, so the first bracket whose upper bound is
+    // >= d is the right one — no lower-bound check needed per branch.
+    lines.push(`  ${i === 1 ? 'if' : 'else if'} (${d_expr} <= ${b.d.toFixed(2)}) {`);
+    lines.push(`    float t = (${d_expr} - ${a.d.toFixed(2)}) / ${(b.d - a.d).toFixed(4)};`);
+    for (const f of fields) {
+      lines.push(`    ${outVars[f]} = ${a[f].toFixed(4)} + (${(b[f] - a[f]).toFixed(4)}) * t;`);
+    }
+    lines.push(`  }`);
+  }
+  return lines.join('\n');
+}
 
 const VERT_SRC = `
 attribute vec2 a_pos;
@@ -52,6 +78,12 @@ const float RIDEAU_OFFSET = ${SEGMENT_SHAPE_OFFSET.rideau.toFixed(2)};
 const float RIDEAU_SPAN = ${RIDEAU_SPAN_DISTANCE.toFixed(2)};
 const float OTTAWA_EASE_START = ${OTTAWA_EASE_START.toFixed(2)};
 const float OTTAWA_EASE_LEN = ${OTTAWA_EASE_LEN.toFixed(2)};
+const float ISLAND_D_MIN = ${FEATURE_ISLAND_RANGE[0].toFixed(2)};
+const float ISLAND_D_MAX = ${FEATURE_ISLAND_RANGE[1].toFixed(2)};
+const float MONTREAL_ISLAND_MIN_HALF = ${MONTREAL_ISLAND_MIN_HALF.toFixed(4)};
+const float MONTREAL_ISLAND_MIN_SUBCHANNEL = ${MONTREAL_ISLAND_MIN_SUBCHANNEL.toFixed(4)};
+const float LACHINE_D_MIN = ${LACHINE_RAPIDS_RANGE[0].toFixed(2)};
+const float LACHINE_D_MAX = ${LACHINE_RAPIDS_RANGE[1].toFixed(2)};
 
 // --- river course, mirrors world/river/path.js — keep in sync by hand ---
 float centerX(float d) {
@@ -109,6 +141,25 @@ float widthAt(float d) {
   return river;
 }
 
+// Mirrors world/river/islands.js's featureIslandAt() — codegen'd straight
+// from its own keyframe table (see glslKeyframeChain() above), not
+// hand-retyped. Currently just the Island of Montreal. cx/ambientHalf are
+// passed in (centerX(d)/widthAt(d)*0.5) rather than recomputed, matching
+// how braidAt() below already has them to hand.
+vec2 featureIslandAt(float d, float cx, float ambientHalf) {
+  if (d < ISLAND_D_MIN || d > ISLAND_D_MAX) return vec2(0.0, -1.0);
+  float offset = 0.0;
+  float halfWidth = 0.0;
+${glslKeyframeChain('d', MONTREAL_ISLAND_KEYFRAMES, ['offset', 'half'], { offset: 'offset', half: 'halfWidth' })}
+  if (halfWidth < MONTREAL_ISLAND_MIN_HALF) return vec2(0.0, -1.0);
+  float maxOffset = max(0.0, ambientHalf - halfWidth - MONTREAL_ISLAND_MIN_SUBCHANNEL);
+  if (abs(offset) > maxOffset) offset = sign(offset) * maxOffset;
+  float maxHalfWidth = max(0.0, ambientHalf - abs(offset) - MONTREAL_ISLAND_MIN_SUBCHANNEL);
+  if (halfWidth > maxHalfWidth) halfWidth = maxHalfWidth;
+  if (halfWidth < MONTREAL_ISLAND_MIN_HALF) return vec2(0.0, -1.0);
+  return vec2(cx + offset, halfWidth);
+}
+
 // Looks up the CPU-computed offset for whichever of the two candidate
 // cycles this pixel's d actually falls in (see the u_braidCycleA/B comment
 // above). Falls back to B when A doesn't match, so a single active cycle
@@ -123,6 +174,13 @@ float braidOffsetForCycle(float cycle) {
 // The two private tuning constants (max island size, min safe passage)
 // aren't exported from world/river/path.js, so they're hand-copied here too.
 vec2 braidAt(float d) {
+  // A baked feature island (river/islands.js — currently just Montreal)
+  // wins outright over the procedural formula below, same as the JS
+  // mirror in river/path.js.
+  if (d >= ISLAND_D_MIN && d <= ISLAND_D_MAX) {
+    return featureIslandAt(d, centerX(d), widthAt(d) * 0.5);
+  }
+
   float cycle = floor(d / BRAID_PERIOD);
   float spanStart = cycle * BRAID_PERIOD + (BRAID_PERIOD - BRAID_LENGTH) * 0.5;
   float t = (d - spanStart) / BRAID_LENGTH;
@@ -143,8 +201,25 @@ vec2 braidAt(float d) {
   return vec2(centerX(d) + offsetFraction * maxOffset, halfWidth);
 }
 
+// Mirrors world/river/islands.js's lachineRapidsAt() — codegen'd, see
+// featureIslandAt() above. Returns -1.0 outside its own range (meaning
+// "not applicable"), matching the JS version's null.
+float lachineRapidsAt(float d) {
+  if (d < LACHINE_D_MIN || d > LACHINE_D_MAX) return -1.0;
+  float v = 0.0;
+${glslKeyframeChain('d', LACHINE_RAPIDS_KEYFRAMES, ['v'], { v: 'v' })}
+  return v;
+}
+
 // Mirrors world/river/path.js's rapidsStrength() — 0 (calm) to 1 (peak whitewater).
 float rapidsStrength(float d) {
+  // The Lachine Rapids — a fixed place, overrides the periodic formula
+  // below outright, same as the JS mirror in river/path.js.
+  if (d >= LACHINE_D_MIN && d <= LACHINE_D_MAX) {
+    float v = lachineRapidsAt(d);
+    if (v >= 0.0) return v;
+  }
+
   float cycle = floor(d / RAPIDS_PERIOD);
   float spanStart = cycle * RAPIDS_PERIOD + (RAPIDS_PERIOD - RAPIDS_LENGTH) * 0.5;
   float t = (d - spanStart) / RAPIDS_LENGTH;

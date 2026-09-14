@@ -12,6 +12,7 @@
 // re-evaluated every frame.
 
 import { hashRange } from '../../shared/hash.js';
+import { featureIslandAt, FEATURE_ISLAND_RANGE, lachineRapidsAt, LACHINE_RAPIDS_RANGE } from './islands.js';
 
 export const FJORD_WIDTH = 8;
 // The real Saint Lawrence off Tadoussac dwarfs the fjord — this is what
@@ -144,12 +145,14 @@ function rideauWidthAt(d) {
 // be a hard `if (d > offset)` swap, which drew a straight horizontal edge
 // across the river the instant it kicked in — right in front of Montréal,
 // since the trigger (~offset 2150) sat a few units *upstream* of the city
-// itself. Now it eases in over OTTAWA_EASE_LEN, starting just past the last
-// of Montréal's waterfront (its buildings span ~±28 of its flowDistance
-// ~2168) and after the Chasse-galerie has already lifted off
-// (chasseGalerie.js TRIGGER_DISTANCE = Montréal + 20), so the closing gorge
-// is only ever seen from the air.
-export const OTTAWA_EASE_START = SEGMENT_SHAPE_OFFSET.lawrenceWest + 2200;
+// itself. Now it eases in over OTTAWA_EASE_LEN, well clear of Montréal's
+// waterfront (its buildings span ~±28 of its flowDistance ~2168) and after
+// the Chasse-galerie has already lifted off (chasseGalerie.js
+// TRIGGER_DISTANCE = Montréal + 150, pushed out from +20 to leave room on
+// the ground for the Island of Montreal split and the Lachine Rapids —
+// see river/islands.js), so the closing gorge is only ever seen from the
+// air. Kept the trigger's original ~12-unit lead on this ease-start.
+export const OTTAWA_EASE_START = SEGMENT_SHAPE_OFFSET.lawrenceWest + 2330;
 export const OTTAWA_EASE_LEN = 120;
 
 function gorgeWidthAt(d) {
@@ -222,6 +225,14 @@ export function braidOffsetFraction(cycle) {
 // island's geometry didn't track that, the safe-passage guarantee would
 // only actually hold at the span's center, not across the whole thing.
 export function braidAt(d) {
+  // A baked feature island (river/islands.js — currently just Montreal)
+  // wins outright over the procedural formula below, and suppresses it
+  // across its whole span so a small periodic lens island can never spawn
+  // stranded inside (or straddling the edge of) the big landmass.
+  if (d >= FEATURE_ISLAND_RANGE[0] && d <= FEATURE_ISLAND_RANGE[1]) {
+    return featureIslandAt(d, centerX(d), widthAt(d));
+  }
+
   const cycle = Math.floor(d / BRAID_PERIOD);
   const spanStart = cycle * BRAID_PERIOD + (BRAID_PERIOD - BRAID_LENGTH) / 2;
   const t = (d - spanStart) / BRAID_LENGTH;
@@ -258,6 +269,14 @@ export const RAPIDS_LENGTH = 22; // world units a rapids stretch spans
 // smoothly in and out across the span so the current builds and eases
 // rather than switching on like a wall.
 export function rapidsStrength(d) {
+  // The Lachine Rapids (river/islands.js) — a real, fixed place, not a
+  // repeating pattern, so it overrides the periodic formula below outright
+  // rather than blending with it.
+  if (d >= LACHINE_RAPIDS_RANGE[0] && d <= LACHINE_RAPIDS_RANGE[1]) {
+    const v = lachineRapidsAt(d);
+    if (v !== null) return v;
+  }
+
   const cycle = Math.floor(d / RAPIDS_PERIOD);
   const spanStart = cycle * RAPIDS_PERIOD + (RAPIDS_PERIOD - RAPIDS_LENGTH) / 2;
   const t = (d - spanStart) / RAPIDS_LENGTH;

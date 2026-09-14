@@ -37,9 +37,12 @@ const QUEBEC_CITY_DOCK_WIDTH_Z = 12; // vs. 2.2 everywhere else
 const QUEBEC_CITY_DOCK_HIT_Z = 7; // vs. 1.3 everywhere else
 
 // Montreal's dock — the great inland port, commercial heart of New France.
-// Even larger than Quebec City's to match its status as the final destination
-// and busiest port on the St. Lawrence. Impossible to miss.
-const MONTREAL_DOCK_REACH = 36; // even bigger than Quebec City
+// Sits in the south (main) channel now that the Island of Montreal splits
+// the river here (river/islands.js) — 18 units comfortably fits the south
+// channel's ~22-unit minimum clearance across the whole island span (see
+// that module's comment) with room to spare, while still reaching much
+// further than the default DOCK_LENGTH (6) the way Quebec City's does.
+const MONTREAL_DOCK_REACH = 18;
 const MONTREAL_DOCK_WIDTH_Z = 14; // wider along the shore
 const MONTREAL_DOCK_HIT_Z = 8; // generous hit zone
 

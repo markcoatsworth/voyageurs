@@ -19,10 +19,17 @@ import { hashRange } from '../shared/hash.js';
 const MONTREAL = VILLAGES.find(v => v.name === 'Montreal');
 const GATINEAU = VILLAGES.find(v => v.name === 'Gatineau');
 
-// Where the canoe leaves the water and takes flight. Exported (like
-// blockade.js's SHIP_FLOW_DISTANCE) so main.js's ?start= keyword can drop a
-// tester right on the cusp of it without re-deriving Montreal's geography.
-export const TRIGGER_DISTANCE = MONTREAL.flowDistance + 20; // Shortly after Montreal
+// Where the canoe leaves the water and takes flight. Pushed out from the
+// original +20 to +150 — just under real Île-Perrot's own spot at +160.6
+// in this same real-distance-derived numbering — to leave room on the
+// ground past Montreal's dock for the Island of Montreal split and the
+// Lachine Rapids (river/islands.js) before liftoff, matching the real
+// sequence: Old Montreal, the rapids, Lake St. Louis, then the Ottawa.
+// river/path.js's OTTAWA_EASE_START was shifted the same amount, keeping
+// its original ~12-unit lead on this trigger. Exported (like blockade.js's
+// SHIP_FLOW_DISTANCE) so main.js's ?start= keyword can drop a tester right
+// on the cusp of it without re-deriving Montreal's geography.
+export const TRIGGER_DISTANCE = MONTREAL.flowDistance + 150;
 
 // The flight ends a little short of Gatineau's own dock, so the canoe
 // glides back down onto the water and you paddle the last stretch in to the
@@ -120,11 +127,26 @@ const SAME_SIDE_CHANCE = 0.16; // odds a church repeats the previous bank
 const STEEPLE_VISUAL_H = 7;    // world-units tall (hash-varied per church)
 const STEEPLE_OVERHANG = 0.8;  // how far the church body spills past its own bank
 
+// The steeple sequence's own anchor — deliberately NOT TRIGGER_DISTANCE
+// itself. Every church's exact position (and hashRange-seeded reach/height)
+// comes from its index in this generation loop, so anchoring it to
+// TRIGGER_DISTANCE would reflow the *entire* sequence, all the way to
+// Gatineau, any time that constant moves — which is exactly what happened
+// when TRIGGER_DISTANCE was pushed from Montréal+20 to +150 (see its own
+// comment): it silently shuffled every steeple's position, including right
+// at the Diable arena. Fixed at the original +20 instead, so the whole
+// tuned sequence stays put; the handful of steeples between here and the
+// new (later) TRIGGER_DISTANCE just sit unused — collision/drawing only
+// happen once playerFlowDistance reaches TRIGGER_DISTANCE anyway (see
+// flightWind()'s callers below), and by then you're on the ground paddling
+// through the Lachine Rapids (river/islands.js), not flying.
+const STEEPLE_ANCHOR = MONTREAL.flowDistance + 20;
+
 // Built once at module load — pure geometry over the flight span. Each entry
 // is one church: `worldX`/`hx`/`hz` are its collision box, `gapOffset` is the
 // centre-relative lateral offset to aim for to clear it, `side` is the bank.
 const STEEPLES = (() => {
-  const from = TRIGGER_DISTANCE - 4;
+  const from = STEEPLE_ANCHOR - 4;
   const to = FLIGHT_END + 4;
   const out = [];
   let side = 1;

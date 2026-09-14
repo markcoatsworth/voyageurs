@@ -154,16 +154,24 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // strategic location between Trois-Rivières and Montreal. South shore —
   // real Sorel-Tracy sits opposite the north-shore towns above it.
   { name: 'Sorel-Tracy', lat: 46.0500, lon: -73.1167, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 },
-  // Charlemagne — a village on the north shore just upriver from Montreal
-  // (on the Rivière des Prairies side, same north bank as Montréal itself,
-  // not Sorel-Tracy's south shore), gives players a close starting point
+  // Charlemagne — real Repentigny's spot, on the Rivière des Prairies side
+  // just upriver from Montreal, right where that channel rejoins the St.
+  // Lawrence at the Island of Montreal's east tip (river/islands.js) — the
+  // narrower north channel the baked island splits off, not Montreal's own
+  // south-shore/main-channel side. Gives players a close starting point
   // for testing the final destination.
   { name: 'Charlemagne', lat: 45.7167, lon: -73.4833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
   // Final destination — New France's commercial heart and the great inland
   // port. The river continues past Montreal too (ultimately toward the Great
-  // Lakes), but this marks the end of the current journey. North shore (side: 1)
-  // like Quebec City — the real city sits on the north bank.
-  { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+  // Lakes), but this marks the end of the current journey. South shore
+  // (side: -1) — corrected from an earlier north-shore placeholder that
+  // predated the Island of Montreal split (see river/islands.js): real
+  // Vieux-Port/Old Montreal faces the St. Lawrence's main channel on the
+  // island's south side, not the narrower Rivière des Prairies to the
+  // north (that's the Charlemagne/side:1 side, matching real Repentigny —
+  // right where the Prairies rejoins the St. Lawrence at the island's east
+  // tip).
+  { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: -1 },
 
   // The Ottawa River — Chasse-galerie flight path toward Gatineau. Real
   // Île-Perrot/Hudson/Rigaud all sit on the south side of Lake of Two

@@ -1,7 +1,8 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } from '../shared/config.js';
 import { centerX, widthAt, braidAt, BRAID_PERIOD } from './river/path.js';
+import { FEATURE_ISLAND_RANGE } from './river/islands.js';
 import { createWaterTile, createGrassTile, createBankTile, createSandTile } from './tiles.js';
-import { createPineTreeSprite, createPebbleSprite } from './sprites.js';
+import { createPineTreeSprite, createPebbleSprite, createMountRoyalSprite } from './sprites.js';
 import { hash, hashRange } from '../shared/hash.js';
 import { isNearVillage, drawVillages } from './villages.js';
 
@@ -28,6 +29,26 @@ const PEBBLE_CHANCE = 0.8;
 let patterns = null;
 const treeSprites = [0, 1, 2].map(createPineTreeSprite);
 const pebbleSprites = [0, 1, 2].map(createPebbleSprite);
+const mountRoyalSprite = createMountRoyalSprite();
+
+// Fixed scenery for the Island of Montreal (river/islands.js) — hand-placed
+// points, not a periodic scatter, since the island itself is baked rather
+// than procedural. `fracFromCenter` positions each relative to the
+// island's own centerX/halfWidth at that exact d (from braidAt(), which
+// resolves to river/islands.js's featureIslandAt() across this span) so
+// they sit safely on the landmass regardless of its exact authored shape.
+const MOUNT_ROYAL_D = 60000 + 2110; // the island's widest keyframe — "at the centre of the island"
+// spriteVariant is a plain fixed index (not hashed) — each point is
+// already an explicit, hand-placed coordinate, so which of the three
+// near-identical pine sprites it uses is just as authored as where it is.
+const ISLAND_TREE_POINTS = [
+  { d: 60000 + 2020, fracFromCenter: 0.35, spriteVariant: 0 },
+  { d: 60000 + 2070, fracFromCenter: -0.45, spriteVariant: 1 },
+  { d: 60000 + 2090, fracFromCenter: 0.55, spriteVariant: 2 },
+  { d: 60000 + 2140, fracFromCenter: -0.35, spriteVariant: 0 },
+  { d: 60000 + 2190, fracFromCenter: 0.4, spriteVariant: 1 },
+  { d: 60000 + 2260, fracFromCenter: -0.55, spriteVariant: 2 },
+];
 
 function ensurePatterns(ctx) {
   if (patterns) return patterns;
@@ -108,6 +129,7 @@ export function drawBanks(ctx, worldDistance, cameraWorldX, { hideVillages = fal
   ctx.restore();
 
   drawBraidIslands(ctx, worldDistance, cameraWorldX);
+  drawFeatureIslandScenery(ctx, worldDistance, cameraWorldX);
   drawShorelineStones(ctx, worldDistance, cameraWorldX, riverEdgeX);
   drawTrees(ctx, worldDistance, cameraWorldX);
   if (!hideVillages) drawVillages(ctx, worldDistance, cameraWorldX, time);
@@ -141,6 +163,11 @@ function drawBraidIslands(ctx, worldDistance, cameraWorldX) {
   const cycleHi = Math.ceil(dFar / BRAID_PERIOD) + 1;
   for (let cycle = cycleLo; cycle <= cycleHi; cycle++) {
     const braidCenterD = cycle * BRAID_PERIOD + BRAID_PERIOD / 2;
+    // A baked feature island (river/islands.js) isn't on this periodic
+    // grid — its own scenery pass (drawFeatureIslandScenery) handles it —
+    // so skip any cycle braidAt() would resolve to it instead of a real
+    // small procedural island.
+    if (braidCenterD >= FEATURE_ISLAND_RANGE[0] && braidCenterD <= FEATURE_ISLAND_RANGE[1]) continue;
     const braid = braidAt(braidCenterD);
     if (!braid) continue;
     const z = worldDistance - braidCenterD;
@@ -148,6 +175,26 @@ function drawBraidIslands(ctx, worldDistance, cameraWorldX) {
     const screenX = toScreenX(braid.centerX, cameraWorldX);
     const sprite = treeSprites[Math.floor(hashRange(cycle, 501, 0, treeSprites.length))];
     ctx.drawImage(sprite, screenX - sprite.width / 2, y - sprite.height * 0.72);
+  }
+}
+
+// Mount Royal + a handful of fixed trees on the Island of Montreal (see the
+// ISLAND_TREE_POINTS/MOUNT_ROYAL_D comment above) — drawn after the sand
+// fill above so they sit on top of the landmass, not painted over by it.
+function drawFeatureIslandScenery(ctx, worldDistance, cameraWorldX) {
+  const draw = (d, fracFromCenter, sprite, anchorFrac) => {
+    const braid = braidAt(d);
+    if (!braid) return; // outside the island's own span at this d
+    const worldX = braid.centerX + fracFromCenter * braid.halfWidth;
+    const z = worldDistance - d;
+    const y = CANOE_SCREEN_Y + z * PIXELS_PER_UNIT;
+    const x = toScreenX(worldX, cameraWorldX);
+    ctx.drawImage(sprite, x - sprite.width / 2, y - sprite.height * anchorFrac);
+  };
+
+  draw(MOUNT_ROYAL_D, 0, mountRoyalSprite, 0.62);
+  for (const p of ISLAND_TREE_POINTS) {
+    draw(p.d, p.fracFromCenter, treeSprites[p.spriteVariant], 0.72);
   }
 }
 
