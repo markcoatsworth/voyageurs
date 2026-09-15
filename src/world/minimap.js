@@ -13,7 +13,10 @@
 // map-projection coordinates. Panning is just moving the SVG viewBox — the
 // route/label markup itself never needs rebuilding, only which segment's
 // cumulative-distance math update() uses to place the marker changes.
-import { SEGMENTS, ALL_POINTS, LAC_SAINT_JEAN_SHAPE } from './river/route.js';
+import {
+  SEGMENTS, ALL_POINTS, LAC_SAINT_JEAN_SHAPE,
+  MONTREAL_ISLAND_MAP_SHAPE, SAINTE_HELENE_MAP_POINT, NUNS_ISLAND_MAP_POINT, LACHINE_RAPIDS_MAP_POINT,
+} from './river/route.js';
 
 // Width/height of the visible window, in the same km-equivalent units as
 // the projected route points. Picked against the real gaps between
@@ -47,6 +50,54 @@ const SEGMENT_STYLE = {
 };
 
 const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+const toClosedPath = (pts) => `${toPath(pts)} Z`;
+
+// riverWidthKm (route.js, every waypoint) floored so the real narrowest
+// reaches — the Rideau's canal towns run as little as 0.15km — don't
+// vanish to an invisible hairline at this widget's scale; the ceiling end
+// (the Sept-Îles estuary, ~50km) is left alone since accurately reading as
+// "this is basically open water here" is the whole point.
+const MIN_RIVER_HALF_WIDTH_KM = 0.45;
+// Extra half-width the outline ribbon gets over the fill ribbon, in km —
+// a constant border regardless of the channel's own real width, same role
+// the old fixed outlineWidth/fillWidth stroke pair played, just additive
+// now that the fill itself varies.
+const OUTLINE_BORDER_KM = 0.7;
+
+function halfWidthKmAt(p) {
+  return Math.max(MIN_RIVER_HALF_WIDTH_KM, (p.riverWidthKm ?? MIN_RIVER_HALF_WIDTH_KM * 2) / 2);
+}
+
+// Turns a polyline + a half-width per vertex into a single closed ribbon
+// polygon (left edge forward, right edge backward) instead of the old
+// fixed-stroke-width path, so the water actually reads as narrow or wide
+// where the real river is. Per-vertex normals are the *averaged* direction
+// of each vertex's incoming and outgoing segments (a standard cheap miter),
+// not a fresh per-segment normal, so consecutive quads share an edge
+// exactly instead of leaving seams/gaps at each waypoint.
+function ribbonPolygon(points, halfWidths) {
+  const n = points.length;
+  const normals = [];
+  for (let i = 0; i < n; i++) {
+    let dx = 0, dy = 0;
+    if (i > 0) {
+      const len = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y) || 1;
+      dx += (points[i].x - points[i - 1].x) / len;
+      dy += (points[i].y - points[i - 1].y) / len;
+    }
+    if (i < n - 1) {
+      const len = Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y) || 1;
+      dx += (points[i + 1].x - points[i].x) / len;
+      dy += (points[i + 1].y - points[i].y) / len;
+    }
+    const len = Math.hypot(dx, dy) || 1;
+    normals.push({ x: -dy / len, y: dx / len });
+  }
+  const left = points.map((p, i) => ({ x: p.x + normals[i].x * halfWidths[i], y: p.y + normals[i].y * halfWidths[i] }));
+  const right = points.map((p, i) => ({ x: p.x - normals[i].x * halfWidths[i], y: p.y - normals[i].y * halfWidths[i] }));
+  right.reverse();
+  return [...left, ...right];
+}
 
 // Turns a closed loop of points into a smooth, rounded outline instead of a
 // hard-edged polygon — quadratic curves through each edge's midpoint, using
@@ -90,22 +141,59 @@ export function createMinimap() {
 
   // Outlines drawn first for *every* segment, then all fills on top, so no
   // segment's outline cuts across another's fill right at the Tadoussac
-  // junction where all three meet.
+  // junction where all three meet. Each is now a variable-width ribbon
+  // polygon (ribbonPolygon), not a fixed-stroke-width path, so the water
+  // actually widens/narrows to match the real river (route.js's
+  // riverWidthKm) instead of reading as a uniform line regardless of
+  // whether it's the Rideau's canal towns or the Sept-Îles estuary.
   const segmentList = Object.values(SEGMENTS);
   for (const seg of segmentList) {
     const style = SEGMENT_STYLE[seg.id];
-    svg.appendChild(svgEl('path', {
-      d: toPath(seg.points), fill: 'none', stroke: style.outline, 'stroke-width': style.outlineWidth,
-      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
-    }));
+    const halfWidths = seg.points.map((p) => halfWidthKmAt(p) + OUTLINE_BORDER_KM);
+    svg.appendChild(svgEl('path', { d: toClosedPath(ribbonPolygon(seg.points, halfWidths)), fill: style.outline }));
   }
   for (const seg of segmentList) {
     const style = SEGMENT_STYLE[seg.id];
-    svg.appendChild(svgEl('path', {
-      d: toPath(seg.points), fill: 'none', stroke: style.fill, 'stroke-width': style.fillWidth,
-      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+    const halfWidths = seg.points.map((p) => halfWidthKmAt(p));
+    svg.appendChild(svgEl('path', { d: toClosedPath(ribbonPolygon(seg.points, halfWidths)), fill: style.fill }));
+  }
+
+  // Real land inside the water, painted the same deep green as the
+  // widget's own background (#minimap in style.css) so it reads as a hole
+  // cut into the ribbon rather than a rendering gap — the same visual
+  // language Google Maps-style terrain tiles use for islands. The Island
+  // of Montreal is large enough at this scale to be its own surveyed
+  // shape (MONTREAL_ISLAND_MAP_SHAPE); Île Sainte-Hélène/Nuns' Island are
+  // both under 1km across in reality, so they're small fixed markers
+  // instead, sized to actually be visible rather than to true scale (the
+  // same liberty the waypoint dots already take).
+  // A touch lighter/warmer than the widget's own background (not an exact
+  // match) plus a warm tan coastline — gives the island real visual
+  // weight of its own rather than just a thin ring, which matters where
+  // (like Montreal's real channels) the surrounding water is too narrow
+  // to leave an obviously-blue ring doing that contrast work instead.
+  const MINIMAP_LAND_COLOR = '#3a5c2e';
+  const MINIMAP_COASTLINE = '#d8c9a0';
+  svg.appendChild(svgEl('path', {
+    d: smoothClosedPath(MONTREAL_ISLAND_MAP_SHAPE), fill: MINIMAP_LAND_COLOR, stroke: MINIMAP_COASTLINE, 'stroke-width': 1.1,
+  }));
+  const SOUTH_ISLAND_MARKER_RADIUS = 0.9;
+  for (const p of [SAINTE_HELENE_MAP_POINT, NUNS_ISLAND_MAP_POINT]) {
+    svg.appendChild(svgEl('circle', {
+      cx: p.x, cy: p.y, r: SOUTH_ISLAND_MARKER_RADIUS, fill: MINIMAP_LAND_COLOR, stroke: MINIMAP_COASTLINE, 'stroke-width': 0.6,
     }));
   }
+
+  // The Lachine Rapids — a rough stretch of water, not land, so a bit of
+  // whitewater texture (a small cluster of pale chevrons) over the ribbon
+  // rather than a hole cut into it.
+  const rapids = svgEl('g', { stroke: '#eaf6ff', 'stroke-width': 0.3, 'stroke-linecap': 'round', fill: 'none', opacity: 0.85 });
+  const RAPIDS_CHEVRONS = [{ dx: -1.1, dy: -0.6 }, { dx: 0, dy: 0.3 }, { dx: 1.1, dy: -0.4 }];
+  for (const c of RAPIDS_CHEVRONS) {
+    const cx = LACHINE_RAPIDS_MAP_POINT.x + c.dx, cy = LACHINE_RAPIDS_MAP_POINT.y + c.dy;
+    rapids.appendChild(svgEl('path', { d: `M${(cx - 0.5).toFixed(2)},${(cy - 0.35).toFixed(2)} L${cx.toFixed(2)},${(cy + 0.35).toFixed(2)} L${(cx + 0.5).toFixed(2)},${(cy - 0.35).toFixed(2)}` }));
+  }
+  svg.appendChild(rapids);
 
   // Waypoint dots, every one labeled with its real name, in absolute
   // projection coordinates — the panning viewBox brings each into view as

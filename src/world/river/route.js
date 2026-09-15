@@ -87,6 +87,19 @@ import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './pa
 // wrong bank: an "i % 2" alternation has no idea which side a real town is
 // actually on, it just happened to agree with reality as often as a coin
 // flip would.
+// riverWidthKm on every waypoint below (all four lists) is the channel's
+// approximate real width at that point, in km — well-known/order-of-
+// magnitude geography (the Saguenay Fjord runs 1-4km wide most of its
+// length; the St. Lawrence estuary opens to tens of km past Tadoussac;
+// Quebec City famously sits where the river narrows to about 1km, the
+// origin of the name; Lac Saint-Pierre widens the river past Trois-
+// Rivières; the Rideau corridor alternates narrow river/canal reaches with
+// genuine lake crossings), not a surveyed figure the way the Island of
+// Montreal's own shape below is — same "approximate but real, not invented"
+// standard as this file's other estimates (e.g. LAC_SAINT_JEAN_SHAPE's own
+// comment). minimap.js turns this into a variable-width ribbon instead of
+// the old fixed-width stroke, so the river actually reads as narrow or wide
+// where it really is.
 const FJORD_WAYPOINTS = [
   // Really La Baie's own coordinates, kept as-is rather than moved to Lac
   // Saint-Jean's actual location — this point is index 0 of makeSegment()'s
@@ -98,16 +111,19 @@ const FJORD_WAYPOINTS = [
   // LAC_SAINT_JEAN_SHAPE below drawn as an offset from this same anchor so
   // the lake the player launches onto reads as sitting right where they
   // start, without touching the real-distance math at all.
-  { name: 'Lac Saint-Jean', lat: 48.4283, lon: -71.0622, label: 'Lac Saint-Jean', labelPos: { dx: -15, dy: -3, anchor: 'middle' } },
+  { name: 'Lac Saint-Jean', lat: 48.4283, lon: -71.0622, label: 'Lac Saint-Jean', labelPos: { dx: -15, dy: -3, anchor: 'middle' }, riverWidthKm: 4 },
   // North shore (Route 172) — the name says so, and so does the map.
-  { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 2 },
   // South shore (Route 170) — in Fjord-du-Saguenay National Park's Baie
-  // Éternité sector.
-  { name: 'Riviere-Eternite', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 },
-  { name: "L'Anse-Saint-Jean", lat: 48.2330, lon: -70.2000, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1 }, // south shore, Route 170
-  { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 }, // south shore, Route 170
+  // Éternité sector, a real wide bay off the main channel.
+  { name: 'Riviere-Eternite', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 2.5 },
+  { name: "L'Anse-Saint-Jean", lat: 48.2330, lon: -70.2000, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1, riverWidthKm: 2 }, // south shore, Route 170
+  { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 2.2 }, // south shore, Route 170
   // North shore — reached via Route 172, not the Route 170/ferry side.
-  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, label: 'Tadoussac', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+  // Still the fjord's own mouth here, just short of the dramatically wider
+  // St. Lawrence it opens into (see the two Saint Lawrence lists' own
+  // Tadoussac entries, each ~20km).
+  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, label: 'Tadoussac', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1, riverWidthKm: 2.5 },
 ];
 // Each Saint Lawrence segment starts from Tadoussac itself (index 0 — its
 // own local d=0, same role FJORD_WAYPOINTS[0]/La Baie plays for the fjord)
@@ -122,45 +138,60 @@ const FJORD_WAYPOINTS = [
 // comment — but fixed anyway since it's still real geography rendered by
 // villages.js the moment anyone does reach it, e.g. via ?start=sept-iles.)
 const LAWRENCE_EAST_WAYPOINTS = [
-  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170 },
-  { name: 'Les Escoumins', lat: 48.3514, lon: -69.4075, labelPos: { dx: -1.4, dy: 0.9, anchor: 'end' }, side: 1 },
-  { name: 'Forestville', lat: 48.7425, lon: -69.0900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
-  { name: 'Baie-Comeau', lat: 49.2200, lon: -68.1500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
-  { name: 'Godbout', lat: 49.2900, lon: -67.5900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
-  { name: 'Baie-Trinite', lat: 49.4200, lon: -67.3400, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
-  { name: 'Port-Cartier', lat: 50.0300, lon: -66.8700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
-  { name: 'Sept-Îles', lat: 50.2000, lon: -66.3800, label: 'Sept-Îles', labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
+  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, riverWidthKm: 20 },
+  // The estuary keeps widening the whole way out to Sept-Îles, where it's
+  // barely distinguishable from the open Gulf any more.
+  { name: 'Les Escoumins', lat: 48.3514, lon: -69.4075, labelPos: { dx: -1.4, dy: 0.9, anchor: 'end' }, side: 1, riverWidthKm: 24 },
+  { name: 'Forestville', lat: 48.7425, lon: -69.0900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 28 },
+  { name: 'Baie-Comeau', lat: 49.2200, lon: -68.1500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1, riverWidthKm: 33 },
+  { name: 'Godbout', lat: 49.2900, lon: -67.5900, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 38 },
+  { name: 'Baie-Trinite', lat: 49.4200, lon: -67.3400, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1, riverWidthKm: 42 },
+  { name: 'Port-Cartier', lat: 50.0300, lon: -66.8700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 46 },
+  { name: 'Sept-Îles', lat: 50.2000, lon: -66.3800, label: 'Sept-Îles', labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1, riverWidthKm: 50 },
 ];
 const LAWRENCE_WEST_WAYPOINTS = [
-  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170 },
+  { name: 'Tadoussac', lat: 48.1500, lon: -69.7170, riverWidthKm: 20 },
   // North shore (side: 1) — real La Malbaie sits on the Charlevoix coast,
-  // the river's north bank, not the alternating pattern's south.
-  { name: 'La Malbaie', lat: 47.6500, lon: -70.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
-  { name: 'Baie-Saint-Paul', lat: 47.4400, lon: -70.5000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 }, // Charlevoix, north shore
+  // the river's north bank, not the alternating pattern's south. The
+  // estuary is still tens of km wide out here, narrowing steadily as it
+  // approaches Quebec City.
+  { name: 'La Malbaie', lat: 47.6500, lon: -70.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 17 },
+  { name: 'Baie-Saint-Paul', lat: 47.4400, lon: -70.5000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1, riverWidthKm: 12 }, // Charlevoix, north shore
   // A short hop downriver of Quebec City itself — mainly here to give
   // testers (and anyone who capsizes right at the capital) a closer
   // ?start= point than doubling all the way back to Baie-Saint-Paul.
-  // North shore (Côte-de-Beaupré).
-  { name: 'Beaupre', lat: 47.0431, lon: -70.8914, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  // North shore (Côte-de-Beaupré) — Île d'Orléans splits the channel here,
+  // and the river is visibly narrowing toward the city.
+  { name: 'Beaupre', lat: 47.0431, lon: -70.8914, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 4 },
   // Pinned to the right/north bank (side: 1) rather than left to the
   // alternating pattern — real Quebec City sits on the river's north
   // shore, and its dock/fortifications are hand-authored to that side.
-  { name: 'Quebec City', lat: 46.8083, lon: -71.2080, label: 'Quebec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+  // "Kebec" is Algonquian for "where the river narrows" — the St. Lawrence
+  // pinches to about 1km wide here, its narrowest point downstream of
+  // Montreal, which is exactly why the city (and its fortifications) sit
+  // right here.
+  { name: 'Quebec City', lat: 46.8083, lon: -71.2080, label: 'Quebec City', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1, riverWidthKm: 1 },
   // Historic trading post between Quebec City and Trois-Rivières — a
   // checkpoint on the upriver slog toward Montréal. North shore (Mauricie).
-  { name: 'Batiscan', lat: 46.5000, lon: -72.2500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1 },
-  { name: 'Trois-Rivieres', lat: 46.3500, lon: -72.5500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  { name: 'Batiscan', lat: 46.5000, lon: -72.2500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1, riverWidthKm: 3 },
+  // Sits right at Lac Saint-Pierre, the real lake-like widening of the St.
+  // Lawrence between Trois-Rivières and Sorel — a genuine ~10km-wide reach.
+  { name: 'Trois-Rivieres', lat: 46.3500, lon: -72.5500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 8 },
   // Port at the confluence of the Richelieu and St. Lawrence rivers,
   // strategic location between Trois-Rivières and Montreal. South shore —
-  // real Sorel-Tracy sits opposite the north-shore towns above it.
-  { name: 'Sorel-Tracy', lat: 46.0500, lon: -73.1167, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 },
+  // real Sorel-Tracy sits opposite the north-shore towns above it. Past
+  // Lac Saint-Pierre's outlet, the channel has narrowed back to a normal
+  // river width.
+  { name: 'Sorel-Tracy', lat: 46.0500, lon: -73.1167, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 3 },
   // Charlemagne — real Repentigny's spot, on the Rivière des Prairies side
   // just upriver from Montreal, right where that channel rejoins the St.
   // Lawrence at the Island of Montreal's east tip (river/islands.js) — the
   // narrower north channel the baked island splits off, not Montreal's own
   // south-shore/main-channel side. Gives players a close starting point
-  // for testing the final destination.
-  { name: 'Charlemagne', lat: 45.7167, lon: -73.4833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
+  // for testing the final destination. The Rivière des Prairies itself is
+  // the narrower of the island's two channels (see islands.js), hence the
+  // narrow figure here vs. Montreal's own south-channel entry below.
+  { name: 'Charlemagne', lat: 45.7167, lon: -73.4833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 1 },
   // Final destination — New France's commercial heart and the great inland
   // port. The river continues past Montreal too (ultimately toward the Great
   // Lakes), but this marks the end of the current journey. South shore
@@ -170,18 +201,21 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // island's south side, not the narrower Rivière des Prairies to the
   // north (that's the Charlemagne/side:1 side, matching real Repentigny —
   // right where the Prairies rejoins the St. Lawrence at the island's east
-  // tip).
-  { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: -1 },
+  // tip). MONTREAL_ISLAND_MAP_SHAPE below draws the island itself as real
+  // land between this channel and Charlemagne's.
+  { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: -1, riverWidthKm: 2.5 },
 
   // The Ottawa River — Chasse-galerie flight path toward Gatineau. Real
   // Île-Perrot/Hudson/Rigaud all sit on the south side of Lake of Two
-  // Mountains/the Ottawa (Montérégie/Vaudreuil-Soulanges); Carillon and
-  // Gatineau are both on the north shore, same side as Montréal.
-  { name: 'Ile-Perrot', lat: 45.3800, lon: -73.9500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 },
-  { name: 'Hudson', lat: 45.4500, lon: -74.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1 },
-  { name: 'Rigaud', lat: 45.4800, lon: -74.3000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1 },
-  { name: 'Carillon', lat: 45.5600, lon: -74.3700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1 },
-  { name: 'Gatineau', lat: 45.4300, lon: -75.7000, label: 'Gatineau', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+  // Mountains/the Ottawa (Montérégie/Vaudreuil-Soulanges), a genuine
+  // lake-sized widening of the river; Carillon and Gatineau are both on
+  // the north shore, same side as Montréal, past a real historic narrows
+  // (Long-Sault/Carillon, canalized and dammed today).
+  { name: 'Ile-Perrot', lat: 45.3800, lon: -73.9500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 4 },
+  { name: 'Hudson', lat: 45.4500, lon: -74.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1, riverWidthKm: 6 },
+  { name: 'Rigaud', lat: 45.4800, lon: -74.3000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 5 },
+  { name: 'Carillon', lat: 45.5600, lon: -74.3700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 1 },
+  { name: 'Gatineau', lat: 45.4300, lon: -75.7000, label: 'Gatineau', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1, riverWidthKm: 1.5 },
 ];
 
 // The Rideau leg — Gatineau south to Kingston (see the module comment: a
@@ -201,17 +235,28 @@ const LAWRENCE_WEST_WAYPOINTS = [
 // Kingston is the one exception — its own real shore (north, on Lake
 // Ontario) is well documented, hence its explicit pin below.
 const RIDEAU_WAYPOINTS = [
-  { name: 'Gatineau', lat: 45.4300, lon: -75.7000 },
-  { name: 'Manotick', lat: 45.2250, lon: -75.6830, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Kars', lat: 45.1280, lon: -75.6390, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Merrickville', lat: 44.9150, lon: -75.8380, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Smiths Falls', lat: 44.9000, lon: -76.0210, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Newboro', lat: 44.6470, lon: -76.3100, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
-  { name: 'Jones Falls', lat: 44.5450, lon: -76.2380, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' } },
-  { name: 'Kingston Mills', lat: 44.3010, lon: -76.4570, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' } },
+  // Same real place as lawrenceWest's own Gatineau entry above — same
+  // width figure for consistency.
+  { name: 'Gatineau', lat: 45.4300, lon: -75.7000, riverWidthKm: 1.5 },
+  // Manotick sits on Long Island, splitting the real Rideau River into two
+  // narrow channels — a modest river, not a lake reach.
+  { name: 'Manotick', lat: 45.2250, lon: -75.6830, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, riverWidthKm: 0.3 },
+  { name: 'Kars', lat: 45.1280, lon: -75.6390, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, riverWidthKm: 0.6 },
+  // Merrickville and Smiths Falls are both small heritage canal towns on a
+  // genuinely narrow stretch of the real Rideau.
+  { name: 'Merrickville', lat: 44.9150, lon: -75.8380, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, riverWidthKm: 0.15 },
+  { name: 'Smiths Falls', lat: 44.9000, lon: -76.0210, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, riverWidthKm: 0.2 },
+  // Newboro and Jones Falls both sit on real lake reaches of the Rideau
+  // Lakes system (Upper Rideau Lake; the Sand/Whitefish Lakes chain) —
+  // genuinely wide compared to the canal towns on either side of them.
+  { name: 'Newboro', lat: 44.6470, lon: -76.3100, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, riverWidthKm: 2 },
+  { name: 'Jones Falls', lat: 44.5450, lon: -76.2380, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, riverWidthKm: 1.5 },
+  // The Cataraqui River narrows again before Kingston.
+  { name: 'Kingston Mills', lat: 44.3010, lon: -76.4570, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, riverWidthKm: 0.3 },
   // Journey's end — Fort Frontenac / Cataraqui, the gateway to the Great
-  // Lakes. game.js declares the run won on reaching it.
-  { name: 'Kingston', lat: 44.2310, lon: -76.4860, label: 'Kingston', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1 },
+  // Lakes. game.js declares the run won on reaching it. Kingston's harbour
+  // opens right onto Lake Ontario, hence the wide figure here.
+  { name: 'Kingston', lat: 44.2310, lon: -76.4860, label: 'Kingston', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1, riverWidthKm: 3 },
 ];
 
 // How far (game-world units) each segment takes to cross, end to end. Real
@@ -345,6 +390,56 @@ const LAKE_OFFSETS = [
   { dx: 3, dy: 3 },
 ];
 export const LAC_SAINT_JEAN_SHAPE = LAKE_OFFSETS.map((o) => ({ x: LAKE_ANCHOR.x + o.dx, y: LAKE_ANCHOR.y + o.dy }));
+
+// Real geography for the minimap only (never touched by gameplay math) —
+// the Island of Montreal itself, drawn as an actual landmass rather than
+// (as river/path.js's/islands.js's gameplay model does) a fixed-width
+// channel split, since at this map's scale (see VIEW_SIZE in minimap.js)
+// the island is a very real, very visible ~50km-long feature, not
+// something a channel-width trick could convey. Same raw survey points
+// river/islands.js's own module comment describes (the west/east tips
+// plus paired north-shore/south-shore towns along its length), projected
+// through this file's own project()/LAT_REF rather than the island's
+// private survey axis, since the minimap needs everything in one shared
+// coordinate space.
+const MONTREAL_WEST_TIP = { lat: 45.4039, lon: -73.9525 }; // Sainte-Anne-de-Bellevue
+const MONTREAL_EAST_TIP = { lat: 45.6423, lon: -73.5053 }; // Pointe-aux-Trembles
+const MONTREAL_NORTH_SHORE = [
+  { lat: 45.4667, lon: -73.8833 }, // Pierrefonds
+  { lat: 45.5317, lon: -73.7089 }, // Cartierville
+  { lat: 45.5547, lon: -73.6711 }, // Ahuntsic
+  { lat: 45.6589, lon: -73.5208 }, // Riviere-des-Prairies
+];
+const MONTREAL_SOUTH_SHORE = [
+  { lat: 45.4170, lon: -73.9170 }, // Baie-D'Urfe
+  { lat: 45.4500, lon: -73.8170 }, // Pointe-Claire
+  { lat: 45.4331, lon: -73.6808 }, // Lachine
+  { lat: 45.4639, lon: -73.5639 }, // Verdun
+  { lat: 45.5017, lon: -73.5673 }, // Old Montreal
+  { lat: 45.5530, lon: -73.5420 }, // Hochelaga-Maisonneuve
+  { lat: 45.5958, lon: -73.5163 }, // Mercier
+];
+// Around the loop once: west tip -> north shore west-to-east -> east tip
+// -> south shore east-to-west -> back to the west tip.
+export const MONTREAL_ISLAND_MAP_SHAPE = [
+  MONTREAL_WEST_TIP,
+  ...MONTREAL_NORTH_SHORE,
+  MONTREAL_EAST_TIP,
+  ...[...MONTREAL_SOUTH_SHORE].reverse(),
+].map(project);
+
+// Île Sainte-Hélène and Nuns' Island (river/islands.js's southIslandAt) —
+// both real, both tiny at this map's scale (each well under 1km across,
+// vs. the main island's ~50km), so drawn as small fixed markers in
+// minimap.js rather than surveyed polygons like the main island above.
+export const SAINTE_HELENE_MAP_POINT = project({ lat: 45.51778, lon: -73.53389 });
+export const NUNS_ISLAND_MAP_POINT = project({ lat: 45.46111, lon: -73.54333 });
+
+// The Lachine Rapids — real, famous, right at the real Lachine village's
+// own coordinates (the same point as MONTREAL_SOUTH_SHORE's Lachine entry
+// above). minimap.js draws a bit of whitewater texture here rather than a
+// shape, since it's a rough stretch of the channel, not land.
+export const LACHINE_RAPIDS_MAP_POINT = project({ lat: 45.4331, lon: -73.6808 });
 
 // Every real point across all three segments, for the minimap to draw as
 // one continuous picture regardless of which segment is actually active.
