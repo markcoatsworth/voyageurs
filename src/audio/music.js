@@ -48,6 +48,13 @@ const DIABLE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diab
 // Appalachian old-time jam session — see README.md's Music section), which
 // is exactly why it reads as "something's different" the moment it cuts in.
 const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel", artist: 'Joe Dobbs & The 1937 Flood' };
+// The Chasse-galerie flight's cue, cut in the instant the canoe lifts off
+// (game.js) — "Reel du Voyageur" was one of Allard's most successful 78s
+// (Victor Bluebird, c.1928), and its own title carries the connection: the
+// legend is voyageurs flying home by canoe. Reserved like the other three;
+// endBossTrack() drops it (or Le Diable's own reel, which cuts in over top
+// of it the same way once his fight starts) back into the shuffle.
+const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-voyageur.mp3', title: 'Reel du Voyageur', artist: 'Joseph Allard' };
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -129,6 +136,7 @@ export function createMusic({ onTrack } = {}) {
   prefetch(BOSS_TRACK.src);
   prefetch(DIABLE_TRACK.src);
   prefetch(WENDIGO_TRACK.src);
+  prefetch(CHASSE_GALERIE_TRACK.src);
 
   // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
   // now, or null before the first successful play(). onTrack — passed by
@@ -307,6 +315,14 @@ export function createMusic({ onTrack } = {}) {
     // back into the shuffle same as the other two.
     playWendigoTrack() {
       playSpecial(WENDIGO_TRACK);
+    },
+    // The Chasse-galerie flight's cue — same cut-in-now behaviour. Le
+    // Diable's own track (playDiableTrack) cuts in over top of this one
+    // the same way once his fight starts mid-flight; endBossTrack() then
+    // drops back into the shuffle for the rest of the glide to Gatineau,
+    // same as it does after every other fight.
+    playChasseGalerieTrack() {
+      playSpecial(CHASSE_GALERIE_TRACK);
     },
     // Cuts the boss track short and drops back into the normal shuffle —
     // called the moment the fight resolves, rather than waiting out the

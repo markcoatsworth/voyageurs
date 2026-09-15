@@ -1059,6 +1059,8 @@ export class Game {
       if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
         this.showBanner('LA CHASSE-GALERIE — thread the steeples!');
         this._chasseGalerieBannerShown = true;
+        this.music?.start(); // safe even if ?start=chasse-galerie drops in before a gesture
+        this.music?.playChasseGalerieTrack();
       }
     }
     const airborne = this.chasseGalerie.isActive();
