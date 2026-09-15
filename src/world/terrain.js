@@ -2,7 +2,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER
 import { centerX, widthAt, braidAt, BRAID_PERIOD } from './river/path.js';
 import { FEATURE_ISLAND_RANGE } from './river/islands.js';
 import { createWaterTile, createGrassTile, createBankTile, createSandTile } from './tiles.js';
-import { createPineTreeSprite, createPebbleSprite, createMountRoyalSprite } from './sprites.js';
+import { createPineTreeSprite, createPebbleSprite, createMountRoyalSprite, createWindmillSprite, createChurchSprite, createCabinSprite } from './sprites.js';
 import { hash, hashRange } from '../shared/hash.js';
 import { isNearVillage, drawVillages } from './villages.js';
 
@@ -30,6 +30,9 @@ let patterns = null;
 const treeSprites = [0, 1, 2].map(createPineTreeSprite);
 const pebbleSprites = [0, 1, 2].map(createPebbleSprite);
 const mountRoyalSprite = createMountRoyalSprite();
+const windmillSprite = createWindmillSprite();
+const islandChurchSprite = createChurchSprite();
+const farmhouseSprites = [0, 1, 2].map(createCabinSprite);
 
 // Fixed scenery for the Island of Montreal (river/islands.js) — hand-placed
 // points, not a periodic scatter, since the island itself is baked rather
@@ -52,6 +55,54 @@ const ISLAND_TREE_POINTS = [
   { d: 60000 + 2222, fracFromCenter: -0.4, spriteVariant: 0 },
   { d: 60000 + 2255, fracFromCenter: 0.4, spriteVariant: 1 },
   { d: 60000 + 2280, fracFromCenter: -0.55, spriteVariant: 2 },
+];
+
+// Three real, surveyed 1790-era landmarks — same projection-onto-the-
+// island's-axis method as river/islands.js's shape itself (real
+// coordinates run through the same west-tip-to-east-tip axis, converted
+// to a local d via the same LAWRENCE_WEST+2102 anchor and 216-unit span).
+// All three predate 1790: the Pointe-Claire windmill (built 1709-10 for
+// the Sulpician seigneurs, on the south/St. Lawrence shore, still standing
+// today); the Church of the Visitation at Sault-au-Récollet (built
+// 1749-52, the oldest church still standing on the island, on the north/
+// Rivière-des-Prairies shore, at the mission-turned-parish the Sulpicians
+// founded there in 1696); and the parish of Lachine (created 1676, right
+// where the Lachine Rapids stretch (river/islands.js's LACHINE_RAPIDS_*)
+// already sits — the real village the rapids are named for, and the fur
+// trade's own departure point west, so it doubles as "why the rapids are
+// dangerous right here" flavour.
+const WINDMILL_D = 60000 + 2272; // Pointe-Claire windmill, south shore
+const SAULT_AU_RECOLLET_D = 60000 + 2174; // church, north shore
+const LACHINE_D = 60000 + 2225; // parish, south shore, inside the rapids stretch
+
+// A scatter of habitant farmhouses along both shores, hand-placed (not
+// hashed) the same way as everything else here — by 1790 the seigneury's
+// long, narrow "côte" lots lined both banks almost continuously, each
+// farmhouse facing the water with its fields behind, which is why these
+// sit right at the island's edge (fracFromCenter near +/-1) rather than
+// inland like Mount Royal. Kept clear of Montreal's own MONTREAL_SPAN
+// footprint (local 2140-2196, south side only — the north side there is
+// fine, see the Sault-au-Récollet marker above) and spaced apart from the
+// tree points above so the two scatters read as one settled shoreline
+// rather than overlapping clumps.
+const FARMHOUSE_POINTS = [
+  // South shore (side facing Montreal's own dock)
+  { d: 60000 + 2118, fracFromCenter: -0.85, spriteVariant: 0 },
+  { d: 60000 + 2132, fracFromCenter: -0.8, spriteVariant: 2 },
+  { d: 60000 + 2210, fracFromCenter: -0.85, spriteVariant: 1 },
+  { d: 60000 + 2240, fracFromCenter: -0.8, spriteVariant: 0 },
+  { d: 60000 + 2260, fracFromCenter: -0.85, spriteVariant: 2 },
+  { d: 60000 + 2296, fracFromCenter: -0.8, spriteVariant: 1 },
+  { d: 60000 + 2312, fracFromCenter: -0.85, spriteVariant: 0 },
+  // North shore (Rivière des Prairies side, Charlemagne's own bank)
+  { d: 60000 + 2108, fracFromCenter: 0.85, spriteVariant: 1 },
+  { d: 60000 + 2145, fracFromCenter: 0.8, spriteVariant: 2 },
+  { d: 60000 + 2160, fracFromCenter: 0.85, spriteVariant: 0 },
+  { d: 60000 + 2192, fracFromCenter: 0.8, spriteVariant: 1 },
+  { d: 60000 + 2215, fracFromCenter: 0.85, spriteVariant: 2 },
+  { d: 60000 + 2245, fracFromCenter: 0.8, spriteVariant: 0 },
+  { d: 60000 + 2265, fracFromCenter: 0.85, spriteVariant: 1 },
+  { d: 60000 + 2300, fracFromCenter: 0.8, spriteVariant: 2 },
 ];
 
 function ensurePatterns(ctx) {
@@ -186,19 +237,31 @@ function drawBraidIslands(ctx, worldDistance, cameraWorldX) {
 // ISLAND_TREE_POINTS/MOUNT_ROYAL_D comment above) — drawn after the sand
 // fill above so they sit on top of the landmass, not painted over by it.
 function drawFeatureIslandScenery(ctx, worldDistance, cameraWorldX) {
-  const draw = (d, fracFromCenter, sprite, anchorFrac) => {
+  // Painter's algorithm — farthest (smallest z) first — same reasoning as
+  // villages.js's drawOneVillage: with this many fixed points now (farms,
+  // churches, the windmill, trees, Mount Royal) two can land close enough
+  // in view for draw order to actually matter, unlike the handful this
+  // started with.
+  const candidates = [];
+  const add = (d, fracFromCenter, sprite, anchorFrac) => {
     const braid = braidAt(d);
     if (!braid) return; // outside the island's own span at this d
     const worldX = braid.centerX + fracFromCenter * braid.halfWidth;
-    const z = worldDistance - d;
-    const y = CANOE_SCREEN_Y + z * PIXELS_PER_UNIT;
-    const x = toScreenX(worldX, cameraWorldX);
-    ctx.drawImage(sprite, x - sprite.width / 2, y - sprite.height * anchorFrac);
+    candidates.push({ z: worldDistance - d, worldX, sprite, anchorFrac });
   };
 
-  draw(MOUNT_ROYAL_D, 0, mountRoyalSprite, 0.62);
-  for (const p of ISLAND_TREE_POINTS) {
-    draw(p.d, p.fracFromCenter, treeSprites[p.spriteVariant], 0.72);
+  add(MOUNT_ROYAL_D, 0, mountRoyalSprite, 0.62);
+  add(WINDMILL_D, 0.88, windmillSprite, 0.9);
+  add(SAULT_AU_RECOLLET_D, 0.85, islandChurchSprite, 0.9);
+  add(LACHINE_D, -0.85, islandChurchSprite, 0.9);
+  for (const p of ISLAND_TREE_POINTS) add(p.d, p.fracFromCenter, treeSprites[p.spriteVariant], 0.72);
+  for (const p of FARMHOUSE_POINTS) add(p.d, p.fracFromCenter, farmhouseSprites[p.spriteVariant], 0.85);
+
+  candidates.sort((a, b) => a.z - b.z);
+  for (const c of candidates) {
+    const y = CANOE_SCREEN_Y + c.z * PIXELS_PER_UNIT;
+    const x = toScreenX(c.worldX, cameraWorldX);
+    ctx.drawImage(c.sprite, x - c.sprite.width / 2, y - c.sprite.height * c.anchorFrac);
   }
 }
 

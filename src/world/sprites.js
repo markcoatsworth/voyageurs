@@ -287,6 +287,80 @@ export function createMountRoyalSprite() {
   });
 }
 
+// The Pointe-Claire windmill (built 1709-1710 for the Sulpicians, still
+// standing today — see world/river/islands.js's landmark comment) and
+// every other stone windmill that dotted the seigneury's shoreline by
+// 1790: a round tapering tower, a conical cap that could be turned to
+// face the sails into the wind, and the small miller's house at its foot.
+export function createWindmillSprite() {
+  const w = 26, h = 56;
+  return makeSprite(w, h, (ctx) => {
+    const cx = w / 2;
+    groundShadow(ctx, cx, h - 3, 10, 3.5);
+
+    // the miller's house, low beside the tower
+    ctx.fillStyle = '#4a3a2a';
+    ctx.fillRect(cx - 11, h - 15, 10, 12);
+    ctx.fillStyle = '#8a6b4a';
+    ctx.fillRect(cx - 10, h - 14, 8, 11);
+    triangle(ctx, cx - 6, h - 20, h - 14, 6, '#3a2c1e');
+
+    // the stone tower, tapering toward the cap
+    const baseW = 13, topW = 8, towerH = 38, towerTop = h - towerH - 6;
+    ctx.fillStyle = '#5c5648';
+    ctx.beginPath();
+    ctx.moveTo(cx - baseW / 2 - 1, h - 6);
+    ctx.lineTo(cx - topW / 2 - 1, towerTop);
+    ctx.lineTo(cx + topW / 2 + 1, towerTop);
+    ctx.lineTo(cx + baseW / 2 + 1, h - 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#948c78';
+    ctx.beginPath();
+    ctx.moveTo(cx - baseW / 2, h - 6);
+    ctx.lineTo(cx - topW / 2, towerTop);
+    ctx.lineTo(cx + topW / 2 - 2, towerTop);
+    ctx.lineTo(cx + baseW / 2 - 2, h - 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#b8b09a'; // sunlit edge
+    ctx.beginPath();
+    ctx.moveTo(cx - baseW / 2, h - 6);
+    ctx.lineTo(cx - topW / 2, towerTop);
+    ctx.lineTo(cx - topW / 2 + 1.5, towerTop);
+    ctx.lineTo(cx - baseW / 2 + 1.5, h - 6);
+    ctx.closePath();
+    ctx.fill();
+
+    // the door
+    ctx.fillStyle = '#241a10';
+    ctx.fillRect(cx - 2.5, h - 12, 5, 8);
+
+    // the cap
+    ctx.fillStyle = '#3f342a';
+    ctx.beginPath();
+    ctx.moveTo(cx - topW / 2 - 2, towerTop + 2);
+    ctx.lineTo(cx, towerTop - 9);
+    ctx.lineTo(cx + topW / 2 + 2, towerTop + 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // the sails, a fixed X — a moving mill reads as a distraction at this
+    // scale and speed, not a detail worth animating
+    ctx.strokeStyle = '#2a2018';
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    const hubY = towerTop - 3;
+    for (const a of [Math.PI / 5, Math.PI - Math.PI / 5, Math.PI + Math.PI / 4, -Math.PI / 4]) {
+      ctx.beginPath();
+      ctx.moveTo(cx, hubY);
+      ctx.lineTo(cx + Math.cos(a) * 15, hubY + Math.sin(a) * 15);
+      ctx.stroke();
+    }
+    blob(ctx, cx, hubY, 1.6, '#2a2018');
+  });
+}
+
 // A stretched fur hide, not a lump: a fringe of small tufts around the edge
 // (the shape cue "soft and furry", vs. the rock's hard angular facets) and a
 // saturated warm gold/amber throughout — pushed deliberately far from the

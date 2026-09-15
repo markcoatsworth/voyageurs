@@ -219,8 +219,10 @@ function buildMontrealBuildings() {
   return buildings;
 }
 const MONTREAL_BUILDINGS = buildMontrealBuildings();
-// Notre-Dame Basilica (original founded 1672, rebuilt 1672-1683) - the city's
-// spiritual center, set back above the commercial district
+// The old Notre-Dame church (built 1672-1683) - the city's spiritual
+// center, set back above the commercial district. Not the present-day
+// Notre-Dame Basilica, which is a ~1820s replacement — this game is set
+// in 1790, when the older stone church was still the one standing.
 const MONTREAL_CHURCH = { dOffset: 4, depth: 8.8 };
 
 const QUEBEC_CITY_SPAN = 24; // half-width of the town along the riverbank, world units
@@ -629,8 +631,9 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
       scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
     }
   } else if (isMontreal) {
-    // Notre-Dame Basilica - the spiritual heart of New France's commercial
-    // capital, rising above the merchant district and warehouses below.
+    // The old Notre-Dame church (see MONTREAL_CHURCH's own comment) - the
+    // spiritual heart of New France's commercial capital, rising above the
+    // merchant district and warehouses below.
     {
       const d = v.flowDistance + MONTREAL_CHURCH.dOffset;
       const z = worldDistance - d;
