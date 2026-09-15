@@ -389,6 +389,7 @@ export class Game {
     this._bossTrackCued = false;
     this._castOffGrace = 0;
     this._castOffGraceVillage = null;
+    this._steepleGraceUntil = -Infinity;
 
     this.segment = this.startSegment;
     this.flowDistance = this.startFlowDistance;
@@ -791,6 +792,26 @@ export class Game {
       this.chasseGalerie.setHeldAloft(false);
       playDiableDefeat();
       this.music?.endBossTrack();
+      // A beat of invulnerability right after the win, same scale as
+      // respawning (SPAWN_INVULN_TIME) — covers bank scrapes etc. in the
+      // first instant back in control.
+      this.invulnTimer = Math.max(this.invulnTimer, SPAWN_INVULN_TIME);
+      // Steeples specifically get a *distance*-based grace instead of a
+      // timed one: the arena's hold releases here and steeple collision
+      // (suspended for the whole fight, see the flight.hit check below)
+      // resumes on the very next frame otherwise, so a canoe that limped
+      // through Diable's fire at low hull could fly straight into whichever
+      // steeple happens to sit closest to the arena and capsize moments
+      // after already winning — and how close that nearest steeple is
+      // varies by playthrough (STEEPLE_SPACING/JITTER, chasseGalerie.js),
+      // so a fixed time isn't reliably enough distance at every speed. 30
+      // units (STEEPLE_SPACING 22 + STEEPLE_JITTER 4, plus margin for the
+      // hit box itself) clears past the *worst-case* nearest steeple, not
+      // just a typical one — verified against the crude "chase Diable,
+      // don't dodge" test pilot, who reaches the fight already down to
+      // ~10 hull from his fire alone and has no margin for bad luck
+      // right after.
+      this._steepleGraceUntil = this.flowDistance + 30;
     }
   }
 
@@ -1055,7 +1076,9 @@ export class Game {
       const flight = this.chasseGalerie.update(this.flowDistance, this.canoeWorldX, dt);
       // The flight's own hazards (steeples, crosswind) are suspended for the
       // Diable fight — he's the whole challenge there.
-      if (flight.hit && !this.diable.isActive()) this.handleHit({ type: 'steeple' });
+      if (flight.hit && !this.diable.isActive() && this.flowDistance > (this._steepleGraceUntil ?? -Infinity)) {
+        this.handleHit({ type: 'steeple' });
+      }
       if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
         this.showBanner('LA CHASSE-GALERIE — thread the steeples!');
         this._chasseGalerieBannerShown = true;

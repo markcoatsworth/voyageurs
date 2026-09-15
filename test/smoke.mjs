@@ -458,7 +458,18 @@ await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
   if (!won) throw new Error('a tracking autopilot could never kill Diable / the flight never resumed — unwinnable or stuck');
 
   // Ride it out: the flight should finish its descent to the water and end.
+  // Keeps threading the steeples the same way flyThrough() does in the main
+  // chasse-galerie scenario below — the descent still runs through
+  // steeple territory (their generation loop runs to FLIGHT_END + 4, past
+  // the arena), so simulating a player who lets go of the stick entirely
+  // for a whole DESCENT_DISTANCE isn't a real playstyle to guarantee safe;
+  // a merely-reasonable pilot still finishing the glide is the actual bar.
   for (let i = 0; i < 6000 && g.game.chasseGalerie.isActive(); i++) {
+    g.input.state.up = true;
+    const want = g.game.chasseGalerie.clearOffsetAhead(g.game.flowDistance);
+    const err = g.game.lateralOffset - want;
+    g.input.state.left = err > 0.12;
+    g.input.state.right = err < -0.12;
     g.game.update(1 / 30);
   }
   if (g.game.chasseGalerie.getAltitude() > 0.6) throw new Error('canoe never glided back down after the fight');

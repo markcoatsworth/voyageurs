@@ -108,14 +108,22 @@ export function flightWind(flowDistance, time, altFrac) {
 
 // --- the churches along the gorge -------------------------------------
 // Every church stands on a bank and only nips into the water — the middle
-// of the channel stays open. Most just cost the careless who drift wide on
-// a bend; roughly one in four "reaches" far enough to force a real dodge
-// toward the far bank, and those alternate sides so a cluster of them is a
-// weave with clear water between.
-const STEEPLE_SPACING = 25;    // nominal flow-distance between churches
+// of the channel stays open. Most still cost the careless who drift wide
+// on a bend; a bit over a third now "reach" far enough to force a real
+// dodge toward the far bank, and those alternate sides so a cluster of
+// them is a weave with clear water between, not a wall.
+//
+// Retuned after "too easy, the river is wide, easy to avoid the
+// steeples" — REACHING_CHANCE was 0.26, REACH_NORMAL 2.3, STEEPLE_SPACING
+// 25. Most of that feedback traced to OTTAWA_EASE_LEN (path.js) being too
+// slow to actually narrow the channel after the newer, later liftoff
+// point, which is fixed separately — these three came up slightly too on
+// their own once that was accounted for, enough to keep real pressure on
+// without needing a dodge on literally every church.
+const STEEPLE_SPACING = 22;    // nominal flow-distance between churches
 const STEEPLE_JITTER = 4;
 const STEEPLE_HIT_Z = 1.9;     // half-depth of the collision box along the flow
-const REACH_NORMAL = 2.3;      // how far a normal church reaches in from its
+const REACH_NORMAL = 2.7;      // how far a normal church reaches in from its
                                // bank — enough that it noticeably narrows
                                // its side of the channel and a loose centre
                                // line will clip it on the bends, but always
@@ -128,7 +136,7 @@ const REACH_MIN_INNER = 0.15;   // how far past centre a reaching church's inner
                                // edge sits — enough that a dead-centre line
                                // clips it, not so far the far-side thread
                                // brushes the bank treetops
-const REACHING_CHANCE = 0.26;  // odds a church is a reaching one
+const REACHING_CHANCE = 0.38;  // odds a church is a reaching one
 const SAME_SIDE_CHANCE = 0.16; // odds a church repeats the previous bank
 const STEEPLE_VISUAL_H = 7;    // world-units tall (hash-varied per church)
 const STEEPLE_OVERHANG = 0.8;  // how far the church body spills past its own bank

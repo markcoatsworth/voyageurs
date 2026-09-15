@@ -152,8 +152,17 @@ function rideauWidthAt(d) {
 // the ground for the Island of Montreal split and the Lachine Rapids —
 // see river/islands.js), so the closing gorge is only ever seen from the
 // air. Kept the trigger's original ~12-unit lead on this ease-start.
+//
+// OTTAWA_EASE_LEN used to be 120 — fine when the trigger sat right next to
+// this ease-start, but once TRIGGER_DISTANCE moved out to Montréal + 150,
+// that stretched into ~130 units of flight (several steeples' worth,
+// spaced ~25 apart — see chasseGalerie.js's STEEPLE_SPACING) where the
+// channel was still 40-55 units wide, far more than any steeple's reach —
+// "the river is wide, steeples are easy to avoid" right when the fight
+// should be starting to bite. Shortened so the gorge is already narrow by
+// the second steeple or so, not the sixth.
 export const OTTAWA_EASE_START = SEGMENT_SHAPE_OFFSET.lawrenceWest + 2330;
-export const OTTAWA_EASE_LEN = 120;
+export const OTTAWA_EASE_LEN = 40;
 
 function gorgeWidthAt(d) {
   const w = 8 + Math.sin(d * 0.09) * 1.4 + Math.sin(d * 0.037 + 2) * 0.9;
