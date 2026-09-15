@@ -17,6 +17,7 @@ import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFr
 import {
   MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL,
   LACHINE_RAPIDS_KEYFRAMES, FEATURE_ISLAND_RANGE, LACHINE_RAPIDS_RANGE,
+  SAINTE_HELENE_KEYFRAMES, NUNS_ISLAND_KEYFRAMES, SOUTH_ISLAND_MIN_HALF, SOUTH_ISLAND_RANGE,
 } from './river/islands.js';
 import { GORGE_WIDTH_KEYFRAMES, GORGE_CENTERX_KEYFRAMES, GORGE_RANGE } from './river/gorge.js';
 
@@ -85,6 +86,9 @@ const float MONTREAL_ISLAND_MIN_HALF = ${MONTREAL_ISLAND_MIN_HALF.toFixed(4)};
 const float MONTREAL_ISLAND_MIN_SUBCHANNEL = ${MONTREAL_ISLAND_MIN_SUBCHANNEL.toFixed(4)};
 const float LACHINE_D_MIN = ${LACHINE_RAPIDS_RANGE[0].toFixed(2)};
 const float LACHINE_D_MAX = ${LACHINE_RAPIDS_RANGE[1].toFixed(2)};
+const float SOUTH_ISLAND_D_MIN = ${SOUTH_ISLAND_RANGE[0].toFixed(2)};
+const float SOUTH_ISLAND_D_MAX = ${SOUTH_ISLAND_RANGE[1].toFixed(2)};
+const float SOUTH_ISLAND_MIN_HALF = ${SOUTH_ISLAND_MIN_HALF.toFixed(4)};
 const float GORGE_D_MIN = ${GORGE_RANGE[0].toFixed(2)};
 const float GORGE_D_MAX = ${GORGE_RANGE[1].toFixed(2)};
 
@@ -178,6 +182,33 @@ ${glslKeyframeChain('d', MONTREAL_ISLAND_KEYFRAMES, ['offset', 'half'], { offset
   return vec2(cx + offset, halfWidth);
 }
 
+// Mirrors world/river/islands.js's southIslandAt() — Île Sainte-Hélène and
+// Nuns' Island, a second split nested inside the south sub-channel the
+// main island above already carves out. The two keyframe spans never
+// overlap (see that file's comment), so checking both in sequence and
+// returning whichever matches is unambiguous, same as the JS version.
+vec2 southIslandAt(float d, float cx, float ambientHalf) {
+  if (d < SOUTH_ISLAND_D_MIN || d > SOUTH_ISLAND_D_MAX) return vec2(0.0, -1.0);
+  float offset = 0.0;
+  float halfWidth = 0.0;
+  bool found = false;
+${glslKeyframeChain('d', SAINTE_HELENE_KEYFRAMES, ['offset', 'half'], { offset: 'offset', half: 'halfWidth' })}
+  if (d >= ${SAINTE_HELENE_KEYFRAMES[0].d.toFixed(2)} && d <= ${SAINTE_HELENE_KEYFRAMES[SAINTE_HELENE_KEYFRAMES.length - 1].d.toFixed(2)}) found = true;
+  if (!found) {
+${glslKeyframeChain('d', NUNS_ISLAND_KEYFRAMES, ['offset', 'half'], { offset: 'offset', half: 'halfWidth' })}
+    if (d >= ${NUNS_ISLAND_KEYFRAMES[0].d.toFixed(2)} && d <= ${NUNS_ISLAND_KEYFRAMES[NUNS_ISLAND_KEYFRAMES.length - 1].d.toFixed(2)}) found = true;
+  }
+  if (!found || halfWidth < SOUTH_ISLAND_MIN_HALF) return vec2(0.0, -1.0);
+  // These islands only ever sit south (negative offset) — clamps against
+  // the true south bank only, mirroring clampSouthIsland()'s JS version.
+  float maxAbsOffset = max(0.0, ambientHalf - MONTREAL_ISLAND_MIN_SUBCHANNEL);
+  if (-offset > maxAbsOffset) offset = -maxAbsOffset;
+  float maxHalfWidth = max(0.0, ambientHalf - abs(offset) - MONTREAL_ISLAND_MIN_SUBCHANNEL);
+  if (halfWidth > maxHalfWidth) halfWidth = maxHalfWidth;
+  if (halfWidth < SOUTH_ISLAND_MIN_HALF) return vec2(0.0, -1.0);
+  return vec2(cx + offset, halfWidth);
+}
+
 // Looks up the CPU-computed offset for whichever of the two candidate
 // cycles this pixel's d actually falls in (see the u_braidCycleA/B comment
 // above). Falls back to B when A doesn't match, so a single active cycle
@@ -262,6 +293,9 @@ void main() {
 
   vec2 braid = braidAt(d);
   if (braid.y > 0.0 && worldX > braid.x - braid.y && worldX < braid.x + braid.y) discard;
+
+  vec2 southIsland = southIslandAt(d, cx, halfW);
+  if (southIsland.y > 0.0 && worldX > southIsland.x - southIsland.y && worldX < southIsland.x + southIsland.y) discard;
 
   float distToEdge = min(worldX - leftEdge, rightEdge - worldX);
   float distFrac = clamp(distToEdge / max(halfW, 0.001), 0.0, 1.0);

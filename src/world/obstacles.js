@@ -1,4 +1,4 @@
-import { centerX, widthAt, braidAt } from './river/path.js';
+import { centerX, widthAt, braidAt, southIslandAt } from './river/path.js';
 import { createRockSprite, createLogSprite, createIslandSprite, createPeltSprite } from './sprites.js';
 import { AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
 
@@ -81,6 +81,26 @@ function pickX(type, d) {
     const islandEdge = braid.centerX + side * (braid.halfWidth + EDGE_MARGIN);
     const lo = Math.min(outerEdge, islandEdge);
     const hi = Math.max(outerEdge, islandEdge);
+
+    // Île Sainte-Hélène/Nuns' Island (river/islands.js's southIslandAt) sit
+    // nested inside this same sub-channel near Montréal, on the south side
+    // — split the lane around them the same way the main braid island
+    // already splits the ambient channel, rather than letting an obstacle
+    // land on top of them.
+    const south = southIslandAt(d);
+    if (south) {
+      const southLo = south.centerX - south.halfWidth - EDGE_MARGIN;
+      const southHi = south.centerX + south.halfWidth + EDGE_MARGIN;
+      if (southHi > lo && southLo < hi) {
+        const lanes = [];
+        if (southLo - lo >= 0.3) lanes.push([lo, southLo]);
+        if (hi - southHi >= 0.3) lanes.push([southHi, hi]);
+        if (lanes.length === 0) return null; // both sub-lanes too tight here
+        const [laneLo, laneHi] = lanes[Math.floor(Math.random() * lanes.length)];
+        return laneLo + Math.random() * (laneHi - laneLo);
+      }
+    }
+
     if (hi - lo < 0.3) return null; // that side channel is too tight here
     return lo + Math.random() * (hi - lo);
   }

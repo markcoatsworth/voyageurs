@@ -1,5 +1,5 @@
 import { CANOE_SCREEN_Y, PIXELS_PER_UNIT } from '../shared/config.js';
-import { centerX, widthAt, braidAt, ESTUARY_WIDTH_THRESHOLD } from './river/path.js';
+import { centerX, widthAt, braidAt, southIslandAt, ESTUARY_WIDTH_THRESHOLD } from './river/path.js';
 import { hash, hashRange } from '../shared/hash.js';
 import { createWhaleSprite } from './sprites.js';
 
@@ -24,6 +24,8 @@ export function drawWhales(ctx, time, worldDistance, cameraWorldX, worldToScreen
     const worldX = centerX(d) + lateralFrac * (width / 2);
     const braid = braidAt(d);
     if (braid && Math.abs(worldX - braid.centerX) < braid.halfWidth + 0.5) continue; // don't swim through the island
+    const south = southIslandAt(d);
+    if (south && Math.abs(worldX - south.centerX) < south.halfWidth + 0.5) continue; // or Île Sainte-Hélène/Nuns' Island
     const z = worldDistance - d;
     const { x, y } = worldToScreen(worldX, z, cameraWorldX);
 

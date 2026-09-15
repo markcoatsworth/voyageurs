@@ -128,6 +128,102 @@ export const FEATURE_ISLAND_RANGE = [
   MONTREAL_ISLAND_KEYFRAMES[MONTREAL_ISLAND_KEYFRAMES.length - 1].d,
 ];
 
+// --- Île Sainte-Hélène and Nuns' Island (Île des Sœurs) ---
+//
+// Two real islands sitting *inside* the south (main) channel the Island
+// of Montreal's own split creates, near downtown — not a hand-wave, both
+// genuinely existed by 1790. Île Sainte-Hélène (surveyed position: local
+// ~2152): named by Champlain in 1611, part of the Le Moyne (Longueuil)
+// barony from 1665, developed by the family in the early 1700s as a
+// country estate — manor house, mills on the Sainte-Marie current, cider
+// press, gardens. Nuns' Island (surveyed position: local ~2174): the
+// Congrégation de Notre-Dame's farm since 1706, sole owners from 1769 (an
+// auction win) — by 1790 the *whole* island was theirs, worked as
+// farmland for their Montreal schools and orphanages.
+//
+// Same {centerX, halfWidth} shape contract as featureIslandAt() above,
+// but a second, independent split *nested inside* the south sub-channel
+// that one already carves out — river/path.js's braidAt() only ever
+// returns one island, so this is a separate function consumers check
+// alongside it, not folded into it.
+//
+// Both real positions sit close to Montréal's own dock (local 2168,
+// route.js) and its DOCK_WIDTH_Z footprint (village.js — roughly local
+// 2161-2175) — reaching MONTREAL_DOCK_REACH (16 units) out from the main
+// island's own south edge into this same channel. Rather than model a
+// dock-avoidance lane (the south channel is consistently 21-24 units wide
+// across this whole stretch — comfortably enough for both a real
+// secondary island *and* the dock's reach, verified by sampling — but
+// getting that exactly right at every d the dock's footprint spans is
+// more moving parts than the payoff is worth), each island's own span is
+// just kept clear of the dock's d-range entirely: Sainte-Hélène tapers
+// out by local 2160, Nuns' Island doesn't start until 2178. That's why
+// Nuns' Island's peak sits at local ~2198 rather than its literal
+// surveyed ~2174 — the same kind of small, documented nudge already made
+// for Pointe-aux-Trembles/Fort Senneville's landmarks (terrain.js) when
+// the literal coordinate didn't leave room for what has to stand there.
+//
+// `offset` is measured the same way as the main island's — from the
+// *ambient* centerX(d), not from the main island's own south edge —
+// which keeps this independent of the main island's exact shape (no
+// import of braidAt()/featureIslandAt() needed here, avoiding another
+// circular-import risk) at the cost of not dynamically tracking the main
+// island's south edge; safe in practice because both spans were chosen,
+// and verified, to sit well clear of it (minimum ~10 units of clearance
+// to the main island at every sampled d — see the authoring notes this
+// comment is condensed from).
+const SAINTE_HELENE_KEYFRAMES = [
+  { d: LAWRENCE_WEST + 2118, offset: 0, half: 0 },
+  { d: LAWRENCE_WEST + 2130, offset: -10, half: 1.8 },
+  { d: LAWRENCE_WEST + 2140, offset: -13, half: 2.7 },
+  { d: LAWRENCE_WEST + 2145, offset: -14, half: 3.0 },  // peak, abeam the real island
+  { d: LAWRENCE_WEST + 2150, offset: -13, half: 2.7 },
+  { d: LAWRENCE_WEST + 2158, offset: -6, half: 0.8 },
+  { d: LAWRENCE_WEST + 2160, offset: 0, half: 0 },       // clear of the dock's d-range (~2161-2175)
+];
+const NUNS_ISLAND_KEYFRAMES = [
+  { d: LAWRENCE_WEST + 2178, offset: 0, half: 0 },       // clear of the dock's d-range
+  { d: LAWRENCE_WEST + 2188, offset: -9, half: 1.6 },
+  { d: LAWRENCE_WEST + 2195, offset: -12, half: 2.6 },
+  { d: LAWRENCE_WEST + 2200, offset: -12, half: 2.8 },  // peak
+  { d: LAWRENCE_WEST + 2208, offset: -11, half: 2.3 },
+  { d: LAWRENCE_WEST + 2216, offset: -5, half: 0.8 },
+  { d: LAWRENCE_WEST + 2222, offset: 0, half: 0 },
+];
+
+const SOUTH_ISLAND_MIN_HALF = 0.12;
+// Only clamps against running past the true south bank (a self-contained
+// check using just the ambient width, same as this file's other clamps) —
+// doesn't also clamp against the main island's own south edge, per the
+// module comment above on why that's safe here without needing it live.
+function clampSouthIsland(kf, ambientCenterX, ambientWidth) {
+  if (!kf || kf.half < SOUTH_ISLAND_MIN_HALF) return null;
+  const half = ambientWidth / 2;
+  let offset = kf.offset;
+  let halfWidth = kf.half;
+  const maxAbsOffset = Math.max(0, half - MONTREAL_ISLAND_MIN_SUBCHANNEL);
+  if (-offset > maxAbsOffset) offset = -maxAbsOffset; // these islands only ever sit south (negative offset)
+  const maxHalfWidth = Math.max(0, half - Math.abs(offset) - MONTREAL_ISLAND_MIN_SUBCHANNEL);
+  if (halfWidth > maxHalfWidth) halfWidth = maxHalfWidth;
+  if (halfWidth < SOUTH_ISLAND_MIN_HALF) return null;
+  return { centerX: ambientCenterX + offset, halfWidth };
+}
+
+// The two spans never overlap (2118-2160 and 2178-2222), so checking both
+// and returning whichever matches (if either) is unambiguous.
+export function southIslandAt(d, ambientCenterX, ambientWidth) {
+  const heleneKf = interpKeyframes(SAINTE_HELENE_KEYFRAMES, d, ['offset', 'half'], false);
+  if (heleneKf) return clampSouthIsland(heleneKf, ambientCenterX, ambientWidth);
+  const nunsKf = interpKeyframes(NUNS_ISLAND_KEYFRAMES, d, ['offset', 'half'], false);
+  if (nunsKf) return clampSouthIsland(nunsKf, ambientCenterX, ambientWidth);
+  return null;
+}
+
+export const SOUTH_ISLAND_RANGE = [
+  SAINTE_HELENE_KEYFRAMES[0].d,
+  NUNS_ISLAND_KEYFRAMES[NUNS_ISLAND_KEYFRAMES.length - 1].d,
+];
+
 // --- The Lachine Rapids ---
 //
 // A real, famous barrier: fur-trade canoes had to portage around these,
@@ -159,4 +255,7 @@ export const LACHINE_RAPIDS_RANGE = [
 // generate its GLSL mirror straight from these numbers (a small JS
 // codegen step at module-eval time) instead of hand-retyping them —
 // the shape stays authored in exactly one place.
-export { MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL, LACHINE_RAPIDS_KEYFRAMES };
+export {
+  MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL, LACHINE_RAPIDS_KEYFRAMES,
+  SAINTE_HELENE_KEYFRAMES, NUNS_ISLAND_KEYFRAMES, SOUTH_ISLAND_MIN_HALF,
+};

@@ -1,10 +1,11 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } from '../shared/config.js';
-import { centerX, widthAt, braidAt, BRAID_PERIOD } from './river/path.js';
-import { FEATURE_ISLAND_RANGE } from './river/islands.js';
+import { centerX, widthAt, braidAt, southIslandAt, BRAID_PERIOD } from './river/path.js';
+import { FEATURE_ISLAND_RANGE, SOUTH_ISLAND_RANGE } from './river/islands.js';
 import { createWaterTile, createGrassTile, createBankTile, createSandTile } from './tiles.js';
 import {
   createPineTreeSprite, createPebbleSprite, createMountRoyalSprite, createWindmillSprite,
   createChurchSprite, createCabinSprite, createSulpicianTowersSprite, createRuinedFortSprite,
+  createStoneBuildingSprite,
 } from './sprites.js';
 import { hash, hashRange } from '../shared/hash.js';
 import { isNearVillage, drawVillages } from './villages.js';
@@ -38,6 +39,7 @@ const islandChurchSprite = createChurchSprite();
 const farmhouseSprites = [0, 1, 2].map(createCabinSprite);
 const sulpicianTowersSprite = createSulpicianTowersSprite();
 const ruinedFortSprite = createRuinedFortSprite();
+const heleneManorSprite = createStoneBuildingSprite(1);
 
 // Fixed scenery for the Island of Montreal (river/islands.js) — hand-placed
 // points, not a periodic scatter, since the island itself is baked rather
@@ -138,6 +140,16 @@ const FARMHOUSE_POINTS = [
   { d: 60000 + 2300, fracFromCenter: 0.8, spriteVariant: 2 },
 ];
 
+// Île Sainte-Hélène's Le Moyne estate — the stone manor house near the
+// island's peak (river/islands.js's SAINTE_HELENE_KEYFRAMES), and one of
+// its mills on the Sainte-Marie current, placed off toward the tapered end
+// so the two don't overlap on this small an island.
+const SAINTE_HELENE_MANOR_D = 60000 + 2145;
+const SAINTE_HELENE_MILL_D = 60000 + 2151;
+// Nuns' Island — worked farmland, so it gets the same habitant-farmhouse
+// sprite as the mainland scatter above rather than a distinct building.
+const NUNS_ISLAND_FARM_D = 60000 + 2200;
+
 function ensurePatterns(ctx) {
   if (patterns) return patterns;
   patterns = {
@@ -157,8 +169,24 @@ function toScreenX(worldX, cameraWorldX) {
   return CANOE_SCREEN_X + (worldX - cameraWorldX) * PIXELS_PER_UNIT;
 }
 
-function pathBetween(ctx, leftXAt, rightXAt) {
-  ctx.beginPath();
+// The south islands' near/far edge in screen X at a given row, collapsing
+// to the ambient centreline (zero width) wherever southIslandAt() returns
+// null — same collapse trick drawBraidIslands/drawWaterFallback already
+// use for the main island, so this both draws as a clean lens and, reused
+// as a hole boundary in drawWaterFallback, never punches a hole where
+// there's no island.
+function southIslandInnerX(y, worldDistance, cameraWorldX, side) {
+  const d = dAtScreenY(y, worldDistance);
+  const south = southIslandAt(d);
+  const cx = south ? south.centerX + side * south.halfWidth : centerX(d);
+  return toScreenX(cx, cameraWorldX);
+}
+
+// Adds one closed loop to whatever path is currently open on ctx — doesn't
+// call beginPath() itself, so several loops can be accumulated into one
+// path (see drawWaterFallback's evenodd hole-punching, which relies on
+// this to add island loops as holes alongside the outer channel loop).
+function addLoop(ctx, leftXAt, rightXAt) {
   for (let y = 0; y <= CANVAS_HEIGHT; y += STEP) {
     const x = leftXAt(y);
     if (y === 0) ctx.moveTo(x, y);
@@ -168,6 +196,11 @@ function pathBetween(ctx, leftXAt, rightXAt) {
     ctx.lineTo(rightXAt(y), y);
   }
   ctx.closePath();
+}
+
+function pathBetween(ctx, leftXAt, rightXAt) {
+  ctx.beginPath();
+  addLoop(ctx, leftXAt, rightXAt);
 }
 
 // Draws grass/bank/sand/pebbles/trees — everything except the water
@@ -217,6 +250,7 @@ export function drawBanks(ctx, worldDistance, cameraWorldX, { hideVillages = fal
   ctx.restore();
 
   drawBraidIslands(ctx, worldDistance, cameraWorldX);
+  drawSouthIslands(ctx, worldDistance, cameraWorldX);
   drawFeatureIslandScenery(ctx, worldDistance, cameraWorldX);
   drawShorelineStones(ctx, worldDistance, cameraWorldX, riverEdgeX);
   drawTrees(ctx, worldDistance, cameraWorldX);
@@ -266,6 +300,19 @@ function drawBraidIslands(ctx, worldDistance, cameraWorldX) {
   }
 }
 
+// Île Sainte-Hélène and Nuns' Island (world/river/path.js's southIslandAt,
+// which resolves to river/islands.js's southIslandAt() across
+// SOUTH_ISLAND_RANGE) — a second split nested inside the main island's own
+// south sub-channel. Same lens sand-fill technique as drawBraidIslands,
+// drawn after it so this land sits on top of (rather than being punched
+// out by) anything already painted for the main channel/island.
+function drawSouthIslands(ctx, worldDistance, cameraWorldX) {
+  const pat = ensurePatterns(ctx);
+  ctx.fillStyle = pat.sand;
+  pathBetween(ctx, (y) => southIslandInnerX(y, worldDistance, cameraWorldX, -1), (y) => southIslandInnerX(y, worldDistance, cameraWorldX, 1));
+  ctx.fill();
+}
+
 // Mount Royal + a handful of fixed trees on the Island of Montreal (see the
 // ISLAND_TREE_POINTS/MOUNT_ROYAL_D comment above) — drawn after the sand
 // fill above so they sit on top of the landmass, not painted over by it.
@@ -282,6 +329,15 @@ function drawFeatureIslandScenery(ctx, worldDistance, cameraWorldX) {
     const worldX = braid.centerX + fracFromCenter * braid.halfWidth;
     candidates.push({ z: worldDistance - d, worldX, sprite, anchorFrac });
   };
+  // Same idea as add() above, but framed against southIslandAt() — Île
+  // Sainte-Hélène/Nuns' Island's own coordinate system, not the main
+  // island's.
+  const addSouth = (d, fracFromCenter, sprite, anchorFrac) => {
+    const south = southIslandAt(d);
+    if (!south) return;
+    const worldX = south.centerX + fracFromCenter * south.halfWidth;
+    candidates.push({ z: worldDistance - d, worldX, sprite, anchorFrac });
+  };
 
   add(MOUNT_ROYAL_D, 0, mountRoyalSprite, 0.62);
   add(WINDMILL_D, 0.88, windmillSprite, 0.9);
@@ -293,6 +349,9 @@ function drawFeatureIslandScenery(ctx, worldDistance, cameraWorldX) {
   add(FORT_SENNEVILLE_D, 0.75, ruinedFortSprite, 0.8);
   for (const p of ISLAND_TREE_POINTS) add(p.d, p.fracFromCenter, treeSprites[p.spriteVariant], 0.72);
   for (const p of FARMHOUSE_POINTS) add(p.d, p.fracFromCenter, farmhouseSprites[p.spriteVariant], 0.85);
+  addSouth(SAINTE_HELENE_MANOR_D, 0, heleneManorSprite, 0.85);
+  addSouth(SAINTE_HELENE_MILL_D, -0.7, windmillSprite, 0.9);
+  addSouth(NUNS_ISLAND_FARM_D, 0.2, farmhouseSprites[1], 0.85);
 
   candidates.sort((a, b) => a.z - b.z);
   for (const c of candidates) {
@@ -313,21 +372,18 @@ export function drawWaterFallback(ctx, worldDistance, cameraWorldX) {
     const d = dAtScreenY(y, worldDistance);
     return toScreenX(centerX(d) + side * widthAt(d) / 2, cameraWorldX);
   };
-  // The inner boundary each half fills to: the island's own near edge when
-  // one exists at this row, or the ambient centreline when it doesn't —
-  // not the *outer* edge, which used to be the no-island fallback here and
-  // made both halves collapse to zero width (nothing ever got filled)
-  // anywhere outside a small braid island's own ~16-unit span. Using the
-  // centreline instead means the two fills still meet with no gap or
-  // overlap when there's no island at all (each covers exactly half the
-  // channel), and — because a baked feature island's offset/half-width
-  // both reach 0 together at its tapered ends (river/islands.js) — the
-  // island-edge and centreline values agree exactly right where an island
-  // starts or ends partway up the screen, so a single pathBetween() call
-  // spanning both stretches doesn't jump between two very different
-  // curves and self-intersect (the white-band artifact this used to draw
-  // right at a big island's tapered tip).
-  const innerX = (y, side) => {
+  // The main island's own near edge when one exists at this row, or the
+  // ambient centreline when it doesn't — not the *outer* edge, which used
+  // to be the no-island fallback here and made both halves collapse to
+  // zero width (nothing ever got filled) anywhere outside a small braid
+  // island's own ~16-unit span. Using the centreline instead means a
+  // single loop spanning both stretches doesn't jump between two very
+  // different curves and self-intersect (the white-band artifact this
+  // used to draw right at a big island's tapered tip) — because a baked
+  // feature island's offset/half-width both reach 0 together at its
+  // tapered ends (river/islands.js), the island-edge and centreline
+  // values agree exactly right where the island starts or ends.
+  const islandX = (y, side) => {
     const d = dAtScreenY(y, worldDistance);
     const braid = braidAt(d);
     const cx = braid ? braid.centerX + side * braid.halfWidth : centerX(d);
@@ -337,10 +393,18 @@ export function drawWaterFallback(ctx, worldDistance, cameraWorldX) {
   const scroll = (worldDistance * PIXELS_PER_UNIT * 0.6) % 16;
   if (pat.water.setTransform) pat.water.setTransform(new DOMMatrix().translate(0, scroll));
   ctx.fillStyle = pat.water;
-  pathBetween(ctx, (y) => edgeX(y, -1), (y) => innerX(y, -1));
-  ctx.fill();
-  pathBetween(ctx, (y) => innerX(y, 1), (y) => edgeX(y, 1));
-  ctx.fill();
+  // One path, three loops, evenodd fill: the outer channel loop, minus the
+  // main island loop, minus the south islands' loop — each hole loop
+  // collapses to a zero-area sliver at the ambient centreline wherever
+  // that island isn't present (see islandX/southIslandInnerX), so nesting
+  // the south islands' hole inside the main island's south sub-channel
+  // just works without the two-pass split-by-side logic this used to need
+  // (which only ever knew how to punch one island, not a nested second).
+  ctx.beginPath();
+  addLoop(ctx, (y) => edgeX(y, -1), (y) => edgeX(y, 1));
+  addLoop(ctx, (y) => islandX(y, -1), (y) => islandX(y, 1));
+  addLoop(ctx, (y) => southIslandInnerX(y, worldDistance, cameraWorldX, -1), (y) => southIslandInnerX(y, worldDistance, cameraWorldX, 1));
+  ctx.fill('evenodd');
 }
 
 // Visual current flow effects - animated streaks showing St. Lawrence currents

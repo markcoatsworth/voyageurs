@@ -12,7 +12,10 @@
 // re-evaluated every frame.
 
 import { hashRange } from '../../shared/hash.js';
-import { featureIslandAt, FEATURE_ISLAND_RANGE, lachineRapidsAt, LACHINE_RAPIDS_RANGE } from './islands.js';
+import {
+  featureIslandAt, FEATURE_ISLAND_RANGE, lachineRapidsAt, LACHINE_RAPIDS_RANGE,
+  southIslandAt as southIslandAtBaked, SOUTH_ISLAND_RANGE,
+} from './islands.js';
 import { gorgeWidthAt, gorgeCenterXAt, GORGE_RANGE } from './gorge.js';
 
 export const FJORD_WIDTH = 8;
@@ -266,6 +269,18 @@ export function braidAt(d) {
     centerX: centerX(d) + offsetFraction * maxOffset,
     halfWidth,
   };
+}
+
+// A second, independent island split — Île Sainte-Hélène and Nuns' Island
+// (river/islands.js), both nested *inside* the south sub-channel the main
+// Montreal Island split (braidAt() above) already carves out. Not folded
+// into braidAt() itself: that function's whole contract is "one island (or
+// none) at this d," and these coexist alongside the main island rather
+// than replacing it, so every consumer that wants both checks this
+// separately.
+export function southIslandAt(d) {
+  if (d < SOUTH_ISLAND_RANGE[0] || d > SOUTH_ISLAND_RANGE[1]) return null;
+  return southIslandAtBaked(d, centerX(d), widthAt(d));
 }
 
 // --- rapids: short stretches where the current pushes the canoe forward
