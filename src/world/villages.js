@@ -47,6 +47,25 @@ const MONTREAL_DOCK_REACH = 30;
 const MONTREAL_DOCK_WIDTH_Z = 14; // wider along the shore
 const MONTREAL_DOCK_HIT_Z = 8; // generous hit zone
 
+// A second, smaller pier on the island's *north* edge, facing the
+// Rivière des Prairies — real Montreal's harbour has wharves on both
+// sides of the island, not just the St. Lawrence one. Sized down from the
+// main dock to fit the narrower north channel (~18-22 units across this
+// span, see river/islands.js) and to read as the secondary crossing it is.
+const MONTREAL_NORTH_DOCK_REACH = 15;
+const MONTREAL_NORTH_DOCK_WIDTH_Z = 8;
+const MONTREAL_NORTH_DOCK_HIT_Z = 5;
+
+// A synthetic village-like object for that second pier: same flowDistance/
+// seed/name as the real Montreal (so every island-geometry helper above —
+// bankEdge/reachSign/inlandSign/shoreEdgeAt/clampToIsland — treats it as
+// "Montreal, on the island" exactly like the real one), just the opposite
+// side. Only dockReach/dockWidthZ/dockHitZ below branch on `side` too, to
+// give it its own smaller footprint.
+function montrealNorthTwin(v) {
+  return { ...v, side: -v.side };
+}
+
 // Buildings sit past the rocky shoreline (terrain.js's shore+bank-rock bands
 // are ~2.2 units deep), each offset slightly along the flow axis (dOffset)
 // and inland from the bank (depth) so they read as a small cluster instead
@@ -356,33 +375,50 @@ function inlandSign(v) {
 
 function dockReach(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_REACH;
-  if (v.name === 'Montreal') return MONTREAL_DOCK_REACH;
+  if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_REACH : MONTREAL_NORTH_DOCK_REACH;
   return DOCK_LENGTH * villageLayout(v.seed).dock.lengthScale;
 }
 
 function dockWidthZ(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_WIDTH_Z;
-  if (v.name === 'Montreal') return MONTREAL_DOCK_WIDTH_Z;
+  if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_WIDTH_Z : MONTREAL_NORTH_DOCK_WIDTH_Z;
   return DOCK_WIDTH_Z;
 }
 
 // Exported so game.js can push the canoe back out past the dock's own
 // (village-specific) trigger zone when casting off.
+// Montreal's two piers are told apart by `v.side < 0` (real Montreal's own
+// side, see river/route.js — south/main channel) vs. everything else
+// (the synthetic north twin, see montrealNorthTwin() above) — not by name,
+// since both share the name 'Montreal' so the rest of the island-geometry
+// helpers treat the twin as "on the island" too.
 export function dockHitZ(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_HIT_Z;
-  if (v.name === 'Montreal') return MONTREAL_DOCK_HIT_Z;
+  if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_HIT_Z : MONTREAL_NORTH_DOCK_HIT_Z;
   return DOCK_HIT_Z;
 }
 
 // Returns the village whose dock the canoe is currently touching, or null.
+function hitsDock(v, flowDistance, canoeWorldX) {
+  if (Math.abs(flowDistance - v.flowDistance) > dockHitZ(v)) return false;
+  const edge = bankEdge(v);
+  const inner = edge + reachSign(v) * dockReach(v);
+  const lo = Math.min(edge, inner);
+  const hi = Math.max(edge, inner);
+  return canoeWorldX >= lo && canoeWorldX <= hi;
+}
+
 export function getDockHit(flowDistance, canoeWorldX) {
   for (const v of VILLAGES) {
-    if (Math.abs(flowDistance - v.flowDistance) > dockHitZ(v)) continue;
-    const edge = bankEdge(v);
-    const inner = edge + reachSign(v) * dockReach(v);
-    const lo = Math.min(edge, inner);
-    const hi = Math.max(edge, inner);
-    if (canoeWorldX >= lo && canoeWorldX <= hi) return v;
+    if (hitsDock(v, flowDistance, canoeWorldX)) return v;
+    // Montreal's second pier (montrealNorthTwin(), see drawOneVillage) is
+    // real geometry a canoe can actually touch, not just decoration — but
+    // it isn't its own VILLAGES entry (see that function's comment), so it
+    // needs its own check here. Returns the real `v`, not the synthetic
+    // twin, so every "which village is this" check elsewhere in the game
+    // (docking banners, the pistol grant, cast-off) keeps working unchanged
+    // regardless of which of the two piers the canoe actually used.
+    if (v.name === 'Montreal' && hitsDock(montrealNorthTwin(v), flowDistance, canoeWorldX)) return v;
   }
   return null;
 }
@@ -450,7 +486,13 @@ function drawDockGreeter(ctx, feetX, feetY, time, seed) {
   ctx.restore();
 }
 
-function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
+// Draws just the wooden pier itself (deck, planks, pilings) for a village-
+// like object `v` — {flowDistance, side, seed, name}. Factored out of
+// drawOneVillage() so Montreal can have a second one drawn against a
+// synthetic "north twin" (see MONTREAL_NORTH_TWIN below) without a whole
+// second building cluster/greeter — real Montreal's harbour has piers on
+// both the St. Lawrence and Rivière-des-Prairies sides of the island.
+function drawDockStructure(ctx, v, worldDistance, cameraWorldX) {
   const layout = villageLayout(v.seed);
   const edge = bankEdge(v);
   const inner = edge + reachSign(v) * dockReach(v);
@@ -493,6 +535,16 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   ctx.fillStyle = '#3f2b1a';
   const pilingX = toScreen(inner, z0, cameraWorldX).x < toScreen(edge, z0, cameraWorldX).x ? left : right;
   ctx.fillRect(pilingX - 1, top - 1, 2, bottom - top + 2);
+}
+
+function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
+  const layout = villageLayout(v.seed);
+  const edge = bankEdge(v);
+  const inner = edge + reachSign(v) * dockReach(v);
+  const z0 = worldDistance - v.flowDistance;
+
+  drawDockStructure(ctx, v, worldDistance, cameraWorldX);
+  if (v.name === 'Montreal') drawDockStructure(ctx, montrealNorthTwin(v), worldDistance, cameraWorldX);
 
   const isQuebecCity = v.name === 'Quebec City';
   const isTroisRivieres = v.name === 'Trois-Rivieres';
