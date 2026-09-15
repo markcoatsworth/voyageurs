@@ -1127,6 +1127,124 @@ export function createRampartSprite() {
   });
 }
 
+// Fort de la Montagne's two surviving stone towers (built 1694 for the
+// Sulpicians' fortified mission — see world/river/islands.js's landmark
+// comment) — round towers with conical caps, joined by a low stretch of
+// rampart, same stone palette as createRampartSprite.
+export function createSulpicianTowersSprite() {
+  const w = 56, h = 46;
+  const stone = '#767066', stoneDark = '#54504a', stoneLight = '#96907f';
+  const roof = '#4a3f36';
+
+  const tower = (ctx, cx, baseY, r, roofH) => {
+    groundShadow(ctx, cx, baseY + 1, r + 2, 3);
+    ctx.fillStyle = stoneDark;
+    ctx.beginPath();
+    ctx.ellipse(cx, baseY - r * 0.8, r + 1, r * 1.6 + 1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = stone;
+    ctx.beginPath();
+    ctx.ellipse(cx, baseY - r * 0.8, r, r * 1.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = stoneLight;
+    ctx.beginPath();
+    ctx.ellipse(cx - r * 0.35, baseY - r * 0.8, r * 0.3, r * 1.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // small window slits
+    ctx.fillStyle = '#241d16';
+    ctx.fillRect(cx - 1, baseY - r * 1.4, 2, 4);
+    ctx.fillRect(cx - 1, baseY - r * 0.4, 2, 4);
+    // conical cap
+    ctx.fillStyle = roof;
+    ctx.beginPath();
+    ctx.moveTo(cx - r - 1, baseY - r * 1.6);
+    ctx.lineTo(cx, baseY - r * 1.6 - roofH);
+    ctx.lineTo(cx + r + 1, baseY - r * 1.6);
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  return makeSprite(w, h, (ctx) => {
+    // low rampart joining the two towers
+    ctx.fillStyle = stoneDark;
+    ctx.fillRect(w / 2 - 14, h - 16, 28, 12);
+    ctx.fillStyle = stone;
+    ctx.fillRect(w / 2 - 14, h - 15, 28, 9);
+    ctx.strokeStyle = stoneDark;
+    ctx.lineWidth = 0.7;
+    for (let x = w / 2 - 12; x < w / 2 + 14; x += 5) {
+      ctx.beginPath(); ctx.moveTo(x, h - 15); ctx.lineTo(x, h - 6); ctx.stroke();
+    }
+
+    tower(ctx, 12, h - 4, 9, 10);
+    tower(ctx, w - 12, h - 4, 9, 10);
+  });
+}
+
+// Fort Senneville's ruins (built in stone 1692, burned by American troops
+// in 1776 — see islands.js) — broken walls and a roofless tower stump, at
+// the island's west tip. Same stone palette as the intact fortifications
+// elsewhere, but darker and mossier, with a jagged broken silhouette
+// instead of clean crenellations, so it reads as abandoned, not garrisoned.
+export function createRuinedFortSprite() {
+  const w = 48, h = 34;
+  const stone = '#655f56', stoneDark = '#433f38', moss = '#4a5c3c';
+
+  return makeSprite(w, h, (ctx) => {
+    groundShadow(ctx, w / 2, h - 2, w / 2 - 4, 3);
+
+    // a broken wall segment, jagged top
+    ctx.fillStyle = stoneDark;
+    ctx.beginPath();
+    ctx.moveTo(2, h - 3);
+    ctx.lineTo(2, h - 14);
+    ctx.lineTo(9, h - 20);
+    ctx.lineTo(15, h - 13);
+    ctx.lineTo(22, h - 17);
+    ctx.lineTo(22, h - 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = stone;
+    ctx.beginPath();
+    ctx.moveTo(3, h - 4);
+    ctx.lineTo(3, h - 13);
+    ctx.lineTo(9, h - 18);
+    ctx.lineTo(14, h - 12);
+    ctx.lineTo(20, h - 15);
+    ctx.lineTo(20, h - 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // the roofless corner tower stump — a squat, broken-topped cylinder
+    const tcx = w - 16, tBase = h - 3, tr = 8;
+    ctx.fillStyle = stoneDark;
+    ctx.beginPath();
+    ctx.ellipse(tcx, tBase - tr * 0.6, tr + 1, tr * 1.2 + 1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = stone;
+    ctx.beginPath();
+    ctx.moveTo(tcx - tr, tBase - tr * 1.1);
+    ctx.lineTo(tcx - tr + 2, tBase - tr * 2.0);
+    ctx.lineTo(tcx + tr - 3, tBase - tr * 1.7);
+    ctx.lineTo(tcx + tr, tBase - tr * 1.0);
+    ctx.lineTo(tcx + tr, tBase);
+    ctx.lineTo(tcx - tr, tBase);
+    ctx.closePath();
+    ctx.fill();
+
+    // moss/ivy patches — the tell that this is a ruin, not a garrison
+    ctx.fillStyle = moss;
+    ctx.beginPath(); ctx.ellipse(tcx - 3, tBase - 4, 3, 5, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(8, h - 8, 2.4, 4, -0.2, 0, Math.PI * 2); ctx.fill();
+
+    // rubble at the base
+    ctx.fillStyle = stoneDark;
+    ctx.fillRect(24, h - 4, 4, 3);
+    ctx.fillRect(30, h - 5, 3, 4);
+    ctx.fillRect(1, h - 4, 3, 3);
+  });
+}
+
 // The player's own figure, walking around a village on foot — same tan
 // skin / cream shirt / red sash palette as the canoe's paddler, so it
 // reads as the same voyageur. A single sprite; game.js mirrors it

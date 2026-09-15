@@ -2,7 +2,10 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER
 import { centerX, widthAt, braidAt, BRAID_PERIOD } from './river/path.js';
 import { FEATURE_ISLAND_RANGE } from './river/islands.js';
 import { createWaterTile, createGrassTile, createBankTile, createSandTile } from './tiles.js';
-import { createPineTreeSprite, createPebbleSprite, createMountRoyalSprite, createWindmillSprite, createChurchSprite, createCabinSprite } from './sprites.js';
+import {
+  createPineTreeSprite, createPebbleSprite, createMountRoyalSprite, createWindmillSprite,
+  createChurchSprite, createCabinSprite, createSulpicianTowersSprite, createRuinedFortSprite,
+} from './sprites.js';
 import { hash, hashRange } from '../shared/hash.js';
 import { isNearVillage, drawVillages } from './villages.js';
 
@@ -33,6 +36,8 @@ const mountRoyalSprite = createMountRoyalSprite();
 const windmillSprite = createWindmillSprite();
 const islandChurchSprite = createChurchSprite();
 const farmhouseSprites = [0, 1, 2].map(createCabinSprite);
+const sulpicianTowersSprite = createSulpicianTowersSprite();
+const ruinedFortSprite = createRuinedFortSprite();
 
 // Fixed scenery for the Island of Montreal (river/islands.js) — hand-placed
 // points, not a periodic scatter, since the island itself is baked rather
@@ -74,6 +79,34 @@ const ISLAND_TREE_POINTS = [
 const WINDMILL_D = 60000 + 2272; // Pointe-Claire windmill, south shore
 const SAULT_AU_RECOLLET_D = 60000 + 2174; // church, north shore
 const LACHINE_D = 60000 + 2225; // parish, south shore, inside the rapids stretch
+
+// Second research pass, same survey method. Fort de la Montagne (built
+// 1685-94 for the Sulpicians; two of its stone towers still stand today)
+// sits inland from the immediate waterfront near the mountain's base, not
+// right on the shore like the others — placed with a small |fracFromCenter|
+// accordingly, just past Mount Royal itself (MOUNT_ROYAL_D) so the two
+// don't overlap. Longue-Pointe (parish erected 1724) and Pointe-aux-
+// Trembles (parish 1674, stone church 1705) are both real south-shore
+// villages; Pointe-aux-Trembles' actual church sits close to — but the
+// island's true east tip is a further ~28 units past — this model's own
+// tapered-to-zero east end (see river/islands.js's comment on why
+// Charlemagne, not the literal tip, anchors that end), so it's placed
+// right at the edge of this model's taper rather than exactly on the real
+// coordinate. Fort Senneville — a real stone fort, burned by American
+// troops in 1776, its ruins still standing — sits right at the island's
+// actual west tip beside Sainte-Anne-de-Bellevue, which lines up with
+// this model's own west tip (TRIGGER_DISTANCE, chasseGalerie.js): a
+// fitting last thing to see before the canoe lifts into the Chasse-
+// galerie's flight.
+const FORT_DE_LA_MONTAGNE_D = 60000 + 2180;
+const LONGUE_POINTE_D = 60000 + 2125;
+// Nudged from the survey's raw 2106/2313 to 2120/2295 — right at the tips
+// the island tapers down to well under a world unit wide (see
+// river/islands.js's keyframes), too narrow for a building-sized sprite
+// to sit on without mostly overhanging open water; still close enough to
+// read as "right near the tip" without that.
+const POINTE_AUX_TREMBLES_D = 60000 + 2120;
+const FORT_SENNEVILLE_D = 60000 + 2295;
 
 // A scatter of habitant farmhouses along both shores, hand-placed (not
 // hashed) the same way as everything else here — by 1790 the seigneury's
@@ -254,6 +287,10 @@ function drawFeatureIslandScenery(ctx, worldDistance, cameraWorldX) {
   add(WINDMILL_D, 0.88, windmillSprite, 0.9);
   add(SAULT_AU_RECOLLET_D, 0.85, islandChurchSprite, 0.9);
   add(LACHINE_D, -0.85, islandChurchSprite, 0.9);
+  add(FORT_DE_LA_MONTAGNE_D, -0.3, sulpicianTowersSprite, 0.85);
+  add(LONGUE_POINTE_D, -0.6, islandChurchSprite, 0.9);
+  add(POINTE_AUX_TREMBLES_D, -0.7, islandChurchSprite, 0.9);
+  add(FORT_SENNEVILLE_D, 0.75, ruinedFortSprite, 0.8);
   for (const p of ISLAND_TREE_POINTS) add(p.d, p.fracFromCenter, treeSprites[p.spriteVariant], 0.72);
   for (const p of FARMHOUSE_POINTS) add(p.d, p.fracFromCenter, farmhouseSprites[p.spriteVariant], 0.85);
 
