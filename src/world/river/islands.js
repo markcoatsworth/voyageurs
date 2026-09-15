@@ -40,71 +40,85 @@ function interpKeyframes(keyframes, d, fields, clampOutside) {
 
 // --- The Island of Montreal ---
 //
-// Real geography (Wikipedia's Island of Montreal / Lachine Rapids
-// articles): ~50km long, croissant-shaped, running east-west between the
-// Saint Lawrence (south boundary, the main channel) and the Rivière des
-// Prairies (north boundary, narrower, part of the Ottawa River system).
-// The two rejoin at the island's east tip near Repentigny/Pointe-aux-
-// Trembles, and split at its west tip at Lac des Deux-Montagnes. Old
-// Montreal/the port sit on the south shore.
+// This shape comes from an actual survey, not eyeballing: real coordinates
+// for the island's two tips and seven paired north-shore/south-shore towns
+// along its length (Sainte-Anne-de-Bellevue west tip; Pierrefonds,
+// Cartierville, Ahuntsic, Rivière-des-Prairies on the north/Rivière-des-
+// Prairies side; Baie-D'Urfé, Pointe-Claire, Lachine, Verdun, Old
+// Montréal, Hochelaga-Maisonneuve, Mercier on the south/St. Lawrence side;
+// Pointe-aux-Trembles east tip), projected onto the island's own west-tip-
+// to-east-tip axis (same equirectangular technique river/route.js uses)
+// to get each point's position along that axis and its sideways offset
+// from it. The real result isn't a symmetric lens: the island is genuinely
+// lopsided, narrow for its first third out of the west tip, then bulging
+// hard — the north/Rivière-des-Prairies shore stays close to the straight
+// axis the whole way, so almost all the width variation comes from the
+// south shore ballooning out toward Verdun/Old Montréal/Mount Royal,
+// roughly 60-70% of the way along from the west tip — before narrowing
+// again into the east tip. `offset`/`half` below are that real profile
+// (normalized to its own peak, then scaled to a peak that reads well at
+// this game's visual scale — not 1:1 real kilometres, which would dwarf
+// everything else in the game), and `MONTREAL_WIDTH_BOOST_KEYFRAMES`
+// below reuses the exact same normalized profile for the corridor's
+// overall width, so the "big open water" swell and the island's own
+// footprint grow and shrink in step, the way they really do.
 //
-// Mapped onto this game's already-existing real-distance-derived village
-// spacing: Charlemagne (local 2041) already sits right where real
-// Repentigny does — the island's east tip — so the island keyframes below
-// start tapering in just before it. Montreal's own dock (local 2168, see
-// river/route.js — now pinned side:-1/south to match the real Vieux-Port)
-// sits inside the wide south channel this shape produces. `offset` below
-// is a worldX offset from the ambient centerX(d), not absolute, so the
-// island rides the channel's own wander instead of drifting off it —
-// positive offset shifts it toward the north/Charlemagne (side:1) edge,
-// narrowing the Rivière-des-Prairies channel there and widening the south
-// one, matching reality.
-// offset/half are scaled up from an earlier, narrower pass in step with
-// MONTREAL_WIDTH_BOOST_KEYFRAMES below (same scale factor — newTotal/
-// oldTotal — applied to both, at each of these same d points), which is
-// why they don't look like "round" authored numbers: the shape itself
-// (proportions of south channel : island : north channel) is still hand-
-// picked, just carried through the widening algebraically rather than
-// re-eyeballed from scratch. See that table's comment for why the corridor
-// widens here at all.
+// Anchored the same way as before: the west tip lines up with
+// bossfights/chasseGalerie.js's TRIGGER_DISTANCE (local 2318 — matches
+// real Île-Perrot, just past the actual west tip, at local 2318 too — see
+// that file's comment), and Montréal's own dock (local 2168, river/
+// route.js, side:-1/south for the real Vieux-Port) has to land at the
+// real fraction-of-the-island's-length that downtown actually sits at
+// (measured the same survey way: ~30% of the way from the east tip) —
+// which is what fixes the *east* tip at local 2102, not at Charlemagne's
+// own flowDistance (2041). That's not a mismatch: real Charlemagne
+// (Repentigny) sits a genuine ~8-12km short of the island's actual east
+// tip in this same survey, across the water from it — so the ~61-unit gap
+// of plain ambient river between Charlemagne and the island's start is
+// the model, not an error.
+//
+// `offset` is a worldX offset from the ambient centerX(d), not absolute,
+// so the island rides the channel's own wander instead of drifting off
+// it — positive shifts it toward the north/Charlemagne (side:1) edge,
+// narrowing the Rivière-des-Prairies channel and widening the south one,
+// matching reality.
 const MONTREAL_ISLAND_KEYFRAMES = [
-  { d: LAWRENCE_WEST + 1980, offset: 0, half: 0 },        // east tip, just before Charlemagne
-  { d: LAWRENCE_WEST + 2010, offset: 4.12, half: 3.02 },
-  { d: LAWRENCE_WEST + 2041, offset: 7.95, half: 5.40 },  // abeam Charlemagne/Repentigny
-  { d: LAWRENCE_WEST + 2070, offset: 12.52, half: 8.23 },
-  { d: LAWRENCE_WEST + 2110, offset: 15.88, half: 9.93 }, // widest, ~Mount Royal
-  { d: LAWRENCE_WEST + 2140, offset: 16.09, half: 9.25 },
-  { d: LAWRENCE_WEST + 2168, offset: 13.42, half: 7.67 }, // abeam Montreal's dock
-  { d: LAWRENCE_WEST + 2200, offset: 11.17, half: 5.96 },
-  { d: LAWRENCE_WEST + 2240, offset: 7.64, half: 3.66 },
-  { d: LAWRENCE_WEST + 2280, offset: 4.09, half: 1.64 },
-  { d: LAWRENCE_WEST + 2318, offset: 0, half: 0 },        // west tip, Lake of Two Mountains
+  { d: LAWRENCE_WEST + 2102.0, offset: 0.00, half: 0.00 },   // east tip (Pointe-aux-Trembles)
+  { d: LAWRENCE_WEST + 2112.8, offset: 2.48, half: 1.57 },
+  { d: LAWRENCE_WEST + 2134.4, offset: 6.20, half: 3.92 },
+  { d: LAWRENCE_WEST + 2156.0, offset: 9.50, half: 6.01 },
+  { d: LAWRENCE_WEST + 2177.6, offset: 15.00, half: 9.50 },  // widest — abeam Verdun/Mount Royal
+  { d: LAWRENCE_WEST + 2199.2, offset: 13.82, half: 8.75 },
+  { d: LAWRENCE_WEST + 2220.8, offset: 13.01, half: 8.24 },
+  { d: LAWRENCE_WEST + 2242.4, offset: 9.05, half: 5.73 },
+  { d: LAWRENCE_WEST + 2264.0, offset: 4.85, half: 3.07 },
+  { d: LAWRENCE_WEST + 2285.6, offset: 3.59, half: 2.27 },
+  { d: LAWRENCE_WEST + 2307.2, offset: 1.13, half: 0.71 },
+  { d: LAWRENCE_WEST + 2318.0, offset: 0.00, half: 0.00 },   // west tip (Île-Perrot/Lake of Two Mountains)
 ];
 
-// The ambient ("normal-river") width formula (river/path.js's widthAt())
-// reads like every other stretch of the Saint Lawrence — but the real
+// Same survey, same normalized profile (see the comment above) — the real
 // water off Montreal is dramatically wider than a typical reach (the
-// harbour, Lake St. Louis just upstream), and the island split above was
-// eating so much of the *ambient* width that even the main south channel
-// read as a squeeze right at the arrival — the opposite of "reaching a
-// grand metropolis." This adds extra width on top of the ambient formula,
-// only across the island's own span, ramping from 0 at both ends (so it
-// blends seamlessly into the normal river just outside — no seam) up to
-// nearly double at the peak, abeam the dock and Mount Royal. widthAt()
-// applies it; the island keyframes above were scaled up to match so the
-// south/island/north proportions stay the same, just bigger.
+// harbour, Lake St. Louis just upstream), and the island alone was eating
+// so much of the *ambient* width that even the main south channel read as
+// a squeeze right at the arrival — the opposite of "reaching a grand
+// metropolis." This adds extra width on top of the ambient formula, only
+// across the island's own span, ramping from 0 at both tips (so it blends
+// seamlessly into the normal river just outside — no seam) to nearly
+// double at the same real peak the island keyframes above widen at.
 const MONTREAL_WIDTH_BOOST_KEYFRAMES = [
-  { d: LAWRENCE_WEST + 1980, boost: 0 },
-  { d: LAWRENCE_WEST + 2010, boost: 22 },
-  { d: LAWRENCE_WEST + 2041, boost: 34 },
-  { d: LAWRENCE_WEST + 2070, boost: 40 },
-  { d: LAWRENCE_WEST + 2110, boost: 44 },
-  { d: LAWRENCE_WEST + 2140, boost: 44 },
-  { d: LAWRENCE_WEST + 2168, boost: 42 },
-  { d: LAWRENCE_WEST + 2200, boost: 34 },
-  { d: LAWRENCE_WEST + 2240, boost: 24 },
-  { d: LAWRENCE_WEST + 2280, boost: 10 },
-  { d: LAWRENCE_WEST + 2318, boost: 0 },
+  { d: LAWRENCE_WEST + 2102.0, boost: 0.00 },
+  { d: LAWRENCE_WEST + 2112.8, boost: 7.59 },
+  { d: LAWRENCE_WEST + 2134.4, boost: 19.00 },
+  { d: LAWRENCE_WEST + 2156.0, boost: 29.12 },
+  { d: LAWRENCE_WEST + 2177.6, boost: 46.00 },
+  { d: LAWRENCE_WEST + 2199.2, boost: 42.37 },
+  { d: LAWRENCE_WEST + 2220.8, boost: 39.88 },
+  { d: LAWRENCE_WEST + 2242.4, boost: 27.74 },
+  { d: LAWRENCE_WEST + 2264.0, boost: 14.86 },
+  { d: LAWRENCE_WEST + 2285.6, boost: 10.99 },
+  { d: LAWRENCE_WEST + 2307.2, boost: 3.45 },
+  { d: LAWRENCE_WEST + 2318.0, boost: 0.00 },
 ];
 
 export function montrealWidthBoostAt(d) {

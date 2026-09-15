@@ -288,6 +288,25 @@ function bankEdge(v) {
   return shoreEdgeAt(v.flowDistance, v.side, v.name === 'Montreal');
 }
 
+// Montreal's real east-side taper (river/islands.js) narrows fast enough
+// that the island isn't uniformly wide across MONTREAL_SPAN's whole
+// footprint — a deep building placed the same distance inland everywhere
+// would clear the island's far edge into open water near that taper.
+// Rather than hand-tune every building's depth against the exact shape,
+// clamp each one's worldX to the island's own two edges (minus a small
+// margin) at its own d — same "authored shape, clamped against live
+// geometry so it can't be pushed off the map" pattern islands.js's
+// featureIslandAt() already uses for the island shape itself.
+const ISLAND_EDGE_MARGIN = 0.5;
+function clampToIsland(worldX, d) {
+  const island = braidAt(d);
+  if (!island) return worldX;
+  const lo = island.centerX - island.halfWidth + ISLAND_EDGE_MARGIN;
+  const hi = island.centerX + island.halfWidth - ISLAND_EDGE_MARGIN;
+  if (lo >= hi) return island.centerX; // degenerate (right at a taper tip)
+  return Math.max(lo, Math.min(hi, worldX));
+}
+
 function toScreen(worldX, z, cameraWorldX) {
   return {
     x: CANOE_SCREEN_X + (worldX - cameraWorldX) * PIXELS_PER_UNIT,
@@ -502,7 +521,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
     scenery = MONTREAL_BUILDINGS.map((b) => {
       const d = v.flowDistance + b.dOffset;
       const z = worldDistance - d;
-      const worldX = shoreEdgeAt(d, v.side, true) + inlandSign(v) * (BUILDING_SHORE_OFFSET + b.depth);
+      const worldX = clampToIsland(shoreEdgeAt(d, v.side, true) + inlandSign(v) * (BUILDING_SHORE_OFFSET + b.depth), d);
       return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
     });
   } else {
@@ -524,7 +543,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   {
     const d = v.flowDistance + REPAIR_SHOP_D_OFFSET;
     const z = worldDistance - d;
-    const worldX = shoreEdgeAt(d, v.side, isMontreal) + inlandSign(v) * (BUILDING_SHORE_OFFSET + REPAIR_SHOP_DEPTH);
+    const worldX = clampToIsland(shoreEdgeAt(d, v.side, isMontreal) + inlandSign(v) * (BUILDING_SHORE_OFFSET + REPAIR_SHOP_DEPTH), d);
     scenery.push({ z, worldX, sprite: repairShopSprite, mirror: false, anchor: 0.85 });
   }
 
@@ -562,7 +581,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
     {
       const d = v.flowDistance + MONTREAL_CHURCH.dOffset;
       const z = worldDistance - d;
-      const worldX = shoreEdgeAt(d, v.side, true) + inlandSign(v) * (BUILDING_SHORE_OFFSET + MONTREAL_CHURCH.depth);
+      const worldX = clampToIsland(shoreEdgeAt(d, v.side, true) + inlandSign(v) * (BUILDING_SHORE_OFFSET + MONTREAL_CHURCH.depth), d);
       scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
     }
   } else {

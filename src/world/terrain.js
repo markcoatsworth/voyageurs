@@ -37,19 +37,21 @@ const mountRoyalSprite = createMountRoyalSprite();
 // island's own centerX/halfWidth at that exact d (from braidAt(), which
 // resolves to river/islands.js's featureIslandAt() across this span) so
 // they sit safely on the landmass regardless of its exact authored shape.
-const MOUNT_ROYAL_D = 60000 + 2110; // the island's widest keyframe — "at the centre of the island"
+// river/islands.js's surveyed real peak (abeam Verdun/Old Montréal) — see
+// its module comment for where these numbers come from.
+const MOUNT_ROYAL_D = 60000 + 2172; // just upstream of the dock (2168), near the real peak (2177.6)
 // spriteVariant is a plain fixed index (not hashed) — each point is
 // already an explicit, hand-placed coordinate, so which of the three
 // near-identical pine sprites it uses is just as authored as where it is.
 // Kept clear of local 2140-2196 (Montreal's own MONTREAL_SPAN footprint,
 // see villages.js) so a tree never lands on top of a building there.
 const ISLAND_TREE_POINTS = [
-  { d: 60000 + 2020, fracFromCenter: 0.35, spriteVariant: 0 },
-  { d: 60000 + 2070, fracFromCenter: -0.45, spriteVariant: 1 },
-  { d: 60000 + 2090, fracFromCenter: 0.55, spriteVariant: 2 },
-  { d: 60000 + 2125, fracFromCenter: -0.4, spriteVariant: 0 },
-  { d: 60000 + 2225, fracFromCenter: 0.4, spriteVariant: 1 },
-  { d: 60000 + 2260, fracFromCenter: -0.55, spriteVariant: 2 },
+  { d: 60000 + 2112, fracFromCenter: 0.35, spriteVariant: 0 },
+  { d: 60000 + 2125, fracFromCenter: -0.45, spriteVariant: 1 },
+  { d: 60000 + 2205, fracFromCenter: 0.5, spriteVariant: 2 },
+  { d: 60000 + 2222, fracFromCenter: -0.4, spriteVariant: 0 },
+  { d: 60000 + 2255, fracFromCenter: 0.4, spriteVariant: 1 },
+  { d: 60000 + 2280, fracFromCenter: -0.55, spriteVariant: 2 },
 ];
 
 function ensurePatterns(ctx) {
