@@ -802,15 +802,14 @@ export class Game {
       // resumes on the very next frame otherwise, so a canoe that limped
       // through Diable's fire at low hull could fly straight into whichever
       // steeple happens to sit closest to the arena and capsize moments
-      // after already winning — and how close that nearest steeple is
-      // varies by playthrough (STEEPLE_SPACING/JITTER, chasseGalerie.js),
-      // so a fixed time isn't reliably enough distance at every speed. 30
-      // units (STEEPLE_SPACING 22 + STEEPLE_JITTER 4, plus margin for the
-      // hit box itself) clears past the *worst-case* nearest steeple, not
-      // just a typical one — verified against the crude "chase Diable,
-      // don't dodge" test pilot, who reaches the fight already down to
-      // ~10 hull from his fire alone and has no margin for bad luck
-      // right after.
+      // after already winning. Steeples are now a fixed list
+      // (chasseGalerie.js's STEEPLE_DEFS, not generated), so this is
+      // checkable exactly rather than guessed: the largest gap between any
+      // two consecutive ones is 26 units. 30 clears past the worst case
+      // with margin, not just a typical one — verified against the crude
+      // "chase Diable, don't dodge" test pilot, who reaches the fight
+      // already down to ~10 hull from his fire alone and has no margin for
+      // bad luck right after.
       this._steepleGraceUntil = this.flowDistance + 30;
     }
   }

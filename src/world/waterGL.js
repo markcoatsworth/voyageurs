@@ -18,6 +18,7 @@ import {
   MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL,
   LACHINE_RAPIDS_KEYFRAMES, FEATURE_ISLAND_RANGE, LACHINE_RAPIDS_RANGE,
 } from './river/islands.js';
+import { GORGE_WIDTH_KEYFRAMES, GORGE_CENTERX_KEYFRAMES, GORGE_RANGE } from './river/gorge.js';
 
 // Generates a GLSL if/else-if chain doing the same linear-keyframe lookup
 // as river/islands.js's interpKeyframes(), straight from that file's own
@@ -84,9 +85,21 @@ const float MONTREAL_ISLAND_MIN_HALF = ${MONTREAL_ISLAND_MIN_HALF.toFixed(4)};
 const float MONTREAL_ISLAND_MIN_SUBCHANNEL = ${MONTREAL_ISLAND_MIN_SUBCHANNEL.toFixed(4)};
 const float LACHINE_D_MIN = ${LACHINE_RAPIDS_RANGE[0].toFixed(2)};
 const float LACHINE_D_MAX = ${LACHINE_RAPIDS_RANGE[1].toFixed(2)};
+const float GORGE_D_MIN = ${GORGE_RANGE[0].toFixed(2)};
+const float GORGE_D_MAX = ${GORGE_RANGE[1].toFixed(2)};
 
 // --- river course, mirrors world/river/path.js — keep in sync by hand ---
+// Mirrors world/river/gorge.js's gorgeCenterXAt() — codegen'd, see
+// featureIslandAt() further down for how.
+float gorgeCenterXAt(float d) {
+  float cx = 0.0;
+${glslKeyframeChain('d', GORGE_CENTERX_KEYFRAMES, ['centerX'], { centerX: 'cx' })}
+  return cx;
+}
 float centerX(float d) {
+  // The Chasse-galerie gorge — baked, checked first, same as the JS
+  // mirror in river/path.js.
+  if (d >= GORGE_D_MIN && d <= GORGE_D_MAX) return gorgeCenterXAt(d);
   return sin(d * 0.09) * 3.0 + sin(d * 0.21 + 1.7) * 1.5;
 }
 float estuaryProgress(float d) {
@@ -114,10 +127,15 @@ float rideauWidthAt(float d) {
   float wobble = sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.13) * 0.8;
   return clamp(trend + wobble, 6.5, 62.0);
 }
-// Mirrors world/river/path.js's gorgeWidthAt() — the tight Ottawa gorge the
-// Chasse-galerie flies through.
+// Mirrors world/river/gorge.js's gorgeWidthAt() — codegen'd, see
+// featureIslandAt() further down for how. clampOutside behaviour (holding
+// the nearest keyframe's value past either end) isn't needed here since
+// widthAt() below only ever calls this once d is already known to be
+// inside [GORGE_D_MIN, GORGE_D_MAX].
 float gorgeWidthAt(float d) {
-  return max(6.2, 8.0 + sin(d * 0.09) * 1.4 + sin(d * 0.037 + 2.0) * 0.9);
+  float w = ${GORGE_WIDTH_KEYFRAMES[0].width.toFixed(4)};
+${glslKeyframeChain('d', GORGE_WIDTH_KEYFRAMES, ['width'], { width: 'w' })}
+  return w;
 }
 float widthAt(float d) {
   // The Rideau leg — checked first, same as the JS widthAt(), because its

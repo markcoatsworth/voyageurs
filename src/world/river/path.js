@@ -13,6 +13,7 @@
 
 import { hashRange } from '../../shared/hash.js';
 import { featureIslandAt, FEATURE_ISLAND_RANGE, lachineRapidsAt, LACHINE_RAPIDS_RANGE } from './islands.js';
+import { gorgeWidthAt, gorgeCenterXAt, GORGE_RANGE } from './gorge.js';
 
 export const FJORD_WIDTH = 8;
 // The real Saint Lawrence off Tadoussac dwarfs the fjord — this is what
@@ -105,6 +106,11 @@ export const ESTUARY_WIDTH_THRESHOLD = 30;
 const ESTUARY_AMP_SCALE = 2.8;
 
 export function centerX(d) {
+  // The Chasse-galerie gorge (river/gorge.js) — baked, checked first for
+  // the same reason widthAt() below checks its own baked stretches first:
+  // it's a narrow slice of the shared number line that shouldn't blend
+  // with the ambient sine formula surrounding it.
+  if (d >= GORGE_RANGE[0] && d <= GORGE_RANGE[1]) return gorgeCenterXAt(d);
   return Math.sin(d * 0.09) * 3 + Math.sin(d * 0.21 + 1.7) * 1.5;
 }
 
@@ -140,34 +146,31 @@ function rideauWidthAt(d) {
 }
 
 // Ottawa River gorge (Chasse-galerie): once the flight is clear of Montréal
-// the channel closes down to a tight gorge, so the big church steeples
-// cutting in from the banks leave only a narrow thread to fly. This used to
-// be a hard `if (d > offset)` swap, which drew a straight horizontal edge
-// across the river the instant it kicked in — right in front of Montréal,
-// since the trigger (~offset 2150) sat a few units *upstream* of the city
-// itself. Now it eases in over OTTAWA_EASE_LEN, well clear of Montréal's
-// waterfront (its buildings span ~±28 of its flowDistance ~2168) and after
-// the Chasse-galerie has already lifted off (chasseGalerie.js
-// TRIGGER_DISTANCE = Montréal + 150, pushed out from +20 to leave room on
-// the ground for the Island of Montreal split and the Lachine Rapids —
-// see river/islands.js), so the closing gorge is only ever seen from the
-// air. Kept the trigger's original ~12-unit lead on this ease-start.
+// the channel closes down to a tight gorge — now a baked shape (river/
+// gorge.js), not a formula, per the "no procedural landscape" direction —
+// so the big church steeples cutting in from the banks leave only a
+// narrow thread to fly. This used to be a hard `if (d > offset)` swap,
+// which drew a straight horizontal edge across the river the instant it
+// kicked in — right in front of Montréal, since the trigger (~offset
+// 2150) sat a few units *upstream* of the city itself. Now it eases in
+// over OTTAWA_EASE_LEN, well clear of Montréal's waterfront (its
+// buildings span ~±28 of its flowDistance ~2168) and after the Chasse-
+// galerie has already lifted off (chasseGalerie.js TRIGGER_DISTANCE =
+// Montréal + 150, pushed out from +20 to leave room on the ground for the
+// Island of Montreal split and the Lachine Rapids — see river/islands.js),
+// so the closing gorge is only ever seen from the air. Kept the trigger's
+// original ~12-unit lead on this ease-start.
 //
 // OTTAWA_EASE_LEN used to be 120 — fine when the trigger sat right next to
 // this ease-start, but once TRIGGER_DISTANCE moved out to Montréal + 150,
-// that stretched into ~130 units of flight (several steeples' worth,
-// spaced ~25 apart — see chasseGalerie.js's STEEPLE_SPACING) where the
-// channel was still 40-55 units wide, far more than any steeple's reach —
-// "the river is wide, steeples are easy to avoid" right when the fight
-// should be starting to bite. Shortened so the gorge is already narrow by
-// the second steeple or so, not the sixth.
+// that stretched into ~130 units of flight (several steeples' worth — see
+// chasseGalerie.js's STEEPLE_DEFS) where the channel was still 40-55
+// units wide, far more than any steeple's reach — "the river is wide,
+// steeples are easy to avoid" right when the fight should be starting to
+// bite. Shortened so the gorge is already narrow by the second steeple or
+// so, not the sixth.
 export const OTTAWA_EASE_START = SEGMENT_SHAPE_OFFSET.lawrenceWest + 2330;
 export const OTTAWA_EASE_LEN = 40;
-
-function gorgeWidthAt(d) {
-  const w = 8 + Math.sin(d * 0.09) * 1.4 + Math.sin(d * 0.037 + 2) * 0.9;
-  return Math.max(6.2, w); // ~6-10.5 units wide (vs 20-44 normally)
-}
 
 export function widthAt(d) {
   // The Rideau leg (river/route.js) — its own profile, checked first because

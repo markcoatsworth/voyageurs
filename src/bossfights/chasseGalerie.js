@@ -109,19 +109,8 @@ export function flightWind(flowDistance, time, altFrac) {
 // --- the churches along the gorge -------------------------------------
 // Every church stands on a bank and only nips into the water — the middle
 // of the channel stays open. Most still cost the careless who drift wide
-// on a bend; a bit over a third now "reach" far enough to force a real
-// dodge toward the far bank, and those alternate sides so a cluster of
-// them is a weave with clear water between, not a wall.
-//
-// Retuned after "too easy, the river is wide, easy to avoid the
-// steeples" — REACHING_CHANCE was 0.26, REACH_NORMAL 2.3, STEEPLE_SPACING
-// 25. Most of that feedback traced to OTTAWA_EASE_LEN (path.js) being too
-// slow to actually narrow the channel after the newer, later liftoff
-// point, which is fixed separately — these three came up slightly too on
-// their own once that was accounted for, enough to keep real pressure on
-// without needing a dodge on literally every church.
-const STEEPLE_SPACING = 22;    // nominal flow-distance between churches
-const STEEPLE_JITTER = 4;
+// on a bend; the ones that "reach" far enough to force a real dodge get
+// denser the closer you are to Le Diable — see STEEPLE_DEFS below.
 const STEEPLE_HIT_Z = 1.9;     // half-depth of the collision box along the flow
 const REACH_NORMAL = 2.7;      // how far a normal church reaches in from its
                                // bank — enough that it noticeably narrows
@@ -136,68 +125,84 @@ const REACH_MIN_INNER = 0.15;   // how far past centre a reaching church's inner
                                // edge sits — enough that a dead-centre line
                                // clips it, not so far the far-side thread
                                // brushes the bank treetops
-const REACHING_CHANCE = 0.38;  // odds a church is a reaching one
-const SAME_SIDE_CHANCE = 0.16; // odds a church repeats the previous bank
-const STEEPLE_VISUAL_H = 7;    // world-units tall (hash-varied per church)
+const STEEPLE_VISUAL_H = 7;    // world-units tall; reaching churches stand a
+                               // bit taller (see the map below) — deliberate,
+                               // not hashed, so a taller silhouette really
+                               // does mean "this one's dangerous"
 const STEEPLE_OVERHANG = 0.8;  // how far the church body spills past its own bank
 
-// The steeple sequence's own anchor — deliberately NOT TRIGGER_DISTANCE
-// itself. Every church's exact position (and hashRange-seeded reach/height)
-// comes from its index in this generation loop, so anchoring it to
-// TRIGGER_DISTANCE would reflow the *entire* sequence, all the way to
-// Gatineau, any time that constant moves — which is exactly what happened
-// when TRIGGER_DISTANCE was pushed from Montréal+20 to +150 (see its own
-// comment): it silently shuffled every steeple's position, including right
-// at the Diable arena. Fixed at the original +20 instead, so the whole
-// tuned sequence stays put; the handful of steeples between here and the
-// new (later) TRIGGER_DISTANCE just sit unused — collision/drawing only
-// happen once playerFlowDistance reaches TRIGGER_DISTANCE anyway (see
-// flightWind()'s callers below), and by then you're on the ground paddling
-// through the Lachine Rapids (river/islands.js), not flying.
-const STEEPLE_ANCHOR = MONTREAL.flowDistance + 20;
+// diable.js's own DIABLE_FLOW_DISTANCE = FLIGHT_END - 45, duplicated as a
+// plain number rather than imported — diable.js imports FLIGHT_END from
+// *this* module, so importing its DIABLE_FLOW_DISTANCE back would be a
+// circular import. Update both if that 45 ever changes.
+const DIABLE_ARENA_D = FLIGHT_END - 45;
 
-// Built once at module load — pure geometry over the flight span. Each entry
-// is one church: `worldX`/`hx`/`hz` are its collision box, `gapOffset` is the
-// centre-relative lateral offset to aim for to clear it, `side` is the bank.
-const STEEPLES = (() => {
-  const from = STEEPLE_ANCHOR - 4;
-  const to = FLIGHT_END + 4;
-  const out = [];
-  let side = 1;
-  let d = from + 12;
-  let i = 0;
-  while (d < to) {
-    const waterHalf = widthAt(d) / 2;
-    const cx = centerX(d);
-    const reaching = hashRange(i, 3, 0, 1) < REACHING_CHANCE;
-    const reach = reaching ? REACH_REACHING : REACH_NORMAL;
-    // Inner edge (facing the open channel): `reach` in from this church's own
-    // bank, but never more than REACH_MIN_INNER past the centre line.
-    const innerX = side * Math.max(waterHalf - reach, -REACH_MIN_INNER);
-    const outerX = side * (waterHalf + STEEPLE_OVERHANG);
-    // Aim just clear of the inner edge, toward the open middle — but keep
-    // the thread inside the water (the bank treetops are a hazard now, see
-    // game.js), so never send it closer than ~0.7 units off the far bank.
-    const threadLimit = Math.max(0, waterHalf - 1.0);
-    const gapOffset = reaching
-      ? Math.max(-threadLimit, Math.min(threadLimit, innerX - side * 1.5))
-      : 0;
-    out.push({
-      flowDistance: d,
-      side,
-      reaching,
-      worldX: cx + (innerX + outerX) / 2,
-      hx: Math.abs(outerX - innerX) / 2,
-      hz: STEEPLE_HIT_Z,
-      gapOffset,
-      h: STEEPLE_VISUAL_H * hashRange(i, 6, 0.85, 1.3),
-    });
-    i++;
-    if (hashRange(i, 9, 0, 1) >= SAME_SIDE_CHANCE) side = -side;
-    d += STEEPLE_SPACING + hashRange(i, 11, -STEEPLE_JITTER, STEEPLE_JITTER);
-  }
-  return out;
-})();
+// Every church along the gorge, fixed — not generated. Per this repo's
+// "no procedural landscape" direction ([[no-procedural-landscape]]): this
+// used to be a hashRange()-seeded loop (odds of "reaching", which bank,
+// how tall), which can't express a deliberate difficulty *curve* without
+// just becoming this anyway. `d` is an offset from the arena
+// (DIABLE_ARENA_D above) rather than an absolute number or an offset from
+// TRIGGER_DISTANCE — anchoring to the arena itself is what actually
+// matters here (the whole point is the sequence getting harder *toward*
+// it), so the ramp stays aligned with the fight even if TRIGGER_DISTANCE
+// (liftoff) ever moves independently again the way it did for the Island
+// of Montreal work. `side` and `reaching` were authored with an explicit
+// escalation, not rolled: roughly 1-in-5 reach in the first stretch after
+// liftoff, tightening through 1-in-4, 1-in-3, 1-in-2, to about 2-in-3 in
+// the last ~100 units before the arena — a real climb in pressure, not a
+// flat chance the whole flight. The last two (past the arena, `d > 0`) are
+// deliberately calm: the glide home to Gatineau, not more fight.
+const STEEPLE_DEFS = [
+  { d: -644, side: 1, reaching: true }, { d: -622, side: -1, reaching: false },
+  { d: -597, side: 1, reaching: false }, { d: -577, side: -1, reaching: false },
+  { d: -551, side: -1, reaching: false }, { d: -532, side: 1, reaching: true },
+  { d: -509, side: -1, reaching: false }, { d: -491, side: 1, reaching: false },
+  { d: -467, side: 1, reaching: true }, { d: -446, side: -1, reaching: false },
+  { d: -420.5, side: 1, reaching: false }, { d: -401, side: -1, reaching: false },
+  { d: -378.5, side: -1, reaching: true }, { d: -356.5, side: 1, reaching: false },
+  { d: -331.5, side: -1, reaching: false }, { d: -311.5, side: 1, reaching: true },
+  { d: -285.5, side: 1, reaching: false }, { d: -266.5, side: -1, reaching: false },
+  { d: -243.5, side: 1, reaching: true }, { d: -225.5, side: -1, reaching: false },
+  { d: -201.5, side: -1, reaching: true }, { d: -180.5, side: 1, reaching: false },
+  { d: -155, side: -1, reaching: true }, { d: -135.5, side: 1, reaching: false },
+  { d: -113, side: 1, reaching: true }, { d: -91, side: -1, reaching: true },
+  { d: -66, side: 1, reaching: false }, { d: -46, side: -1, reaching: true },
+  { d: -20, side: -1, reaching: true }, { d: -1, side: 1, reaching: false },
+  { d: 22, side: -1, reaching: false }, { d: 40, side: 1, reaching: false },
+];
+
+// Built once at module load from STEEPLE_DEFS — pure geometry, no more
+// generation. Each entry is one church: `worldX`/`hx`/`hz` are its
+// collision box, `gapOffset` is the centre-relative lateral offset to aim
+// for to clear it, `side` is the bank.
+const STEEPLES = STEEPLE_DEFS.map(({ d: offset, side, reaching }) => {
+  const d = DIABLE_ARENA_D + offset;
+  const waterHalf = widthAt(d) / 2;
+  const cx = centerX(d);
+  const reach = reaching ? REACH_REACHING : REACH_NORMAL;
+  // Inner edge (facing the open channel): `reach` in from this church's own
+  // bank, but never more than REACH_MIN_INNER past the centre line.
+  const innerX = side * Math.max(waterHalf - reach, -REACH_MIN_INNER);
+  const outerX = side * (waterHalf + STEEPLE_OVERHANG);
+  // Aim just clear of the inner edge, toward the open middle — but keep
+  // the thread inside the water (the bank treetops are a hazard now, see
+  // game.js), so never send it closer than ~0.7 units off the far bank.
+  const threadLimit = Math.max(0, waterHalf - 1.0);
+  const gapOffset = reaching
+    ? Math.max(-threadLimit, Math.min(threadLimit, innerX - side * 1.5))
+    : 0;
+  return {
+    flowDistance: d,
+    side,
+    reaching,
+    worldX: cx + (innerX + outerX) / 2,
+    hx: Math.abs(outerX - innerX) / 2,
+    hz: STEEPLE_HIT_Z,
+    gapOffset,
+    h: STEEPLE_VISUAL_H * (reaching ? 1.15 : 1.0),
+  };
+});
 
 // --- lightning -------------------------------------------------------
 // A deterministic flicker in [0,1] for render() to flash the screen with.
