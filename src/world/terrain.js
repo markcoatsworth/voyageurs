@@ -276,19 +276,33 @@ export function drawWaterFallback(ctx, worldDistance, cameraWorldX) {
     const d = dAtScreenY(y, worldDistance);
     return toScreenX(centerX(d) + side * widthAt(d) / 2, cameraWorldX);
   };
-  const islandX = (y, side) => {
+  // The inner boundary each half fills to: the island's own near edge when
+  // one exists at this row, or the ambient centreline when it doesn't —
+  // not the *outer* edge, which used to be the no-island fallback here and
+  // made both halves collapse to zero width (nothing ever got filled)
+  // anywhere outside a small braid island's own ~16-unit span. Using the
+  // centreline instead means the two fills still meet with no gap or
+  // overlap when there's no island at all (each covers exactly half the
+  // channel), and — because a baked feature island's offset/half-width
+  // both reach 0 together at its tapered ends (river/islands.js) — the
+  // island-edge and centreline values agree exactly right where an island
+  // starts or ends partway up the screen, so a single pathBetween() call
+  // spanning both stretches doesn't jump between two very different
+  // curves and self-intersect (the white-band artifact this used to draw
+  // right at a big island's tapered tip).
+  const innerX = (y, side) => {
     const d = dAtScreenY(y, worldDistance);
     const braid = braidAt(d);
-    const cx = braid ? braid.centerX + side * braid.halfWidth : centerX(d) + side * widthAt(d) / 2;
+    const cx = braid ? braid.centerX + side * braid.halfWidth : centerX(d);
     return toScreenX(cx, cameraWorldX);
   };
 
   const scroll = (worldDistance * PIXELS_PER_UNIT * 0.6) % 16;
   if (pat.water.setTransform) pat.water.setTransform(new DOMMatrix().translate(0, scroll));
   ctx.fillStyle = pat.water;
-  pathBetween(ctx, (y) => edgeX(y, -1), (y) => islandX(y, -1));
+  pathBetween(ctx, (y) => edgeX(y, -1), (y) => innerX(y, -1));
   ctx.fill();
-  pathBetween(ctx, (y) => islandX(y, 1), (y) => edgeX(y, 1));
+  pathBetween(ctx, (y) => innerX(y, 1), (y) => edgeX(y, 1));
   ctx.fill();
 }
 
