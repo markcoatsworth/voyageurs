@@ -39,6 +39,11 @@ it's not the same running order every session:
   ([source](https://www.1937flood.com/audio/podcasts/floodcast34.mp3)), not
   a period Québécois recording like everything else here — the mismatch is
   exactly why it reads as "something's different" the moment it cuts in.
+- "Reel du Gouvernement," performed by Les Chevaliers du Folklore
+  (accordion, violin, guitar — Starr Records, 1937) — reserved for the
+  Chasse-galerie flight, not in the regular shuffle, sourced from Internet
+  Archive's Great 78 Project
+  ([source](https://archive.org/details/78_reel-du-gouvernement_les-chevaliers-du-folklore-t-duchene-a-allard-c-ouellette_gbia0277397a)).
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
@@ -46,10 +51,10 @@ Under the Music Modernization Act, US sound recordings first published
 1931 Soucy recordings, that's 2032, not now, and they're also hosted under
 Internet Archive's Great 78 Project, the subject of ongoing, unresolved
 litigation from major record labels over exactly this kind of use. The
-Duchesne, Carignan, Allard, Bouchard, and Boudreault recordings' copyright
-status hasn't been separately researched — most are the same era of Quebec
-78rpm/LP recording as the Soucy tracks, so there's no reason to assume
-they're any more settled. St. Anne's Reel is a different case again: a
+Duchesne, Carignan, Allard, Bouchard, Boudreault, and Chevaliers du
+Folklore recordings' copyright status hasn't been separately researched —
+most are the same era of Quebec 78rpm/LP recording as the Soucy tracks, so
+there's no reason to assume they're any more settled. St. Anne's Reel is a different case again: a
 2009 recording, clearly still under whatever copyright the band/podcast
 holds, used here on the assumption that a jam-session recording shared
 publicly on the band's own podcast feed is low-risk for casual/personal

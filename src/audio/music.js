@@ -49,12 +49,20 @@ const DIABLE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diab
 // is exactly why it reads as "something's different" the moment it cuts in.
 const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel", artist: 'Joe Dobbs & The 1937 Flood' };
 // The Chasse-galerie flight's cue, cut in the instant the canoe lifts off
-// (game.js) — "Reel du Voyageur" was one of Allard's most successful 78s
-// (Victor Bluebird, c.1928), and its own title carries the connection: the
-// legend is voyageurs flying home by canoe. Reserved like the other three;
-// endBossTrack() drops it (or Le Diable's own reel, which cuts in over top
-// of it the same way once his fight starts) back into the shuffle.
-const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-voyageur.mp3', title: 'Reel du Voyageur', artist: 'Joseph Allard' };
+// (game.js). The original pick here was Joseph Allard's "Reel du
+// Voyageur" — its own title ties straight to the legend, voyageurs flying
+// home by canoe — but that recording lives only on Library and Archives
+// Canada's Virtual Gramophone, which this dev environment can't reach
+// (and it isn't in Internet Archive's Great 78 Project — confirmed via
+// their search API, not just a missed guess). Swapped for "Reel du
+// Gouvernement," performed by Les Chevaliers du Folklore (accordion,
+// violin, guitar — Starr Records, 1937), same Great 78 Project pool as
+// the rest of this catalog and genuinely downloadable, so the boss cue
+// actually plays instead of silently 404ing. Reserved like the other
+// three; endBossTrack() drops it (or Le Diable's own reel, which cuts in
+// over top of it the same way once his fight starts) back into the
+// shuffle.
+const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-gouvernement.mp3', title: 'Reel du Gouvernement', artist: 'Les Chevaliers du Folklore' };
 
 const DEFAULT_VOLUME = 0.35;
 
