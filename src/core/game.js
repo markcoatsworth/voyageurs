@@ -1,4 +1,5 @@
 import { centerX, widthAt, braidAt, rapidsStrength, MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from '../world/river/path.js';
+import { FEATURE_ISLAND_RANGE } from '../world/river/islands.js';
 import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
 import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
@@ -991,7 +992,26 @@ export class Game {
     }
 
     this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
-    this.cameraCenterX = lerp(this.cameraCenterX, centerX(this.flowDistance), CAMERA_SMOOTH);
+    // A baked feature island (river/islands.js — currently just the Island
+    // of Montreal) sits offset from the ambient centerX, and the camera
+    // otherwise has no idea it exists: paddling straight with zero
+    // steering input keeps the canoe exactly on centerX, and
+    // CAMERA_MAX_ONSCREEN_OFFSET (5 world units, well under the island's
+    // own offset) would then hold the camera there too — pushing much of
+    // a wide island and its far channel outside the visible ~20-unit-wide
+    // window without the player ever choosing to look away from it. Nudge
+    // the camera's own baseline halfway toward the island's centre while
+    // inside its span, so the split is visible by default rather than only
+    // when deliberately steered into view. Scoped to FEATURE_ISLAND_RANGE
+    // specifically (not just "does braidAt return something") so this
+    // doesn't also nudge the camera for every small procedural braid
+    // island elsewhere in the game, which was never a visibility problem.
+    let islandBias = 0;
+    if (this.flowDistance >= FEATURE_ISLAND_RANGE[0] && this.flowDistance <= FEATURE_ISLAND_RANGE[1]) {
+      const islandHere = braidAt(this.flowDistance);
+      if (islandHere) islandBias = (islandHere.centerX - centerX(this.flowDistance)) * 0.5;
+    }
+    this.cameraCenterX = lerp(this.cameraCenterX, centerX(this.flowDistance) + islandBias, CAMERA_SMOOTH);
     // Zero inside the dead zone; positive/negative beyond it, so any real
     // steering swings the camera into motion well before the canoe visually
     // nears the edge of the canvas (see CAMERA_DEAD_ZONE's own comment).

@@ -58,10 +58,7 @@ function interpKeyframes(keyframes, d, fields, clampOutside) {
 // again into the east tip. `offset`/`half` below are that real profile
 // (normalized to its own peak, then scaled to a peak that reads well at
 // this game's visual scale — not 1:1 real kilometres, which would dwarf
-// everything else in the game), and `MONTREAL_WIDTH_BOOST_KEYFRAMES`
-// below reuses the exact same normalized profile for the corridor's
-// overall width, so the "big open water" swell and the island's own
-// footprint grow and shrink in step, the way they really do.
+// everything else in the game — see the scale-choice comment below).
 //
 // Anchored the same way as before: the west tip lines up with
 // bossfights/chasseGalerie.js's TRIGGER_DISTANCE (local 2318 — matches
@@ -82,53 +79,35 @@ function interpKeyframes(keyframes, d, fields, clampOutside) {
 // it — positive shifts it toward the north/Charlemagne (side:1) edge,
 // narrowing the Rivière-des-Prairies channel and widening the south one,
 // matching reality.
+// offset/half peak at 8/6 (not the ~15/9.5 an earlier pass used) — that
+// earlier pass also added a width *boost* on top of the ambient channel
+// (nearly doubling it, up to ~88 units at the peak) to keep the south
+// channel feeling open. That was a mistake independent of the shape
+// itself: CANOE_SCREEN_X/PIXELS_PER_UNIT (shared/config.js) only show
+// CANVAS_WIDTH/PIXELS_PER_UNIT = 20 world units across the screen at once,
+// and the camera's default tracking (game.js's cameraCenterX) follows the
+// *ambient* centerX(d), which knows nothing about the island's offset —
+// so widening the corridor to ~88 units while offsetting the island ~15
+// units off that centerline pushed most of the split outside the default
+// view entirely; a player going straight without deliberately steering
+// toward it would plausibly never see it. Scaled back down to fit inside
+// the *existing* ambient width (no boost at all now — see widthAt() in
+// path.js, which no longer touches Montreal specially), so the whole
+// south-channel/island/north-channel cross-section stays close to a
+// normal stretch's width elsewhere in the game.
 const MONTREAL_ISLAND_KEYFRAMES = [
   { d: LAWRENCE_WEST + 2102.0, offset: 0.00, half: 0.00 },   // east tip (Pointe-aux-Trembles)
-  { d: LAWRENCE_WEST + 2112.8, offset: 2.48, half: 1.57 },
-  { d: LAWRENCE_WEST + 2134.4, offset: 6.20, half: 3.92 },
-  { d: LAWRENCE_WEST + 2156.0, offset: 9.50, half: 6.01 },
-  { d: LAWRENCE_WEST + 2177.6, offset: 15.00, half: 9.50 },  // widest — abeam Verdun/Mount Royal
-  { d: LAWRENCE_WEST + 2199.2, offset: 13.82, half: 8.75 },
-  { d: LAWRENCE_WEST + 2220.8, offset: 13.01, half: 8.24 },
-  { d: LAWRENCE_WEST + 2242.4, offset: 9.05, half: 5.73 },
-  { d: LAWRENCE_WEST + 2264.0, offset: 4.85, half: 3.07 },
-  { d: LAWRENCE_WEST + 2285.6, offset: 3.59, half: 2.27 },
-  { d: LAWRENCE_WEST + 2307.2, offset: 1.13, half: 0.71 },
+  { d: LAWRENCE_WEST + 2112.8, offset: 1.32, half: 0.99 },
+  { d: LAWRENCE_WEST + 2134.4, offset: 3.30, half: 2.48 },
+  { d: LAWRENCE_WEST + 2156.0, offset: 5.06, half: 3.80 },
+  { d: LAWRENCE_WEST + 2177.6, offset: 8.00, half: 6.00 },   // widest — abeam Verdun/Mount Royal
+  { d: LAWRENCE_WEST + 2199.2, offset: 7.37, half: 5.53 },
+  { d: LAWRENCE_WEST + 2220.8, offset: 6.94, half: 5.20 },
+  { d: LAWRENCE_WEST + 2242.4, offset: 4.82, half: 3.62 },
+  { d: LAWRENCE_WEST + 2264.0, offset: 2.58, half: 1.94 },
+  { d: LAWRENCE_WEST + 2285.6, offset: 1.91, half: 1.43 },
+  { d: LAWRENCE_WEST + 2307.2, offset: 0.60, half: 0.45 },
   { d: LAWRENCE_WEST + 2318.0, offset: 0.00, half: 0.00 },   // west tip (Île-Perrot/Lake of Two Mountains)
-];
-
-// Same survey, same normalized profile (see the comment above) — the real
-// water off Montreal is dramatically wider than a typical reach (the
-// harbour, Lake St. Louis just upstream), and the island alone was eating
-// so much of the *ambient* width that even the main south channel read as
-// a squeeze right at the arrival — the opposite of "reaching a grand
-// metropolis." This adds extra width on top of the ambient formula, only
-// across the island's own span, ramping from 0 at both tips (so it blends
-// seamlessly into the normal river just outside — no seam) to nearly
-// double at the same real peak the island keyframes above widen at.
-const MONTREAL_WIDTH_BOOST_KEYFRAMES = [
-  { d: LAWRENCE_WEST + 2102.0, boost: 0.00 },
-  { d: LAWRENCE_WEST + 2112.8, boost: 7.59 },
-  { d: LAWRENCE_WEST + 2134.4, boost: 19.00 },
-  { d: LAWRENCE_WEST + 2156.0, boost: 29.12 },
-  { d: LAWRENCE_WEST + 2177.6, boost: 46.00 },
-  { d: LAWRENCE_WEST + 2199.2, boost: 42.37 },
-  { d: LAWRENCE_WEST + 2220.8, boost: 39.88 },
-  { d: LAWRENCE_WEST + 2242.4, boost: 27.74 },
-  { d: LAWRENCE_WEST + 2264.0, boost: 14.86 },
-  { d: LAWRENCE_WEST + 2285.6, boost: 10.99 },
-  { d: LAWRENCE_WEST + 2307.2, boost: 3.45 },
-  { d: LAWRENCE_WEST + 2318.0, boost: 0.00 },
-];
-
-export function montrealWidthBoostAt(d) {
-  const kf = interpKeyframes(MONTREAL_WIDTH_BOOST_KEYFRAMES, d, ['boost'], false);
-  return kf ? kf.boost : 0;
-}
-
-export const MONTREAL_WIDTH_BOOST_RANGE = [
-  MONTREAL_WIDTH_BOOST_KEYFRAMES[0].d,
-  MONTREAL_WIDTH_BOOST_KEYFRAMES[MONTREAL_WIDTH_BOOST_KEYFRAMES.length - 1].d,
 ];
 
 const MONTREAL_ISLAND_MIN_HALF = 0.12; // below this, treat as "no island" (matches path.js's braidAt taper cutoff)
@@ -199,4 +178,4 @@ export const LACHINE_RAPIDS_RANGE = [
 // generate its GLSL mirror straight from these numbers (a small JS
 // codegen step at module-eval time) instead of hand-retyping them —
 // the shape stays authored in exactly one place.
-export { MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL, LACHINE_RAPIDS_KEYFRAMES, MONTREAL_WIDTH_BOOST_KEYFRAMES };
+export { MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL, LACHINE_RAPIDS_KEYFRAMES };

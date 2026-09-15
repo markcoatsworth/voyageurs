@@ -38,21 +38,22 @@ const QUEBEC_CITY_DOCK_HIT_Z = 7; // vs. 1.3 everywhere else
 
 // Montreal's dock — the great inland port, commercial heart of New France.
 // Sits in the south (main) channel now that the Island of Montreal splits
-// the river here (river/islands.js) — that channel widens to ~37-50 units
-// across the island's span (the whole corridor gets a deliberate width
-// boost there, see islands.js's MONTREAL_WIDTH_BOOST_KEYFRAMES comment), so
-// 30 units reaches nearly as far as Quebec City's own dock with room to
-// spare, matching its status as the busiest port on the river.
-const MONTREAL_DOCK_REACH = 30;
+// the river here (river/islands.js) — that channel is ~22-30 units across
+// this span (deliberately kept close to a normal stretch's width — see
+// islands.js's MONTREAL_ISLAND_KEYFRAMES comment on why it's *not* boosted
+// wider than that), so 16 units still reaches much further than the
+// default DOCK_LENGTH (6) without crowding the channel.
+const MONTREAL_DOCK_REACH = 16;
 const MONTREAL_DOCK_WIDTH_Z = 14; // wider along the shore
 const MONTREAL_DOCK_HIT_Z = 8; // generous hit zone
 
 // A second, smaller pier on the island's *north* edge, facing the
 // Rivière des Prairies — real Montreal's harbour has wharves on both
 // sides of the island, not just the St. Lawrence one. Sized down from the
-// main dock to fit the narrower north channel (~18-22 units across this
-// span, see river/islands.js) and to read as the secondary crossing it is.
-const MONTREAL_NORTH_DOCK_REACH = 15;
+// main dock to fit the narrower north channel (~7-27 units across this
+// span, ~11 right at Montreal's own flowDistance — see river/islands.js)
+// and to read as the secondary crossing it is.
+const MONTREAL_NORTH_DOCK_REACH = 6;
 const MONTREAL_NORTH_DOCK_WIDTH_Z = 8;
 const MONTREAL_NORTH_DOCK_HIT_Z = 5;
 
