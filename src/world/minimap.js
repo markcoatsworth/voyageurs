@@ -50,6 +50,15 @@ const SEGMENT_STYLE = {
   rideau: { outline: '#1f5e3a', fill: '#41b06d', outlineWidth: 3.0, fillWidth: 2.0 },
 };
 
+// The Island of Montreal's own two channels get lawrenceEast's blue rather
+// than lawrenceWest's purple, even though it's the same lawrenceWest arm —
+// purple only exists to stay tellable from lawrenceEast right at the
+// Tadoussac junction, hundreds of km away and never on screen at the same
+// time as Montreal, so there's no ambiguity to avoid here; plain blue
+// reads as real water at a glance, which is the point right where the
+// channel split itself is the whole thing being shown.
+const MONTREAL_CHANNEL_STYLE = SEGMENT_STYLE.lawrenceEast;
+
 const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
 const toClosedPath = (pts) => `${toPath(pts)} Z`;
 
@@ -184,10 +193,11 @@ export function createMinimap() {
   for (const { style, runs } of segmentRuns) for (const run of runs) drawRibbon(svg, run, style);
   for (const { style, runs } of segmentRuns) for (const run of runs) fillRibbon(svg, run, style);
 
-  // The Island of Montreal's own two real channels — same lawrenceWest
-  // hue (it's the same river), drawn hugging the island's real
-  // shorelines instead of the straight chords the plain waypoint list
-  // would give (see mapSkipRibbon's comment on those two waypoints).
+  // The Island of Montreal's own two real channels — MONTREAL_CHANNEL_STYLE
+  // (blue, not lawrenceWest's own purple; see that constant's comment),
+  // drawn hugging the island's real shorelines instead of the straight
+  // chords the plain waypoint list would give (see mapSkipRibbon's comment
+  // on those two waypoints).
   //
   // Charlemagne and Ile-Perrot (real towns, real coordinates) don't sit
   // exactly at the island's real east/west tips — Charlemagne is ~8km
@@ -198,7 +208,6 @@ export function createMinimap() {
   // rather than water. Bridge both gaps with short two-point ribbons
   // (the channel shapes' own first/last points already carry the tip
   // coordinates, so no new export is needed for those).
-  const montrealChannelStyle = SEGMENT_STYLE.lawrenceWest;
   const lawrenceWestPoints = SEGMENTS.lawrenceWest.points;
   const charlemagnePoint = lawrenceWestPoints.find((p) => p.name === 'Charlemagne');
   const ilePerrotPoint = lawrenceWestPoints.find((p) => p.name === 'Ile-Perrot');
@@ -209,8 +218,8 @@ export function createMinimap() {
     [westTipPoint, ilePerrotPoint],
   ];
   const montrealPieces = [MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE, ...montrealConnectors];
-  for (const piece of montrealPieces) drawRibbon(svg, piece, montrealChannelStyle);
-  for (const piece of montrealPieces) fillRibbon(svg, piece, montrealChannelStyle);
+  for (const piece of montrealPieces) drawRibbon(svg, piece, MONTREAL_CHANNEL_STYLE);
+  for (const piece of montrealPieces) fillRibbon(svg, piece, MONTREAL_CHANNEL_STYLE);
 
   // Real land inside the water, painted the same deep green as the
   // widget's own background (#minimap in style.css) so it reads as a hole
