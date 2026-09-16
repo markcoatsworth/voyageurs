@@ -314,6 +314,30 @@ const MONTREAL_GARDEN_PLOTS = [
   { x: 190, y: -250, w: 140, h: 38 }, // Monsieur Lignères' Gardens, north field
 ];
 
+// The open field flanking Mont-Royal used to read as forest (dense
+// scattered pine — see the old MONTREAL_DISTRICT_TREE_SPOTS, trimmed
+// below). Checking the actual Jefferys map: the ground immediately north
+// of the walls isn't wilderness at all, it's a dense quilt of small
+// cultivated fields (the French seigneurial "côte" strip-lot system),
+// right up to the map's own drawn edge — true forest only begins further
+// out than the map bothers to show. drawFarmStrip gives that same
+// patchwork read; each habitant farmhouse (the cabin sprites already
+// scattered through here) effectively sits on its own strip. Kept clear
+// of Fort de la Montagne, the windmill, both dirt paths, and Lignères'
+// own walled garden (MONTREAL_GARDEN_PLOTS) rather than overlapping them.
+const MONTREAL_FARM_STRIPS = [
+  // west field, flanking the fort/windmill
+  { x: 8, y: -235, w: 26, h: 225, tone: 1 },
+  { x: 36, y: -235, w: 72, h: 160, tone: 2 },
+  // east field, behind the farmhouses lining the mountain's own east side
+  { x: 335, y: -235, w: 50, h: 225, tone: 0 },
+  { x: 385, y: -235, w: 50, h: 225, tone: 1 },
+  { x: 435, y: -235, w: 50, h: 225, tone: 2 },
+  { x: 485, y: -235, w: 50, h: 225, tone: 0 },
+  { x: 535, y: -235, w: 50, h: 225, tone: 1 },
+  { x: 585, y: -235, w: 45, h: 225, tone: 2 },
+];
+
 // The rural track up to the Mont-Royal district (drawDirtPath, not the
 // town's cut-stone streets) — picks up right where the brick MONTREAL_ROAD_V
 // ends (its own y: 96, the north edge of the built-up town) and continues
@@ -434,28 +458,16 @@ const MONTREAL_NORTH_TREE_SPOTS = [
   { x: 30, y: -266 }, { x: 100, y: -272 }, { x: 175, y: -264 }, { x: 340, y: -270 },
   { x: 420, y: -266 }, { x: 495, y: -272 }, { x: 565, y: -264 }, { x: 615, y: -270 },
 ];
-// The open field around Mont-Royal itself (between the town wall and
-// MONTREAL_NORTH_TREE_SPOTS' own boundary line) read as too bare — real
-// forest, not just a lawn, would actually cover most of this ground.
-// Scattered by hand rather than a grid, clear of Mont-Royal's own
-// sprite footprint (roughly x 105-275), both dirt paths
-// (MONTREAL_DIRT_PATH_V/SPUR), and the fort/windmill/farmhouse spots —
-// treesClearOfBuildings() drops any that still land on a real building,
-// same safety net TREE_SPOTS already relies on.
+// Trees directly flanking Mont-Royal's own sprite (east and west edges,
+// roughly x 105-275) — the mountain's own wooded base, not the open
+// field beyond it. The field itself used to be filled with two more
+// clusters of "forest" trees here, but the actual Jefferys map shows
+// that ground under cultivation (MONTREAL_FARM_STRIPS, above), not
+// forest — those two clusters are gone, not replaced.
 const MONTREAL_DISTRICT_TREE_SPOTS = [
-  // west of the fort/windmill cluster
-  { x: 15, y: -20 }, { x: 20, y: -65 }, { x: 15, y: -105 }, { x: 25, y: -145 },
-  { x: 15, y: -185 }, { x: 25, y: -225 },
-  { x: 90, y: -15 }, { x: 85, y: -95 }, { x: 90, y: -135 }, { x: 85, y: -195 }, { x: 90, y: -235 },
-  // flanking Mont-Royal itself, east and west edges
   { x: 60, y: -170 }, { x: 40, y: -230 },
   { x: 285, y: -30 }, { x: 330, y: -35 }, { x: 285, y: -105 }, { x: 335, y: -115 },
   { x: 280, y: -185 }, { x: 330, y: -195 }, { x: 285, y: -235 },
-  // east field, between the mountain and the farmhouses
-  { x: 345, y: -15 }, { x: 410, y: -25 }, { x: 415, y: -95 }, { x: 410, y: -155 }, { x: 420, y: -205 },
-  { x: 495, y: -20 }, { x: 500, y: -110 }, { x: 495, y: -170 }, { x: 500, y: -225 },
-  { x: 570, y: -30 }, { x: 580, y: -115 }, { x: 575, y: -195 }, { x: 580, y: -240 },
-  { x: 615, y: -25 }, { x: 610, y: -105 }, { x: 620, y: -185 }, { x: 615, y: -235 },
 ];
 const MONTREAL_TREE_SPOTS = [
   ...clearOfDock([...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))]),
@@ -688,6 +700,44 @@ function drawGardenPlot(ctx, x, y, w, h) {
   ctx.restore();
 }
 
+// A cultivated farm strip — one lot of the seigneurial "côte" system the
+// Jefferys map shows blanketing the ground north of the walls: dozens of
+// narrow, hedge-divided fields in different crops/colours, not the empty
+// forest a first pass here assumed (see MONTREAL_FARM_STRIPS' own
+// comment). Three tones cycle across adjacent strips for the same
+// patchwork read the map itself has; furrow lines run across the strip's
+// width (perpendicular to its long north-south axis, like real plough
+// rows), and only the long edges get a fence line, so neighbouring strips
+// read as one continuous quilt rather than boxed-off garden plots.
+const FARM_STRIP_TONES = [
+  { fill: '#7c9c52', furrow: '#688a41' }, // hay/pasture
+  { fill: '#b99c4c', furrow: '#9c8038' }, // wheat stubble
+  { fill: '#5f7a40', furrow: '#4c6530' }, // root crop, freshly turned
+];
+function drawFarmStrip(ctx, x, y, w, h, tone) {
+  const { fill, furrow } = FARM_STRIP_TONES[tone % FARM_STRIP_TONES.length];
+  ctx.save();
+  ctx.fillStyle = fill;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = furrow;
+  ctx.lineWidth = 1;
+  for (let ry = y + 4; ry < y + h; ry += 5) {
+    ctx.beginPath();
+    ctx.moveTo(x + 1, ry);
+    ctx.lineTo(x + w - 1, ry);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#4a3a22';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + 0.5, y);
+  ctx.lineTo(x + 0.5, y + h);
+  ctx.moveTo(x + w - 0.5, y);
+  ctx.lineTo(x + w - 0.5, y + h);
+  ctx.stroke();
+  ctx.restore();
+}
+
 // The market well at the centre of the Market Place — a plain stone-ringed
 // well with a small shingled roof, the kind of modest period fixture a
 // real colonial market square would have rather than a monument (the
@@ -903,6 +953,9 @@ export function createVillageScene() {
         drawMarketWell(ctx, MONTREAL_SQUARE_CENTER.x, MONTREAL_SQUARE_CENTER.y);
         drawDirtPath(ctx, MONTREAL_PARADE.x, MONTREAL_PARADE.y, MONTREAL_PARADE.w, MONTREAL_PARADE.h);
         for (const g of MONTREAL_GARDEN_PLOTS) drawGardenPlot(ctx, g.x, g.y, g.w, g.h);
+        // The cultivated fields flanking Mont-Royal itself — see
+        // MONTREAL_FARM_STRIPS' own comment.
+        for (const f of MONTREAL_FARM_STRIPS) drawFarmStrip(ctx, f.x, f.y, f.w, f.h, f.tone);
         // The rural track up to the Mont-Royal district — dirt, not
         // brick, picking up where the town's own streets end.
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_V.x, MONTREAL_DIRT_PATH_V.y, MONTREAL_DIRT_PATH_V.w, MONTREAL_DIRT_PATH_V.h);
