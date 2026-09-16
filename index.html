@@ -56,12 +56,25 @@
       <button id="fire-z" class="weapon-key" title="Fire pistol (Z)">Z</button>
     </div>
 
-    <div id="hud" class="hidden">
-      <div id="hud-score">FURS: 0</div>
-      <div id="hud-health-label">HULL HEALTH</div>
-      <div id="hud-health-wrap"><div id="hud-health-fill"></div></div>
-      <div id="hud-speed-label">CURRENT SPEED</div>
-      <div id="hud-speed-wrap"><div id="hud-speed-fill"></div></div>
+    <!-- The top-left column: score/health/speed, then the "now playing"
+         card right underneath (mobile got crowded with it down at the
+         bottom — see #top-left-panel's own comment in style.css). Two
+         independent flex items, not parent/child: #hud hiding (village
+         mode, game over) removes it from the flow and #now-playing
+         slides up to take its place instead of vanishing along with it,
+         since a track can still change while docked. -->
+    <div id="top-left-panel">
+      <div id="hud" class="hidden">
+        <div id="hud-score">FURS: 0</div>
+        <div id="hud-health-label">HULL HEALTH</div>
+        <div id="hud-health-wrap"><div id="hud-health-fill"></div></div>
+        <div id="hud-speed-label">CURRENT SPEED</div>
+        <div id="hud-speed-wrap"><div id="hud-speed-fill"></div></div>
+      </div>
+
+      <!-- "Now playing" card. Filled and shown/hidden by main.js as the
+           music playlist (src/audio/music.js) advances. -->
+      <div id="now-playing" aria-live="polite"></div>
     </div>
 
     <!-- Le Diable's health, shown only during the boss fight at the head of
@@ -83,10 +96,6 @@
     <!-- A big, one-off dramatic title card — see style.css's own comment.
          Currently only the British Blockade coming into range uses it. -->
     <div id="boss-banner"></div>
-
-    <!-- "Now playing" card, bottom-left. Filled and shown/hidden by
-         main.js as the music playlist (src/audio/music.js) advances. -->
-    <div id="now-playing" aria-live="polite"></div>
 
     <div id="gameover-screen" class="screen hidden">
       <h1 id="gameover-title">CAPSIZED</h1>

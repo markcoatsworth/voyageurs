@@ -392,7 +392,8 @@ function showFatalError(err, context, { fatal = true } = {}) {
   }
 }
 
-// "Now playing" card (bottom-left, #now-playing in index.html). Built here
+// "Now playing" card (top-left, under the HUD — #now-playing in
+// index.html, inside #top-left-panel). Built here
 // rather than in music.js so the audio layer stays DOM-free — music.js just
 // calls onTrack({ title, artist }) whenever a new track actually starts.
 // Stays up for as long as that track plays (used to auto-hide after 7s —

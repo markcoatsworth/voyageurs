@@ -49,11 +49,21 @@ html, body {
   display: none !important;
 }
 
-#hud {
+/* Positions #hud and #now-playing as one column — see index.html's own
+   comment on why they're flex siblings here rather than #now-playing
+   nested inside #hud. */
+#top-left-panel {
   position: absolute;
   top: 16px;
   left: 16px;
   right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+#hud {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -285,15 +295,16 @@ html, body {
   transform: translate(-50%, -50%) scale(1);
 }
 
-/* "Now playing" card, bottom-left. Same visual language as the milestone
-   banner and buttons — dark panel, thick amber frame, hard offset shadow —
-   so it reads as part of the same HUD, not a browser chrome element. Slides
-   in from off the left edge when a track starts; main.js toggles .show and
-   pulls it back off after a few seconds. */
+/* "Now playing" card — top-left, right under the score/health/speed HUD
+   (see #top-left-panel). Same visual language as the milestone banner
+   and buttons — dark panel, thick amber frame, hard offset shadow — so
+   it reads as part of the same HUD, not a browser chrome element.
+   Slides in from off the left edge when a track starts; main.js toggles
+   .show and pulls it back off after a few seconds. A flex item now, not
+   independently positioned — transform still does the slide (it doesn't
+   affect layout/flow), it's just relative to its own flex-column slot
+   instead of the viewport corner. */
 #now-playing {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
   max-width: 260px;
   padding: 11px 13px 12px;
   background: rgba(10, 14, 20, 0.85);
