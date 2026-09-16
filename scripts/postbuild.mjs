@@ -17,15 +17,24 @@ if (existsSync(strip)) {
   console.log('postbuild: removed dist/audio/src (source audio, not for deploy)');
 }
 
-// Stamp dist/index.html with the real build time + git SHA, replacing the
-// __BUILD_STAMP__ placeholder. This is the corner badge's whole point: a
-// deployed page that still shows an old stamp means a stale index.html is
-// being served (browser heuristic cache, a proxy, an unreloaded tab) — not
-// that the deploy didn't happen.
+// Stamp dist/index.html with the build number + real build time + git SHA,
+// replacing the __BUILD_STAMP__ placeholder. This is the corner badge's
+// whole point: a deployed page that still shows an old stamp means a stale
+// index.html is being served (browser heuristic cache, a proxy, an
+// unreloaded tab) — not that the deploy didn't happen.
 const indexPath = resolve(root, 'dist/index.html');
 if (existsSync(indexPath)) {
   const now = new Date();
   const utc = now.toISOString().slice(0, 16).replace('T', ' ');
+  // build-number.txt (repo root) — a plain incrementing counter, bumped by
+  // scripts/bump-build.mjs and committed *before* the deploy that should
+  // show it (see that script's own comment for why it can't just increment
+  // itself here: this postbuild step runs inside the same ephemeral build
+  // container the increment would be lost in). Read-only here — never
+  // written back — so a build run without bumping first just repeats the
+  // last committed number instead of silently drifting.
+  const buildNumberPath = resolve(root, 'build-number.txt');
+  const buildNumber = existsSync(buildNumberPath) ? readFileSync(buildNumberPath, 'utf8').trim() : null;
   // git SHA when available (local builds). Cloud Run's source build has no
   // .git — the timestamp alone still changes on every deploy, which is all
   // the badge needs to prove freshness. A SHA can also be passed in via the
@@ -37,7 +46,8 @@ if (existsSync(indexPath)) {
       if (execSync('git status --porcelain', { cwd: root }).toString().trim()) sha += '+';
     } catch { /* not a git checkout — time alone is fine */ }
   }
-  const stamp = sha ? `${utc} UTC · ${sha}` : `${utc} UTC`;
+  const parts = [buildNumber ? `#${buildNumber}` : null, `${utc} UTC`, sha || null].filter(Boolean);
+  const stamp = parts.join(' · ');
   const html = readFileSync(indexPath, 'utf8');
   if (html.includes('__BUILD_STAMP__')) {
     writeFileSync(indexPath, html.replace('__BUILD_STAMP__', stamp));

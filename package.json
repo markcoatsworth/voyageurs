@@ -10,6 +10,7 @@
     "test": "node test/smoke.mjs",
     "prebuild": "node test/smoke.mjs",
     "postbuild": "node scripts/postbuild.mjs",
+    "bump-build": "node scripts/bump-build.mjs",
     "audio:measure": "node scripts/measure-audio.mjs",
     "audio:normalize": "node scripts/normalize-audio.mjs"
   },
