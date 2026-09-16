@@ -51,6 +51,20 @@ const MONTREAL_WORLD_WIDTH = 640;
 // and beyond the mountain itself, not just the mountain alone.
 const MONTREAL_WORLD_TOP = -280;
 
+// Montreal also gets room to the *west*, past the real Récollets Gate —
+// same pattern as MONTREAL_WORLD_TOP, just the other axis: negative x,
+// extending left from the town's own x=0 edge, without touching
+// anything about the town itself. The 1738 map draws real detail just
+// outside that gate too (St. Peter's River joining the St. Lawrence, the
+// General Hospital, the House of Monsieur de Callières) — genuine
+// suburb, not empty space the world happened to stop at. No wall runs
+// along this edge (MONTREAL_WALL_BAND only spans the north side), so
+// unlike the Mont-Royal district this needs no gate — you just walk out
+// past the Récollets buildings. worldLeft is 0 (not negative) for every
+// other village, collapsing the horizontal-minimum camera clamp exactly
+// the way worldTop/MONTREAL_WORLD_WIDTH already do for their own axes.
+const MONTREAL_WORLD_LEFT = -240;
+
 // Anchor is the point where each building's front (door) sits; the
 // collision box is a simplified footprint under the sprite's walls, not
 // its wider overhanging roof. The cluster is generated from the same
@@ -137,6 +151,21 @@ const TROIS_RIVIERES_ONFOOT_BUILDINGS = [
 // Saint-Paul) — same abstraction as before, now populated with what was
 // actually there instead of a generic repeating cluster.
 const MONTREAL_ONFOOT_BUILDINGS = [
+  // --- the western suburb, past the Récollets Gate (MONTREAL_WORLD_LEFT
+  // opened this ground up; see its own comment) — real detail the map
+  // draws just outside the walls there, not empty space the world
+  // happened to stop at.
+  // Les Frères Charron — the General Hospital, run by the Frères
+  // Hospitaliers (the Charron Brothers), a real Montreal institution
+  // since 1694.
+  { kind: 'stone', x: -190, y: 130, variant: 0, mirror: false },
+  { kind: 'stone', x: -150, y: 135, variant: 1, mirror: true },
+  // The House of Monsieur de Callières — Louis-Hector de Callières,
+  // Governor of Montreal (1684-99) and later Governor General of New
+  // France, whose own residence the map places right by St. Peter's
+  // River (MONTREAL_ST_PETER_RIVER, drawn in draw()).
+  { kind: 'stone', x: -90, y: 90, variant: 2, mirror: false },
+
   // --- back row (inland, near the town wall) ---
   // Récollets Convent — west end, by the real Récollets Gate. Two
   // buildings; its own garden plot is drawn separately (MONTREAL_GARDEN_PLOTS).
@@ -149,6 +178,10 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   // puts the real Parish Church further west than that).
   { kind: 'seminary', x: 150, y: 82, mirror: false },
   { kind: 'church', x: 230, y: 92, mirror: false },
+  // The Powder Magazine — named on the map's own legend, tucked right up
+  // against the north wall, west-of-centre, clear of the Seminary's own
+  // wide footprint.
+  { kind: 'stone', x: 195, y: 52, variant: 1, mirror: false },
   // The Nunnery Hospital (Hôtel-Dieu, run by the Religieuses
   // Hospitalières) — between the church and the Market Place.
   { kind: 'stone', x: 290, y: 76, variant: 2, mirror: false },
@@ -251,18 +284,34 @@ const MONTREAL_ROAD_H = { y: 104, h: 22 };
 const MONTREAL_SQUARE = { x: 280, y: 96, w: 80, h: 34 };
 const MONTREAL_SQUARE_CENTER = { x: MONTREAL_SQUARE.x + MONTREAL_SQUARE.w / 2, y: MONTREAL_SQUARE.y + MONTREAL_SQUARE.h / 2 };
 
+// A real grid, not just one crossing — the map shows several parallel
+// streets, not a single cross. MONTREAL_ROAD_H2 is the waterfront street
+// itself (Rue Saint-Paul, real name), running past the front row the
+// same way MONTREAL_ROAD_H already runs past the back row; two more
+// cross streets connect the two, dropped into real gaps between existing
+// buildings (west of the Seminary, and between the Parish Church and
+// the Nunnery Hospital) rather than cutting through any of them.
+const MONTREAL_ROAD_H2 = { y: 142, h: 16 };
+const MONTREAL_ROAD_V2 = { x: 106, y: MONTREAL_ROAD_H.y, w: 16, h: MONTREAL_ROAD_H2.y + MONTREAL_ROAD_H2.h - MONTREAL_ROAD_H.y };
+const MONTREAL_ROAD_V3 = { x: 250, y: MONTREAL_ROAD_H.y, w: 20, h: MONTREAL_ROAD_H2.y + MONTREAL_ROAD_H2.h - MONTREAL_ROAD_H.y };
+
 // The Parade — the town's own open drill ground, east of the Market
 // Place, near the Governor's Palace, per the map. Packed earth
 // (drawDirtPath), not cobbled — a military ground, not a market square.
 const MONTREAL_PARADE = { x: 450, y: 138, w: 90, h: 30 };
 
-// The Récollets' and the Jesuits' own walled gardens — the map's two
-// largest cultivated plots by far, flanking the town at opposite ends.
-// Drawn as a distinct hatched-green ground texture (drawGardenPlot),
-// not just more plain grass, right behind each order's own buildings.
+// The Récollets' and the Jesuits' own walled gardens flank the town
+// itself at opposite ends; Monsieur Lignères' Gardens (its own separate
+// inset on the map, a real formal garden — the tree symbols the map
+// draws scattered through its own rows are exactly why a few of
+// MONTREAL_DISTRICT_TREE_SPOTS land inside this one, not an oversight)
+// sits out past the walls, in the Mont-Royal district's own field. All
+// three get the same distinct hatched-green ground texture
+// (drawGardenPlot), not just more plain grass.
 const MONTREAL_GARDEN_PLOTS = [
-  { x: 15, y: 100, w: 110, h: 30 }, // Récollets Convent Gardens, west end
-  { x: 520, y: 100, w: 110, h: 30 }, // The Jesuits' Gardens, east end
+  { x: 15, y: 100, w: 110, h: 30 }, // Récollets Convent Gardens, west end (town)
+  { x: 520, y: 100, w: 110, h: 30 }, // The Jesuits' Gardens, east end (town)
+  { x: 190, y: -250, w: 140, h: 38 }, // Monsieur Lignères' Gardens, north field
 ];
 
 // The rural track up to the Mont-Royal district (drawDirtPath, not the
@@ -271,6 +320,23 @@ const MONTREAL_GARDEN_PLOTS = [
 // north into the field, then a short spur west to Fort de la Montagne.
 const MONTREAL_DIRT_PATH_V = { x: 296, y: -140, w: 24, h: 236 };
 const MONTREAL_DIRT_PATH_SPUR = { x: 60, y: -22, w: 250, h: 14 };
+// Same idea, west out past the Récollets Gate toward the General
+// Hospital and the Callières house — picks up at the west end of the
+// front row (x: 15, roughly the Récollets buildings' own street
+// frontage) and runs out to the world's own western edge.
+const MONTREAL_DIRT_PATH_WEST = { x: MONTREAL_WORLD_LEFT, y: 148, w: 15 - MONTREAL_WORLD_LEFT, h: 14 };
+
+// St. Peter's River — real, shown joining the St. Lawrence just west of
+// the walls on the map, right where the General Hospital and the
+// Callières house sit. A short diagonal reach of the same water pattern
+// the main river/dock use, not a full winding river — this is a
+// decorative suburb, not a second navigable channel.
+const MONTREAL_ST_PETER_RIVER = [
+  { x: -240, y: 170, w: 46, h: 18 },
+  { x: -205, y: 158, w: 46, h: 18 },
+  { x: -170, y: 172, w: 46, h: 14 },
+  { x: -140, y: WATER_TOP - 8, w: 60, h: 16 },
+];
 
 // The landward fortification wall, as a fixed backdrop strip along the very
 // top of the scene — behind the back row of buildings, same "wall set back
@@ -553,8 +619,8 @@ function overlapsBuilding(buildings, x, y) {
 // walking the plank back out to the boat rather than into the river.
 // wallBand (null everywhere but Montreal — see its own comment) blocks
 // the fortification wall's own strip except at the gate gap.
-function isWalkable(buildings, x, y, worldWidth, worldTop, wallBand) {
-  if (x < 10 || x > worldWidth - 10 || y < worldTop + 10 || y > CANVAS_HEIGHT - 4) return false;
+function isWalkable(buildings, x, y, worldWidth, worldTop, wallBand, worldLeft) {
+  if (x < worldLeft + 10 || x > worldWidth - 10 || y < worldTop + 10 || y > CANVAS_HEIGHT - 4) return false;
   if (y > WATER_TOP && (x < dockX0(worldWidth) || x > dockX1(worldWidth))) return false;
   if (wallBand && y >= wallBand.y0 && y <= wallBand.y1 && (x < wallBand.gateX0 || x > wallBand.gateX1)) return false;
   return !overlapsBuilding(buildings, x, y);
@@ -667,6 +733,7 @@ export function createVillageScene() {
   let facingLeft = false;
   let worldWidth = CANVAS_WIDTH;
   let worldTop = 0;
+  let worldLeft = 0;
   let wallBand = null;
   let repairShop = repairShopFor(worldWidth);
   let buildings = [...buildingsFor(0), repairShop];
@@ -697,6 +764,7 @@ export function createVillageScene() {
       isMontreal = village && village.name === 'Montreal';
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
+      worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : 0;
       wallBand = isMontreal ? MONTREAL_WALL_BAND : null;
       repairShop = repairShopFor(worldWidth);
       buildings = isQuebecCity
@@ -753,8 +821,8 @@ export function createVillageScene() {
         const ny = player.y + dy * step;
         // Resolve each axis separately so sliding along a wall/edge works
         // instead of a diagonal move being blocked entirely by one axis.
-        if (isWalkable(buildings, nx, player.y, worldWidth, worldTop, wallBand)) player.x = nx;
-        if (isWalkable(buildings, player.x, ny, worldWidth, worldTop, wallBand)) player.y = ny;
+        if (isWalkable(buildings, nx, player.y, worldWidth, worldTop, wallBand, worldLeft)) player.x = nx;
+        if (isWalkable(buildings, player.x, ny, worldWidth, worldTop, wallBand, worldLeft)) player.y = ny;
 
         strideTimer += dt;
         if (strideTimer > 0.28) {
@@ -767,10 +835,10 @@ export function createVillageScene() {
 
       // The camera follows the player on both axes, clamped so it never
       // scrolls past the world's own edges — [0, 0] when worldWidth ===
-      // CANVAS_WIDTH and worldTop === 0 (every village but Montreal),
-      // which pins the camera at (0, 0) always and reproduces the old
-      // fixed-screen framing exactly.
-      camera.x = Math.max(0, Math.min(worldWidth - CANVAS_WIDTH, player.x - CANVAS_WIDTH / 2));
+      // CANVAS_WIDTH, worldTop === 0, and worldLeft === 0 (every village
+      // but Montreal), which pins the camera at (0, 0) always and
+      // reproduces the old fixed-screen framing exactly.
+      camera.x = Math.max(worldLeft, Math.min(worldWidth - CANVAS_WIDTH, player.x - CANVAS_WIDTH / 2));
       // Max is always 0, not a worldHeight-derived value — the world's
       // south edge never moves (see MONTREAL_WORLD_TOP's own comment),
       // only the north one does, so the camera only ever scrolls upward
@@ -828,7 +896,10 @@ export function createVillageScene() {
       if (isMontreal) {
         drawBrickRoad(ctx, MONTREAL_SQUARE.x, MONTREAL_SQUARE.y, MONTREAL_SQUARE.w, MONTREAL_SQUARE.h);
         drawBrickRoad(ctx, 0, MONTREAL_ROAD_H.y, worldWidth, MONTREAL_ROAD_H.h);
+        drawBrickRoad(ctx, 0, MONTREAL_ROAD_H2.y, worldWidth, MONTREAL_ROAD_H2.h);
         drawBrickRoad(ctx, MONTREAL_ROAD_V.x, MONTREAL_ROAD_V.y, MONTREAL_ROAD_V.w, MONTREAL_ROAD_V.h);
+        drawBrickRoad(ctx, MONTREAL_ROAD_V2.x, MONTREAL_ROAD_V2.y, MONTREAL_ROAD_V2.w, MONTREAL_ROAD_V2.h);
+        drawBrickRoad(ctx, MONTREAL_ROAD_V3.x, MONTREAL_ROAD_V3.y, MONTREAL_ROAD_V3.w, MONTREAL_ROAD_V3.h);
         drawMarketWell(ctx, MONTREAL_SQUARE_CENTER.x, MONTREAL_SQUARE_CENTER.y);
         drawDirtPath(ctx, MONTREAL_PARADE.x, MONTREAL_PARADE.y, MONTREAL_PARADE.w, MONTREAL_PARADE.h);
         for (const g of MONTREAL_GARDEN_PLOTS) drawGardenPlot(ctx, g.x, g.y, g.w, g.h);
@@ -836,6 +907,12 @@ export function createVillageScene() {
         // brick, picking up where the town's own streets end.
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_V.x, MONTREAL_DIRT_PATH_V.y, MONTREAL_DIRT_PATH_V.w, MONTREAL_DIRT_PATH_V.h);
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_SPUR.x, MONTREAL_DIRT_PATH_SPUR.y, MONTREAL_DIRT_PATH_SPUR.w, MONTREAL_DIRT_PATH_SPUR.h);
+        // Same, west out past the Récollets Gate toward the western
+        // suburb, and St. Peter's River itself alongside it — plain
+        // water fill, same pattern the main river uses.
+        drawDirtPath(ctx, MONTREAL_DIRT_PATH_WEST.x, MONTREAL_DIRT_PATH_WEST.y, MONTREAL_DIRT_PATH_WEST.w, MONTREAL_DIRT_PATH_WEST.h);
+        ctx.fillStyle = pat.water;
+        for (const r of MONTREAL_ST_PETER_RIVER) ctx.fillRect(r.x, r.y, r.w, r.h);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe
