@@ -336,6 +336,15 @@ const MONTREAL_FARM_STRIPS = [
   { x: 485, y: -235, w: 50, h: 225, tone: 0 },
   { x: 535, y: -235, w: 50, h: 225, tone: 1 },
   { x: 585, y: -235, w: 45, h: 225, tone: 2 },
+  // Côte-des-Neiges, continuing the district past the fort/windmill onto
+  // the mountain's own west flank (see MONTREAL_COTE_DES_NEIGES_ROAD's own
+  // comment) — real habitant farm lots granted along that road, same
+  // strip-lot pattern as everything else here, out to the world's edge.
+  { x: -40, y: -235, w: 48, h: 225, tone: 1 },
+  { x: -88, y: -235, w: 48, h: 225, tone: 2 },
+  { x: -136, y: -235, w: 48, h: 225, tone: 0 },
+  { x: -184, y: -235, w: 48, h: 225, tone: 1 },
+  { x: -232, y: -235, w: 40, h: 225, tone: 2 },
 ];
 
 // The rural track up to the Mont-Royal district (drawDirtPath, not the
@@ -349,6 +358,17 @@ const MONTREAL_DIRT_PATH_SPUR = { x: 60, y: -22, w: 250, h: 14 };
 // front row (x: 15, roughly the Récollets buildings' own street
 // frontage) and runs out to the world's own western edge.
 const MONTREAL_DIRT_PATH_WEST = { x: MONTREAL_WORLD_LEFT, y: 148, w: 15 - MONTREAL_WORLD_LEFT, h: 14 };
+
+// Côte-des-Neiges — a real rural road documented under that name from
+// around 1698 (one of the Sulpicians' own seigneurial "côtes," granted
+// out along Mont-Royal's west flank), so genuinely there in the 1790s
+// setting even though the built-up Montreal district of the same name is
+// a much later, 19th-century thing. Forks west from the fort/windmill
+// spur (a short connector joins the two) and runs out to the world's own
+// west edge, flanking farmland (MONTREAL_FARM_STRIPS) the same way the
+// existing spur does past the fort.
+const MONTREAL_COTE_DES_NEIGES_ROAD = { x: MONTREAL_WORLD_LEFT, y: -100, w: 36 - MONTREAL_WORLD_LEFT, h: 14 };
+const MONTREAL_COTE_DES_NEIGES_CONNECTOR = { x: 53, y: -100, w: 14, h: 78 };
 
 // St. Peter's River — real, shown joining the St. Lawrence just west of
 // the walls on the map, right where the General Hospital and the
@@ -461,6 +481,7 @@ function clearOfDock(spots) {
 // hard wall, so it reads as the clearing giving way to forest again once
 // you've walked far enough past Mont-Royal.
 const MONTREAL_NORTH_TREE_SPOTS = [
+  { x: -220, y: -270 }, { x: -140, y: -264 }, { x: -60, y: -272 },
   { x: 30, y: -266 }, { x: 100, y: -272 }, { x: 175, y: -264 }, { x: 340, y: -270 },
   { x: 420, y: -266 }, { x: 495, y: -272 }, { x: 565, y: -264 }, { x: 615, y: -270 },
 ];
@@ -966,6 +987,10 @@ export function createVillageScene() {
         // brick, picking up where the town's own streets end.
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_V.x, MONTREAL_DIRT_PATH_V.y, MONTREAL_DIRT_PATH_V.w, MONTREAL_DIRT_PATH_V.h);
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_SPUR.x, MONTREAL_DIRT_PATH_SPUR.y, MONTREAL_DIRT_PATH_SPUR.w, MONTREAL_DIRT_PATH_SPUR.h);
+        // Côte-des-Neiges — forks off the spur above, out along the
+        // mountain's west flank (see its own comment).
+        drawDirtPath(ctx, MONTREAL_COTE_DES_NEIGES_CONNECTOR.x, MONTREAL_COTE_DES_NEIGES_CONNECTOR.y, MONTREAL_COTE_DES_NEIGES_CONNECTOR.w, MONTREAL_COTE_DES_NEIGES_CONNECTOR.h);
+        drawDirtPath(ctx, MONTREAL_COTE_DES_NEIGES_ROAD.x, MONTREAL_COTE_DES_NEIGES_ROAD.y, MONTREAL_COTE_DES_NEIGES_ROAD.w, MONTREAL_COTE_DES_NEIGES_ROAD.h);
         // Same, west out past the Récollets Gate toward the western
         // suburb, and St. Peter's River itself alongside it — plain
         // water fill, same pattern the main river uses.
