@@ -381,7 +381,13 @@ const CITY_WALL_H = 26; // the rampart sprite's own drawn height
 // MONTREAL_DIRT_PATH_V actually crosses the wall on its way up to the
 // Mont-Royal district.
 const MONTREAL_WALL_GATE = { x0: 256, x1: 384 };
-const MONTREAL_WALL_BAND = { y0: CITY_WALL_Y, y1: CITY_WALL_Y + CITY_WALL_H, gateX0: MONTREAL_WALL_GATE.x0, gateX1: MONTREAL_WALL_GATE.x1 };
+// x0: 0 bounds the collision band to the actual town wall's own extent
+// (the tile loop below never draws it west of x=0 either). Without this,
+// the band's y-range blocked movement at every x, including the western
+// suburb (x < 0, MONTREAL_WORLD_LEFT) added later past the Récollets
+// Gate -- an invisible wall out past the real, visible one, since
+// nothing is drawn to explain the block out there.
+const MONTREAL_WALL_BAND = { x0: 0, y0: CITY_WALL_Y, y1: CITY_WALL_Y + CITY_WALL_H, gateX0: MONTREAL_WALL_GATE.x0, gateX1: MONTREAL_WALL_GATE.x1 };
 
 function buildingsForQuebecCity() {
   return QUEBEC_CITY_ONFOOT_BUILDINGS.map((b) => ({
@@ -634,7 +640,7 @@ function overlapsBuilding(buildings, x, y) {
 function isWalkable(buildings, x, y, worldWidth, worldTop, wallBand, worldLeft) {
   if (x < worldLeft + 10 || x > worldWidth - 10 || y < worldTop + 10 || y > CANVAS_HEIGHT - 4) return false;
   if (y > WATER_TOP && (x < dockX0(worldWidth) || x > dockX1(worldWidth))) return false;
-  if (wallBand && y >= wallBand.y0 && y <= wallBand.y1 && (x < wallBand.gateX0 || x > wallBand.gateX1)) return false;
+  if (wallBand && x >= wallBand.x0 && y >= wallBand.y0 && y <= wallBand.y1 && (x < wallBand.gateX0 || x > wallBand.gateX1)) return false;
   return !overlapsBuilding(buildings, x, y);
 }
 
