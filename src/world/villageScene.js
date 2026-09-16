@@ -7,6 +7,7 @@ import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
 import {
   createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
   createStoneBuildingSprite, createChurchSprite, createRampartSprite, createGunShopSprite, createGunsmithSprite,
+  createSulpicianTowersSprite,
 } from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../shared/hash.js';
@@ -96,24 +97,32 @@ const TROIS_RIVIERES_ONFOOT_BUILDINGS = [
   { kind: 'church', x: 160, y: 100, mirror: false },
 ];
 
-// Montréal's on-foot layout is a rough placeholder — it'll be properly built
-// up later. For now it's two rows of houses flanking a pair of grey-brick
-// streets (MONTREAL_ROAD_V / MONTREAL_ROAD_H, laid in draw()): one running
-// straight up from the dock to the basilica, one crossing it the full width
-// of the clearing. The old middle row of houses — and the one house that
-// sat squarely on the dock-to-church line — are pulled out to leave the
-// streets clear.
+// Montréal's on-foot layout — real 1790s Montreal, not the generic
+// procedural cluster every other village gets: two rows of houses
+// flanking a pair of grey-brick streets (MONTREAL_ROAD_V / MONTREAL_ROAD_H,
+// laid in draw()) that widen into a real square (MONTREAL_SQUARE, drawn in
+// draw()) where they cross — Place d'Armes, the city's actual old market
+// square, facing the basilica exactly like the real square does. The old
+// middle row of houses — and the one house that sat squarely on the
+// dock-to-church line — stay pulled out to leave the streets/square clear.
 const MONTREAL_ONFOOT_BUILDINGS = [
-  // back row - upper residential quarter (5 buildings)
+  // back row - upper residential quarter
   { kind: 'stone', x: 50, y: 76, variant: 0, mirror: false },
   { kind: 'stone', x: 110, y: 80, variant: 1, mirror: true },
-  { kind: 'stone', x: 170, y: 78, variant: 2, mirror: false },
-  { kind: 'stone', x: 230, y: 82, variant: 0, mirror: true },
+  // The Vieux Séminaire de Saint-Sulpice (built 1685-94) — real, and still
+  // Montreal's oldest standing building — sits right beside Notre-Dame in
+  // reality, hence right next to the church here too. Its own twin-tower
+  // sprite (sprites.js, already used for the same building in the river
+  // view's terrain scenery) is much wider than the generic stone houses,
+  // so it replaces what used to be two crowded back-row slots (170/230)
+  // rather than squeezing in as a third.
+  { kind: 'seminary', x: 208, y: 84, mirror: false },
   { kind: 'stone', x: 290, y: 76, variant: 1, mirror: false },
-  // front row - waterfront warehouses/trading posts. The gun shop, right of
-  // the dock lane — walk up to it and you're handed a pistol (see game.js's
-  // acquirePistol / the trigger in update() below), mirroring the repair
-  // shop just left of the dock.
+  // front row - waterfront warehouses/trading posts, along the real Rue
+  // Saint-Paul (Montreal's oldest street, running along the old
+  // waterfront). The gun shop, right of the dock lane — walk up to it and
+  // you're handed a pistol (see game.js's acquirePistol / the trigger in
+  // update() below), mirroring the repair shop just left of the dock.
   { kind: 'stone', x: 20, y: 150, variant: 1, mirror: false },
   { kind: 'stone', x: 65, y: 154, variant: 2, mirror: true },
   { kind: 'stone', x: 110, y: 152, variant: 0, mirror: false },
@@ -124,23 +133,32 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   { kind: 'church', x: 160, y: 92, mirror: false },
 ];
 
-// Montréal's placeholder streets, in the scene's fixed pixel space. The
-// vertical one runs from just below the basilica down to the dock head; the
-// horizontal one spans the whole clearing, crossing it where the old middle
-// row of houses used to be. Grey brick, drawn on the ground under everything
-// else — see drawBrickRoad() and the isMontreal branch in draw().
+// Montréal's streets, in the scene's fixed pixel space. The vertical one
+// runs from just below the basilica down to the dock head; the horizontal
+// one spans the whole clearing. Grey brick, drawn on the ground under
+// everything else — see drawBrickRoad() and the isMontreal branch in
+// draw(). MONTREAL_SQUARE widens the two streets' crossing into a real
+// plaza in front of the church — Place d'Armes, Montreal's actual old
+// market square, which really does sit exactly there (drawn *before* the
+// two road strips below in draw(), so their narrower arms paint cleanly
+// over its edges rather than leaving a seam).
 const MONTREAL_ROAD_V = { x: 147, y: 96, w: 26, h: DOCK_TOP - 96 };
 const MONTREAL_ROAD_H = { y: 104, h: 22 };
+const MONTREAL_SQUARE = { x: 124, y: 96, w: 72, h: 34 };
+const MONTREAL_SQUARE_CENTER = { x: MONTREAL_SQUARE.x + MONTREAL_SQUARE.w / 2, y: MONTREAL_SQUARE.y + MONTREAL_SQUARE.h / 2 };
 
 // The landward fortification wall, as a fixed backdrop strip along the very
 // top of the scene — behind the back row of buildings, same "wall set back
 // behind the town, not along the water" read as the river view's own
 // QUEBEC_CITY_RAMPART_DEPTH. Tiled edge to edge across the fixed 320px
 // scene width using the sprite's own drawn width, same tiling approach as
-// villages.js's river-view wall.
+// villages.js's river-view wall. Montreal was itself a walled city right
+// through the 1790s (the walls came down 1804-1817), so it gets the same
+// backdrop as Quebec City rather than the open-forest treeline every other
+// village has.
 const WALL_TILE_W = 64;
-const QUEBEC_CITY_WALL_Y = 6;
-const QUEBEC_CITY_WALL_TILES = Math.ceil(CANVAS_WIDTH / WALL_TILE_W) + 1;
+const CITY_WALL_Y = 6;
+const CITY_WALL_TILES = Math.ceil(CANVAS_WIDTH / WALL_TILE_W) + 1;
 
 function buildingsForQuebecCity() {
   return QUEBEC_CITY_ONFOOT_BUILDINGS.map((b) => ({
@@ -174,8 +192,8 @@ function buildingsForMontreal() {
     anchorX: b.x,
     anchorY: b.y,
     isGunShop: b.kind === 'gunshop',
-    footHalfW: b.kind === 'church' || b.kind === 'gunshop' ? 12 : 13,
-    footHeight: b.kind === 'church' ? 26 : b.kind === 'gunshop' ? 20 : 24,
+    footHalfW: b.kind === 'seminary' ? 24 : b.kind === 'church' || b.kind === 'gunshop' ? 12 : 13,
+    footHeight: b.kind === 'seminary' ? 18 : b.kind === 'church' ? 26 : b.kind === 'gunshop' ? 20 : 24,
   }));
 }
 
@@ -249,6 +267,7 @@ const cabinSprites = [0, 1, 2].map(createCabinSprite);
 const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
 const churchSprite = createChurchSprite();
 const rampartSprite = createRampartSprite();
+const seminarySprite = createSulpicianTowersSprite();
 const repairShopSprite = createRepairShopSprite();
 const gunShopSprite = createGunShopSprite();
 const traderSprite = createTraderSprite();
@@ -266,6 +285,7 @@ function buildingSprite(b) {
   if (b.isRepairShop) return repairShopSprite;
   if (b.isGunShop) return gunShopSprite;
   if (b.kind === 'church') return churchSprite;
+  if (b.kind === 'seminary') return seminarySprite;
   if (b.kind === 'stone') return stoneSprites[b.variant % stoneSprites.length];
   return cabinSprites[b.variant % cabinSprites.length];
 }
@@ -355,6 +375,45 @@ function drawBrickRoad(ctx, x, y, w, h) {
       ctx.fillRect(bx, ry, 1, bh);
     }
   }
+  ctx.restore();
+}
+
+// The market well at the centre of Place d'Armes — a plain stone-ringed
+// well with a small shingled roof, the kind of modest period fixture a
+// real colonial market square would have rather than a monument (the
+// actual statue there today postdates 1790 by over a century). Purely
+// decorative, like the treeline — not solid, so it never blocks the
+// player the way a building does.
+function drawMarketWell(ctx, cx, cy) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 6, 8, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // stone ring
+  ctx.fillStyle = '#6b6259';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 3, 7, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#847a6d';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 7, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2a241d';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 4, 2.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // two posts + a small shingled roof over the well
+  ctx.fillStyle = '#4a3423';
+  ctx.fillRect(cx - 7, cy - 14, 2, 14);
+  ctx.fillRect(cx + 5, cy - 14, 2, 14);
+  ctx.fillStyle = '#5c3f2a';
+  ctx.beginPath();
+  ctx.moveTo(cx - 9, cy - 13);
+  ctx.lineTo(cx, cy - 20);
+  ctx.lineTo(cx + 9, cy - 13);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 }
 
@@ -471,11 +530,16 @@ export function createVillageScene() {
       ctx.fillStyle = pat.water;
       ctx.fillRect(0, WATER_TOP, CANVAS_WIDTH, CANVAS_HEIGHT - WATER_TOP);
 
-      // Montréal's placeholder streets — on the ground, under the dock,
-      // trees, buildings and player.
+      // Montréal's streets and Place d'Armes — on the ground, under the
+      // dock, trees, buildings and player. The square first, so the two
+      // narrower road strips paint cleanly over its edges (see
+      // MONTREAL_SQUARE's own comment), then the market well on top of
+      // all three, right in the middle of the plaza.
       if (isMontreal) {
+        drawBrickRoad(ctx, MONTREAL_SQUARE.x, MONTREAL_SQUARE.y, MONTREAL_SQUARE.w, MONTREAL_SQUARE.h);
         drawBrickRoad(ctx, 0, MONTREAL_ROAD_H.y, CANVAS_WIDTH, MONTREAL_ROAD_H.h);
         drawBrickRoad(ctx, MONTREAL_ROAD_V.x, MONTREAL_ROAD_V.y, MONTREAL_ROAD_V.w, MONTREAL_ROAD_V.h);
+        drawMarketWell(ctx, MONTREAL_SQUARE_CENTER.x, MONTREAL_SQUARE_CENTER.y);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe
@@ -492,13 +556,15 @@ export function createVillageScene() {
         ctx.stroke();
       }
 
-      // Québec City gets the landward fortification wall as its backdrop
-      // instead of the usual treeline framing every other village's
-      // clearing — a walled capital doesn't back onto open forest. Behind
-      // everything else, so it never occludes a building or the player.
-      if (isQuebecCity) {
-        for (let i = 0; i < QUEBEC_CITY_WALL_TILES; i++) {
-          ctx.drawImage(rampartSprite, i * WALL_TILE_W, QUEBEC_CITY_WALL_Y);
+      // Québec City and Montréal both get the landward fortification wall
+      // as their backdrop instead of the usual treeline framing every
+      // other village's clearing — a walled capital doesn't back onto
+      // open forest, and Montreal genuinely was walled right through the
+      // 1790s (see CITY_WALL_Y's own comment). Behind everything else, so
+      // it never occludes a building or the player.
+      if (isQuebecCity || isMontreal) {
+        for (let i = 0; i < CITY_WALL_TILES; i++) {
+          ctx.drawImage(rampartSprite, i * WALL_TILE_W, CITY_WALL_Y);
         }
       } else {
         for (const t of trees) {
