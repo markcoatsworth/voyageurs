@@ -188,9 +188,29 @@ export function createMinimap() {
   // hue (it's the same river), drawn hugging the island's real
   // shorelines instead of the straight chords the plain waypoint list
   // would give (see mapSkipRibbon's comment on those two waypoints).
+  //
+  // Charlemagne and Ile-Perrot (real towns, real coordinates) don't sit
+  // exactly at the island's real east/west tips — Charlemagne is ~8km
+  // from the true east tip, Ile-Perrot ~3km from the true west tip — so
+  // without a connector there's a real, unfilled gap between where
+  // splitAtSkip cut the ordinary ribbon off and where these channel
+  // shapes start, which read as a confusing patch of plain background
+  // rather than water. Bridge both gaps with short two-point ribbons
+  // (the channel shapes' own first/last points already carry the tip
+  // coordinates, so no new export is needed for those).
   const montrealChannelStyle = SEGMENT_STYLE.lawrenceWest;
-  for (const channel of [MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE]) drawRibbon(svg, channel, montrealChannelStyle);
-  for (const channel of [MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE]) fillRibbon(svg, channel, montrealChannelStyle);
+  const lawrenceWestPoints = SEGMENTS.lawrenceWest.points;
+  const charlemagnePoint = lawrenceWestPoints.find((p) => p.name === 'Charlemagne');
+  const ilePerrotPoint = lawrenceWestPoints.find((p) => p.name === 'Ile-Perrot');
+  const eastTipPoint = MONTREAL_NORTH_CHANNEL_MAP_SHAPE[MONTREAL_NORTH_CHANNEL_MAP_SHAPE.length - 1];
+  const westTipPoint = MONTREAL_NORTH_CHANNEL_MAP_SHAPE[0];
+  const montrealConnectors = [
+    [charlemagnePoint, eastTipPoint],
+    [westTipPoint, ilePerrotPoint],
+  ];
+  const montrealPieces = [MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE, ...montrealConnectors];
+  for (const piece of montrealPieces) drawRibbon(svg, piece, montrealChannelStyle);
+  for (const piece of montrealPieces) fillRibbon(svg, piece, montrealChannelStyle);
 
   // Real land inside the water, painted the same deep green as the
   // widget's own background (#minimap in style.css) so it reads as a hole
