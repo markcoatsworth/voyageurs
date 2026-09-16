@@ -16,7 +16,7 @@
 import {
   SEGMENTS, ALL_POINTS, LAC_SAINT_JEAN_SHAPE,
   MONTREAL_ISLAND_MAP_SHAPE, SAINTE_HELENE_MAP_POINT, NUNS_ISLAND_MAP_POINT, LACHINE_RAPIDS_MAP_POINT,
-  MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE,
+  MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE, MOUNT_ROYAL_MAP_POINT,
 } from './river/route.js';
 
 // Width/height of the visible window, in the same km-equivalent units as
@@ -171,6 +171,22 @@ export function createMinimap() {
     viewBox: `0 0 ${VIEW_SIZE} ${VIEW_SIZE}`,
   });
 
+  // A soft "developed area" tint for the Island of Montreal's interior
+  // (drawn further down, clipped to MONTREAL_ISLAND_MAP_SHAPE) — a warm
+  // radial fade centered between Old Montreal's dock and Mount Royal,
+  // fading to fully transparent (so the plain island green shows through)
+  // a few km out, rather than a hard-edged patch. Defs go in one block up
+  // front since SVG only resolves url(#id) references, not element order.
+  const defs = svgEl('defs', {});
+  const developedGradient = svgEl('radialGradient', { id: 'montreal-developed' });
+  developedGradient.appendChild(svgEl('stop', { offset: '0%', 'stop-color': '#7d7a4a' }));
+  developedGradient.appendChild(svgEl('stop', { offset: '100%', 'stop-color': '#7d7a4a', 'stop-opacity': 0 }));
+  defs.appendChild(developedGradient);
+  const islandClip = svgEl('clipPath', { id: 'montreal-island-clip' });
+  islandClip.appendChild(svgEl('path', { d: smoothClosedPath(MONTREAL_ISLAND_MAP_SHAPE) }));
+  defs.appendChild(islandClip);
+  svg.appendChild(defs);
+
   // Lac Saint-Jean, drawn first so the fjord's own outline/fill paint over
   // its edge right where the river leaves it — reads as the route flowing
   // out of the lake rather than the lake sitting on top of the route. A
@@ -213,6 +229,20 @@ export function createMinimap() {
   const MINIMAP_COASTLINE = '#d8c9a0';
   svg.appendChild(svgEl('path', {
     d: smoothClosedPath(MONTREAL_ISLAND_MAP_SHAPE), fill: MINIMAP_LAND_COLOR, stroke: MINIMAP_COASTLINE, 'stroke-width': 1.1,
+  }));
+
+  // The developed-area tint itself — centered between Old Montreal's real
+  // dock coordinate and Mount Royal (both real, both close together, so
+  // one soft patch covers the actual historic core rather than the whole
+  // island) instead of leaving the interior flat, undifferentiated green.
+  const montrealDockPoint = SEGMENTS.lawrenceWest.points.find((p) => p.name === 'Montreal');
+  const developedCenter = {
+    x: (montrealDockPoint.x + MOUNT_ROYAL_MAP_POINT.x) / 2,
+    y: (montrealDockPoint.y + MOUNT_ROYAL_MAP_POINT.y) / 2,
+  };
+  svg.appendChild(svgEl('circle', {
+    cx: developedCenter.x, cy: developedCenter.y, r: 6.5,
+    fill: 'url(#montreal-developed)', 'clip-path': 'url(#montreal-island-clip)',
   }));
 
   // The Island of Montreal's own two real channels — MONTREAL_CHANNEL_STYLE
