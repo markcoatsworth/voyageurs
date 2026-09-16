@@ -7,7 +7,7 @@ import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
 import {
   createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
   createStoneBuildingSprite, createChurchSprite, createRampartSprite, createGunShopSprite, createGunsmithSprite,
-  createSulpicianTowersSprite, createMontRoyalSprite,
+  createSulpicianTowersSprite, createMontRoyalSprite, createWindmillSprite,
 } from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../shared/hash.js';
@@ -45,8 +45,11 @@ const MONTREAL_WORLD_WIDTH = 640;
 // sitting clipped against the top of a screen that could never scroll.
 // worldTop is 0 (not negative) for every other village, which — like
 // MONTREAL_WORLD_WIDTH above — collapses the vertical camera clamp to
-// [0, 0] and reproduces the old fixed framing exactly.
-const MONTREAL_WORLD_TOP = -180;
+// [0, 0] and reproduces the old fixed framing exactly. Pushed out again
+// (from -180) to make real room for a Mont-Royal district — Fort de la
+// Montagne, its farms and mill, and the rural road up to them — around
+// and beyond the mountain itself, not just the mountain alone.
+const MONTREAL_WORLD_TOP = -280;
 
 // Anchor is the point where each building's front (door) sits; the
 // collision box is a simplified footprint under the sprite's walls, not
@@ -164,6 +167,33 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   { kind: 'stone', x: 520, y: 150, variant: 2, mirror: true },
   { kind: 'stone', x: 570, y: 154, variant: 0, mirror: false },
   { kind: 'stone', x: 610, y: 150, variant: 1, mirror: true },
+
+  // The Mont-Royal district — north of the built-up town, in the field
+  // around the mountain itself (MONTREAL_WORLD_TOP opened this ground up;
+  // see its own comment). By 1790 this was genuinely rural: Sulpician
+  // mission land and scattered habitant farms, not more city blocks.
+  //
+  // Fort de la Montagne (built 1685-94, the same years and the same
+  // Sulpician builders as the Vieux Séminaire downtown — hence reusing
+  // its twin-tower sprite here too, which is architecturally honest, not
+  // just convenient) was a real fortified mission at the mountain's own
+  // base, built to house and convert Indigenous converts; two of its
+  // stone towers still stand today, preserved inside the Grand Séminaire.
+  // West of the mountain, matching its real relative position.
+  { kind: 'seminary', x: 60, y: 0, mirror: false },
+  // One of the Sulpicians' own mills, close to their mission — real
+  // seigneurial mills dotted the island (see river/islands.js's
+  // Pointe-Claire windmill), and the order that built Fort de la
+  // Montagne operated others near it.
+  { kind: 'windmill', x: 100, y: -50, mirror: false },
+  // Scattered habitant farmhouses on the mountain's lower slopes and the
+  // open ground beyond it — the same log-cabin sprite (not the urban
+  // stone kind) the waterfront farms in the river view itself use.
+  { kind: 'cabin', x: 460, y: -30, variant: 0, mirror: false },
+  { kind: 'cabin', x: 530, y: -75, variant: 1, mirror: true },
+  { kind: 'cabin', x: 380, y: -115, variant: 2, mirror: false },
+  { kind: 'cabin', x: 170, y: -145, variant: 0, mirror: true },
+  { kind: 'cabin', x: 555, y: -165, variant: 1, mirror: false },
 ];
 
 // Montréal's streets, in the scene's own (wider) world pixel space. The
@@ -181,6 +211,13 @@ const MONTREAL_ROAD_V = { x: 307, y: 96, w: 26, h: DOCK_TOP - 96 };
 const MONTREAL_ROAD_H = { y: 104, h: 22 };
 const MONTREAL_SQUARE = { x: 280, y: 96, w: 80, h: 34 };
 const MONTREAL_SQUARE_CENTER = { x: MONTREAL_SQUARE.x + MONTREAL_SQUARE.w / 2, y: MONTREAL_SQUARE.y + MONTREAL_SQUARE.h / 2 };
+
+// The rural track up to the Mont-Royal district (drawDirtPath, not the
+// town's cut-stone streets) — picks up right where the brick MONTREAL_ROAD_V
+// ends (its own y: 96, the north edge of the built-up town) and continues
+// north into the field, then a short spur west to Fort de la Montagne.
+const MONTREAL_DIRT_PATH_V = { x: 296, y: -140, w: 24, h: 236 };
+const MONTREAL_DIRT_PATH_SPUR = { x: 60, y: -22, w: 250, h: 14 };
 
 // The landward fortification wall, as a fixed backdrop strip along the very
 // top of the scene — behind the back row of buildings, same "wall set back
@@ -227,8 +264,8 @@ function buildingsForMontreal() {
     anchorX: b.x,
     anchorY: b.y,
     isGunShop: b.kind === 'gunshop',
-    footHalfW: b.kind === 'seminary' ? 24 : b.kind === 'church' || b.kind === 'gunshop' ? 12 : 13,
-    footHeight: b.kind === 'seminary' ? 18 : b.kind === 'church' ? 26 : b.kind === 'gunshop' ? 20 : 24,
+    footHalfW: b.kind === 'seminary' ? 24 : b.kind === 'windmill' ? 8 : b.kind === 'church' || b.kind === 'gunshop' ? 12 : 13,
+    footHeight: b.kind === 'seminary' ? 18 : b.kind === 'windmill' ? 14 : b.kind === 'church' ? 26 : b.kind === 'gunshop' ? 20 : 24,
   }));
 }
 
@@ -267,8 +304,8 @@ function clearOfDock(spots) {
 // hard wall, so it reads as the clearing giving way to forest again once
 // you've walked far enough past Mont-Royal.
 const MONTREAL_NORTH_TREE_SPOTS = [
-  { x: 30, y: -166 }, { x: 100, y: -172 }, { x: 175, y: -164 }, { x: 340, y: -170 },
-  { x: 420, y: -166 }, { x: 495, y: -172 }, { x: 565, y: -164 }, { x: 615, y: -170 },
+  { x: 30, y: -266 }, { x: 100, y: -272 }, { x: 175, y: -264 }, { x: 340, y: -270 },
+  { x: 420, y: -266 }, { x: 495, y: -272 }, { x: 565, y: -264 }, { x: 615, y: -270 },
 ];
 const MONTREAL_TREE_SPOTS = [
   ...clearOfDock([...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))]),
@@ -344,6 +381,7 @@ const churchSprite = createChurchSprite();
 const rampartSprite = createRampartSprite();
 const seminarySprite = createSulpicianTowersSprite();
 const montRoyalSprite = createMontRoyalSprite();
+const montrealWindmillSprite = createWindmillSprite();
 const repairShopSprite = createRepairShopSprite();
 const gunShopSprite = createGunShopSprite();
 const traderSprite = createTraderSprite();
@@ -362,6 +400,7 @@ function buildingSprite(b) {
   if (b.isGunShop) return gunShopSprite;
   if (b.kind === 'church') return churchSprite;
   if (b.kind === 'seminary') return seminarySprite;
+  if (b.kind === 'windmill') return montrealWindmillSprite;
   if (b.kind === 'stone') return stoneSprites[b.variant % stoneSprites.length];
   return cabinSprites[b.variant % cabinSprites.length];
 }
@@ -452,6 +491,23 @@ function drawBrickRoad(ctx, x, y, w, h) {
       ctx.fillRect(bx, ry, 1, bh);
     }
   }
+  ctx.restore();
+}
+
+// A worn dirt track — the rural road up to the Mont-Royal district
+// (drawDirtPath's own call site), not the town's cut-stone brick streets
+// (drawBrickRoad above). Plain packed earth with two faint wheel ruts,
+// rather than a coursed pattern — a farm track, not a paved street.
+function drawDirtPath(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.fillStyle = '#8a7050';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#79603f';
+  ctx.fillRect(x + w * 0.22, y, w * 0.14, h);
+  ctx.fillRect(x + w * 0.64, y, w * 0.14, h);
   ctx.restore();
 }
 
@@ -658,6 +714,10 @@ export function createVillageScene() {
         drawBrickRoad(ctx, 0, MONTREAL_ROAD_H.y, worldWidth, MONTREAL_ROAD_H.h);
         drawBrickRoad(ctx, MONTREAL_ROAD_V.x, MONTREAL_ROAD_V.y, MONTREAL_ROAD_V.w, MONTREAL_ROAD_V.h);
         drawMarketWell(ctx, MONTREAL_SQUARE_CENTER.x, MONTREAL_SQUARE_CENTER.y);
+        // The rural track up to the Mont-Royal district — dirt, not
+        // brick, picking up where the town's own streets end.
+        drawDirtPath(ctx, MONTREAL_DIRT_PATH_V.x, MONTREAL_DIRT_PATH_V.y, MONTREAL_DIRT_PATH_V.w, MONTREAL_DIRT_PATH_V.h);
+        drawDirtPath(ctx, MONTREAL_DIRT_PATH_SPUR.x, MONTREAL_DIRT_PATH_SPUR.y, MONTREAL_DIRT_PATH_SPUR.w, MONTREAL_DIRT_PATH_SPUR.h);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe
