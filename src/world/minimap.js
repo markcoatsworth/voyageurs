@@ -131,12 +131,12 @@ function splitAtSkip(points) {
   return runs.filter((run) => run.length > 1);
 }
 
-function drawRibbon(svg, points, style) {
-  const outlineHalf = points.map((p) => halfWidthKmAt(p) + OUTLINE_BORDER_KM);
+function drawRibbon(svg, points, style, widthBoost = 1) {
+  const outlineHalf = points.map((p) => halfWidthKmAt(p) * widthBoost + OUTLINE_BORDER_KM);
   svg.appendChild(svgEl('path', { d: toClosedPath(ribbonPolygon(points, outlineHalf)), fill: style.outline }));
 }
-function fillRibbon(svg, points, style) {
-  const fillHalf = points.map((p) => halfWidthKmAt(p));
+function fillRibbon(svg, points, style, widthBoost = 1) {
+  const fillHalf = points.map((p) => halfWidthKmAt(p) * widthBoost);
   svg.appendChild(svgEl('path', { d: toClosedPath(ribbonPolygon(points, fillHalf)), fill: style.fill }));
 }
 
@@ -195,11 +195,33 @@ export function createMinimap() {
   for (const { style, runs } of segmentRuns) for (const run of runs) drawRibbon(svg, run, style);
   for (const { style, runs } of segmentRuns) for (const run of runs) fillRibbon(svg, run, style);
 
+  // Real land, painted the same deep green as the widget's own background
+  // (#minimap in style.css) so it reads as a hole cut into the water
+  // rather than a rendering gap — the same visual language Google Maps-
+  // style terrain tiles use for islands. Drawn *before* the Montreal
+  // channels below, not after: the island's real shape is genuinely huge
+  // next to its own real channels (a ~50km landmass split by 1-4km-wide
+  // water), so painting it first and letting the channels paint over its
+  // edges is what actually gets a map that reads as "blue water, with an
+  // island in it" instead of "a green landmass with a thin blue trace
+  // around it" — accurate real proportions were making a legible picture
+  // impossible, not just an unblue one.
+  // A touch lighter/warmer than the widget's own background (not an exact
+  // match) plus a warm tan coastline — gives the island real visual
+  // weight of its own rather than just a thin ring.
+  const MINIMAP_LAND_COLOR = '#3a5c2e';
+  const MINIMAP_COASTLINE = '#d8c9a0';
+  svg.appendChild(svgEl('path', {
+    d: smoothClosedPath(MONTREAL_ISLAND_MAP_SHAPE), fill: MINIMAP_LAND_COLOR, stroke: MINIMAP_COASTLINE, 'stroke-width': 1.1,
+  }));
+
   // The Island of Montreal's own two real channels — MONTREAL_CHANNEL_STYLE
-  // (blue, not lawrenceWest's own purple; see that constant's comment),
-  // drawn hugging the island's real shorelines instead of the straight
-  // chords the plain waypoint list would give (see mapSkipRibbon's comment
-  // on those two waypoints).
+  // (a dedicated bright blue; see that constant's comment), drawn hugging
+  // the island's real shorelines instead of the straight chords the plain
+  // waypoint list would give (see mapSkipRibbon's comment on those two
+  // waypoints), and at MONTREAL_CHANNEL_WIDTH_BOOST× their real width so
+  // they read as the dominant color here rather than a thin trace around
+  // a big green interior (see the island's own comment just above).
   //
   // Charlemagne and Ile-Perrot (real towns, real coordinates) don't sit
   // exactly at the island's real east/west tips — Charlemagne is ~8km
@@ -210,6 +232,7 @@ export function createMinimap() {
   // rather than water. Bridge both gaps with short two-point ribbons
   // (the channel shapes' own first/last points already carry the tip
   // coordinates, so no new export is needed for those).
+  const MONTREAL_CHANNEL_WIDTH_BOOST = 2.4;
   const lawrenceWestPoints = SEGMENTS.lawrenceWest.points;
   const charlemagnePoint = lawrenceWestPoints.find((p) => p.name === 'Charlemagne');
   const ilePerrotPoint = lawrenceWestPoints.find((p) => p.name === 'Ile-Perrot');
@@ -220,28 +243,8 @@ export function createMinimap() {
     [westTipPoint, ilePerrotPoint],
   ];
   const montrealPieces = [MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE, ...montrealConnectors];
-  for (const piece of montrealPieces) drawRibbon(svg, piece, MONTREAL_CHANNEL_STYLE);
-  for (const piece of montrealPieces) fillRibbon(svg, piece, MONTREAL_CHANNEL_STYLE);
-
-  // Real land inside the water, painted the same deep green as the
-  // widget's own background (#minimap in style.css) so it reads as a hole
-  // cut into the ribbon rather than a rendering gap — the same visual
-  // language Google Maps-style terrain tiles use for islands. The Island
-  // of Montreal is large enough at this scale to be its own surveyed
-  // shape (MONTREAL_ISLAND_MAP_SHAPE); Île Sainte-Hélène/Nuns' Island are
-  // both under 1km across in reality, so they're small fixed markers
-  // instead, sized to actually be visible rather than to true scale (the
-  // same liberty the waypoint dots already take).
-  // A touch lighter/warmer than the widget's own background (not an exact
-  // match) plus a warm tan coastline — gives the island real visual
-  // weight of its own rather than just a thin ring, which matters where
-  // (like Montreal's real channels) the surrounding water is too narrow
-  // to leave an obviously-blue ring doing that contrast work instead.
-  const MINIMAP_LAND_COLOR = '#3a5c2e';
-  const MINIMAP_COASTLINE = '#d8c9a0';
-  svg.appendChild(svgEl('path', {
-    d: smoothClosedPath(MONTREAL_ISLAND_MAP_SHAPE), fill: MINIMAP_LAND_COLOR, stroke: MINIMAP_COASTLINE, 'stroke-width': 1.1,
-  }));
+  for (const piece of montrealPieces) drawRibbon(svg, piece, MONTREAL_CHANNEL_STYLE, MONTREAL_CHANNEL_WIDTH_BOOST);
+  for (const piece of montrealPieces) fillRibbon(svg, piece, MONTREAL_CHANNEL_STYLE, MONTREAL_CHANNEL_WIDTH_BOOST);
   const SOUTH_ISLAND_MARKER_RADIUS = 0.9;
   for (const p of [SAINTE_HELENE_MAP_POINT, NUNS_ISLAND_MAP_POINT]) {
     svg.appendChild(svgEl('circle', {
