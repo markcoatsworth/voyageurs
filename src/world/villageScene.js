@@ -16,16 +16,25 @@ const WALK_SPEED = 62; // px/sec, in this scene's own fixed pixel space
 
 const WATER_TOP = CANVAS_HEIGHT - 40;
 const DOCK_HALF_W = 20;
-const DOCK_X0 = CANVAS_WIDTH / 2 - DOCK_HALF_W;
-const DOCK_X1 = CANVAS_WIDTH / 2 + DOCK_HALF_W;
 const DOCK_TOP = WATER_TOP - 12;
+// The dock always sits at the horizontal centre of whichever world is
+// active — CANVAS_WIDTH itself for every ordinary single-screen village
+// (so dockX0/dockX1(CANVAS_WIDTH) reproduce the old fixed DOCK_X0/DOCK_X1
+// exactly), or MONTREAL_WORLD_WIDTH below for Montreal's own scrollable
+// scene. Functions, not constants, since which world is active is
+// per-visit state (see enter()), not fixed at module load.
+const dockX0 = (worldWidth) => worldWidth / 2 - DOCK_HALF_W;
+const dockX1 = (worldWidth) => worldWidth / 2 + DOCK_HALF_W;
 
-// x0/x1 match the dock's own walkable width (DOCK_X0/DOCK_X1) exactly, not
-// inset inside it — isWalkable() already clamps movement to that same
-// range, so an inset here used to pin a player walking to either literal
-// edge of the dock just outside the zone that would actually register
-// their reboard, leaving them stuck right at the edge unable to leave.
-const REBOARD_ZONE = { x0: DOCK_X0, x1: DOCK_X1, y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
+// Montreal alone gets a wider world than the fixed CANVAS_WIDTH every
+// other village's on-foot scene is confined to — real 1790s Montreal was
+// a genuine small city, not a one-street dock landing, and a single
+// 320px screen never had room for that. The camera (enter()/draw())
+// follows the player and scrolls horizontally within this width; every
+// other village keeps worldWidth === CANVAS_WIDTH, which pins the camera
+// at 0 always (see its clamp in draw()) and reproduces the exact old
+// non-scrolling behaviour with no special-casing needed anywhere else.
+const MONTREAL_WORLD_WIDTH = 640;
 
 // Anchor is the point where each building's front (door) sits; the
 // collision box is a simplified footprint under the sprite's walls, not
@@ -98,53 +107,67 @@ const TROIS_RIVIERES_ONFOOT_BUILDINGS = [
 ];
 
 // Montréal's on-foot layout — real 1790s Montreal, not the generic
-// procedural cluster every other village gets: two rows of houses
-// flanking a pair of grey-brick streets (MONTREAL_ROAD_V / MONTREAL_ROAD_H,
-// laid in draw()) that widen into a real square (MONTREAL_SQUARE, drawn in
-// draw()) where they cross — Place d'Armes, the city's actual old market
-// square, facing the basilica exactly like the real square does. The old
-// middle row of houses — and the one house that sat squarely on the
-// dock-to-church line — stay pulled out to leave the streets/square clear.
+// procedural cluster every other village gets, and (per MONTREAL_WORLD_WIDTH
+// above) laid out across a real scrollable city rather than one fixed
+// screen: two full rows of houses flanking a pair of grey-brick streets
+// (MONTREAL_ROAD_V / MONTREAL_ROAD_H, laid in draw()) that widen into a
+// real square (MONTREAL_SQUARE) where they cross, at the world's own
+// horizontal centre (same centre the dock sits at) — Place d'Armes, the
+// city's actual old market square, facing the basilica exactly like the
+// real square does.
 const MONTREAL_ONFOOT_BUILDINGS = [
-  // back row - upper residential quarter
-  { kind: 'stone', x: 50, y: 76, variant: 0, mirror: false },
-  { kind: 'stone', x: 110, y: 80, variant: 1, mirror: true },
+  // back row - upper residential quarter, both sides of the square
+  { kind: 'stone', x: 40, y: 74, variant: 0, mirror: false },
+  { kind: 'stone', x: 95, y: 78, variant: 1, mirror: true },
+  { kind: 'stone', x: 150, y: 76, variant: 2, mirror: false },
+  { kind: 'stone', x: 205, y: 80, variant: 0, mirror: true },
   // The Vieux Séminaire de Saint-Sulpice (built 1685-94) — real, and still
   // Montreal's oldest standing building — sits right beside Notre-Dame in
-  // reality, hence right next to the church here too. Its own twin-tower
-  // sprite (sprites.js, already used for the same building in the river
-  // view's terrain scenery) is much wider than the generic stone houses,
-  // so it replaces what used to be two crowded back-row slots (170/230)
-  // rather than squeezing in as a third.
-  { kind: 'seminary', x: 208, y: 84, mirror: false },
-  { kind: 'stone', x: 290, y: 76, variant: 1, mirror: false },
+  // reality, west of it, hence right next to the church here too. Its own
+  // twin-tower sprite (sprites.js, already used for the same building in
+  // the river view's terrain scenery) is much wider than the generic
+  // stone houses.
+  { kind: 'seminary', x: 265, y: 84, mirror: false },
+  // Notre-Dame Basilica - spiritual heart of the commercial capital, at
+  // the world's own horizontal centre.
+  { kind: 'church', x: 320, y: 92, mirror: false },
+  { kind: 'stone', x: 380, y: 76, variant: 1, mirror: false },
+  { kind: 'stone', x: 435, y: 80, variant: 2, mirror: true },
+  { kind: 'stone', x: 490, y: 74, variant: 0, mirror: false },
+  { kind: 'stone', x: 545, y: 78, variant: 1, mirror: true },
+  { kind: 'stone', x: 600, y: 76, variant: 2, mirror: false },
   // front row - waterfront warehouses/trading posts, along the real Rue
   // Saint-Paul (Montreal's oldest street, running along the old
-  // waterfront). The gun shop, right of the dock lane — walk up to it and
-  // you're handed a pistol (see game.js's acquirePistol / the trigger in
-  // update() below), mirroring the repair shop just left of the dock.
-  { kind: 'stone', x: 20, y: 150, variant: 1, mirror: false },
-  { kind: 'stone', x: 65, y: 154, variant: 2, mirror: true },
-  { kind: 'stone', x: 110, y: 152, variant: 0, mirror: false },
-  { kind: 'gunshop', x: 210, y: 152, mirror: false },
-  { kind: 'stone', x: 255, y: 150, variant: 0, mirror: true },
-  { kind: 'stone', x: 300, y: 154, variant: 1, mirror: false },
-  // Notre-Dame Basilica - spiritual heart of the commercial capital
-  { kind: 'church', x: 160, y: 92, mirror: false },
+  // waterfront). The gun shop sits just right of the dock lane — walk up
+  // to it and you're handed a pistol (see game.js's acquirePistol / the
+  // trigger in update() below), mirroring the repair shop just left of it.
+  { kind: 'stone', x: 30, y: 150, variant: 1, mirror: false },
+  { kind: 'stone', x: 80, y: 154, variant: 2, mirror: true },
+  { kind: 'stone', x: 130, y: 152, variant: 0, mirror: false },
+  { kind: 'stone', x: 180, y: 150, variant: 1, mirror: true },
+  { kind: 'stone', x: 230, y: 154, variant: 2, mirror: false },
+  { kind: 'gunshop', x: 370, y: 152, mirror: false },
+  { kind: 'stone', x: 420, y: 150, variant: 0, mirror: true },
+  { kind: 'stone', x: 470, y: 154, variant: 1, mirror: false },
+  { kind: 'stone', x: 520, y: 150, variant: 2, mirror: true },
+  { kind: 'stone', x: 570, y: 154, variant: 0, mirror: false },
+  { kind: 'stone', x: 610, y: 150, variant: 1, mirror: true },
 ];
 
-// Montréal's streets, in the scene's fixed pixel space. The vertical one
-// runs from just below the basilica down to the dock head; the horizontal
-// one spans the whole clearing. Grey brick, drawn on the ground under
-// everything else — see drawBrickRoad() and the isMontreal branch in
-// draw(). MONTREAL_SQUARE widens the two streets' crossing into a real
-// plaza in front of the church — Place d'Armes, Montreal's actual old
-// market square, which really does sit exactly there (drawn *before* the
-// two road strips below in draw(), so their narrower arms paint cleanly
-// over its edges rather than leaving a seam).
-const MONTREAL_ROAD_V = { x: 147, y: 96, w: 26, h: DOCK_TOP - 96 };
+// Montréal's streets, in the scene's own (wider) world pixel space. The
+// vertical one runs from just below the basilica down to the dock head;
+// the horizontal one spans the *whole world*, not just one screen's
+// width — see its draw() call, which uses the active worldWidth rather
+// than CANVAS_WIDTH. Grey brick, drawn on the ground under everything
+// else — see drawBrickRoad() and the isMontreal branch in draw().
+// MONTREAL_SQUARE widens the two streets' crossing into a real plaza in
+// front of the church — Place d'Armes, Montreal's actual old market
+// square — centred on the world's own centre (drawn *before* the two
+// road strips below in draw(), so their narrower arms paint cleanly over
+// its edges rather than leaving a seam).
+const MONTREAL_ROAD_V = { x: 307, y: 96, w: 26, h: DOCK_TOP - 96 };
 const MONTREAL_ROAD_H = { y: 104, h: 22 };
-const MONTREAL_SQUARE = { x: 124, y: 96, w: 72, h: 34 };
+const MONTREAL_SQUARE = { x: 280, y: 96, w: 80, h: 34 };
 const MONTREAL_SQUARE_CENTER = { x: MONTREAL_SQUARE.x + MONTREAL_SQUARE.w / 2, y: MONTREAL_SQUARE.y + MONTREAL_SQUARE.h / 2 };
 
 // The landward fortification wall, as a fixed backdrop strip along the very
@@ -209,36 +232,49 @@ const TREE_SPOTS = [
   { x: 262, y: 150 }, { x: 276, y: 92 },
   { x: 196, y: 96 },
 ];
-function treesFor(seed) {
-  return TREE_SPOTS.map((t, i) => ({
+// Montreal's own world is MONTREAL_WORLD_WIDTH (640) wide, twice
+// TREE_SPOTS' native 320 — reuse that same spot pattern for the near
+// half and mirror it (x -> 640-x, so it isn't just a repeated copy) for
+// the far half, rather than hand-placing a whole second set.
+const MONTREAL_TREE_SPOTS = [...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))];
+function treesFor(seed, spots = TREE_SPOTS) {
+  return spots.map((t, i) => ({
     ...t,
     variant: Math.floor(hashRange(seed, 700 + i, 0, 2.999)),
   }));
 }
 
-// The repair shop — always present, in the exact same spot regardless of
-// seed, so it's a landmark you can count on finding beside the dock every
-// time you step ashore (see the matching fixed placement in villages.js's
-// river view). Kept clear of the dock lane and low/close to shore, in a
-// different anchorY band than the procedural cluster above, so it never
-// fights with a randomly-placed cabin for the same footprint.
-const REPAIR_SHOP = {
-  isRepairShop: true,
-  mirror: false,
-  anchorX: DOCK_X0 - 25,
-  anchorY: WATER_TOP - 20,
-  footHalfW: 12,
-  footHeight: 22,
-};
+// The repair shop — always present, in the exact same spot *relative to
+// the dock* regardless of seed or which world is active, so it's a
+// landmark you can count on finding beside the dock every time you step
+// ashore (see the matching fixed placement in villages.js's river view).
+// A function of worldWidth (not a constant) for the same reason
+// dockX0/dockX1 are: Montreal's dock sits at a different absolute
+// position than every other village's. Kept clear of the dock lane and
+// low/close to shore, in a different anchorY band than the procedural
+// cluster above, so it never fights with a randomly-placed cabin for the
+// same footprint.
+function repairShopFor(worldWidth) {
+  return {
+    isRepairShop: true,
+    mirror: false,
+    anchorX: dockX0(worldWidth) - 25,
+    anchorY: WATER_TOP - 20,
+    footHalfW: 12,
+    footHeight: 22,
+  };
+}
 
 // The trader who runs the repair shop — standing just outside its door,
 // clear of the shop's own footprint and the dock lane, so walking up to
-// them is unambiguous. Fixed alongside REPAIR_SHOP for the same reason:
-// always in the same spot, not part of the seeded layout. Not a solid
-// obstacle (see isWalkable) — the trade triggers from proximity alone, so
-// blocking movement would just make lining up with them more fiddly for
-// no benefit.
-const TRADER_POS = { x: REPAIR_SHOP.anchorX + 19, y: REPAIR_SHOP.anchorY + 5 };
+// them is unambiguous. Worked out from the repair shop's own (worldWidth-
+// dependent) position on enter(), same reasoning as the gunsmith below.
+// Not a solid obstacle (see isWalkable) — the trade triggers from
+// proximity alone, so blocking movement would just make lining up with
+// them more fiddly for no benefit.
+function traderPosFor(repairShop) {
+  return { x: repairShop.anchorX + 19, y: repairShop.anchorY + 5 };
+}
 const TRADER_TRIGGER_RADIUS = 16;
 
 // Montréal only: the gunsmith stands a little forward of the gun shop's
@@ -249,7 +285,9 @@ const TRADER_TRIGGER_RADIUS = 16;
 const GUNSMITH_OFFSET = { x: 4, y: 11 };
 const GUNSMITH_TRIGGER_RADIUS = 20;
 
-const PLAYER_START = { x: CANVAS_WIDTH / 2, y: WATER_TOP - 10 };
+function playerStartFor(worldWidth) {
+  return { x: worldWidth / 2, y: WATER_TOP - 10 };
+}
 const PLAYER_HALF = 4; // simple circular-ish collision radius against buildings
 
 let patterns = null;
@@ -348,12 +386,13 @@ function overlapsBuilding(buildings, x, y) {
   return false;
 }
 
-// On land the player can walk anywhere within the scene margins; over the
-// water band they're restricted to the dock's width, i.e. walking the
-// plank back out to the boat rather than into the river.
-function isWalkable(buildings, x, y) {
-  if (x < 10 || x > CANVAS_WIDTH - 10 || y < 10 || y > CANVAS_HEIGHT - 4) return false;
-  if (y > WATER_TOP && (x < DOCK_X0 || x > DOCK_X1)) return false;
+// On land the player can walk anywhere within the scene margins (the
+// active world's own width, not always CANVAS_WIDTH — see worldWidth);
+// over the water band they're restricted to the dock's width, i.e.
+// walking the plank back out to the boat rather than into the river.
+function isWalkable(buildings, x, y, worldWidth) {
+  if (x < 10 || x > worldWidth - 10 || y < 10 || y > CANVAS_HEIGHT - 4) return false;
+  if (y > WATER_TOP && (x < dockX0(worldWidth) || x > dockX1(worldWidth))) return false;
   return !overlapsBuilding(buildings, x, y);
 }
 
@@ -422,18 +461,27 @@ export function createVillageScene() {
   let strideTimer = 0;
   let strideFrame = 0;
   let facingLeft = false;
-  let buildings = [...buildingsFor(0), REPAIR_SHOP];
+  let worldWidth = CANVAS_WIDTH;
+  let repairShop = repairShopFor(worldWidth);
+  let buildings = [...buildingsFor(0), repairShop];
   let trees = treesFor(0);
   let isQuebecCity = false;
   let isTroisRivieres = false;
   let isMontreal = false;
   let wasNearTrader = false;
+  let traderPos = traderPosFor(repairShop);
+  let reboardZone = { x0: dockX0(worldWidth), x1: dockX1(worldWidth), y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
   // The gunsmith who stands outside the Montréal gun shop — his scene
   // position, worked out from the gun shop building on enter(). null in
   // every other village (no gun shop, nobody to draw or range-check).
   let gunsmithPos = null;
   let wasNearGunsmith = false;
-  const player = { x: PLAYER_START.x, y: PLAYER_START.y };
+  const player = { x: worldWidth / 2, y: WATER_TOP - 10 };
+  // How far the camera has scrolled — always 0 when worldWidth ===
+  // CANVAS_WIDTH (every village but Montreal), which is exactly what
+  // reproduces the old fixed-screen behaviour with no special-casing
+  // needed in draw() beyond the one clamp below.
+  const camera = { x: 0 };
 
   return {
     enter(village) {
@@ -441,25 +489,31 @@ export function createVillageScene() {
       isQuebecCity = village && village.name === 'Quebec City';
       isTroisRivieres = village && village.name === 'Trois-Rivieres';
       isMontreal = village && village.name === 'Montreal';
+      worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : CANVAS_WIDTH;
+      repairShop = repairShopFor(worldWidth);
       buildings = isQuebecCity
-        ? [...buildingsForQuebecCity(), REPAIR_SHOP]
+        ? [...buildingsForQuebecCity(), repairShop]
         : isTroisRivieres
-        ? [...buildingsForTroisRivieres(), REPAIR_SHOP]
+        ? [...buildingsForTroisRivieres(), repairShop]
         : isMontreal
-        ? [...buildingsForMontreal(), REPAIR_SHOP]
-        : [...buildingsFor(seed), REPAIR_SHOP];
-      trees = treesClearOfBuildings(treesFor(seed), buildings);
+        ? [...buildingsForMontreal(), repairShop]
+        : [...buildingsFor(seed), repairShop];
+      trees = treesClearOfBuildings(treesFor(seed, isMontreal ? MONTREAL_TREE_SPOTS : TREE_SPOTS), buildings);
+      traderPos = traderPosFor(repairShop);
+      reboardZone = { x0: dockX0(worldWidth), x1: dockX1(worldWidth), y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
       const gunShop = buildings.find((b) => b.isGunShop) || null;
       gunsmithPos = gunShop
         ? { x: gunShop.anchorX + GUNSMITH_OFFSET.x, y: gunShop.anchorY + GUNSMITH_OFFSET.y }
         : null;
       wasNearGunsmith = false;
-      player.x = PLAYER_START.x;
-      player.y = PLAYER_START.y;
+      const start = playerStartFor(worldWidth);
+      player.x = start.x;
+      player.y = start.y;
+      camera.x = 0;
       strideTimer = 0;
       strideFrame = 0;
-      // Arriving right on top of the trigger radius (unlikely given
-      // PLAYER_START is up by the dock, but not impossible on a small
+      // Arriving right on top of the trigger radius (unlikely given the
+      // player start is up by the dock, but not impossible on a small
       // screen) shouldn't count as "just walked up" — only an actual
       // approach during this visit should.
       wasNearTrader = false;
@@ -490,8 +544,8 @@ export function createVillageScene() {
         const ny = player.y + dy * step;
         // Resolve each axis separately so sliding along a wall/edge works
         // instead of a diagonal move being blocked entirely by one axis.
-        if (isWalkable(buildings, nx, player.y)) player.x = nx;
-        if (isWalkable(buildings, player.x, ny)) player.y = ny;
+        if (isWalkable(buildings, nx, player.y, worldWidth)) player.x = nx;
+        if (isWalkable(buildings, player.x, ny, worldWidth)) player.y = ny;
 
         strideTimer += dt;
         if (strideTimer > 0.28) {
@@ -502,12 +556,18 @@ export function createVillageScene() {
         strideTimer = 0;
       }
 
+      // The camera follows the player, clamped so it never scrolls past
+      // the world's own edges — [0, 0] when worldWidth === CANVAS_WIDTH
+      // (every village but Montreal), which pins camera.x at 0 always and
+      // reproduces the old fixed-screen framing exactly.
+      camera.x = Math.max(0, Math.min(worldWidth - CANVAS_WIDTH, player.x - CANVAS_WIDTH / 2));
+
       const reboard = (
-        player.x >= REBOARD_ZONE.x0 && player.x <= REBOARD_ZONE.x1 &&
-        player.y >= REBOARD_ZONE.y0 && player.y <= REBOARD_ZONE.y1
+        player.x >= reboardZone.x0 && player.x <= reboardZone.x1 &&
+        player.y >= reboardZone.y0 && player.y <= reboardZone.y1
       );
 
-      const nearTrader = Math.hypot(player.x - TRADER_POS.x, player.y - TRADER_POS.y) < TRADER_TRIGGER_RADIUS;
+      const nearTrader = Math.hypot(player.x - traderPos.x, player.y - traderPos.y) < TRADER_TRIGGER_RADIUS;
       const tradeRequested = nearTrader && !wasNearTrader;
       wasNearTrader = nearTrader;
 
@@ -524,36 +584,47 @@ export function createVillageScene() {
     draw(ctx) {
       const pat = ensurePatterns(ctx);
 
+      // Everything below is drawn in world coordinates; this translate is
+      // what turns that into a scrolling view — screen x = world x -
+      // camera.x. When worldWidth === CANVAS_WIDTH (every village but
+      // Montreal), camera.x is always 0 (see its clamp in update()), so
+      // this translate is a no-op and every coordinate below lands
+      // exactly where the old fixed-screen version put it.
+      ctx.save();
+      ctx.translate(-camera.x, 0);
+
       ctx.fillStyle = pat.grass;
-      ctx.fillRect(0, 0, CANVAS_WIDTH, WATER_TOP);
+      ctx.fillRect(camera.x, 0, CANVAS_WIDTH, WATER_TOP);
       ctx.fillStyle = pat.sand;
-      ctx.fillRect(0, WATER_TOP - 6, CANVAS_WIDTH, 6);
+      ctx.fillRect(camera.x, WATER_TOP - 6, CANVAS_WIDTH, 6);
       ctx.fillStyle = pat.water;
-      ctx.fillRect(0, WATER_TOP, CANVAS_WIDTH, CANVAS_HEIGHT - WATER_TOP);
+      ctx.fillRect(camera.x, WATER_TOP, CANVAS_WIDTH, CANVAS_HEIGHT - WATER_TOP);
 
       // Montréal's streets and Place d'Armes — on the ground, under the
       // dock, trees, buildings and player. The square first, so the two
       // narrower road strips paint cleanly over its edges (see
       // MONTREAL_SQUARE's own comment), then the market well on top of
-      // all three, right in the middle of the plaza.
+      // all three, right in the middle of the plaza. The horizontal
+      // street spans the *whole world*, not just one screen.
       if (isMontreal) {
         drawBrickRoad(ctx, MONTREAL_SQUARE.x, MONTREAL_SQUARE.y, MONTREAL_SQUARE.w, MONTREAL_SQUARE.h);
-        drawBrickRoad(ctx, 0, MONTREAL_ROAD_H.y, CANVAS_WIDTH, MONTREAL_ROAD_H.h);
+        drawBrickRoad(ctx, 0, MONTREAL_ROAD_H.y, worldWidth, MONTREAL_ROAD_H.h);
         drawBrickRoad(ctx, MONTREAL_ROAD_V.x, MONTREAL_ROAD_V.y, MONTREAL_ROAD_V.w, MONTREAL_ROAD_V.h);
         drawMarketWell(ctx, MONTREAL_SQUARE_CENTER.x, MONTREAL_SQUARE_CENTER.y);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe
+      const dX0 = dockX0(worldWidth), dX1 = dockX1(worldWidth);
       ctx.fillStyle = '#3f2b1a';
-      ctx.fillRect(DOCK_X0 - 1, DOCK_TOP - 1, DOCK_X1 - DOCK_X0 + 2, CANVAS_HEIGHT - DOCK_TOP + 1);
+      ctx.fillRect(dX0 - 1, DOCK_TOP - 1, dX1 - dX0 + 2, CANVAS_HEIGHT - DOCK_TOP + 1);
       ctx.fillStyle = '#8a5a34';
-      ctx.fillRect(DOCK_X0, DOCK_TOP, DOCK_X1 - DOCK_X0, CANVAS_HEIGHT - DOCK_TOP);
+      ctx.fillRect(dX0, DOCK_TOP, dX1 - dX0, CANVAS_HEIGHT - DOCK_TOP);
       ctx.strokeStyle = '#5f3b20';
       ctx.lineWidth = 1;
       for (let py = DOCK_TOP + 5; py < CANVAS_HEIGHT; py += 5) {
         ctx.beginPath();
-        ctx.moveTo(DOCK_X0, py);
-        ctx.lineTo(DOCK_X1, py);
+        ctx.moveTo(dX0, py);
+        ctx.lineTo(dX1, py);
         ctx.stroke();
       }
 
@@ -566,13 +637,13 @@ export function createVillageScene() {
       // rather than needing a hard edge like a wall to hide its base
       // against. Off-centre (real Mont Royal sits northwest of Old
       // Montreal's waterfront, not dead behind the church) rather than
-      // centred.
+      // centred on the world.
       if (isMontreal) {
         const mrScale = 0.66;
         const mrW = mountRoyalSprite.width * mrScale;
         const mrH = mountRoyalSprite.height * mrScale;
         const mrBottom = 34;
-        ctx.drawImage(mountRoyalSprite, 128 - mrW / 2, mrBottom - mrH, mrW, mrH);
+        ctx.drawImage(mountRoyalSprite, 190 - mrW / 2, mrBottom - mrH, mrW, mrH);
       }
 
       // Québec City keeps the landward fortification wall as its backdrop
@@ -598,7 +669,7 @@ export function createVillageScene() {
       }
 
       // the canoe, parked at the water end of the dock
-      ctx.drawImage(parkedCanoeSprite, CANVAS_WIDTH / 2 - parkedCanoeSprite.width / 2, CANVAS_HEIGHT - parkedCanoeSprite.height + 6);
+      ctx.drawImage(parkedCanoeSprite, worldWidth / 2 - parkedCanoeSprite.width / 2, CANVAS_HEIGHT - parkedCanoeSprite.height + 6);
 
       // buildings, painter's-algorithm by anchor Y
       const order = buildings
@@ -618,9 +689,9 @@ export function createVillageScene() {
       }
 
       // the trader, standing outside the repair shop — drawn after the
-      // building pass (TRADER_POS.y sits below every building's anchorY,
+      // building pass (traderPos.y sits below every building's anchorY,
       // i.e. nearer the camera, so this is already correct painter's-order)
-      ctx.drawImage(traderSprite, TRADER_POS.x - traderSprite.width / 2, TRADER_POS.y - traderSprite.height + 2);
+      ctx.drawImage(traderSprite, traderPos.x - traderSprite.width / 2, traderPos.y - traderSprite.height + 2);
 
       // the gunsmith, outside the Montréal gun shop (null elsewhere) — same
       // painter's-order reasoning as the trader above
@@ -635,6 +706,8 @@ export function createVillageScene() {
       if (facingLeft) ctx.scale(-1, 1);
       ctx.drawImage(sprite, -sprite.width / 2, -sprite.height + 2);
       ctx.restore();
+
+      ctx.restore(); // matches the camera translate at the top of draw()
     },
   };
 }
