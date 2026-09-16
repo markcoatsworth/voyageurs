@@ -913,41 +913,56 @@ export function createVillageScene() {
       // the canoe, parked at the water end of the dock
       ctx.drawImage(parkedCanoeSprite, worldWidth / 2 - parkedCanoeSprite.width / 2, CANVAS_HEIGHT - parkedCanoeSprite.height + 6);
 
-      // buildings, painter's-algorithm by anchor Y
-      const order = buildings
-        .map((b) => ({ b, sprite: buildingSprite(b) }))
-        .sort((a, c) => a.b.anchorY - c.b.anchorY);
-      for (const { b, sprite } of order) {
-        const top = b.anchorY - sprite.height + 6;
-        if (b.mirror) {
-          ctx.save();
-          ctx.translate(b.anchorX, 0);
-          ctx.scale(-1, 1);
-          ctx.drawImage(sprite, -sprite.width / 2, top);
-          ctx.restore();
-        } else {
-          ctx.drawImage(sprite, b.anchorX - sprite.width / 2, top);
-        }
-      }
-
-      // the trader, standing outside the repair shop — drawn after the
-      // building pass (traderPos.y sits below every building's anchorY,
-      // i.e. nearer the camera, so this is already correct painter's-order)
-      ctx.drawImage(traderSprite, traderPos.x - traderSprite.width / 2, traderPos.y - traderSprite.height + 2);
-
-      // the gunsmith, outside the Montréal gun shop (null elsewhere) — same
-      // painter's-order reasoning as the trader above
-      if (gunsmithPos) {
-        ctx.drawImage(gunsmithSprite, gunsmithPos.x - gunsmithSprite.width / 2, gunsmithPos.y - gunsmithSprite.height + 2);
-      }
-
-      // player, mirrored horizontally for facing rather than separate frames
-      const sprite = walkerFrames[strideFrame];
-      ctx.save();
-      ctx.translate(player.x, player.y);
-      if (facingLeft) ctx.scale(-1, 1);
-      ctx.drawImage(sprite, -sprite.width / 2, -sprite.height + 2);
-      ctx.restore();
+      // Everything that stands on the ground — buildings, the trader,
+      // the gunsmith, and the player — drawn together in one painter's-
+      // algorithm pass, sorted by each one's own Y position (not
+      // buildings-then-player as two fixed passes, which is what used to
+      // let the player walk "in front of" a building they were actually
+      // standing north of/behind — e.g. Montréal's own tall churches).
+      // The trader/gunsmith's fixed spots happen to always sort after
+      // every building anyway (they stand out front of their own shops,
+      // south of every building's anchorY), so this reproduces their old
+      // always-drawn-last behaviour exactly; the player is the one whose
+      // Y genuinely changes every frame and actually needs sorting.
+      const walkerSprite = walkerFrames[strideFrame];
+      const drawOrder = [
+        ...buildings.map((b) => ({
+          y: b.anchorY,
+          draw: (c) => {
+            const sprite = buildingSprite(b);
+            const top = b.anchorY - sprite.height + 6;
+            if (b.mirror) {
+              c.save();
+              c.translate(b.anchorX, 0);
+              c.scale(-1, 1);
+              c.drawImage(sprite, -sprite.width / 2, top);
+              c.restore();
+            } else {
+              c.drawImage(sprite, b.anchorX - sprite.width / 2, top);
+            }
+          },
+        })),
+        {
+          y: traderPos.y,
+          draw: (c) => c.drawImage(traderSprite, traderPos.x - traderSprite.width / 2, traderPos.y - traderSprite.height + 2),
+        },
+        ...(gunsmithPos ? [{
+          y: gunsmithPos.y,
+          draw: (c) => c.drawImage(gunsmithSprite, gunsmithPos.x - gunsmithSprite.width / 2, gunsmithPos.y - gunsmithSprite.height + 2),
+        }] : []),
+        {
+          y: player.y,
+          draw: (c) => {
+            c.save();
+            c.translate(player.x, player.y);
+            if (facingLeft) c.scale(-1, 1);
+            c.drawImage(walkerSprite, -walkerSprite.width / 2, -walkerSprite.height + 2);
+            c.restore();
+          },
+        },
+      ];
+      drawOrder.sort((a, b) => a.y - b.y);
+      for (const item of drawOrder) item.draw(ctx);
 
       ctx.restore(); // matches the camera translate at the top of draw()
     },
