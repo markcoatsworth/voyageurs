@@ -180,11 +180,17 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   // / the trigger in update() below); see the Arsenal building itself,
   // further east, for where the map would actually put an armoury.
   { kind: 'gunshop', x: 365, y: 160, mirror: false },
-  { kind: 'stone', x: 420, y: 150, variant: 1, mirror: false },
+  // Notre-Dame-de-Bon-Secours — the real "Sailors' Chapel," rebuilt in
+  // stone in 1771 after the original 1655 chapel burned, genuinely right
+  // by the old port (today's Rue Saint-Paul, a short walk from the
+  // harbour) — replaces what was a generic stone house at this same
+  // dock-adjacent spot. (Its famous statue of the Virgin facing the
+  // harbour is a later, 1890s addition — left out here as anachronistic
+  // for the 1790s.)
+  { kind: 'church', x: 420, y: 150, mirror: false },
   // (gap here is The Parade, MONTREAL_PARADE — the town's open drill
   // ground, drawn as packed earth rather than a building row.)
-  // Monsieur de Longueuil's House (D on the map) and a small chapel
-  // beside it, near the east end.
+  // Monsieur de Longueuil's House, near the east end.
   { kind: 'stone', x: 575, y: 154, variant: 2, mirror: true },
   // The Arsenal building itself stays near the east gate, matching the
   // map's own "Yard for Canoes & Battoes" — but the gun shop you can
