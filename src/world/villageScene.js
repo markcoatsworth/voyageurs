@@ -174,19 +174,26 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   // (gap here is the Market Place itself, MONTREAL_SQUARE, at the world's
   // own centre — same spot the map's own Market Place sits, right at
   // the wharf.)
-  { kind: 'stone', x: 370, y: 152, variant: 0, mirror: true },
+  // The gun shop — right at the dock, on the opposite side from the
+  // repair shop (which sits at dockX0-25; this mirrors that same offset
+  // onto dockX1). Walk up to it for the pistol (game.js's acquirePistol
+  // / the trigger in update() below); see the Arsenal building itself,
+  // further east, for where the map would actually put an armoury.
+  { kind: 'gunshop', x: 365, y: 160, mirror: false },
   { kind: 'stone', x: 420, y: 150, variant: 1, mirror: false },
   // (gap here is The Parade, MONTREAL_PARADE — the town's open drill
   // ground, drawn as packed earth rather than a building row.)
   // Monsieur de Longueuil's House (D on the map) and a small chapel
   // beside it, near the east end.
   { kind: 'stone', x: 575, y: 154, variant: 2, mirror: true },
-  // The Arsenal and Yard for Canoes & Battoes, right by the east gate —
-  // the gun shop keeps its real gameplay job (walk up to it for the
-  // pistol, see game.js's acquirePistol / the trigger in update() below)
-  // but now sits where an arsenal actually would on the map, not
-  // arbitrarily next to the dock.
-  { kind: 'gunshop', x: 615, y: 152, mirror: false },
+  // The Arsenal building itself stays near the east gate, matching the
+  // map's own "Yard for Canoes & Battoes" — but the gun shop you can
+  // actually walk up to (game.js's acquirePistol / the trigger in
+  // update() below) sits right at the dock instead, mirroring the
+  // repair shop's own dockX0-25 offset onto the opposite side
+  // (dockX1+25): gameplay convenience over strict map fidelity, same
+  // trade-off the always-by-the-dock repair shop already makes.
+  { kind: 'stone', x: 615, y: 152, variant: 0, mirror: false },
 
   // The Mont-Royal district — north of the built-up town, in the field
   // around the mountain itself (MONTREAL_WORLD_TOP opened this ground up;
