@@ -29,12 +29,14 @@ Confirm the project/service before any `gcloud run deploy`. Never the
 `northbound` project.
 
 Before a deploy meant to ship (not just a local check), run `npm run
-bump-build` and commit the resulting `build-number.txt` along with the
-change — it's what makes the on-page build badge's number advance. It has to
-happen as its own committed step, not inside the build itself: `gcloud run
-deploy --source .` builds in an ephemeral container, so anything incremented
-during that build never makes it back to this checkout (see
-`scripts/bump-build.mjs`'s own comment).
+bump-build` and commit the resulting `build-number.txt` + `package.json`
+changes along with the rest of the change — it's what makes the on-page
+build badge's version (`0.1.<build number>` — no expectation of ever
+reaching a real "1.0"; the version exists to distinguish builds, not to
+promise semver) advance. It has to happen as its own committed step, not
+inside the build itself: `gcloud run deploy --source .` builds in an
+ephemeral container, so anything incremented during that build never makes
+it back to this checkout (see `scripts/bump-build.mjs`'s own comment).
 
 ## Layout
 
