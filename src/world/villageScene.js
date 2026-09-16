@@ -255,15 +255,23 @@ const MONTREAL_DIRT_PATH_SPUR = { x: 60, y: -22, w: 250, h: 14 };
 // The landward fortification wall, as a fixed backdrop strip along the very
 // top of the scene — behind the back row of buildings, same "wall set back
 // behind the town, not along the water" read as the river view's own
-// QUEBEC_CITY_RAMPART_DEPTH. Tiled edge to edge across the fixed 320px
-// scene width using the sprite's own drawn width, same tiling approach as
-// villages.js's river-view wall. Montreal was itself a walled city right
-// through the 1790s (the walls came down 1804-1817), so it gets the same
-// backdrop as Quebec City rather than the open-forest treeline every other
-// village has.
+// QUEBEC_CITY_RAMPART_DEPTH. Tiled edge to edge across whichever world is
+// active (worldWidth, not always CANVAS_WIDTH — see draw()), same tiling
+// approach as villages.js's river-view wall.
 const WALL_TILE_W = 64;
 const CITY_WALL_Y = 6;
-const CITY_WALL_TILES = Math.ceil(CANVAS_WIDTH / WALL_TILE_W) + 1;
+const CITY_WALL_H = 26; // the rampart sprite's own drawn height
+
+// Montreal's wall is a real, solid obstacle (isWalkable() checks this),
+// not just a backdrop like Quebec City's — you can't just stroll through
+// a fortification. MONTREAL_WALL_GATE is the one break in it: two whole
+// tiles (256-384, the pair straddling x=320) left undrawn in the tiling
+// loop below *and* excluded from the collision band, so the visual gap
+// and the walkable gap are pixel-for-pixel the same gate — right where
+// MONTREAL_DIRT_PATH_V actually crosses the wall on its way up to the
+// Mont-Royal district.
+const MONTREAL_WALL_GATE = { x0: 256, x1: 384 };
+const MONTREAL_WALL_BAND = { y0: CITY_WALL_Y, y1: CITY_WALL_Y + CITY_WALL_H, gateX0: MONTREAL_WALL_GATE.x0, gateX1: MONTREAL_WALL_GATE.x1 };
 
 function buildingsForQuebecCity() {
   return QUEBEC_CITY_ONFOOT_BUILDINGS.map((b) => ({
@@ -499,9 +507,12 @@ function overlapsBuilding(buildings, x, y) {
 // active world's own width, not always CANVAS_WIDTH — see worldWidth);
 // over the water band they're restricted to the dock's width, i.e.
 // walking the plank back out to the boat rather than into the river.
-function isWalkable(buildings, x, y, worldWidth, worldTop) {
+// wallBand (null everywhere but Montreal — see its own comment) blocks
+// the fortification wall's own strip except at the gate gap.
+function isWalkable(buildings, x, y, worldWidth, worldTop, wallBand) {
   if (x < 10 || x > worldWidth - 10 || y < worldTop + 10 || y > CANVAS_HEIGHT - 4) return false;
   if (y > WATER_TOP && (x < dockX0(worldWidth) || x > dockX1(worldWidth))) return false;
+  if (wallBand && y >= wallBand.y0 && y <= wallBand.y1 && (x < wallBand.gateX0 || x > wallBand.gateX1)) return false;
   return !overlapsBuilding(buildings, x, y);
 }
 
@@ -612,6 +623,7 @@ export function createVillageScene() {
   let facingLeft = false;
   let worldWidth = CANVAS_WIDTH;
   let worldTop = 0;
+  let wallBand = null;
   let repairShop = repairShopFor(worldWidth);
   let buildings = [...buildingsFor(0), repairShop];
   let trees = treesFor(0);
@@ -641,6 +653,7 @@ export function createVillageScene() {
       isMontreal = village && village.name === 'Montreal';
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
+      wallBand = isMontreal ? MONTREAL_WALL_BAND : null;
       repairShop = repairShopFor(worldWidth);
       buildings = isQuebecCity
         ? [...buildingsForQuebecCity(), repairShop]
@@ -696,8 +709,8 @@ export function createVillageScene() {
         const ny = player.y + dy * step;
         // Resolve each axis separately so sliding along a wall/edge works
         // instead of a diagonal move being blocked entirely by one axis.
-        if (isWalkable(buildings, nx, player.y, worldWidth, worldTop)) player.x = nx;
-        if (isWalkable(buildings, player.x, ny, worldWidth, worldTop)) player.y = ny;
+        if (isWalkable(buildings, nx, player.y, worldWidth, worldTop, wallBand)) player.x = nx;
+        if (isWalkable(buildings, player.x, ny, worldWidth, worldTop, wallBand)) player.y = ny;
 
         strideTimer += dt;
         if (strideTimer > 0.28) {
@@ -805,12 +818,16 @@ export function createVillageScene() {
       // mountain glimpsed between trees would look, rather than needing a
       // hard edge like a wall to hide its base against. Off-centre (real
       // Mont-Royal sits northwest of Old Montreal's waterfront, not dead
-      // behind the church) rather than centred on the world.
+      // behind the church) rather than centred on the world. Its base
+      // (mrBottom) sits north of the wall's own band (MONTREAL_WALL_BAND,
+      // drawn next) rather than overlapping it — the mountain is genuinely
+      // outside the walled town, not something the fortifications cut
+      // across.
       if (isMontreal) {
         const mrScale = 1.7;
         const mrW = montRoyalSprite.width * mrScale;
         const mrH = montRoyalSprite.height * mrScale;
-        const mrBottom = 46;
+        const mrBottom = MONTREAL_WALL_BAND.y0 - 20;
         ctx.drawImage(montRoyalSprite, 190 - mrW / 2, mrBottom - mrH, mrW, mrH);
       }
 
@@ -827,10 +844,19 @@ export function createVillageScene() {
       // further north sits genuinely *outside* the walls, matching the
       // map's own farmland-beyond-the-fortifications. Behind everything
       // else, so it never occludes a building or the player.
+      //
+      // Montreal's wall is a real obstacle (isWalkable()'s wallBand
+      // check), not just backdrop like Quebec City's — so the one gate
+      // (MONTREAL_WALL_GATE, where MONTREAL_DIRT_PATH_V actually crosses
+      // it) skips both tiles it falls under here too, leaving a real gap
+      // in the stonework exactly where the collision gap is, rather than
+      // an invisible hole in a solid-looking wall.
       if (isQuebecCity || isMontreal) {
         const wallTiles = Math.ceil(worldWidth / WALL_TILE_W) + 1;
         for (let i = 0; i < wallTiles; i++) {
-          ctx.drawImage(rampartSprite, i * WALL_TILE_W, CITY_WALL_Y);
+          const tileX = i * WALL_TILE_W;
+          if (isMontreal && tileX < MONTREAL_WALL_GATE.x1 && tileX + WALL_TILE_W > MONTREAL_WALL_GATE.x0) continue;
+          ctx.drawImage(rampartSprite, tileX, CITY_WALL_Y);
         }
       }
       if (!isQuebecCity) {
