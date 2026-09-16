@@ -157,12 +157,19 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   // Monsieur de Vaudreuil's — the Governor General's Palace, marked C on
   // the map, near the Parade — the grandest house in town, even if the
   // sprite itself is the same stone building every other house here uses.
-  { kind: 'stone', x: 490, y: 78, variant: 2, mirror: true },
+  { kind: 'stone', x: 478, y: 78, variant: 2, mirror: true },
+  // Château de Ramezay (built 1705 for Montreal's own governor, Claude de
+  // Ramezay — a real, separate building from Vaudreuil's own residence
+  // just west of it here, and still standing today as a museum). By the
+  // 1790s it was serving as the British governors' own residence in
+  // Montreal — two genuine seats of government sitting right next to
+  // each other, which is exactly why it belongs beside the Palace.
+  { kind: 'stone', x: 520, y: 76, variant: 0, mirror: false },
   // The Jesuits' Church, Convent and Gardens — the map's own single
   // largest walled garden, east end. A second real church (not a
   // duplicate sprite mistake — Montreal genuinely had both a parish
   // church and a separate Jesuit church at once).
-  { kind: 'church', x: 550, y: 92, mirror: true },
+  { kind: 'church', x: 562, y: 92, mirror: true },
   { kind: 'stone', x: 600, y: 76, variant: 0, mirror: false },
 
   // --- front row (waterfront, Rue Saint-Paul) ---
