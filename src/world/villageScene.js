@@ -557,32 +557,36 @@ export function createVillageScene() {
         ctx.stroke();
       }
 
-      // Mont Royal itself, rising behind the wall — real Montreal's one
-      // unmistakable landmark, the mountain (233m) the city and island are
-      // both named for (same sprite already used for it in the river
-      // view's own terrain scenery). Scaled down and drawn with its base
-      // right at the wall's own bottom edge (CITY_WALL_Y + wall height),
-      // so the wall (drawn next, on top) covers the mountain's base
-      // entirely — only its upper slopes and peak show, above the wall,
-      // the way a background mountain actually reads from a town in front
-      // of it. Off-centre (real Mont Royal sits northwest of Old
-      // Montreal's waterfront, not dead behind it) rather than centred
-      // behind the church.
+      // Mont Royal itself — real Montreal's one unmistakable landmark,
+      // the mountain (233m) the city and island are both named for (same
+      // sprite already used for it in the river view's own terrain
+      // scenery). Scaled down and drawn *before* the treeline just below,
+      // so the trees' own canopies overlap its lower slopes the way a
+      // real background mountain glimpsed between trees would look,
+      // rather than needing a hard edge like a wall to hide its base
+      // against. Off-centre (real Mont Royal sits northwest of Old
+      // Montreal's waterfront, not dead behind the church) rather than
+      // centred.
       if (isMontreal) {
         const mrScale = 0.66;
         const mrW = mountRoyalSprite.width * mrScale;
         const mrH = mountRoyalSprite.height * mrScale;
-        const mrBottom = CITY_WALL_Y + 26; // the rampart sprite's own height
+        const mrBottom = 34;
         ctx.drawImage(mountRoyalSprite, 128 - mrW / 2, mrBottom - mrH, mrW, mrH);
       }
 
-      // Québec City and Montréal both get the landward fortification wall
-      // as their backdrop instead of the usual treeline framing every
-      // other village's clearing — a walled capital doesn't back onto
-      // open forest, and Montreal genuinely was walled right through the
-      // 1790s (see CITY_WALL_Y's own comment). Behind everything else, so
-      // it never occludes a building or the player.
-      if (isQuebecCity || isMontreal) {
+      // Québec City keeps the landward fortification wall as its backdrop
+      // instead of the usual treeline framing every other village's
+      // clearing — a walled capital doesn't back onto open forest.
+      // Montreal doesn't get this: unlike Quebec City (still walled
+      // today, the image most people actually associate with a walled
+      // colonial town), Montreal's own 1717-1744 walls came down in the
+      // early 1800s and aren't part of how the real city reads now, so it
+      // keeps the ordinary treeline instead (which, for Montreal, now
+      // also gives Mont Royal above something to be partly seen through
+      // rather than a flat hard edge). Behind everything else, so it
+      // never occludes a building or the player.
+      if (isQuebecCity) {
         for (let i = 0; i < CITY_WALL_TILES; i++) {
           ctx.drawImage(rampartSprite, i * WALL_TILE_W, CITY_WALL_Y);
         }
