@@ -485,13 +485,13 @@ export const NUNS_ISLAND_MAP_POINT = project({ lat: 45.46111, lon: -73.54333 });
 // shape, since it's a rough stretch of the channel, not land.
 export const LACHINE_RAPIDS_MAP_POINT = project({ lat: 45.4331, lon: -73.6808 });
 
-// Mount Royal (233m, the island's real central landmark — see
-// terrain.js's own MOUNT_ROYAL_D for its in-game counterpart) — real
+// Mont-Royal (233m, the island's real central landmark — see
+// terrain.js's own MONT_ROYAL_D for its in-game counterpart) — real
 // coordinates, same survey this file's other Montreal-area points use.
 // minimap.js uses this (together with the Old Montreal/dock point above)
 // to shade a "developed" patch into the island's interior instead of
 // leaving it flat green.
-export const MOUNT_ROYAL_MAP_POINT = project({ lat: 45.5045, lon: -73.5878 });
+export const MONT_ROYAL_MAP_POINT = project({ lat: 45.5045, lon: -73.5878 });
 
 // Every real point across all three segments, for the minimap to draw as
 // one continuous picture regardless of which segment is actually active.

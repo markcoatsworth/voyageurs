@@ -3,7 +3,7 @@ import { centerX, widthAt, braidAt, southIslandAt, BRAID_PERIOD } from './river/
 import { FEATURE_ISLAND_RANGE, SOUTH_ISLAND_RANGE } from './river/islands.js';
 import { createWaterTile, createGrassTile, createBankTile, createSandTile } from './tiles.js';
 import {
-  createPineTreeSprite, createPebbleSprite, createMountRoyalSprite, createWindmillSprite,
+  createPineTreeSprite, createPebbleSprite, createMontRoyalSprite, createWindmillSprite,
   createChurchSprite, createCabinSprite, createSulpicianTowersSprite, createRuinedFortSprite,
   createStoneBuildingSprite,
 } from './sprites.js';
@@ -33,7 +33,7 @@ const PEBBLE_CHANCE = 0.8;
 let patterns = null;
 const treeSprites = [0, 1, 2].map(createPineTreeSprite);
 const pebbleSprites = [0, 1, 2].map(createPebbleSprite);
-const mountRoyalSprite = createMountRoyalSprite();
+const montRoyalSprite = createMontRoyalSprite();
 const windmillSprite = createWindmillSprite();
 const islandChurchSprite = createChurchSprite();
 const farmhouseSprites = [0, 1, 2].map(createCabinSprite);
@@ -49,7 +49,7 @@ const heleneManorSprite = createStoneBuildingSprite(1);
 // they sit safely on the landmass regardless of its exact authored shape.
 // river/islands.js's surveyed real peak (abeam Verdun/Old Montréal) — see
 // its module comment for where these numbers come from.
-const MOUNT_ROYAL_D = 60000 + 2172; // just upstream of the dock (2168), near the real peak (2177.6)
+const MONT_ROYAL_D = 60000 + 2172; // just upstream of the dock (2168), near the real peak (2177.6)
 // spriteVariant is a plain fixed index (not hashed) — each point is
 // already an explicit, hand-placed coordinate, so which of the three
 // near-identical pine sprites it uses is just as authored as where it is.
@@ -86,7 +86,7 @@ const LACHINE_D = 60000 + 2225; // parish, south shore, inside the rapids stretc
 // 1685-94 for the Sulpicians; two of its stone towers still stand today)
 // sits inland from the immediate waterfront near the mountain's base, not
 // right on the shore like the others — placed with a small |fracFromCenter|
-// accordingly, just past Mount Royal itself (MOUNT_ROYAL_D) so the two
+// accordingly, just past Mont-Royal itself (MONT_ROYAL_D) so the two
 // don't overlap. Longue-Pointe (parish erected 1724) and Pointe-aux-
 // Trembles (parish 1674, stone church 1705) are both real south-shore
 // villages; Pointe-aux-Trembles' actual church sits close to — but the
@@ -115,7 +115,7 @@ const FORT_SENNEVILLE_D = 60000 + 2295;
 // long, narrow "côte" lots lined both banks almost continuously, each
 // farmhouse facing the water with its fields behind, which is why these
 // sit right at the island's edge (fracFromCenter near +/-1) rather than
-// inland like Mount Royal. Kept clear of Montreal's own MONTREAL_SPAN
+// inland like Mont-Royal. Kept clear of Montreal's own MONTREAL_SPAN
 // footprint (local 2140-2196, south side only — the north side there is
 // fine, see the Sault-au-Récollet marker above) and spaced apart from the
 // tree points above so the two scatters read as one settled shoreline
@@ -313,13 +313,13 @@ function drawSouthIslands(ctx, worldDistance, cameraWorldX) {
   ctx.fill();
 }
 
-// Mount Royal + a handful of fixed trees on the Island of Montreal (see the
-// ISLAND_TREE_POINTS/MOUNT_ROYAL_D comment above) — drawn after the sand
+// Mont-Royal + a handful of fixed trees on the Island of Montreal (see the
+// ISLAND_TREE_POINTS/MONT_ROYAL_D comment above) — drawn after the sand
 // fill above so they sit on top of the landmass, not painted over by it.
 function drawFeatureIslandScenery(ctx, worldDistance, cameraWorldX) {
   // Painter's algorithm — farthest (smallest z) first — same reasoning as
   // villages.js's drawOneVillage: with this many fixed points now (farms,
-  // churches, the windmill, trees, Mount Royal) two can land close enough
+  // churches, the windmill, trees, Mont-Royal) two can land close enough
   // in view for draw order to actually matter, unlike the handful this
   // started with.
   const candidates = [];
@@ -339,7 +339,7 @@ function drawFeatureIslandScenery(ctx, worldDistance, cameraWorldX) {
     candidates.push({ z: worldDistance - d, worldX, sprite, anchorFrac });
   };
 
-  add(MOUNT_ROYAL_D, 0, mountRoyalSprite, 0.62);
+  add(MONT_ROYAL_D, 0, montRoyalSprite, 0.62);
   add(WINDMILL_D, 0.88, windmillSprite, 0.9);
   add(SAULT_AU_RECOLLET_D, 0.85, islandChurchSprite, 0.9);
   add(LACHINE_D, -0.85, islandChurchSprite, 0.9);

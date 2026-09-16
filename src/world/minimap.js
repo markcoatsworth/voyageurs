@@ -16,7 +16,7 @@
 import {
   SEGMENTS, ALL_POINTS, LAC_SAINT_JEAN_SHAPE,
   MONTREAL_ISLAND_MAP_SHAPE, SAINTE_HELENE_MAP_POINT, NUNS_ISLAND_MAP_POINT, LACHINE_RAPIDS_MAP_POINT,
-  MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE, MOUNT_ROYAL_MAP_POINT,
+  MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE, MONT_ROYAL_MAP_POINT,
 } from './river/route.js';
 
 // Width/height of the visible window, in the same km-equivalent units as
@@ -173,7 +173,7 @@ export function createMinimap() {
 
   // A soft "developed area" tint for the Island of Montreal's interior
   // (drawn further down, clipped to MONTREAL_ISLAND_MAP_SHAPE) — a warm
-  // radial fade centered between Old Montreal's dock and Mount Royal,
+  // radial fade centered between Old Montreal's dock and Mont-Royal,
   // fading to fully transparent (so the plain island green shows through)
   // a few km out, rather than a hard-edged patch. Defs go in one block up
   // front since SVG only resolves url(#id) references, not element order.
@@ -232,13 +232,13 @@ export function createMinimap() {
   }));
 
   // The developed-area tint itself — centered between Old Montreal's real
-  // dock coordinate and Mount Royal (both real, both close together, so
+  // dock coordinate and Mont-Royal (both real, both close together, so
   // one soft patch covers the actual historic core rather than the whole
   // island) instead of leaving the interior flat, undifferentiated green.
   const montrealDockPoint = SEGMENTS.lawrenceWest.points.find((p) => p.name === 'Montreal');
   const developedCenter = {
-    x: (montrealDockPoint.x + MOUNT_ROYAL_MAP_POINT.x) / 2,
-    y: (montrealDockPoint.y + MOUNT_ROYAL_MAP_POINT.y) / 2,
+    x: (montrealDockPoint.x + MONT_ROYAL_MAP_POINT.x) / 2,
+    y: (montrealDockPoint.y + MONT_ROYAL_MAP_POINT.y) / 2,
   };
   svg.appendChild(svgEl('circle', {
     cx: developedCenter.x, cy: developedCenter.y, r: 6.5,

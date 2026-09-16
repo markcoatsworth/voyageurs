@@ -368,7 +368,7 @@ function reachSign(v) {
 // The opposite direction from reachSign(v) — "inland, away from the
 // water" instead of "out into it." Buildings/church/repair-shop placement
 // all measure depth from the shore in this direction; for Montreal that's
-// -side (toward the island's own bulk/Mount Royal), same flip as reachSign
+// -side (toward the island's own bulk/Mont-Royal), same flip as reachSign
 // and for the same reason (see its comment) — everywhere else it's just
 // +side, same as using v.side directly, which is what every non-Montreal
 // call site below still does.

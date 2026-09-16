@@ -7,7 +7,7 @@ import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
 import {
   createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
   createStoneBuildingSprite, createChurchSprite, createRampartSprite, createGunShopSprite, createGunsmithSprite,
-  createSulpicianTowersSprite, createMountRoyalSprite,
+  createSulpicianTowersSprite, createMontRoyalSprite,
 } from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../shared/hash.js';
@@ -235,8 +235,21 @@ const TREE_SPOTS = [
 // Montreal's own world is MONTREAL_WORLD_WIDTH (640) wide, twice
 // TREE_SPOTS' native 320 — reuse that same spot pattern for the near
 // half and mirror it (x -> 640-x, so it isn't just a repeated copy) for
-// the far half, rather than hand-placing a whole second set.
-const MONTREAL_TREE_SPOTS = [...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))];
+// the far half, rather than hand-placing a whole second set. TREE_SPOTS'
+// own (312, 158) sits near the *old* 320-wide screen's right edge — fine
+// framing there, but at x=312 in the new 640-wide world that's now right
+// next to the dock/square at the world's centre (320) instead, and its
+// mirror lands at 328, right beside it: two pines planted almost on top
+// of the dock. Drop any *front-row* spot (y > 100 — the back/top framing
+// trees near Mont-Royal and the church stay untouched) within
+// DOCK_CLEARANCE_X of the world centre, both before and after mirroring,
+// rather than special-casing that one coordinate, so the same fix holds
+// if this list changes later.
+const DOCK_CLEARANCE_X = 40;
+function clearOfDock(spots) {
+  return spots.filter((t) => t.y <= 100 || Math.abs(t.x - MONTREAL_WORLD_WIDTH / 2) >= DOCK_CLEARANCE_X);
+}
+const MONTREAL_TREE_SPOTS = clearOfDock([...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))]);
 function treesFor(seed, spots = TREE_SPOTS) {
   return spots.map((t, i) => ({
     ...t,
@@ -306,7 +319,7 @@ const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
 const churchSprite = createChurchSprite();
 const rampartSprite = createRampartSprite();
 const seminarySprite = createSulpicianTowersSprite();
-const mountRoyalSprite = createMountRoyalSprite();
+const montRoyalSprite = createMontRoyalSprite();
 const repairShopSprite = createRepairShopSprite();
 const gunShopSprite = createGunShopSprite();
 const traderSprite = createTraderSprite();
@@ -628,22 +641,22 @@ export function createVillageScene() {
         ctx.stroke();
       }
 
-      // Mont Royal itself — real Montreal's one unmistakable landmark,
+      // Mont-Royal itself — real Montreal's one unmistakable landmark,
       // the mountain (233m) the city and island are both named for (same
       // sprite already used for it in the river view's own terrain
-      // scenery). Scaled down and drawn *before* the treeline just below,
-      // so the trees' own canopies overlap its lower slopes the way a
-      // real background mountain glimpsed between trees would look,
-      // rather than needing a hard edge like a wall to hide its base
-      // against. Off-centre (real Mont Royal sits northwest of Old
-      // Montreal's waterfront, not dead behind the church) rather than
-      // centred on the world.
+      // scenery). Drawn big — a real hill dominating the skyline, not a
+      // background detail — and *before* the treeline just below, so the
+      // trees' own canopies overlap its lower slopes the way a real
+      // mountain glimpsed between trees would look, rather than needing a
+      // hard edge like a wall to hide its base against. Off-centre (real
+      // Mont-Royal sits northwest of Old Montreal's waterfront, not dead
+      // behind the church) rather than centred on the world.
       if (isMontreal) {
-        const mrScale = 0.66;
-        const mrW = mountRoyalSprite.width * mrScale;
-        const mrH = mountRoyalSprite.height * mrScale;
-        const mrBottom = 34;
-        ctx.drawImage(mountRoyalSprite, 190 - mrW / 2, mrBottom - mrH, mrW, mrH);
+        const mrScale = 1.7;
+        const mrW = montRoyalSprite.width * mrScale;
+        const mrH = montRoyalSprite.height * mrScale;
+        const mrBottom = 46;
+        ctx.drawImage(montRoyalSprite, 190 - mrW / 2, mrBottom - mrH, mrW, mrH);
       }
 
       // Québec City keeps the landward fortification wall as its backdrop

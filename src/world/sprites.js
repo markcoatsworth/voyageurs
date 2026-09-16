@@ -250,13 +250,13 @@ export function createIslandSprite() {
   });
 }
 
-// Mount Royal — the hill at the centre of the Island of Montreal (see
+// Mont-Royal — the hill at the centre of the Island of Montreal (see
 // world/river/islands.js), drawn top-down as a big rounded forested mound
 // (same shading-band approach as createIslandSprite, just much bigger, and
 // no water ripple — it sits on dry land, not in the channel) with the real
 // illuminated cross at its peak as a small pale accent. A landmark, not a
 // hazard: terrain.js draws it well clear of either channel.
-export function createMountRoyalSprite() {
+export function createMontRoyalSprite() {
   const w = 96, h = 76;
   return makeSprite(w, h, (ctx) => {
     const cx = w / 2, cy = h / 2 + 6;

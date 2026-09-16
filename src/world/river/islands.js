@@ -34,7 +34,7 @@ const LAWRENCE_WEST = 60000;
 // lopsided, narrow for its first third out of the west tip, then bulging
 // hard — the north/Rivière-des-Prairies shore stays close to the straight
 // axis the whole way, so almost all the width variation comes from the
-// south shore ballooning out toward Verdun/Old Montréal/Mount Royal,
+// south shore ballooning out toward Verdun/Old Montréal/Mont-Royal,
 // roughly 60-70% of the way along from the west tip — before narrowing
 // again into the east tip. `offset`/`half` below are that real profile
 // (normalized to its own peak, then scaled to a peak that reads well at
@@ -81,7 +81,7 @@ const MONTREAL_ISLAND_KEYFRAMES = [
   { d: LAWRENCE_WEST + 2112.8, offset: 1.32, half: 0.99 },
   { d: LAWRENCE_WEST + 2134.4, offset: 3.30, half: 2.48 },
   { d: LAWRENCE_WEST + 2156.0, offset: 5.06, half: 3.80 },
-  { d: LAWRENCE_WEST + 2177.6, offset: 8.00, half: 6.00 },   // widest — abeam Verdun/Mount Royal
+  { d: LAWRENCE_WEST + 2177.6, offset: 8.00, half: 6.00 },   // widest — abeam Verdun/Mont-Royal
   { d: LAWRENCE_WEST + 2199.2, offset: 7.37, half: 5.53 },
   { d: LAWRENCE_WEST + 2220.8, offset: 6.94, half: 5.20 },
   { d: LAWRENCE_WEST + 2242.4, offset: 4.82, half: 3.62 },
