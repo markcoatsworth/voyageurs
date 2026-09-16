@@ -7,7 +7,7 @@ import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
 import {
   createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
   createStoneBuildingSprite, createChurchSprite, createRampartSprite, createGunShopSprite, createGunsmithSprite,
-  createSulpicianTowersSprite,
+  createSulpicianTowersSprite, createMountRoyalSprite,
 } from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../shared/hash.js';
@@ -268,6 +268,7 @@ const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
 const churchSprite = createChurchSprite();
 const rampartSprite = createRampartSprite();
 const seminarySprite = createSulpicianTowersSprite();
+const mountRoyalSprite = createMountRoyalSprite();
 const repairShopSprite = createRepairShopSprite();
 const gunShopSprite = createGunShopSprite();
 const traderSprite = createTraderSprite();
@@ -554,6 +555,25 @@ export function createVillageScene() {
         ctx.moveTo(DOCK_X0, py);
         ctx.lineTo(DOCK_X1, py);
         ctx.stroke();
+      }
+
+      // Mont Royal itself, rising behind the wall — real Montreal's one
+      // unmistakable landmark, the mountain (233m) the city and island are
+      // both named for (same sprite already used for it in the river
+      // view's own terrain scenery). Scaled down and drawn with its base
+      // right at the wall's own bottom edge (CITY_WALL_Y + wall height),
+      // so the wall (drawn next, on top) covers the mountain's base
+      // entirely — only its upper slopes and peak show, above the wall,
+      // the way a background mountain actually reads from a town in front
+      // of it. Off-centre (real Mont Royal sits northwest of Old
+      // Montreal's waterfront, not dead behind it) rather than centred
+      // behind the church.
+      if (isMontreal) {
+        const mrScale = 0.66;
+        const mrW = mountRoyalSprite.width * mrScale;
+        const mrH = mountRoyalSprite.height * mrScale;
+        const mrBottom = CITY_WALL_Y + 26; // the rampart sprite's own height
+        ctx.drawImage(mountRoyalSprite, 128 - mrW / 2, mrBottom - mrH, mrW, mrH);
       }
 
       // Québec City and Montréal both get the landward fortification wall
