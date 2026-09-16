@@ -705,12 +705,14 @@ await step('montreal: walk up to the gunsmith, get the pistol', () => {
   if (!g.game.ui.weaponPad.classList.contains('hidden')) {
     throw new Error('weapon controls showing before the pistol is picked up');
   }
-  // The gunsmith stands outside the gun shop, along the bank right of the
-  // dock. Walk the waterfront over to him, then nudge up toward the shop.
+  // The gunsmith stands outside the Arsenal, near the east gate — the
+  // Jefferys 1738 map's own "Yard for Canoes & Battoes" — well east along
+  // the waterfront (Rue Saint-Paul) at the same height as the dock, so
+  // walking straight along the bank reaches him with no vertical approach
+  // needed any more.
   let armed = false;
   for (let i = 0; i < 600 && !armed; i++) {
     g.input.state.right = true;
-    g.input.state.up = i > 120; // reach his column first, then close in
     g.game.update(1 / 30);
     if (g.game.weapons.has('pistol')) armed = true;
   }

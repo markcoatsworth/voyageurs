@@ -121,52 +121,72 @@ const TROIS_RIVIERES_ONFOOT_BUILDINGS = [
   { kind: 'church', x: 160, y: 100, mirror: false },
 ];
 
-// Montréal's on-foot layout — real 1790s Montreal, not the generic
-// procedural cluster every other village gets, and (per MONTREAL_WORLD_WIDTH
-// above) laid out across a real scrollable city rather than one fixed
-// screen: two full rows of houses flanking a pair of grey-brick streets
-// (MONTREAL_ROAD_V / MONTREAL_ROAD_H, laid in draw()) that widen into a
-// real square (MONTREAL_SQUARE) where they cross, at the world's own
-// horizontal centre (same centre the dock sits at) — Place d'Armes, the
-// city's actual old market square, facing the basilica exactly like the
-// real square does.
+// Montréal's on-foot layout — rebuilt from an actual period source: Thomas
+// Jefferys' 1738 "Plan of the Town and Fortifications of Montreal or Ville
+// Marie in Canada" (dropped into the repo as montreal-1700s.jpg — not
+// committed, a reference image only), which shows the exact walled town
+// still standing through the 1790s (the walls came down 1804-1817) with
+// every institution named and placed. West-to-east order below follows the
+// map's own real layout: the Récollets' convent and the Seminary/Parish
+// Church cluster toward the west end, the Market Place at the wharf
+// (world centre, same spot the dock already anchors to), the Parade
+// ground and the Governor's Palace east-center, the Jesuits' church and
+// convent (the map's own largest garden) further east, and the Arsenal/
+// canoe yard and the Fort right at the east end, by the gate. Two rows —
+// back (inland, near the wall) and front (waterfront, along the real Rue
+// Saint-Paul) — same abstraction as before, now populated with what was
+// actually there instead of a generic repeating cluster.
 const MONTREAL_ONFOOT_BUILDINGS = [
-  // back row - upper residential quarter, both sides of the square
+  // --- back row (inland, near the town wall) ---
+  // Récollets Convent — west end, by the real Récollets Gate. Two
+  // buildings; its own garden plot is drawn separately (MONTREAL_GARDEN_PLOTS).
   { kind: 'stone', x: 40, y: 74, variant: 0, mirror: false },
-  { kind: 'stone', x: 95, y: 78, variant: 1, mirror: true },
-  { kind: 'stone', x: 150, y: 76, variant: 2, mirror: false },
-  { kind: 'stone', x: 205, y: 80, variant: 0, mirror: true },
-  // The Vieux Séminaire de Saint-Sulpice (built 1685-94) — real, and still
-  // Montreal's oldest standing building — sits right beside Notre-Dame in
-  // reality, west of it, hence right next to the church here too. Its own
-  // twin-tower sprite (sprites.js, already used for the same building in
-  // the river view's terrain scenery) is much wider than the generic
-  // stone houses.
-  { kind: 'seminary', x: 265, y: 84, mirror: false },
-  // Notre-Dame Basilica - spiritual heart of the commercial capital, at
-  // the world's own horizontal centre.
-  { kind: 'church', x: 320, y: 92, mirror: false },
-  { kind: 'stone', x: 380, y: 76, variant: 1, mirror: false },
-  { kind: 'stone', x: 435, y: 80, variant: 2, mirror: true },
-  { kind: 'stone', x: 490, y: 74, variant: 0, mirror: false },
-  { kind: 'stone', x: 545, y: 78, variant: 1, mirror: true },
-  { kind: 'stone', x: 600, y: 76, variant: 2, mirror: false },
-  // front row - waterfront warehouses/trading posts, along the real Rue
-  // Saint-Paul (Montreal's oldest street, running along the old
-  // waterfront). The gun shop sits just right of the dock lane — walk up
-  // to it and you're handed a pistol (see game.js's acquirePistol / the
-  // trigger in update() below), mirroring the repair shop just left of it.
+  { kind: 'stone', x: 90, y: 78, variant: 1, mirror: true },
+  // The Vieux Séminaire de Saint-Sulpice (built 1685-94, still Montreal's
+  // oldest standing building) and the Parish Church next to it — the
+  // map shows both west of the Market Place, not centred on it (an
+  // earlier pass here had the church facing the square head-on; the map
+  // puts the real Parish Church further west than that).
+  { kind: 'seminary', x: 150, y: 82, mirror: false },
+  { kind: 'church', x: 230, y: 92, mirror: false },
+  // The Nunnery Hospital (Hôtel-Dieu, run by the Religieuses
+  // Hospitalières) — between the church and the Market Place.
+  { kind: 'stone', x: 290, y: 76, variant: 2, mirror: false },
+  { kind: 'stone', x: 390, y: 80, variant: 0, mirror: true },
+  { kind: 'stone', x: 440, y: 74, variant: 1, mirror: false },
+  // Monsieur de Vaudreuil's — the Governor General's Palace, marked C on
+  // the map, near the Parade — the grandest house in town, even if the
+  // sprite itself is the same stone building every other house here uses.
+  { kind: 'stone', x: 490, y: 78, variant: 2, mirror: true },
+  // The Jesuits' Church, Convent and Gardens — the map's own single
+  // largest walled garden, east end. A second real church (not a
+  // duplicate sprite mistake — Montreal genuinely had both a parish
+  // church and a separate Jesuit church at once).
+  { kind: 'church', x: 550, y: 92, mirror: true },
+  { kind: 'stone', x: 600, y: 76, variant: 0, mirror: false },
+
+  // --- front row (waterfront, Rue Saint-Paul) ---
   { kind: 'stone', x: 30, y: 150, variant: 1, mirror: false },
   { kind: 'stone', x: 80, y: 154, variant: 2, mirror: true },
   { kind: 'stone', x: 130, y: 152, variant: 0, mirror: false },
   { kind: 'stone', x: 180, y: 150, variant: 1, mirror: true },
   { kind: 'stone', x: 230, y: 154, variant: 2, mirror: false },
-  { kind: 'gunshop', x: 370, y: 152, mirror: false },
-  { kind: 'stone', x: 420, y: 150, variant: 0, mirror: true },
-  { kind: 'stone', x: 470, y: 154, variant: 1, mirror: false },
-  { kind: 'stone', x: 520, y: 150, variant: 2, mirror: true },
-  { kind: 'stone', x: 570, y: 154, variant: 0, mirror: false },
-  { kind: 'stone', x: 610, y: 150, variant: 1, mirror: true },
+  // (gap here is the Market Place itself, MONTREAL_SQUARE, at the world's
+  // own centre — same spot the map's own Market Place sits, right at
+  // the wharf.)
+  { kind: 'stone', x: 370, y: 152, variant: 0, mirror: true },
+  { kind: 'stone', x: 420, y: 150, variant: 1, mirror: false },
+  // (gap here is The Parade, MONTREAL_PARADE — the town's open drill
+  // ground, drawn as packed earth rather than a building row.)
+  // Monsieur de Longueuil's House (D on the map) and a small chapel
+  // beside it, near the east end.
+  { kind: 'stone', x: 575, y: 154, variant: 2, mirror: true },
+  // The Arsenal and Yard for Canoes & Battoes, right by the east gate —
+  // the gun shop keeps its real gameplay job (walk up to it for the
+  // pistol, see game.js's acquirePistol / the trigger in update() below)
+  // but now sits where an arsenal actually would on the map, not
+  // arbitrarily next to the dock.
+  { kind: 'gunshop', x: 615, y: 152, mirror: false },
 
   // The Mont-Royal district — north of the built-up town, in the field
   // around the mountain itself (MONTREAL_WORLD_TOP opened this ground up;
@@ -196,21 +216,34 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   { kind: 'cabin', x: 555, y: -165, variant: 1, mirror: false },
 ];
 
-// Montréal's streets, in the scene's own (wider) world pixel space. The
-// vertical one runs from just below the basilica down to the dock head;
-// the horizontal one spans the *whole world*, not just one screen's
-// width — see its draw() call, which uses the active worldWidth rather
-// than CANVAS_WIDTH. Grey brick, drawn on the ground under everything
-// else — see drawBrickRoad() and the isMontreal branch in draw().
-// MONTREAL_SQUARE widens the two streets' crossing into a real plaza in
-// front of the church — Place d'Armes, Montreal's actual old market
-// square — centred on the world's own centre (drawn *before* the two
-// road strips below in draw(), so their narrower arms paint cleanly over
-// its edges rather than leaving a seam).
+// Montréal's streets, in the scene's own (wider) world pixel space —
+// grey brick, drawn on the ground under everything else (drawBrickRoad(),
+// the isMontreal branch in draw()). MONTREAL_SQUARE widens the two
+// streets' crossing into a real plaza at the world's own centre, the
+// same spot the dock already anchors to — *The Market Place*, per the
+// map's own label, right at the wharf (not Place d'Armes, which this
+// same map doesn't actually label here; the church/seminary sit west of
+// this square now, not facing it — see MONTREAL_ONFOOT_BUILDINGS).
+// Drawn before the two road strips, so their narrower arms paint cleanly
+// over its edges rather than leaving a seam.
 const MONTREAL_ROAD_V = { x: 307, y: 96, w: 26, h: DOCK_TOP - 96 };
 const MONTREAL_ROAD_H = { y: 104, h: 22 };
 const MONTREAL_SQUARE = { x: 280, y: 96, w: 80, h: 34 };
 const MONTREAL_SQUARE_CENTER = { x: MONTREAL_SQUARE.x + MONTREAL_SQUARE.w / 2, y: MONTREAL_SQUARE.y + MONTREAL_SQUARE.h / 2 };
+
+// The Parade — the town's own open drill ground, east of the Market
+// Place, near the Governor's Palace, per the map. Packed earth
+// (drawDirtPath), not cobbled — a military ground, not a market square.
+const MONTREAL_PARADE = { x: 450, y: 138, w: 90, h: 30 };
+
+// The Récollets' and the Jesuits' own walled gardens — the map's two
+// largest cultivated plots by far, flanking the town at opposite ends.
+// Drawn as a distinct hatched-green ground texture (drawGardenPlot),
+// not just more plain grass, right behind each order's own buildings.
+const MONTREAL_GARDEN_PLOTS = [
+  { x: 15, y: 100, w: 110, h: 30 }, // Récollets Convent Gardens, west end
+  { x: 520, y: 100, w: 110, h: 30 }, // The Jesuits' Gardens, east end
+];
 
 // The rural track up to the Mont-Royal district (drawDirtPath, not the
 // town's cut-stone streets) — picks up right where the brick MONTREAL_ROAD_V
@@ -511,7 +544,30 @@ function drawDirtPath(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// The market well at the centre of Place d'Armes — a plain stone-ringed
+// A walled, cultivated garden plot (Récollets/Jesuits — MONTREAL_GARDEN_PLOTS)
+// — a hatched pattern of little furrow-rows on a slightly richer green than
+// plain grass, plus a plain fence line, so it reads as tended ground
+// rather than more lawn. Purely decorative, like drawDirtPath/drawBrickRoad
+// — not solid, the player can walk straight through it.
+function drawGardenPlot(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.fillStyle = '#3f6b34';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#2e4f27';
+  ctx.lineWidth = 1;
+  for (let ry = y + 4; ry < y + h; ry += 6) {
+    ctx.beginPath();
+    ctx.moveTo(x + 2, ry);
+    ctx.lineTo(x + w - 2, ry);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#5c4a30';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.restore();
+}
+
+// The market well at the centre of the Market Place — a plain stone-ringed
 // well with a small shingled roof, the kind of modest period fixture a
 // real colonial market square would have rather than a monument (the
 // actual statue there today postdates 1790 by over a century). Purely
@@ -703,17 +759,22 @@ export function createVillageScene() {
       ctx.fillStyle = pat.water;
       ctx.fillRect(camera.x, WATER_TOP, CANVAS_WIDTH, CANVAS_HEIGHT - WATER_TOP);
 
-      // Montréal's streets and Place d'Armes — on the ground, under the
+      // Montréal's streets and Market Place — on the ground, under the
       // dock, trees, buildings and player. The square first, so the two
       // narrower road strips paint cleanly over its edges (see
       // MONTREAL_SQUARE's own comment), then the market well on top of
       // all three, right in the middle of the plaza. The horizontal
-      // street spans the *whole world*, not just one screen.
+      // street spans the *whole world*, not just one screen. The Parade
+      // and the two convent gardens are ground features too, drawn the
+      // same pass — packed earth and hatched cultivation respectively,
+      // each distinct from both the brick streets and plain grass.
       if (isMontreal) {
         drawBrickRoad(ctx, MONTREAL_SQUARE.x, MONTREAL_SQUARE.y, MONTREAL_SQUARE.w, MONTREAL_SQUARE.h);
         drawBrickRoad(ctx, 0, MONTREAL_ROAD_H.y, worldWidth, MONTREAL_ROAD_H.h);
         drawBrickRoad(ctx, MONTREAL_ROAD_V.x, MONTREAL_ROAD_V.y, MONTREAL_ROAD_V.w, MONTREAL_ROAD_V.h);
         drawMarketWell(ctx, MONTREAL_SQUARE_CENTER.x, MONTREAL_SQUARE_CENTER.y);
+        drawDirtPath(ctx, MONTREAL_PARADE.x, MONTREAL_PARADE.y, MONTREAL_PARADE.w, MONTREAL_PARADE.h);
+        for (const g of MONTREAL_GARDEN_PLOTS) drawGardenPlot(ctx, g.x, g.y, g.w, g.h);
         // The rural track up to the Mont-Royal district — dirt, not
         // brick, picking up where the town's own streets end.
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_V.x, MONTREAL_DIRT_PATH_V.y, MONTREAL_DIRT_PATH_V.w, MONTREAL_DIRT_PATH_V.h);
@@ -753,22 +814,26 @@ export function createVillageScene() {
         ctx.drawImage(montRoyalSprite, 190 - mrW / 2, mrBottom - mrH, mrW, mrH);
       }
 
-      // Québec City keeps the landward fortification wall as its backdrop
-      // instead of the usual treeline framing every other village's
-      // clearing — a walled capital doesn't back onto open forest.
-      // Montreal doesn't get this: unlike Quebec City (still walled
-      // today, the image most people actually associate with a walled
-      // colonial town), Montreal's own 1717-1744 walls came down in the
-      // early 1800s and aren't part of how the real city reads now, so it
-      // keeps the ordinary treeline instead (which, for Montreal, now
-      // also gives Mont Royal above something to be partly seen through
-      // rather than a flat hard edge). Behind everything else, so it
-      // never occludes a building or the player.
-      if (isQuebecCity) {
-        for (let i = 0; i < CITY_WALL_TILES; i++) {
+      // Québec City and Montréal both keep the landward fortification
+      // wall as their backdrop instead of the usual treeline framing
+      // every other village's clearing. Montreal's own case is no longer
+      // a guess: the Jefferys 1738 map (montreal-1700s.jpg, MONTREAL_ONFOOT_
+      // BUILDINGS' own comment) is literally titled "Plan of the Town and
+      // FORTIFICATIONS of Montreal," and shows the same stone wall (built
+      // 1717-1744, down 1804-1817) still standing through the 1790s. Tiled
+      // across the *active* worldWidth, not always CANVAS_WIDTH, so it
+      // still spans Montreal's own wider world edge to edge. Drawn where
+      // the built-up town's own back row ends — the Mont-Royal district
+      // further north sits genuinely *outside* the walls, matching the
+      // map's own farmland-beyond-the-fortifications. Behind everything
+      // else, so it never occludes a building or the player.
+      if (isQuebecCity || isMontreal) {
+        const wallTiles = Math.ceil(worldWidth / WALL_TILE_W) + 1;
+        for (let i = 0; i < wallTiles; i++) {
           ctx.drawImage(rampartSprite, i * WALL_TILE_W, CITY_WALL_Y);
         }
-      } else {
+      }
+      if (!isQuebecCity) {
         for (const t of trees) {
           const sprite = treeSprites[t.variant];
           ctx.drawImage(sprite, t.x - sprite.width / 2, t.y - sprite.height * TREE_DRAW_ANCHOR);
