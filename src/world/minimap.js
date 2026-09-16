@@ -50,14 +50,16 @@ const SEGMENT_STYLE = {
   rideau: { outline: '#1f5e3a', fill: '#41b06d', outlineWidth: 3.0, fillWidth: 2.0 },
 };
 
-// The Island of Montreal's own two channels get lawrenceEast's blue rather
-// than lawrenceWest's purple, even though it's the same lawrenceWest arm —
-// purple only exists to stay tellable from lawrenceEast right at the
-// Tadoussac junction, hundreds of km away and never on screen at the same
-// time as Montreal, so there's no ambiguity to avoid here; plain blue
-// reads as real water at a glance, which is the point right where the
-// channel split itself is the whole thing being shown.
-const MONTREAL_CHANNEL_STYLE = SEGMENT_STYLE.lawrenceEast;
+// The Island of Montreal's own two channels get a dedicated bright sky-blue
+// (not lawrenceWest's purple, and not even lawrenceEast's own blue, which
+// is a muted "steel" tone close enough to the purple in darkness/saturation
+// that the two can be hard to tell apart at this widget's small size and
+// low contrast against the dark green background). This one's deliberately
+// vivid and unambiguous — closer to a clear-sky blue than the rest of this
+// map's muted "real water" palette — since being obviously, unmistakably
+// blue right where the channel split is the whole point being shown
+// matters more here than matching the rest of the map's restrained style.
+const MONTREAL_CHANNEL_STYLE = { outline: '#1565c0', fill: '#4da6ff', outlineWidth: 3.2, fillWidth: 2.2 };
 
 const toPath = (pts) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
 const toClosedPath = (pts) => `${toPath(pts)} Z`;
