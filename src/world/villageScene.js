@@ -36,6 +36,18 @@ const dockX1 = (worldWidth) => worldWidth / 2 + DOCK_HALF_W;
 // non-scrolling behaviour with no special-casing needed anywhere else.
 const MONTREAL_WORLD_WIDTH = 640;
 
+// Montreal also gets room to the *north* (inland, toward Mont-Royal) —
+// negative y, extending up from the old world's y=0 top edge, rather than
+// touching WATER_TOP/DOCK_TOP or any existing building's y at all: the
+// water stays exactly where it's always been at the world's south edge,
+// and this just opens up new ground beyond the old northern boundary for
+// Mont-Royal and its own approach to actually be walked into instead of
+// sitting clipped against the top of a screen that could never scroll.
+// worldTop is 0 (not negative) for every other village, which — like
+// MONTREAL_WORLD_WIDTH above — collapses the vertical camera clamp to
+// [0, 0] and reproduces the old fixed framing exactly.
+const MONTREAL_WORLD_TOP = -180;
+
 // Anchor is the point where each building's front (door) sits; the
 // collision box is a simplified footprint under the sprite's walls, not
 // its wider overhanging roof. The cluster is generated from the same
@@ -249,7 +261,19 @@ const DOCK_CLEARANCE_X = 40;
 function clearOfDock(spots) {
   return spots.filter((t) => t.y <= 100 || Math.abs(t.x - MONTREAL_WORLD_WIDTH / 2) >= DOCK_CLEARANCE_X);
 }
-const MONTREAL_TREE_SPOTS = clearOfDock([...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))]);
+// Frames the new northern edge of Montreal's own taller world
+// (MONTREAL_WORLD_TOP) the same way TREE_SPOTS already frames the old
+// screen's top edge — a scattered line near the true boundary, not a
+// hard wall, so it reads as the clearing giving way to forest again once
+// you've walked far enough past Mont-Royal.
+const MONTREAL_NORTH_TREE_SPOTS = [
+  { x: 30, y: -166 }, { x: 100, y: -172 }, { x: 175, y: -164 }, { x: 340, y: -170 },
+  { x: 420, y: -166 }, { x: 495, y: -172 }, { x: 565, y: -164 }, { x: 615, y: -170 },
+];
+const MONTREAL_TREE_SPOTS = [
+  ...clearOfDock([...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))]),
+  ...MONTREAL_NORTH_TREE_SPOTS,
+];
 function treesFor(seed, spots = TREE_SPOTS) {
   return spots.map((t, i) => ({
     ...t,
@@ -403,8 +427,8 @@ function overlapsBuilding(buildings, x, y) {
 // active world's own width, not always CANVAS_WIDTH — see worldWidth);
 // over the water band they're restricted to the dock's width, i.e.
 // walking the plank back out to the boat rather than into the river.
-function isWalkable(buildings, x, y, worldWidth) {
-  if (x < 10 || x > worldWidth - 10 || y < 10 || y > CANVAS_HEIGHT - 4) return false;
+function isWalkable(buildings, x, y, worldWidth, worldTop) {
+  if (x < 10 || x > worldWidth - 10 || y < worldTop + 10 || y > CANVAS_HEIGHT - 4) return false;
   if (y > WATER_TOP && (x < dockX0(worldWidth) || x > dockX1(worldWidth))) return false;
   return !overlapsBuilding(buildings, x, y);
 }
@@ -475,6 +499,7 @@ export function createVillageScene() {
   let strideFrame = 0;
   let facingLeft = false;
   let worldWidth = CANVAS_WIDTH;
+  let worldTop = 0;
   let repairShop = repairShopFor(worldWidth);
   let buildings = [...buildingsFor(0), repairShop];
   let trees = treesFor(0);
@@ -490,11 +515,11 @@ export function createVillageScene() {
   let gunsmithPos = null;
   let wasNearGunsmith = false;
   const player = { x: worldWidth / 2, y: WATER_TOP - 10 };
-  // How far the camera has scrolled — always 0 when worldWidth ===
-  // CANVAS_WIDTH (every village but Montreal), which is exactly what
-  // reproduces the old fixed-screen behaviour with no special-casing
-  // needed in draw() beyond the one clamp below.
-  const camera = { x: 0 };
+  // How far the camera has scrolled — always {0, 0} when worldWidth ===
+  // CANVAS_WIDTH and worldTop === 0 (every village but Montreal), which is
+  // exactly what reproduces the old fixed-screen behaviour with no
+  // special-casing needed in draw() beyond the two clamps below.
+  const camera = { x: 0, y: 0 };
 
   return {
     enter(village) {
@@ -503,6 +528,7 @@ export function createVillageScene() {
       isTroisRivieres = village && village.name === 'Trois-Rivieres';
       isMontreal = village && village.name === 'Montreal';
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : CANVAS_WIDTH;
+      worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
       repairShop = repairShopFor(worldWidth);
       buildings = isQuebecCity
         ? [...buildingsForQuebecCity(), repairShop]
@@ -523,6 +549,7 @@ export function createVillageScene() {
       player.x = start.x;
       player.y = start.y;
       camera.x = 0;
+      camera.y = 0;
       strideTimer = 0;
       strideFrame = 0;
       // Arriving right on top of the trigger radius (unlikely given the
@@ -557,8 +584,8 @@ export function createVillageScene() {
         const ny = player.y + dy * step;
         // Resolve each axis separately so sliding along a wall/edge works
         // instead of a diagonal move being blocked entirely by one axis.
-        if (isWalkable(buildings, nx, player.y, worldWidth)) player.x = nx;
-        if (isWalkable(buildings, player.x, ny, worldWidth)) player.y = ny;
+        if (isWalkable(buildings, nx, player.y, worldWidth, worldTop)) player.x = nx;
+        if (isWalkable(buildings, player.x, ny, worldWidth, worldTop)) player.y = ny;
 
         strideTimer += dt;
         if (strideTimer > 0.28) {
@@ -569,11 +596,17 @@ export function createVillageScene() {
         strideTimer = 0;
       }
 
-      // The camera follows the player, clamped so it never scrolls past
-      // the world's own edges — [0, 0] when worldWidth === CANVAS_WIDTH
-      // (every village but Montreal), which pins camera.x at 0 always and
-      // reproduces the old fixed-screen framing exactly.
+      // The camera follows the player on both axes, clamped so it never
+      // scrolls past the world's own edges — [0, 0] when worldWidth ===
+      // CANVAS_WIDTH and worldTop === 0 (every village but Montreal),
+      // which pins the camera at (0, 0) always and reproduces the old
+      // fixed-screen framing exactly.
       camera.x = Math.max(0, Math.min(worldWidth - CANVAS_WIDTH, player.x - CANVAS_WIDTH / 2));
+      // Max is always 0, not a worldHeight-derived value — the world's
+      // south edge never moves (see MONTREAL_WORLD_TOP's own comment),
+      // only the north one does, so the camera only ever scrolls upward
+      // from its default framing, never downward past it.
+      camera.y = Math.max(worldTop, Math.min(0, player.y - CANVAS_HEIGHT / 2));
 
       const reboard = (
         player.x >= reboardZone.x0 && player.x <= reboardZone.x1 &&
@@ -598,16 +631,17 @@ export function createVillageScene() {
       const pat = ensurePatterns(ctx);
 
       // Everything below is drawn in world coordinates; this translate is
-      // what turns that into a scrolling view — screen x = world x -
-      // camera.x. When worldWidth === CANVAS_WIDTH (every village but
-      // Montreal), camera.x is always 0 (see its clamp in update()), so
-      // this translate is a no-op and every coordinate below lands
-      // exactly where the old fixed-screen version put it.
+      // what turns that into a scrolling view — screen (x,y) = world
+      // (x,y) - camera. When worldWidth === CANVAS_WIDTH and worldTop
+      // === 0 (every village but Montreal), camera stays (0, 0) always
+      // (see its clamp in update()), so this translate is a no-op and
+      // every coordinate below lands exactly where the old fixed-screen
+      // version put it.
       ctx.save();
-      ctx.translate(-camera.x, 0);
+      ctx.translate(-camera.x, -camera.y);
 
       ctx.fillStyle = pat.grass;
-      ctx.fillRect(camera.x, 0, CANVAS_WIDTH, WATER_TOP);
+      ctx.fillRect(camera.x, worldTop, CANVAS_WIDTH, WATER_TOP - worldTop);
       ctx.fillStyle = pat.sand;
       ctx.fillRect(camera.x, WATER_TOP - 6, CANVAS_WIDTH, 6);
       ctx.fillStyle = pat.water;
