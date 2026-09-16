@@ -361,9 +361,33 @@ const MONTREAL_NORTH_TREE_SPOTS = [
   { x: 30, y: -266 }, { x: 100, y: -272 }, { x: 175, y: -264 }, { x: 340, y: -270 },
   { x: 420, y: -266 }, { x: 495, y: -272 }, { x: 565, y: -264 }, { x: 615, y: -270 },
 ];
+// The open field around Mont-Royal itself (between the town wall and
+// MONTREAL_NORTH_TREE_SPOTS' own boundary line) read as too bare — real
+// forest, not just a lawn, would actually cover most of this ground.
+// Scattered by hand rather than a grid, clear of Mont-Royal's own
+// sprite footprint (roughly x 105-275), both dirt paths
+// (MONTREAL_DIRT_PATH_V/SPUR), and the fort/windmill/farmhouse spots —
+// treesClearOfBuildings() drops any that still land on a real building,
+// same safety net TREE_SPOTS already relies on.
+const MONTREAL_DISTRICT_TREE_SPOTS = [
+  // west of the fort/windmill cluster
+  { x: 15, y: -20 }, { x: 20, y: -65 }, { x: 15, y: -105 }, { x: 25, y: -145 },
+  { x: 15, y: -185 }, { x: 25, y: -225 },
+  { x: 90, y: -15 }, { x: 85, y: -95 }, { x: 90, y: -135 }, { x: 85, y: -195 }, { x: 90, y: -235 },
+  // flanking Mont-Royal itself, east and west edges
+  { x: 60, y: -170 }, { x: 40, y: -230 },
+  { x: 285, y: -30 }, { x: 330, y: -35 }, { x: 285, y: -105 }, { x: 335, y: -115 },
+  { x: 280, y: -185 }, { x: 330, y: -195 }, { x: 285, y: -235 },
+  // east field, between the mountain and the farmhouses
+  { x: 345, y: -15 }, { x: 410, y: -25 }, { x: 415, y: -95 }, { x: 410, y: -155 }, { x: 420, y: -205 },
+  { x: 495, y: -20 }, { x: 500, y: -110 }, { x: 495, y: -170 }, { x: 500, y: -225 },
+  { x: 570, y: -30 }, { x: 580, y: -115 }, { x: 575, y: -195 }, { x: 580, y: -240 },
+  { x: 615, y: -25 }, { x: 610, y: -105 }, { x: 620, y: -185 }, { x: 615, y: -235 },
+];
 const MONTREAL_TREE_SPOTS = [
   ...clearOfDock([...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))]),
   ...MONTREAL_NORTH_TREE_SPOTS,
+  ...MONTREAL_DISTRICT_TREE_SPOTS,
 ];
 function treesFor(seed, spots = TREE_SPOTS) {
   return spots.map((t, i) => ({
