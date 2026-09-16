@@ -16,6 +16,7 @@
 import {
   SEGMENTS, ALL_POINTS, LAC_SAINT_JEAN_SHAPE,
   MONTREAL_ISLAND_MAP_SHAPE, SAINTE_HELENE_MAP_POINT, NUNS_ISLAND_MAP_POINT, LACHINE_RAPIDS_MAP_POINT,
+  MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE,
 } from './river/route.js';
 
 // Width/height of the visible window, in the same km-equivalent units as
@@ -99,6 +100,35 @@ function ribbonPolygon(points, halfWidths) {
   return [...left, ...right];
 }
 
+// Splits a segment's point list into separate runs wherever a waypoint is
+// flagged mapSkipRibbon (route.js — currently just Charlemagne/Montreal,
+// where the minimap draws the real Island of Montreal channels instead of
+// the straight chord this list would otherwise connect them with). Each
+// run gets its own ribbon polygon rather than one continuous one, so the
+// skipped stretch is left undrawn for the dedicated channel shapes to
+// cover instead.
+function splitAtSkip(points) {
+  const runs = [[points[0]]];
+  for (let i = 1; i < points.length; i++) {
+    // Check the flag *before* deciding where this point goes — appending
+    // it to the current run first and only then splitting (the original,
+    // buggy order) draws the very chord this exists to suppress, one
+    // point too late.
+    if (points[i - 1].mapSkipRibbon) runs.push([points[i]]);
+    else runs[runs.length - 1].push(points[i]);
+  }
+  return runs.filter((run) => run.length > 1);
+}
+
+function drawRibbon(svg, points, style) {
+  const outlineHalf = points.map((p) => halfWidthKmAt(p) + OUTLINE_BORDER_KM);
+  svg.appendChild(svgEl('path', { d: toClosedPath(ribbonPolygon(points, outlineHalf)), fill: style.outline }));
+}
+function fillRibbon(svg, points, style) {
+  const fillHalf = points.map((p) => halfWidthKmAt(p));
+  svg.appendChild(svgEl('path', { d: toClosedPath(ribbonPolygon(points, fillHalf)), fill: style.fill }));
+}
+
 // Turns a closed loop of points into a smooth, rounded outline instead of a
 // hard-edged polygon — quadratic curves through each edge's midpoint, using
 // the original points as control points, a standard cheap way to round off
@@ -146,17 +176,21 @@ export function createMinimap() {
   // actually widens/narrows to match the real river (route.js's
   // riverWidthKm) instead of reading as a uniform line regardless of
   // whether it's the Rideau's canal towns or the Sept-Îles estuary.
+  // splitAtSkip breaks each segment's own polyline at mapSkipRibbon
+  // waypoints, leaving the Island of Montreal's stretch for the two
+  // dedicated channel shapes just below instead.
   const segmentList = Object.values(SEGMENTS);
-  for (const seg of segmentList) {
-    const style = SEGMENT_STYLE[seg.id];
-    const halfWidths = seg.points.map((p) => halfWidthKmAt(p) + OUTLINE_BORDER_KM);
-    svg.appendChild(svgEl('path', { d: toClosedPath(ribbonPolygon(seg.points, halfWidths)), fill: style.outline }));
-  }
-  for (const seg of segmentList) {
-    const style = SEGMENT_STYLE[seg.id];
-    const halfWidths = seg.points.map((p) => halfWidthKmAt(p));
-    svg.appendChild(svgEl('path', { d: toClosedPath(ribbonPolygon(seg.points, halfWidths)), fill: style.fill }));
-  }
+  const segmentRuns = segmentList.map((seg) => ({ style: SEGMENT_STYLE[seg.id], runs: splitAtSkip(seg.points) }));
+  for (const { style, runs } of segmentRuns) for (const run of runs) drawRibbon(svg, run, style);
+  for (const { style, runs } of segmentRuns) for (const run of runs) fillRibbon(svg, run, style);
+
+  // The Island of Montreal's own two real channels — same lawrenceWest
+  // hue (it's the same river), drawn hugging the island's real
+  // shorelines instead of the straight chords the plain waypoint list
+  // would give (see mapSkipRibbon's comment on those two waypoints).
+  const montrealChannelStyle = SEGMENT_STYLE.lawrenceWest;
+  for (const channel of [MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE]) drawRibbon(svg, channel, montrealChannelStyle);
+  for (const channel of [MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE]) fillRibbon(svg, channel, montrealChannelStyle);
 
   // Real land inside the water, painted the same deep green as the
   // widget's own background (#minimap in style.css) so it reads as a hole

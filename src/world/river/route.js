@@ -191,7 +191,20 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // for testing the final destination. The Rivière des Prairies itself is
   // the narrower of the island's two channels (see islands.js), hence the
   // narrow figure here vs. Montreal's own south-channel entry below.
-  { name: 'Charlemagne', lat: 45.7167, lon: -73.4833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 1 },
+  // mapSkipRibbon: the minimap draws MONTREAL_NORTH_CHANNEL_MAP_SHAPE /
+  // MONTREAL_SOUTH_CHANNEL_MAP_SHAPE (below) hugging the island's real
+  // shorelines instead of the straight Charlemagne->Montreal->Ile-Perrot
+  // chords this waypoint list would otherwise draw — a direct chord
+  // between two towns on *opposite shores* of a ~50km island cuts right
+  // across the landmass, which doesn't happen in reality. Doesn't touch
+  // flowDistance/villages/cumulative math at all (see makeSegment(): only
+  // name/segment/flowDistance/side get copied into `villages`), so the
+  // canoe marker still interpolates straight through this stretch same as
+  // ever — a real but minor simplification, the same "not the same as
+  // gameplay's own model" gap this segment already has near Montreal (see
+  // river/islands.js's module comment on why the baked split only starts
+  // right at the island, not back at Charlemagne).
+  { name: 'Charlemagne', lat: 45.7167, lon: -73.4833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 1, mapSkipRibbon: true },
   // Final destination — New France's commercial heart and the great inland
   // port. The river continues past Montreal too (ultimately toward the Great
   // Lakes), but this marks the end of the current journey. South shore
@@ -203,7 +216,7 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // right where the Prairies rejoins the St. Lawrence at the island's east
   // tip). MONTREAL_ISLAND_MAP_SHAPE below draws the island itself as real
   // land between this channel and Charlemagne's.
-  { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: -1, riverWidthKm: 2.5 },
+  { name: 'Montreal', lat: 45.5017, lon: -73.5673, label: 'Montreal', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: -1, riverWidthKm: 2.5, mapSkipRibbon: true }, // see Charlemagne's mapSkipRibbon comment above
 
   // The Ottawa River — Chasse-galerie flight path toward Gatineau. Real
   // Île-Perrot/Hudson/Rigaud all sit on the south side of Lake of Two
@@ -426,6 +439,37 @@ export const MONTREAL_ISLAND_MAP_SHAPE = [
   ...MONTREAL_NORTH_SHORE,
   MONTREAL_EAST_TIP,
   ...[...MONTREAL_SOUTH_SHORE].reverse(),
+].map(project);
+
+// The island's two real channels, drawn on the minimap in place of the
+// straight Charlemagne->Montreal->Ile-Perrot chords (see mapSkipRibbon on
+// those waypoints above) — the real Rivière des Prairies (narrow, north
+// of the island) and the real St. Lawrence main channel (wider, narrows
+// hard at the Lachine Rapids, opens into Lake St. Louis at the west tip).
+// Both run the island's full real length, tip to tip, hugging the same
+// shore-town sequences MONTREAL_ISLAND_MAP_SHAPE's own boundary uses.
+// riverWidthKm figures are the same kind of researched estimate as the
+// main route's (this file's earlier comment on that), chosen to agree
+// with the villages already pinned nearby (Charlemagne=1km, Montreal=2.5km,
+// Ile-Perrot=4km above) at the point each channel passes closest to them.
+export const MONTREAL_NORTH_CHANNEL_MAP_SHAPE = [
+  { ...MONTREAL_WEST_TIP, riverWidthKm: 1.5 }, // opens into Lake of Two Mountains
+  { ...MONTREAL_NORTH_SHORE[0], riverWidthKm: 1.0 }, // Pierrefonds
+  { ...MONTREAL_NORTH_SHORE[1], riverWidthKm: 0.7 }, // Cartierville
+  { ...MONTREAL_NORTH_SHORE[2], riverWidthKm: 0.6 }, // Ahuntsic
+  { ...MONTREAL_NORTH_SHORE[3], riverWidthKm: 0.8 }, // Riviere-des-Prairies
+  { ...MONTREAL_EAST_TIP, riverWidthKm: 1.2 }, // confluence with the south channel
+].map(project);
+export const MONTREAL_SOUTH_CHANNEL_MAP_SHAPE = [
+  { ...MONTREAL_WEST_TIP, riverWidthKm: 4.5 }, // opens into Lake St. Louis
+  { ...MONTREAL_SOUTH_SHORE[0], riverWidthKm: 3.5 }, // Baie-D'Urfe
+  { ...MONTREAL_SOUTH_SHORE[1], riverWidthKm: 3.0 }, // Pointe-Claire
+  { ...MONTREAL_SOUTH_SHORE[2], riverWidthKm: 1.3 }, // Lachine — the rapids narrows
+  { ...MONTREAL_SOUTH_SHORE[3], riverWidthKm: 2.0 }, // Verdun
+  { ...MONTREAL_SOUTH_SHORE[4], riverWidthKm: 2.5 }, // Old Montreal
+  { ...MONTREAL_SOUTH_SHORE[5], riverWidthKm: 2.2 }, // Hochelaga-Maisonneuve
+  { ...MONTREAL_SOUTH_SHORE[6], riverWidthKm: 1.8 }, // Mercier
+  { ...MONTREAL_EAST_TIP, riverWidthKm: 1.5 }, // confluence with the north channel
 ].map(project);
 
 // Île Sainte-Hélène and Nuns' Island (river/islands.js's southIslandAt) —
