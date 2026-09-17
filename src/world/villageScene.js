@@ -46,10 +46,12 @@ const MONTREAL_WORLD_WIDTH = 640;
 // worldTop is 0 (not negative) for every other village, which — like
 // MONTREAL_WORLD_WIDTH above — collapses the vertical camera clamp to
 // [0, 0] and reproduces the old fixed framing exactly. Pushed out again
-// (from -180) to make real room for a Mont-Royal district — Fort de la
-// Montagne, its farms and mill, and the rural road up to them — around
-// and beyond the mountain itself, not just the mountain alone.
-const MONTREAL_WORLD_TOP = -280;
+// (from -180, then -280) to make room past Mont-Royal's own field for
+// Côte Sainte-Catherine — a real côte road that ran (and, as Chemin de
+// la Côte-Sainte-Catherine, still runs today) along the mountain's own
+// north side, continuing MONTREAL_DIRT_PATH_V further out rather than
+// stopping dead at what used to be the tree line.
+const MONTREAL_WORLD_TOP = -460;
 
 // Montreal also gets room to the *west*, past the real Récollets Gate —
 // same pattern as MONTREAL_WORLD_TOP, just the other axis: negative x,
@@ -376,14 +378,37 @@ const MONTREAL_FARM_STRIPS = [
   { x: -136, y: -235, w: 48, h: 225, tone: 0 },
   { x: -184, y: -235, w: 48, h: 225, tone: 1 },
   { x: -232, y: -235, w: 40, h: 225, tone: 2 },
+  // Côte Sainte-Catherine — past Mont-Royal itself and Lignères' Gardens
+  // (MONTREAL_GARDEN_PLOTS' own north field entry ends at y: -212, clear
+  // of this ground), flanking the same road (MONTREAL_DIRT_PATH_V,
+  // extended) continuing north as a real côte in its own right rather
+  // than the road just petering out at the old tree line.
+  { x: 40, y: -430, w: 51, h: 174, tone: 0 },
+  { x: 91, y: -430, w: 51, h: 174, tone: 1 },
+  { x: 142, y: -430, w: 51, h: 174, tone: 2 },
+  { x: 193, y: -430, w: 51, h: 174, tone: 0 },
+  { x: 244, y: -430, w: 52, h: 174, tone: 1 },
+  { x: 320, y: -430, w: 56, h: 174, tone: 2 },
+  { x: 376, y: -430, w: 56, h: 174, tone: 0 },
+  { x: 432, y: -430, w: 56, h: 174, tone: 1 },
+  { x: 488, y: -430, w: 56, h: 174, tone: 2 },
+  { x: 544, y: -430, w: 56, h: 174, tone: 0 },
 ];
 
 // The rural track up to the Mont-Royal district (drawDirtPath, not the
 // town's cut-stone streets) — picks up right where the brick MONTREAL_ROAD_V
 // ends (its own y: 96, the north edge of the built-up town) and continues
 // north into the field, then a short spur west to Fort de la Montagne.
-const MONTREAL_DIRT_PATH_V = { x: 296, y: -140, w: 24, h: 236 };
+// Extended again (top from -140 to -430) to carry on past the mountain
+// as Côte Sainte-Catherine (MONTREAL_COTE_STE_CATHERINE_STRIPS, below) —
+// one continuous road, not two, the same way the real one is.
+const MONTREAL_DIRT_PATH_V = { x: 296, y: -430, w: 24, h: 526 };
 const MONTREAL_DIRT_PATH_SPUR = { x: 60, y: -22, w: 250, h: 14 };
+// A wayside calvaire (drawCalvaire) along Côte Sainte-Catherine, right
+// on the road's own shoulder — a real, common roadside feature of
+// Catholic farm parishes in this period, not a claim that this specific
+// cross ever stood here.
+const MONTREAL_CALVAIRE = { x: 284, y: -350 };
 // Same idea, west out past the Récollets Gate toward the General
 // Hospital and the Callières house — picks up at the west end of the
 // front row (x: 15, roughly the Récollets buildings' own street
@@ -569,11 +594,14 @@ function clearOfDock(spots) {
 // (MONTREAL_WORLD_TOP) the same way TREE_SPOTS already frames the old
 // screen's top edge — a scattered line near the true boundary, not a
 // hard wall, so it reads as the clearing giving way to forest again once
-// you've walked far enough past Mont-Royal.
+// you've walked far enough past Mont-Royal. Pushed out again to the
+// world's new edge (from y ~ -270) now that Côte Sainte-Catherine
+// (MONTREAL_COTE_STE_CATHERINE_STRIPS, below) occupies the ground this
+// line used to frame.
 const MONTREAL_NORTH_TREE_SPOTS = [
-  { x: -220, y: -270 }, { x: -140, y: -264 }, { x: -60, y: -272 },
-  { x: 30, y: -266 }, { x: 100, y: -272 }, { x: 175, y: -264 }, { x: 340, y: -270 },
-  { x: 420, y: -266 }, { x: 495, y: -272 }, { x: 565, y: -264 }, { x: 615, y: -270 },
+  { x: -220, y: -448 }, { x: -140, y: -442 }, { x: -60, y: -450 },
+  { x: 30, y: -444 }, { x: 100, y: -450 }, { x: 175, y: -442 }, { x: 340, y: -448 },
+  { x: 420, y: -444 }, { x: 495, y: -450 }, { x: 565, y: -442 }, { x: 615, y: -448 },
 ];
 // Trees directly flanking Mont-Royal's own sprite (east and west edges,
 // roughly x 105-275) — the mountain's own wooded base, not the open
@@ -586,6 +614,16 @@ const MONTREAL_DISTRICT_TREE_SPOTS = [
   { x: 285, y: -30 }, { x: 330, y: -35 }, { x: 285, y: -105 }, { x: 335, y: -115 },
   { x: 280, y: -185 }, { x: 330, y: -195 }, { x: 285, y: -235 },
 ];
+// Scattered along Côte Sainte-Catherine (MONTREAL_COTE_STE_CATHERINE_
+// STRIPS, below), clear of its own farm strips and the calvaire
+// (MONTREAL_CALVAIRE) — the same hedgerow/windbreak read as the trees
+// flanking Mont-Royal itself, not a second forest belt.
+const MONTREAL_STE_CATHERINE_TREE_SPOTS = [
+  { x: 60, y: -270 }, { x: 20, y: -340 }, { x: 60, y: -400 },
+  { x: 260, y: -280 }, { x: 260, y: -400 },
+  { x: 360, y: -270 }, { x: 360, y: -400 },
+  { x: 560, y: -280 }, { x: 600, y: -370 },
+];
 // The open field past the east gate, around "The Fort" — scattered,
 // clear of the fort's own footprint and the path leading to it, same
 // "clearing, not a lawn" read as the rest of Montreal's own countryside.
@@ -597,6 +635,7 @@ const MONTREAL_TREE_SPOTS = [
   ...clearOfDock([...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))]),
   ...MONTREAL_NORTH_TREE_SPOTS,
   ...MONTREAL_DISTRICT_TREE_SPOTS,
+  ...MONTREAL_STE_CATHERINE_TREE_SPOTS,
   ...MONTREAL_EAST_TREE_SPOTS,
 ];
 function treesFor(seed, spots = TREE_SPOTS) {
@@ -992,6 +1031,29 @@ function drawMarketWell(ctx, cx, cy) {
   ctx.restore();
 }
 
+// A wayside calvaire — a plain wooden roadside cross on a small stone
+// base, the kind that genuinely marked farm roads like Côte Sainte-
+// Catherine (MONTREAL_CALVAIRE's own comment) in Catholic New France,
+// not a landmark specific to this one road. Purely decorative, like the
+// market well above — not solid, never blocks the player.
+function drawCalvaire(ctx, cx, cy) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 1, 6, 2.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // low stone cairn base
+  ctx.fillStyle = '#6b6259';
+  ctx.fillRect(cx - 5, cy - 5, 10, 6);
+  ctx.fillStyle = '#847a6d';
+  ctx.fillRect(cx - 5, cy - 6, 10, 2);
+  // the cross itself
+  ctx.fillStyle = '#4a3423';
+  ctx.fillRect(cx - 1.5, cy - 30, 3, 25);
+  ctx.fillRect(cx - 8, cy - 24, 16, 3);
+  ctx.restore();
+}
+
 export function createVillageScene() {
   let strideTimer = 0;
   let strideFrame = 0;
@@ -1177,6 +1239,7 @@ export function createVillageScene() {
         // brick, picking up where the town's own streets end.
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_V.x, MONTREAL_DIRT_PATH_V.y, MONTREAL_DIRT_PATH_V.w, MONTREAL_DIRT_PATH_V.h);
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_SPUR.x, MONTREAL_DIRT_PATH_SPUR.y, MONTREAL_DIRT_PATH_SPUR.w, MONTREAL_DIRT_PATH_SPUR.h);
+        drawCalvaire(ctx, MONTREAL_CALVAIRE.x, MONTREAL_CALVAIRE.y);
         // The real Rivière St-Pierre / Ville St-Gabriel route up to the
         // mountain's foot (see its own comment) — runs down the world's
         // west edge to meet MONTREAL_DIRT_PATH_WEST below.
