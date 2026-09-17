@@ -205,10 +205,15 @@ export function createDiable() {
 
     // dt: seconds. playerFlowDistance: game.js's clock. canoe: {x,y} screen
     // space. bulletScreens: [{x,y,ref}] pistol shots in screen space.
-    // onHitPlayer(dmg): called when a fireball connects.
+    // onHitPlayer(dmg): called when a fireball connects. onCollide():
+    // called when the canoe itself overlaps his body — flying into him
+    // directly rather than dodging his fire. No cooldown in here; relies
+    // on game.js's own invulnTimer (set from the callback, same as every
+    // other hazard) to turn "still overlapping" into one penalty, not one
+    // per frame.
     // Returns { hitBullets: [ref] } — shots that struck him this frame, for
     // game.js to remove from the pool.
-    update(dt, playerFlowDistance, canoe, bulletScreens, onHitPlayer) {
+    update(dt, playerFlowDistance, canoe, bulletScreens, onHitPlayer, onCollide) {
       const hitBullets = [];
 
       if (phase === 'idle') {
@@ -247,6 +252,17 @@ export function createDiable() {
             if (hitFlash <= 0) hitFlash = 0.08;
           }
         }
+
+        // --- flying the canoe straight into him ---
+        // Same box his own bullet-hit check above uses. This costs furs
+        // (game.js's handleHit, via onCollide), not hull health — a real
+        // deterrent against just ramming through him for position instead
+        // of actually dodging his fire, without turning "got too close"
+        // into a death the way a fireball hit is.
+        if (Math.abs(canoe.x - cx) < BODY_HALF_W && Math.abs(canoe.y - cy) < BODY_HALF_H) {
+          onCollide();
+        }
+
         if (hp <= 0) {
           hp = 0;
           phase = 'dying';

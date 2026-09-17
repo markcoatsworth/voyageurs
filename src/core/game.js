@@ -180,6 +180,12 @@ const FIGHT_HOVER_MIN = -1.0;   // fully retreated — low on screen, near the b
 const FIGHT_HOVER_MAX = 4.6;    // pressed up toward him
 const FIGHT_HOVER_SPEED = 5;    // units/sec of vertical move under input
 const FIGHT_HOVER_RECENTER = 1.6; // units/sec drift back to the baseline when idle
+// Flying the canoe straight into Diable's own body (not his fire) — costs
+// furs instead of hull health, the first hazard in the game that docks the
+// score rather than health. A real deterrent against ramming through him
+// for position, without turning "got too close" into a death the way a
+// fireball hit already is.
+const DIABLE_TOUCH_FUR_PENALTY = 2;
 const DAMAGE_FLASH_TIME = 0.28;
 // How much hull a single fur buys at the repair shop's trader — a full
 // repair from empty costs ceil(100/15) = 7 furs; tryRepairTrade() below
@@ -666,6 +672,12 @@ export class Game {
     } else if (entry.type === 'diable') {
       this.takeDamage(entry.damage ?? 18);
       this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'diable-touch') {
+      // No hull damage — see DIABLE_TOUCH_FUR_PENALTY's own comment.
+      // invulnTimer still gates it the same as every other hazard, so
+      // holding the canoe inside him is one penalty, not one per frame.
+      this.furs = Math.max(0, this.furs - DIABLE_TOUCH_FUR_PENALTY);
+      this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'wolf') {
       // A lunge that connects knocks the canoe back a beat, then it springs off.
       this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - 3.5);
@@ -770,6 +782,7 @@ export class Game {
     const res = this.diable.update(
       dt, this.flowDistance, canoeScreen, bulletScreens,
       (dmg) => this.handleHit({ type: 'diable', damage: dmg }),
+      () => this.handleHit({ type: 'diable-touch' }),
     );
     for (const ref of res.hitBullets) this.weapons.removeBullet(ref);
 
