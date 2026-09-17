@@ -51,7 +51,11 @@ const BOSS_TRACK = { src: '/audio/rule-britannia.mp3', title: 'Rule, Britannia!'
 // normalized via scripts/normalize-audio.mjs same as everything else) —
 // see README.md's Music section for the same rights caveat every other
 // track here carries.
-const DIABLE_TRACK = { src: '/audio/le-reel-du-paradis-et-enfer.mp3', title: 'Reel du Paradis et Enfer', artist: 'Les Chevaliers' };
+// volume overrides DEFAULT_VOLUME for this fight specifically — reported
+// as too quiet against the fireballs/pistol SFX during the Diable fight's
+// own held-arena intensity, a boost the ambient shuffle doesn't need.
+// ~43% louder (+3.1dB) than the 0.35 default.
+const DIABLE_TRACK = { src: '/audio/le-reel-du-paradis-et-enfer.mp3', title: 'Reel du Paradis et Enfer', artist: 'Les Chevaliers', volume: 0.5 };
 // The Wendigo's cue — reserved rather than left in the shuffle. It's the one
 // recording in this catalog that isn't a period Québécois source (an
 // Appalachian old-time jam session — see README.md's Music section), which
@@ -194,6 +198,9 @@ export function createMusic({ onTrack } = {}) {
     // is stale and must not touch audio.src/play() at all.
     if (index !== requestedIndex || generation !== requestedGeneration) return;
     audio.src = src;
+    // Always the shuffle's own level — undoes whatever a special track
+    // (e.g. DIABLE_TRACK's own volume) left it at.
+    audio.volume = DEFAULT_VOLUME;
     audio.play().then(
       () => {
         started = true;
@@ -223,6 +230,10 @@ export function createMusic({ onTrack } = {}) {
     const src = await prefetch(track.src);
     if (generation !== requestedGeneration) return;
     audio.src = src;
+    // track.volume overrides the shuffle's own DEFAULT_VOLUME — see
+    // DIABLE_TRACK's own comment for why that one needs it; every other
+    // special track just falls back to the same level the shuffle uses.
+    audio.volume = track.volume ?? DEFAULT_VOLUME;
     audio.play().then(
       () => {
         started = true;
