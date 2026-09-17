@@ -48,7 +48,7 @@ async function step(name, fn) {
 
 // --- shared wiring, mirrors main.js -----------------------------------------
 
-const { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, PIXELS_PER_UNIT } = await import('../src/shared/config.js');
+const { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } = await import('../src/shared/config.js');
 const { Game } = await import('../src/core/game.js');
 const { Input } = await import('../src/core/input.js');
 const { createObstacleField } = await import('../src/world/obstacles.js');
@@ -406,21 +406,53 @@ await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
 // --- scenario 4e: the Diable boss fight, from the ?start= checkpoint ------
 
 await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
-  // Autopilot: line the canoe up under the Devil (debugCentreX) so shots
-  // land — chasing his sway also lags his aimed fire, which is most of the
-  // dodging. If this crude pilot can win, the fight is beatable.
+  // Autopilot: line the canoe up under the Devil (debugCentreX) to land
+  // pistol shots, but actually dodge too rather than relying on aim-lag
+  // alone — react to isTelegraphing() (the real wind-up tell a player
+  // reacts to), committing to a direction for the whole windup + early
+  // flight, since reacting only once a shot's airborne leaves too little
+  // time to clear the gap. Oscillates toward centre so it doesn't drift
+  // to an arena edge over a long fight. If this still-crude pilot can
+  // win, the fight is beatable.
+  let dodgeDir = 0;
+  let wasTelegraphing = false;
   function fightDiable(game, input) {
     input.state.up = true;
     input.onWeaponFire?.('pistol');
     const d = game.diable;
     if (d.isActive() && !d.isDefeated()) {
-      const wantOffset = (d.debugCentreX() - CANOE_SCREEN_X) / PIXELS_PER_UNIT;
-      const err = game.lateralOffset - wantOffset;
-      input.state.left = err > 0.4;
-      input.state.right = err < -0.4;
+      const canoeX = CANOE_SCREEN_X + game.lateralOffset * PIXELS_PER_UNIT;
+      const telegraphing = d.isTelegraphing();
+      if (telegraphing && !wasTelegraphing) {
+        dodgeDir = canoeX > CANVAS_WIDTH / 2 ? -1 : 1;
+      }
+      wasTelegraphing = telegraphing;
+      if (telegraphing) {
+        input.state.left = dodgeDir < 0;
+        input.state.right = dodgeDir > 0;
+      } else {
+        let urgent = null, soonest = Infinity;
+        for (const f of d.getFireballs()) {
+          if (f.vy <= 0) continue;
+          const tArrive = (CANOE_SCREEN_Y - f.y) / f.vy;
+          if (tArrive > 0 && tArrive < soonest) { soonest = tArrive; urgent = { f, tArrive }; }
+        }
+        if (urgent && urgent.tArrive < 0.7) {
+          const predictedX = urgent.f.x + urgent.f.vx * urgent.tArrive;
+          const goLeft = predictedX >= canoeX;
+          input.state.left = goLeft;
+          input.state.right = !goLeft;
+        } else {
+          const wantOffset = (d.debugCentreX() - CANOE_SCREEN_X) / PIXELS_PER_UNIT;
+          const err = game.lateralOffset - wantOffset;
+          input.state.left = err > 0.4;
+          input.state.right = err < -0.4;
+        }
+      }
     } else {
       input.state.left = false;
       input.state.right = false;
+      wasTelegraphing = false;
     }
   }
 
@@ -432,7 +464,12 @@ await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
   let heldAtArena = false;
   let won = false;
   let deaths = 0;
-  for (let i = 0; i < 20000 && !won; i++) {
+  // Budget scales with the fight's own HP_MAX (doubled for a longer, not
+  // more brutal, fight — diable.js's own comment) so this cap doesn't
+  // silently start failing an otherwise-winnable fight again next time
+  // HP_MAX moves.
+  const FRAME_BUDGET = 40000;
+  for (let i = 0; i < FRAME_BUDGET && !won; i++) {
     fightDiable(g.game, g.input);
     g.game.update(1 / 30);
     if (g.game.diable.isActive()) {

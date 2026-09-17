@@ -25,7 +25,17 @@ export const DIABLE_FLOW_DISTANCE = FLIGHT_END - 45;
 // clamps, so the encounter has a moment of dread before it locks in.
 const APPROACH = 16;
 
-const HP_MAX = 240;
+// The fight's original HP total, kept as its own constant: hpFrac (below)
+// anchors the difficulty ramp to *this*, not to the live HP_MAX, so
+// stretching HP_MAX only lengthens the safe opening, never the dangerous
+// finale — see hpFrac's own comment for why that distinction actually
+// matters (a first pass here that skipped it made the fight's last 45%
+// last twice as long too, which quietly broke it for anyone who doesn't
+// actively dodge).
+const ORIGINAL_HP_MAX = 240;
+// Doubled for a longer, more drawn-out fight without making it more
+// dangerous. BULLET_DAMAGE/CONTACT_DAMAGE untouched.
+const HP_MAX = 480;
 const BULLET_DAMAGE = 4;      // per pistol hit
 const CONTACT_DAMAGE = 30;    // a fireball that connects (game.js applies INVULN_TIME) — ~3 hits and the 4th kills
 
@@ -120,6 +130,12 @@ export function createDiable() {
     debugCentreX() { return centreX(); },
     // Live fireballs, for the same "is this fair" checks.
     getFireballs() { return fireballs; },
+    // Whether he's mid-windup right now (the flame swelling in his hand) —
+    // the one real dodge tell (TELEGRAPH's own comment). A shot's flight
+    // time is short enough that reacting only once it's airborne doesn't
+    // leave room to actually clear the gap between shots in a spread; the
+    // real move is to already be moving by the time he throws.
+    isTelegraphing() { return telegraph > 0; },
 
     // dt: seconds. playerFlowDistance: game.js's clock. canoe: {x,y} screen
     // space. bulletScreens: [{x,y,ref}] pistol shots in screen space.
@@ -176,7 +192,19 @@ export function createDiable() {
 
         // --- his attack: a fireball aimed at the canoe, fanning to a
         //     3-shot spread once he's badly hurt ---
-        const hpFrac = hp / HP_MAX;
+        // Anchored to ORIGINAL_HP_MAX, not the live HP_MAX: while hp is
+        // still above that (the "bonus" length added on top of the
+        // original fight), this reads as 1 — full-health behaviour,
+        // single shots at the slow interval — the same way the original
+        // fight opened. Only once hp actually drops into the original
+        // 0-240 range does the ramp (including the 3-shot spread below
+        // 45%) kick in, and from there it's pixel-for-pixel the same
+        // ramp the original, shorter fight always had. Extending HP_MAX
+        // without this anchor stretches the *dangerous* finale by the
+        // same factor as the *safe* opening — which is what silently
+        // turned "longer" into "a non-dodging strategy can't survive the
+        // last 45% anymore" (see HP_MAX's own comment).
+        const hpFrac = Math.min(hp, ORIGINAL_HP_MAX) / ORIGINAL_HP_MAX;
         if (telegraph > 0) {
           telegraph -= dt;
           if (telegraph <= 0) {
