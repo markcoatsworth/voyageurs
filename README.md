@@ -27,8 +27,7 @@ it's not the same running order every session:
   Quebec*, sourced from [Internet Archive](https://archive.org/details/lp_songs-and-dances-of-quebec_jean-carignan-aldor-morin-edgar-morin-b).
 - "Gigue du Poteau Blanc," "Quadrille Acadien," and "Quadrille Français,"
   performed by Joseph Allard, sourced from Library and Archives Canada.
-- "La Reel du Terreur" and "Le Reel du Diable" (the latter reserved for the
-  Diable boss fight, not in the regular shuffle), performed by Jos Bouchard;
+- "La Reel du Terreur" and "Le Reel du Diable," performed by Jos Bouchard;
   "Avec les Ruine-Babine" and "Les Batteux," performed by Louis « Pitou »
   Boudreault.
 - "St. Anne's Reel," performed by Joe Dobbs with The 1937 Flood — reserved
@@ -44,6 +43,12 @@ it's not the same running order every session:
   Chasse-galerie flight, not in the regular shuffle, sourced from Internet
   Archive's Great 78 Project
   ([source](https://archive.org/details/78_reel-du-gouvernement_les-chevaliers-du-folklore-t-duchene-a-allard-c-ouellette_gbia0277397a)).
+- "Reel du Paradis et Enfer," performed by Les Chevaliers — reserved for the
+  Diable boss fight (the Devil is a fiddler, so his fight gets a reel),
+  replacing "Le Reel du Diable" in that role; the Bouchard track now plays
+  in the regular shuffle instead. Supplied directly rather than sourced from
+  Internet Archive/LAC like the rest of this catalog — provenance and rights
+  status not independently verified.
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
@@ -58,10 +63,15 @@ there's no reason to assume they're any more settled. St. Anne's Reel is a diffe
 2009 recording, clearly still under whatever copyright the band/podcast
 holds, used here on the assumption that a jam-session recording shared
 publicly on the band's own podcast feed is low-risk for casual/personal
-use — not the same thing as a rights clearance. All are included as a
-deliberate, informed choice for casual/personal use, not because the
-rights are clean — swap the `public/audio/*.mp3` files for something with
-airtight licensing before this ships anywhere beyond that.
+use — not the same thing as a rights clearance. "Reel du Paradis et Enfer"
+is a further step removed again: supplied directly rather than pulled from
+a documented archive, so there's no source link to point to and no
+independent confirmation of who holds what rights — treat it as the least
+cleared track in the catalog, not more settled just because it lacks a
+paper trail. All are included as a deliberate, informed choice for
+casual/personal use, not because the rights are clean — swap the
+`public/audio/*.mp3` files for something with airtight licensing before
+this ships anywhere beyond that.
 
 ## Running it
 

@@ -31,6 +31,10 @@ const PLAYLIST = [
   { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du Terreur', artist: 'Jos Bouchard' },
   { src: '/audio/avec-les-ruine-babine.mp3', title: 'Avec les Ruine-Babine', artist: 'Louis « Pitou » Boudreault' },
   { src: '/audio/les-batteux.mp3', title: 'Les Batteux', artist: 'Louis « Pitou » Boudreault' },
+  // Formerly the Diable boss cue (DIABLE_TRACK below) — freed up when
+  // "Reel du Paradis et Enfer" took over that role. Kept in the catalog
+  // rather than dropped; it's a fine reel on its own merits outside the fight.
+  { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' },
 ];
 
 // Not part of the shuffle above — this only ever plays on cue, the moment
@@ -42,7 +46,12 @@ const BOSS_TRACK = { src: '/audio/rule-britannia.mp3', title: 'Rule, Britannia!'
 // Same deal for the Diable fight at the head of the Chasse-galerie — the
 // Devil is a fiddler, so his fight gets a reel. Reserved for that fight
 // only; kept out of the shuffle so it never turns up on its own elsewhere.
-const DIABLE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' };
+// Not from the Great 78 Project/LAC catalog the rest of this file cites —
+// supplied directly (public/audio/src/le-reel-du-paradis-et-enfer.wav,
+// normalized via scripts/normalize-audio.mjs same as everything else) —
+// see README.md's Music section for the same rights caveat every other
+// track here carries.
+const DIABLE_TRACK = { src: '/audio/le-reel-du-paradis-et-enfer.mp3', title: 'Reel du Paradis et Enfer', artist: 'Les Chevaliers' };
 // The Wendigo's cue — reserved rather than left in the shuffle. It's the one
 // recording in this catalog that isn't a period Québécois source (an
 // Appalachian old-time jam session — see README.md's Music section), which
