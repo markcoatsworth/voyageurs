@@ -105,29 +105,127 @@ function buildingsFor(seed) {
   });
 }
 
-// Québec City's own on-foot layout — hand-placed, not generated from
-// villageLayout() like every other village, since a real 1790s colonial
-// capital needs a lot more buildings than that small procedural cluster
-// ever produces, in stone rather than log (see sprites.js). Two rows
-// (kind: 'stone') plus one church (kind: 'church') set back between them,
-// laid out to leave the dock lane (DOCK_X0..DOCK_X1) and the repair
-// shop/trader's own spot clear, same as buildingsFor()'s cluster has to.
+// Québec City's own on-foot layout — rebuilt from an actual period source:
+// "Plan de la Ville de Québec" (dropped into the repo as
+// quebec-city-1700s.jpg — not committed, a reference image only), whose own
+// legend names every institution placed below (Fort St-Louis, the Récollets,
+// the Jésuites, the Ursulines, the Séminaire, l'Évêché, l'Hôtel-Dieu,
+// l'Intendance, the Batteries and the bastion line), same "real map, not a
+// generic cluster" treatment MONTREAL_ONFOOT_BUILDINGS already gets.
+//
+// The one thing Montréal's flat town never needed: Québec genuinely sits on
+// two levels, Haute-Ville walled on the bluff and Basse-Ville a narrow strip
+// at the water's edge below it — this game has no real elevation, so the
+// split is done the only way a top-down scene can: two bands (back = Haute-
+// Ville, y ~50-112; front = Basse-Ville, y ~140-168) separated by
+// QUEBEC_CITY_WALLS' own cliff/battery line, a real obstacle (not backdrop,
+// see below) with a single gate where Côte de la Montagne — the actual road
+// that has connected the two towns since the 1600s — climbs through it.
+// East-to-west order below follows the map's own real layout: Fort St-Louis
+// and the Récollets toward the point (Cap Diamant, west, where the citadel
+// tiles below stand in for Redoute du Cap au Diamant/Cavalier du Moulin),
+// the Cathedral/Séminaire/Évêché cluster around Place d'Armes at the head of
+// the Côte, the Ursulines and Jésuites further east, l'Hôtel-Dieu and
+// l'Intendance toward the St-Charles side (Sault-au-Matelot/St-Roch, off the
+// world's own east edge — this scene stops at the walled town itself, same
+// scope cut Montréal's own core town makes before its suburbs).
+const QUEBEC_WORLD_WIDTH = 560;
+
+// The cliff itself, as a real obstacle (isWalkable()'s walls check) rather
+// than Québec's old backdrop-only wall — the one meaningful new gameplay
+// beat this rebuild adds: you can't walk from the dock straight up into
+// Haute-Ville, you have to find Côte de la Montagne. Drawn with
+// drawWaterfrontWall (crenellations facing up, toward the water) rather than
+// drawSideWall — the real batteries named in the legend (Vaudreuil, Dauphine,
+// Royale, du Château) sit right on this cliff edge facing the river, exactly
+// the read that function already has.
+const QUEBEC_CITY_GATE = { x0: 255, x1: 305 };
+const QUEBEC_CLIFF_Y = 120;
+const QUEBEC_CLIFF_H = 12;
+const QUEBEC_CITY_WALLS = [
+  {
+    axis: 'h', lo: QUEBEC_CLIFF_Y, hi: QUEBEC_CLIFF_Y + QUEBEC_CLIFF_H,
+    spanLo: 0, spanHi: QUEBEC_WORLD_WIDTH,
+    gates: [[QUEBEC_CITY_GATE.x0, QUEBEC_CITY_GATE.x1]],
+  },
+];
+
+// Côte de la Montagne, climbing from right behind the dock/Place Royale
+// through the cliff's one gate up to Place d'Armes — same brick-strip
+// treatment as Montréal's own streets, just one road instead of a grid
+// (Québec's Basse-Ville-to-Haute-Ville climb is the one street this scene
+// actually needs).
+const QUEBEC_ROAD_V = { x: QUEBEC_CITY_GATE.x0, y: 86, w: QUEBEC_CITY_GATE.x1 - QUEBEC_CITY_GATE.x0, h: DOCK_TOP - 86 };
+// Place d'Armes — the square at the top of the Côte, fronted by Fort/
+// Château St-Louis (the map's own "a"). Packed earth (drawDirtPath), not
+// cobbled brick — this was the garrison's own parade ground, same
+// distinction MONTREAL_PARADE already draws against Montréal's market square.
+const QUEBEC_PLACE_DARMES = { x: 250, y: 86, w: 60, h: 26 };
+// Place Royale, Basse-Ville's own square in front of the Église de la
+// Basse-Ville (Notre-Dame-des-Victoires, the map's own "n") — a real
+// cobbled market square down by the harbour, so brick here, not dirt.
+const QUEBEC_PLACE_ROYALE = { x: 128, y: 140, w: 82, h: 26 };
+
+// Redoute du Cap au Diamant / Cavalier du Moulin (the map's own "b"/"c") —
+// the citadel's own outworks at the point, west of the Récollets, standing
+// apart from the main cliff line the same way QUEBEC_CITY_CITADEL already
+// reads as a distinct bastion in the river view. Decorative, like that one —
+// see its own comment.
+const QUEBEC_CITADEL_TILES = [
+  { x: 14, y: 114 }, { x: 34, y: 105 }, { x: 54, y: 116 },
+];
+
+// Two of the map's own scattered green garden plots — the Récollets' own
+// (west end, behind their convent) and the Séminaire/Cathedral precinct's
+// (east of Place d'Armes) — not all of them (Montréal's own equivalent
+// trims the same way; see MONTREAL_GARDEN_PLOTS' own comment).
+const QUEBEC_GARDEN_PLOTS = [
+  { x: 60, y: 30, w: 100, h: 34 },
+  { x: 370, y: 22, w: 100, h: 38 },
+];
+
 const QUEBEC_CITY_ONFOOT_BUILDINGS = [
-  // back row
-  { kind: 'stone', x: 34, y: 88, variant: 0, mirror: false },
-  { kind: 'stone', x: 78, y: 92, variant: 1, mirror: true },
-  { kind: 'stone', x: 122, y: 86, variant: 2, mirror: false },
-  { kind: 'stone', x: 198, y: 90, variant: 0, mirror: true },
-  { kind: 'stone', x: 242, y: 94, variant: 1, mirror: false },
-  { kind: 'stone', x: 286, y: 88, variant: 2, mirror: true },
-  // front row, closer to shore
-  { kind: 'stone', x: 34, y: 150, variant: 1, mirror: false },
-  { kind: 'stone', x: 78, y: 154, variant: 2, mirror: true },
-  { kind: 'stone', x: 222, y: 150, variant: 0, mirror: false },
-  { kind: 'stone', x: 266, y: 148, variant: 1, mirror: true },
-  // the church, set back behind the dock — the tallest thing in the scene,
-  // same "rises over the row in front of it" effect as the river view
-  { kind: 'church', x: 160, y: 112, mirror: false },
+  // --- Haute-Ville back row (further from Place d'Armes/the Côte) ---
+  // Les Récollets ("d") — west end, near the citadel point.
+  { kind: 'stone', x: 100, y: 62, variant: 0, mirror: false },
+  { kind: 'stone', x: 140, y: 58, variant: 1, mirror: true },
+  // Les Ursulines ("f") — east of the Séminaire cluster.
+  { kind: 'stone', x: 440, y: 64, variant: 2, mirror: false },
+  { kind: 'stone', x: 478, y: 60, variant: 0, mirror: true },
+  // Les Jésuites et dépendances ("e") — east end of Haute-Ville.
+  { kind: 'stone', x: 520, y: 64, variant: 1, mirror: false },
+
+  // --- Haute-Ville front row (facing Place d'Armes/the Côte) ---
+  // Fort/Château St-Louis ("a") — the Governor's own residence, right at
+  // the head of the Côte, west of Place d'Armes.
+  { kind: 'stone', x: 140, y: 104, variant: 2, mirror: false },
+  { kind: 'stone', x: 180, y: 108, variant: 0, mirror: true },
+  // L'Évêché ("h") — the Bishop's Palace, flanking the square's west side.
+  { kind: 'stone', x: 220, y: 112, variant: 1, mirror: true },
+  // La Paroisse avec le Séminaire et dépendances ("g") — the Cathedral
+  // (Notre-Dame de Québec) east of the square, the Séminaire itself right
+  // beside it (twin-tower sprite reused honestly, same institution type
+  // as Montréal's own Vieux Séminaire).
+  { kind: 'church', x: 340, y: 108, mirror: false },
+  { kind: 'seminary', x: 395, y: 100, mirror: false },
+  // L'Hôtel-Dieu ("i") — toward the St-Charles/east side.
+  { kind: 'stone', x: 450, y: 108, variant: 0, mirror: false },
+
+  // --- Basse-Ville, the narrow waterfront strip below the cliff ---
+  // Église de la Basse-Ville / Notre-Dame-des-Victoires ("n") — Place
+  // Royale, west of the Côte.
+  { kind: 'church', x: 160, y: 150, mirror: false },
+  { kind: 'stone', x: 70, y: 162, variant: 1, mirror: false },
+  { kind: 'stone', x: 105, y: 166, variant: 2, mirror: true },
+  { kind: 'stone', x: 200, y: 158, variant: 0, mirror: false },
+  // Le Sault au Matelot ("l") — the waterfront row continuing east, past
+  // the Côte, toward the St-Charles.
+  { kind: 'stone', x: 355, y: 164, variant: 1, mirror: true },
+  { kind: 'stone', x: 400, y: 158, variant: 2, mirror: false },
+  // L'Intendance ("m") — the Intendant's Palace, furthest east, nearest
+  // the real St-Charles-side site.
+  { kind: 'stone', x: 470, y: 160, variant: 0, mirror: true },
+  { kind: 'stone', x: 505, y: 164, variant: 1, mirror: false },
 ];
 
 const TROIS_RIVIERES_ONFOOT_BUILDINGS = [
@@ -585,8 +683,8 @@ function buildingsForQuebecCity() {
     mirror: b.mirror,
     anchorX: b.x,
     anchorY: b.y,
-    footHalfW: b.kind === 'church' ? 12 : 13,
-    footHeight: b.kind === 'church' ? 26 : 24,
+    footHalfW: b.kind === 'seminary' ? 24 : b.kind === 'church' ? 12 : 13,
+    footHeight: b.kind === 'seminary' ? 18 : b.kind === 'church' ? 26 : 24,
   }));
 }
 
@@ -1144,11 +1242,15 @@ export function createVillageScene() {
       isQuebecCity = village && village.name === 'Quebec City';
       isTroisRivieres = village && village.name === 'Trois-Rivieres';
       isMontreal = village && village.name === 'Montreal';
-      worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : CANVAS_WIDTH;
+      worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : isQuebecCity ? QUEBEC_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
       worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : 0;
-      worldRight = isMontreal ? MONTREAL_WORLD_RIGHT : CANVAS_WIDTH;
-      walls = isMontreal ? MONTREAL_WALLS : null;
+      // worldRight tracks worldWidth (not always CANVAS_WIDTH) so Québec's
+      // own wider world is actually walkable edge to edge — every other
+      // village still has worldWidth === CANVAS_WIDTH, so this changes
+      // nothing for them.
+      worldRight = isMontreal ? MONTREAL_WORLD_RIGHT : worldWidth;
+      walls = isMontreal ? MONTREAL_WALLS : isQuebecCity ? QUEBEC_CITY_WALLS : null;
       repairShop = repairShopFor(worldWidth);
       buildings = isQuebecCity
         ? [...buildingsForQuebecCity(), repairShop]
@@ -1309,6 +1411,18 @@ export function createVillageScene() {
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_EAST.x, MONTREAL_DIRT_PATH_EAST.y, MONTREAL_DIRT_PATH_EAST.w, MONTREAL_DIRT_PATH_EAST.h);
       }
 
+      // Québec City's own streets — Place Royale (cobbled, by the harbour),
+      // Côte de la Montagne climbing up through the cliff's one gate, and
+      // Place d'Armes (packed earth — a parade ground, not a market) at the
+      // top, plus the two garden plots. Same ground-layer pass as
+      // Montréal's own streets, drawn before the dock/buildings/player.
+      if (isQuebecCity) {
+        drawBrickRoad(ctx, QUEBEC_PLACE_ROYALE.x, QUEBEC_PLACE_ROYALE.y, QUEBEC_PLACE_ROYALE.w, QUEBEC_PLACE_ROYALE.h);
+        drawBrickRoad(ctx, QUEBEC_ROAD_V.x, QUEBEC_ROAD_V.y, QUEBEC_ROAD_V.w, QUEBEC_ROAD_V.h);
+        drawDirtPath(ctx, QUEBEC_PLACE_DARMES.x, QUEBEC_PLACE_DARMES.y, QUEBEC_PLACE_DARMES.w, QUEBEC_PLACE_DARMES.h);
+        for (const g of QUEBEC_GARDEN_PLOTS) drawGardenPlot(ctx, g.x, g.y, g.w, g.h);
+      }
+
       // dock, planks + pilings, leading from the shore down to the canoe
       const dX0 = dockX0(worldWidth), dX1 = dockX1(worldWidth);
       ctx.fillStyle = '#3f2b1a';
@@ -1408,6 +1522,18 @@ export function createVillageScene() {
         for (const [s0, s1] of wallSegments(west)) drawSideWall(ctx, west.lo, s0, west.hi - west.lo, s1 - s0, 'w');
         for (const [s0, s1] of wallSegments(east)) drawSideWall(ctx, east.lo, s0, east.hi - east.lo, s1 - s0, 'e');
         for (const [s0, s1] of wallSegments(south)) drawWaterfrontWall(ctx, s0, south.lo, s1 - s0, south.hi - south.lo);
+      }
+      // The cliff itself, standing in for the four riverfront batteries
+      // (Vaudreuil/Dauphine/Royale/du Château) — a real obstacle
+      // (QUEBEC_CITY_WALLS, checked by isWalkable() above), same
+      // waterfront-wall styling as Montréal's own south wall since both
+      // read as "battlements facing the river."
+      if (isQuebecCity) {
+        const [cliff] = QUEBEC_CITY_WALLS;
+        for (const [s0, s1] of wallSegments(cliff)) drawWaterfrontWall(ctx, s0, cliff.lo, s1 - s0, cliff.hi - cliff.lo);
+        // Redoute du Cap au Diamant / Cavalier du Moulin — decorative
+        // outworks at the point (QUEBEC_CITADEL_TILES' own comment).
+        for (const t of QUEBEC_CITADEL_TILES) ctx.drawImage(rampartSprite, t.x, t.y);
       }
       if (!isQuebecCity) {
         for (const t of trees) {
