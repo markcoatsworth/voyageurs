@@ -42,9 +42,13 @@ const APPROACH = 16;
 // dodging the whole time. RAMP_GAMMA > 1 is what avoids repeating that:
 // it biases the curve to stay low through the opening (still a real safe
 // stretch, just no longer the entire fight) and only climbs to full
-// intensity in roughly the last 15% of hp — a real, felt finale (~24s of
-// hardest-tier dodging at steady damage), not a multi-minute wall.
-const RAMP_GAMMA = 1.7;
+// intensity in roughly the last 14% of hp — a real, felt finale, not a
+// multi-minute wall. Nudged up from 1.7 (which put that threshold at
+// 15.6%) alongside CONTACT_DAMAGE's own reduction (see its comment) after
+// a request to tone the fight down slightly — a fractionally later,
+// gentler climb into the hardest tier, not a reversal of the escalation
+// itself.
+const RAMP_GAMMA = 1.9;
 // A first pass doubled this (240 -> 480) and landed way short: a real
 // playtest cleared it in ~30s. At FIRE_COOLDOWN (weapons.js, 0.16s) and
 // BULLET_DAMAGE below, holding the trigger on a well-tracked target caps
@@ -57,12 +61,32 @@ const RAMP_GAMMA = 1.7;
 // dangerous: BULLET_DAMAGE/CONTACT_DAMAGE and the whole ramp shape below
 // are untouched, so this is purely more hits required, nothing riskier
 // about landing or missing any one of them.
+// Recalibrated again: a request for "~3min for a skilled player, ~5min
+// for a slower one" (down from an earlier ~5min/~7min ask — this fight
+// has been trending shorter each round, not longer). Using the same
+// ~16 dmg/sec real-world baseline above (not the ~25 dmg/sec theoretical
+// max, which assumes a stationary target and no need to dodge): 3min *
+// 16 = 2880. A slower player naturally lands fewer hits per second while
+// also dodging, so the same pool stretches to ~5min for them without a
+// second number to separately tune — one pool, and completion time
+// falls out of whatever dps the player actually manages, the same way a
+// real boss fight would scale with skill on its own.
 // Exported so the smoke test's own frame budget can scale off the real
 // value instead of a hardcoded ratio that goes stale the next time this
-// number moves (it already has, twice).
-export const HP_MAX = 3840;
+// number moves (it already has, three times).
+export const HP_MAX = 2880;
 const BULLET_DAMAGE = 4;      // per pistol hit
-const CONTACT_DAMAGE = 30;    // a fireball that connects (game.js applies INVULN_TIME) — ~3 hits and the 4th kills
+// A fireball that connects (game.js applies INVULN_TIME). Was 30 — ~3 hits
+// and the 4th kills. Every death resets Diable's own hp back to HP_MAX
+// (game.js's start() calls diable.reset()), so for anyone who dies even
+// once, total time-to-clear is dominated by how often they die and have
+// to re-grind the whole pool from scratch, not raw dps — a request for
+// "tone it down a little, ~5min for a skilled clean run, ~7min for a
+// slower player" is really a request for fewer deaths, not a shorter
+// pool (a skilled clean run is already close to 5min; HP_MAX shrinking
+// would undershoot that). 25 gives one more hit of margin (4 survived,
+// the 5th kills) without touching the pool or the escalation shape.
+const CONTACT_DAMAGE = 25;
 
 // --- his screen footprint. He stands in the upper half of the channel; the
 // canoe is pulled low for the fight (chasseGalerie.js's boss hover height),
