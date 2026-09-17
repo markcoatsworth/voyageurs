@@ -174,7 +174,27 @@ function install() {
   globalThis.getComputedStyle = windowShim.getComputedStyle;
   globalThis.Image = function () { return makeElement('img'); };
   globalThis.Audio = function () {
-    return { play: () => Promise.resolve(), pause: noop, load: noop, addEventListener: noop, removeEventListener: noop, canPlayType: () => '', volume: 1, currentTime: 0, loop: false };
+    const listeners = {};
+    return {
+      play: () => Promise.resolve(),
+      pause: noop,
+      // A real element fires readiness events asynchronously after a
+      // source change; queued the same way here so code that waits for
+      // 'canplay' rather than calling play() immediately (music.js's
+      // playSpecial) still runs end to end in this shim instead of
+      // depending entirely on its own fallback timer.
+      load() {
+        queueMicrotask(() => (listeners.canplay || []).forEach((fn) => fn()));
+      },
+      addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
+      removeEventListener(type, fn) {
+        listeners[type] = (listeners[type] || []).filter((f) => f !== fn);
+      },
+      canPlayType: () => '',
+      volume: 1,
+      currentTime: 0,
+      loop: false,
+    };
   };
   globalThis.HTMLElement = function () {};
   try { globalThis.navigator = windowShim.navigator = { maxTouchPoints: 0, userAgent: 'node-smoke' }; } catch { /* read-only in some node builds — fine */ }

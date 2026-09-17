@@ -249,19 +249,35 @@ export function createMusic({ onTrack } = {}) {
     );
   }
 
+  // How long playSpecial() waits for the browser's own 'canplay' signal
+  // before giving up on it and calling play() anyway — a rare last resort,
+  // not the normal path (see playSpecial's own comment for why the normal
+  // path is event-driven, not timer-driven). 'canplay' should fire within
+  // milliseconds for a same-origin file under any real network condition,
+  // so this only matters if a browser genuinely never fires it.
+  const CANPLAY_FALLBACK_MS = 2000;
+
   // Same idea as playCurrent() above, but for a specific one-off track
   // instead of wherever the shuffle currently points — see BOSS_TRACK's own
   // comment. Deliberately NOT going through prefetch()/the blob cache (see
   // that call site's own comment for why) — audio.src is assigned straight
   // to the track's own URL and the browser streams it natively, the same
-  // ordinary path every <audio> tag takes by default. Fully synchronous up
-  // to the play() call itself, so there's no async gap for a stale call to
-  // land in the way playCurrent() has to guard against; generation is still
-  // bumped so stop() and a concurrent playCurrent() know a special track is
-  // now in charge. One retry on a rejected play() (not a hard failure like
-  // AbortError, which just means something newer already took over) — cheap
-  // insurance against a transient rejection leaving a boss cue silently
-  // stuck on whatever was playing before, with no second attempt at all.
+  // ordinary path every <audio> tag takes by default.
+  //
+  // play() is deliberately NOT called immediately after the src swap —
+  // reported on mobile as exactly the failure that reordering predicts:
+  // the "now playing" card updated correctly (the play() promise resolved)
+  // but the audio actually heard kept playing the *previous* track for a
+  // while. The DOM-level API resolving successfully only means playback
+  // was accepted; it doesn't mean the underlying native media pipeline
+  // (which on mobile is frequently a separate, slower-to-reconfigure OS
+  // decoder, not something purely inside the JS engine) has actually
+  // finished tearing down the old resource and switched to the new one —
+  // a desktop browser's own pipeline is fast enough that this race is
+  // essentially never visible, which is exactly why it never showed up in
+  // any desktop testing. Waiting for 'canplay' — the browser's own signal
+  // that the *new* resource is actually decoded and ready — closes that
+  // race by construction instead of hoping the timing works out.
   function playSpecial(track) {
     special = true;
     generation++;
@@ -269,13 +285,14 @@ export function createMusic({ onTrack } = {}) {
     debug(`playSpecial: ${track.title}`);
     audio.pause();
     audio.src = track.src;
-    audio.load();
     // track.volume overrides the shuffle's own DEFAULT_VOLUME — see
     // DIABLE_TRACK's own comment for why that one needs it; every other
     // special track just falls back to the same level the shuffle uses.
     audio.volume = track.volume ?? DEFAULT_VOLUME;
+
     let retried = false;
     const attempt = () => {
+      if (generation !== requestedGeneration) return;
       audio.play().then(
         () => {
           started = true;
@@ -292,7 +309,15 @@ export function createMusic({ onTrack } = {}) {
         }
       );
     };
-    attempt();
+    let ready = false;
+    const onReady = () => {
+      if (ready) return;
+      ready = true;
+      attempt();
+    };
+    audio.addEventListener('canplay', onReady, { once: true });
+    setTimeout(onReady, CANPLAY_FALLBACK_MS);
+    audio.load();
   }
 
   audio.addEventListener('error', () => {
