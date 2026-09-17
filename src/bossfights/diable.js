@@ -633,32 +633,67 @@ function drawDevil(ctx, cx, cy, time, telegraph, hitFlash, dieK, fade = 1, feint
   ctx.restore();
 }
 
+// Was a flat-filled disc plus a shadowBlur glow, trailed by a clean taper
+// of same-shaped circles — reported as "looks like a flashlight," which
+// tracks: that's textbook light-source/lens rendering, not fire. Rebuilt
+// with the same visual language the rest of this file's fire already
+// uses (drawHellfireWall's tongues, the hand-flame in drawDevil) —
+// irregular, flickering flame licks trailing behind a soft radial-
+// gradient head, instead of a hard-edged ball and a geometric taper.
 function drawFireball(ctx, f, time) {
-  ctx.save();
-  // a short tail, opposite the travel direction
   const len = Math.hypot(f.vx, f.vy) || 1;
   const ux = f.vx / len, uy = f.vy / len;
-  for (let i = 4; i >= 1; i--) {
-    ctx.globalAlpha = 0.12 * i;
-    ctx.fillStyle = i > 2 ? '#ff7a1e' : '#a82810';
+  // Per-fireball, position-derived (not Math.random(), which would make
+  // the flicker jump every frame instead of animating smoothly) — close
+  // enough to unique between fireballs in the same volley that they don't
+  // flicker in lockstep with each other.
+  const seed = f.x * 0.37 + f.y * 0.53;
+  ctx.save();
+
+  // Flame licks peeling off behind it — teardrop tongues (same
+  // construction as drawHellfireWall's own), each with its own flicker
+  // and a little sideways sway, not a straight line of shrinking circles.
+  for (let i = 0; i < 3; i++) {
+    const flick = 0.55 + Math.sin(time * (10 + i * 4) + seed + i * 2) * 0.45;
+    const tLen = (10 + i * 5) * (0.6 + flick * 0.6);
+    const tW = 3.4 + i * 1.4;
+    const bx = f.x - ux * (2 + i * 2.5);
+    const by = f.y - uy * (2 + i * 2.5);
+    const sway = Math.sin(time * 6 + seed + i) * 2.5;
+    const tx = bx - ux * tLen - uy * sway;
+    const ty = by - uy * tLen + ux * sway;
+    ctx.globalAlpha = Math.max(0, (0.6 - i * 0.16) * flick);
+    ctx.fillStyle = i === 0 ? '#ffcf7a' : i === 1 ? '#ff7e26' : '#a8280c';
     ctx.beginPath();
-    ctx.arc(f.x - ux * i * 3, f.y - uy * i * 3, 5 - i * 0.6, 0, Math.PI * 2);
+    ctx.moveTo(bx - uy * tW, by + ux * tW);
+    ctx.quadraticCurveTo(bx - ux * tLen * 0.4 - uy * sway * 0.5, by - uy * tLen * 0.4 + ux * sway * 0.5, tx, ty);
+    ctx.quadraticCurveTo(bx - ux * tLen * 0.4 + uy * sway * 0.5, by - uy * tLen * 0.4 - ux * sway * 0.5, bx + uy * tW, by - ux * tW);
+    ctx.closePath();
     ctx.fill();
   }
+
+  // The head: a soft glowing gradient, not a flat disc + shadowBlur —
+  // white-hot centre fading through orange to a transparent red edge,
+  // pulsing gently so it reads as a living ember, not a fixed icon.
   ctx.globalAlpha = 1;
-  ctx.shadowColor = '#ff7a1e';
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = '#a82810';
+  const pulse = 0.85 + Math.sin(time * 16 + seed) * 0.15;
+  const r = 8 * pulse;
+  const glow = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+  glow.addColorStop(0, 'rgba(255,250,225,0.95)');
+  glow.addColorStop(0.3, 'rgba(255,160,40,0.9)');
+  glow.addColorStop(0.65, 'rgba(200,50,10,0.55)');
+  glow.addColorStop(1, 'rgba(120,20,4,0)');
+  ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(f.x, f.y, 6, 0, Math.PI * 2);
+  ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#ff8a2c';
+
+  // A small white-hot spark at the leading edge — the one point that
+  // should read as genuinely incandescent.
+  ctx.fillStyle = 'rgba(255,255,240,0.9)';
   ctx.beginPath();
-  ctx.arc(f.x, f.y, 4, 0, Math.PI * 2);
+  ctx.arc(f.x + ux * 1.2, f.y + uy * 1.2, 1.8 * pulse, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#ffe0a0';
-  ctx.beginPath();
-  ctx.arc(f.x - ux, f.y - uy, 2, 0, Math.PI * 2);
-  ctx.fill();
+
   ctx.restore();
 }
