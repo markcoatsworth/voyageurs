@@ -121,6 +121,27 @@ function prefetch(url) {
   return promise;
 }
 
+// How long playSpecial() (the boss tracks) will wait for prefetch()'s own
+// blob before giving up and falling back to the raw URL instead — a boss
+// cue has to cut in close to the instant it's triggered, not however long
+// a large file's prefetch happens to take on a slow connection. Without
+// this ceiling, a still-queued prefetch (see the reordering above) just
+// never resolves and the currently-playing track keeps going, silently,
+// forever — indistinguishable from "nothing happened" to whoever's
+// playing. The raw-URL fallback still plays (the browser streams it
+// natively instead of waiting for the whole blob), just without the
+// zero-latency swap a completed blob gives every other track.
+const SPECIAL_TRACK_TIMEOUT_MS = 1500;
+function withTimeout(promise, ms, fallback) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then((v) => {
+      clearTimeout(timer);
+      resolve(v);
+    });
+  });
+}
+
 // Fisher-Yates — used once at startup so the play order isn't the same
 // every session, and again each time the shuffled order is exhausted so it
 // doesn't just repeat the same cycle forever.
@@ -155,13 +176,23 @@ export function createMusic({ onTrack } = {}) {
   // comment for why this, not audio.src/preload, is what actually gets a
   // real head start on mobile. Fire-and-forget: playCurrent() awaits
   // whichever of these promises it needs, whenever it needs it.
-  for (const track of PLAYLIST) prefetch(track.src);
-  // The boss tracks need the exact same head start — ready to cut in the
-  // instant the frigate is spotted / the Devil looms up, not fetching then.
+  // Boss tracks first, *before* the full shuffle — they have to be ready
+  // the instant an unpredictable trigger fires (a frigate sighting, the
+  // Devil appearing), while the regular shuffle only ever needs its next
+  // one or two tracks ready before it gets there. Reported on mobile as
+  // the Diable fight's music never switching: on a fast desktop connection
+  // every concurrent fetch below finishes in a couple seconds regardless of
+  // order, but on a slower/congested mobile connection the browser queues
+  // them, and with the full ~15-track shuffle fired first, the Diable
+  // track's own prefetch was queued dead last — reachable before its fetch
+  // had even started. See SPECIAL_TRACK_TIMEOUT_MS below for the other half
+  // of this fix (a hard ceiling, since reordering alone doesn't guarantee
+  // any one fetch finishes in time on a genuinely slow connection).
   prefetch(BOSS_TRACK.src);
   prefetch(DIABLE_TRACK.src);
   prefetch(WENDIGO_TRACK.src);
   prefetch(CHASSE_GALERIE_TRACK.src);
+  for (const track of PLAYLIST) prefetch(track.src);
 
   // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
   // now, or null before the first successful play(). onTrack — passed by
@@ -231,7 +262,7 @@ export function createMusic({ onTrack } = {}) {
     special = true;
     generation++;
     const requestedGeneration = generation;
-    const src = await prefetch(track.src);
+    const src = await withTimeout(prefetch(track.src), SPECIAL_TRACK_TIMEOUT_MS, track.src);
     if (generation !== requestedGeneration) return;
     audio.src = src;
     // track.volume overrides the shuffle's own DEFAULT_VOLUME — see
