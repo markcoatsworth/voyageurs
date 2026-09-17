@@ -65,6 +65,18 @@ const MONTREAL_WORLD_TOP = -280;
 // worldTop/MONTREAL_WORLD_WIDTH already do for their own axes.
 const MONTREAL_WORLD_LEFT = -240;
 
+// Same idea, past the real east gate this time — the map shows one
+// there too (by the Arsenal), leading out along the shore to "The Fort"
+// (a small redoubt, "only a Cavalier without a Parapet" per the map's
+// own legend) sitting alone in the open field beyond. MONTREAL_WORLD_
+// WIDTH itself stays fixed at 640 (the walled town's own interior, and
+// the dock's centring point) — worldRight is the separate exploration
+// boundary, mirroring worldLeft on this axis exactly the same way:
+// worldRight === CANVAS_WIDTH (not worldWidth) for every other village,
+// collapsing the horizontal-maximum camera clamp to reproduce the old
+// fixed framing exactly.
+const MONTREAL_WORLD_RIGHT = MONTREAL_WORLD_WIDTH + 240;
+
 // Anchor is the point where each building's front (door) sits; the
 // collision box is a simplified footprint under the sprite's walls, not
 // its wider overhanging roof. The cluster is generated from the same
@@ -248,6 +260,17 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   // trade-off the always-by-the-dock repair shop already makes.
   { kind: 'stone', x: 615, y: 152, variant: 0, mirror: false },
 
+  // --- past the east gate (MONTREAL_WORLD_RIGHT opened this ground up;
+  // see its own comment) ---
+  // "The Fort" — the map's own label for it, with its own legend entry:
+  // "only a Cavalier without a Parapet," i.e. a raised gun platform on
+  // its own, not a proper bastioned fort — a minor outwork standing
+  // alone in the open field beyond the gate, not another building
+  // cluster. The stone sprite is a simplification (no bespoke redoubt
+  // sprite exists), same pragmatic reuse as Fort de la Montagne's own
+  // seminary-sprite stand-in above.
+  { kind: 'stone', x: 760, y: 95, variant: 2, mirror: false },
+
   // The Mont-Royal district — north of the built-up town, in the field
   // around the mountain itself (MONTREAL_WORLD_TOP opened this ground up;
   // see its own comment). By 1790 this was genuinely rural: Sulpician
@@ -366,6 +389,11 @@ const MONTREAL_DIRT_PATH_SPUR = { x: 60, y: -22, w: 250, h: 14 };
 // front row (x: 15, roughly the Récollets buildings' own street
 // frontage) and runs out to the world's own western edge.
 const MONTREAL_DIRT_PATH_WEST = { x: MONTREAL_WORLD_LEFT, y: 148, w: 15 - MONTREAL_WORLD_LEFT, h: 14 };
+// Same idea, east out past the east gate toward "The Fort" — picks up
+// right where the wall's own gate opens (x: 648, the east wall's own
+// outer face — MONTREAL_WALLS' own east segment, defined further down)
+// and runs out to the world's own eastern edge.
+const MONTREAL_DIRT_PATH_EAST = { x: 648, y: 100, w: MONTREAL_WORLD_RIGHT - 648, h: 14 };
 
 // The road up to the district's west field was originally a guess (a
 // fork off the fort's own spur) made before a real source was in hand.
@@ -450,15 +478,15 @@ const MONTREAL_WALLS = [
     spanLo: CITY_WALL_Y + CITY_WALL_H, spanHi: MONTREAL_WATERFRONT_WALL_Y + MONTREAL_WATERFRONT_WALL_H,
     gateLo: 145, gateHi: 167,
   },
-  // East wall — the map shows a real gate here too, leading to a road
-  // further along the north shore, but that ground is outside this
-  // world's own edge (the margin check already stops the player past
-  // x: 630) and isn't built yet. Left solid rather than opening a gate
-  // onto nothing; a real spot to pick up from later.
+  // East wall — the real gate here (by the Arsenal) leads out to "The
+  // Fort" (MONTREAL_EAST_FORT, below), same idea as the west's Récollets
+  // Gate leading to the suburb. worldRight (MONTREAL_WORLD_RIGHT) is
+  // what actually makes this ground reachable — without it the margin
+  // check alone would've stopped the player right at the wall anyway.
   {
     axis: 'v', lo: 628, hi: 628 + CITY_WALL_SIDE_W,
     spanLo: CITY_WALL_Y + CITY_WALL_H, spanHi: MONTREAL_WATERFRONT_WALL_Y + MONTREAL_WATERFRONT_WALL_H,
-    gateLo: null, gateHi: null,
+    gateLo: 96, gateHi: 120,
   },
   // South/waterfront wall — the map shows a small cluster of gates
   // right by the wharf (Market Gate, St Mary's Gate, Water Gate); one
@@ -558,10 +586,18 @@ const MONTREAL_DISTRICT_TREE_SPOTS = [
   { x: 285, y: -30 }, { x: 330, y: -35 }, { x: 285, y: -105 }, { x: 335, y: -115 },
   { x: 280, y: -185 }, { x: 330, y: -195 }, { x: 285, y: -235 },
 ];
+// The open field past the east gate, around "The Fort" — scattered,
+// clear of the fort's own footprint and the path leading to it, same
+// "clearing, not a lawn" read as the rest of Montreal's own countryside.
+const MONTREAL_EAST_TREE_SPOTS = [
+  { x: 660, y: 40 }, { x: 690, y: 100 }, { x: 720, y: 30 },
+  { x: 800, y: 35 }, { x: 830, y: 90 }, { x: 800, y: 110 }, { x: 850, y: 55 },
+];
 const MONTREAL_TREE_SPOTS = [
   ...clearOfDock([...TREE_SPOTS, ...TREE_SPOTS.map((t) => ({ x: MONTREAL_WORLD_WIDTH - t.x, y: t.y }))]),
   ...MONTREAL_NORTH_TREE_SPOTS,
   ...MONTREAL_DISTRICT_TREE_SPOTS,
+  ...MONTREAL_EAST_TREE_SPOTS,
 ];
 function treesFor(seed, spots = TREE_SPOTS) {
   return spots.map((t, i) => ({
@@ -715,13 +751,16 @@ function overlapsBuilding(buildings, x, y) {
 }
 
 // On land the player can walk anywhere within the scene margins (the
-// active world's own width, not always CANVAS_WIDTH — see worldWidth);
-// over the water band they're restricted to the dock's width, i.e.
-// walking the plank back out to the boat rather than into the river.
-// walls (null everywhere but Montreal — see MONTREAL_WALLS) is the full
-// perimeter: each strip blocks its own band except at its own gate.
-function isWalkable(buildings, x, y, worldWidth, worldTop, walls, worldLeft) {
-  if (x < worldLeft + 10 || x > worldWidth - 10 || y < worldTop + 10 || y > CANVAS_HEIGHT - 4) return false;
+// active world's own right/left extent, not always CANVAS_WIDTH/0 — see
+// worldRight/worldLeft); over the water band they're restricted to the
+// dock's width, i.e. walking the plank back out to the boat rather than
+// into the river. dockX0/X1 still key off worldWidth specifically (the
+// walled town's own fixed interior/dock-centring width), not worldRight
+// (the separate, further-out exploration boundary). walls (null
+// everywhere but Montreal — see MONTREAL_WALLS) is the full perimeter:
+// each strip blocks its own band except at its own gate.
+function isWalkable(buildings, x, y, worldWidth, worldTop, walls, worldLeft, worldRight) {
+  if (x < worldLeft + 10 || x > worldRight - 10 || y < worldTop + 10 || y > CANVAS_HEIGHT - 4) return false;
   if (y > WATER_TOP && (x < dockX0(worldWidth) || x > dockX1(worldWidth))) return false;
   if (walls) {
     for (const w of walls) {
@@ -960,6 +999,7 @@ export function createVillageScene() {
   let worldWidth = CANVAS_WIDTH;
   let worldTop = 0;
   let worldLeft = 0;
+  let worldRight = CANVAS_WIDTH;
   let walls = null;
   let repairShop = repairShopFor(worldWidth);
   let buildings = [...buildingsFor(0), repairShop];
@@ -991,6 +1031,7 @@ export function createVillageScene() {
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
       worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : 0;
+      worldRight = isMontreal ? MONTREAL_WORLD_RIGHT : CANVAS_WIDTH;
       walls = isMontreal ? MONTREAL_WALLS : null;
       repairShop = repairShopFor(worldWidth);
       buildings = isQuebecCity
@@ -1047,8 +1088,8 @@ export function createVillageScene() {
         const ny = player.y + dy * step;
         // Resolve each axis separately so sliding along a wall/edge works
         // instead of a diagonal move being blocked entirely by one axis.
-        if (isWalkable(buildings, nx, player.y, worldWidth, worldTop, walls, worldLeft)) player.x = nx;
-        if (isWalkable(buildings, player.x, ny, worldWidth, worldTop, walls, worldLeft)) player.y = ny;
+        if (isWalkable(buildings, nx, player.y, worldWidth, worldTop, walls, worldLeft, worldRight)) player.x = nx;
+        if (isWalkable(buildings, player.x, ny, worldWidth, worldTop, walls, worldLeft, worldRight)) player.y = ny;
 
         strideTimer += dt;
         if (strideTimer > 0.28) {
@@ -1060,11 +1101,11 @@ export function createVillageScene() {
       }
 
       // The camera follows the player on both axes, clamped so it never
-      // scrolls past the world's own edges — [0, 0] when worldWidth ===
+      // scrolls past the world's own edges — [0, 0] when worldRight ===
       // CANVAS_WIDTH, worldTop === 0, and worldLeft === 0 (every village
       // but Montreal), which pins the camera at (0, 0) always and
       // reproduces the old fixed-screen framing exactly.
-      camera.x = Math.max(worldLeft, Math.min(worldWidth - CANVAS_WIDTH, player.x - CANVAS_WIDTH / 2));
+      camera.x = Math.max(worldLeft, Math.min(worldRight - CANVAS_WIDTH, player.x - CANVAS_WIDTH / 2));
       // Max is always 0, not a worldHeight-derived value — the world's
       // south edge never moves (see MONTREAL_WORLD_TOP's own comment),
       // only the north one does, so the camera only ever scrolls upward
@@ -1146,6 +1187,8 @@ export function createVillageScene() {
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_WEST.x, MONTREAL_DIRT_PATH_WEST.y, MONTREAL_DIRT_PATH_WEST.w, MONTREAL_DIRT_PATH_WEST.h);
         ctx.fillStyle = pat.water;
         for (const r of MONTREAL_ST_PETER_RIVER) ctx.fillRect(r.x, r.y, r.w, r.h);
+        // Same, east out past the east gate toward "The Fort".
+        drawDirtPath(ctx, MONTREAL_DIRT_PATH_EAST.x, MONTREAL_DIRT_PATH_EAST.y, MONTREAL_DIRT_PATH_EAST.w, MONTREAL_DIRT_PATH_EAST.h);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe
