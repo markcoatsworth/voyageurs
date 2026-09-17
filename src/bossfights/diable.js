@@ -35,9 +35,22 @@ const APPROACH = 16;
 // last twice as long too, which quietly broke it for anyone who doesn't
 // actively dodge).
 const ORIGINAL_HP_MAX = 240;
-// Doubled for a longer, more drawn-out fight without making it more
-// dangerous. BULLET_DAMAGE/CONTACT_DAMAGE untouched.
-const HP_MAX = 480;
+// A first pass doubled this (240 -> 480) and landed way short: a real
+// playtest cleared it in ~30s. At FIRE_COOLDOWN (weapons.js, 0.16s) and
+// BULLET_DAMAGE below, holding the trigger on a well-tracked target caps
+// out around 25 dmg/sec -- so 480/25 ~= 19-30s once you're actually
+// landing most shots, which is exactly what happened. No HP number was
+// ever going to fix that on its own; the real ceiling is damage-per-
+// second, not the pool. Scaled from that real data point (30s at 480)
+// to a several-minutes target instead of guessing again -- ~8x, for
+// somewhere around 4 minutes of sustained, accurate fire. Still not more
+// dangerous: BULLET_DAMAGE/CONTACT_DAMAGE and the whole ramp shape below
+// are untouched, so this is purely more hits required, nothing riskier
+// about landing or missing any one of them.
+// Exported so the smoke test's own frame budget can scale off the real
+// value instead of a hardcoded ratio that goes stale the next time this
+// number moves (it already has, twice).
+export const HP_MAX = 3840;
 const BULLET_DAMAGE = 4;      // per pistol hit
 const CONTACT_DAMAGE = 30;    // a fireball that connects (game.js applies INVULN_TIME) — ~3 hits and the 4th kills
 

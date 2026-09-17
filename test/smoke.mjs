@@ -60,7 +60,7 @@ const { getDockHit } = await import('../src/world/villages.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
-const { DIABLE_FLOW_DISTANCE } = await import('../src/bossfights/diable.js');
+const { DIABLE_FLOW_DISTANCE, HP_MAX: DIABLE_HP_MAX } = await import('../src/bossfights/diable.js');
 const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
 const { TRIGGER_DISTANCE: WENDIGO_TRIGGER, DELIVERANCE_DISTANCE: WENDIGO_DELIVERANCE } = await import('../src/bossfights/wendigo.js');
 
@@ -467,19 +467,24 @@ await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
   let lowestHpPct = 100;
   // This scenario checks liveness/integrity (this file's own top comment:
   // "NOT an assertion of correct gameplay"), not that a scripted bot can
-  // fairly clear a bullet-hell-style fight — the fight is now long enough
-  // that a full clean clear depends on genuinely reactive dodging no
-  // script here manages well, and since nothing in the sim is randomised,
-  // a bot that can't clear it fails at the exact same point every single
-  // retry, no matter the frame budget (confirmed empirically, not just in
-  // theory). Real winnability is a human-playtesting question — this just
-  // confirms the fight activates, holds the arena, deals damage in both
-  // directions for a sustained stretch (lowestHpPct dropping well below
-  // full proves hits are actually registering, not just being attempted),
-  // and that dying mid-fight correctly respawns at the checkpoint with
-  // the pistol intact. A clean win, if the autopilot happens to land one,
-  // is checked and welcomed but no longer required.
-  const FRAME_BUDGET = 12000;
+  // fairly clear a bullet-hell-style fight — a full clean clear depends on
+  // genuinely reactive dodging no script here manages well (confirmed
+  // empirically at an earlier HP_MAX, not just in theory: the same bot
+  // failed at the exact same point on every retry, since nothing but the
+  // feint's coin flip is randomised, and that alone isn't enough to make
+  // repeated attempts meaningfully different). Real winnability is a human-
+  // playtesting question — this just confirms the fight activates, holds
+  // the arena, deals damage in both directions for a sustained stretch
+  // (lowestHpPct dropping well below full proves hits are actually
+  // registering, not just being attempted), and that dying mid-fight
+  // correctly respawns at the checkpoint with the pistol intact. A clean
+  // win, if the autopilot happens to land one, is checked and welcomed but
+  // no longer required.
+  // Budget scales with the real, live HP_MAX (imported above as
+  // DIABLE_HP_MAX, not a hardcoded ratio) so this doesn't silently start
+  // timing out again next time it moves — it already has once. 12000
+  // frames was the calibrated budget back when HP_MAX was 480.
+  const FRAME_BUDGET = Math.round(12000 * (DIABLE_HP_MAX / 480));
   for (let i = 0; i < FRAME_BUDGET && !won; i++) {
     fightDiable(g.game, g.input);
     g.game.update(1 / 30);
@@ -508,7 +513,14 @@ await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
   // the 40-60% range depending on exact timing, well short of a full
   // clear (this scenario's own comment) but well past "barely dented" —
   // 70 comfortably separates "damage is registering" from "isn't."
-  if (lowestHpPct > 70) throw new Error(`pistol hits barely dented him (lowest ${lowestHpPct.toFixed(0)}% hp) — damage isn't registering`);
+  // 85, not 70: that bar was tuned when HP_MAX was 480 and needed a 30%
+  // drop; at HP_MAX 3840 the same percentage is 8x the raw hp (and real
+  // combat time) to prove the same thing, most of it eaten by death/
+  // retry overhead this scenario doesn't otherwise care about. All this
+  // needs to show is that hits are landing at all — a 15% drop already
+  // does that unambiguously, and stays cheap to reach regardless of how
+  // big HP_MAX gets next.
+  if (lowestHpPct > 85) throw new Error(`pistol hits barely dented him (lowest ${lowestHpPct.toFixed(0)}% hp) — damage isn't registering`);
   notes.push(`  note diable: lowest hp reached ${lowestHpPct.toFixed(0)}%, ${deaths} death(s), ${won ? 'won outright' : 'not cleared within budget (expected for now — see this scenario\'s own comment)'}`);
   if (!won) return;
 
