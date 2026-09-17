@@ -134,30 +134,6 @@ function prefetch(url) {
   return promise;
 }
 
-// How long playSpecial() (the boss tracks) will wait for prefetch()'s own
-// blob before giving up and falling back to the raw URL instead — a boss
-// cue has to cut in close to the instant it's triggered, not however long
-// a large file's prefetch happens to take on a slow connection. Without
-// this ceiling, a still-queued prefetch (see the reordering above) just
-// never resolves and the currently-playing track keeps going, silently,
-// forever — indistinguishable from "nothing happened" to whoever's
-// playing. The raw-URL fallback still plays (the browser streams it
-// natively instead of waiting for the whole blob), just without the
-// zero-latency swap a completed blob gives every other track.
-const SPECIAL_TRACK_TIMEOUT_MS = 1500;
-function withTimeout(promise, ms, fallback, label) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      debug(`${label}: prefetch still not ready after ${ms}ms, falling back to raw URL`);
-      resolve(fallback);
-    }, ms);
-    promise.then((v) => {
-      clearTimeout(timer);
-      resolve(v);
-    });
-  });
-}
-
 // Fisher-Yates — used once at startup so the play order isn't the same
 // every session, and again each time the shuffled order is exhausted so it
 // doesn't just repeat the same cycle forever.
@@ -188,26 +164,29 @@ export function createMusic({ onTrack } = {}) {
   // undo the pause stop() just made.
   let generation = 0;
 
-  // Kick off every track's prefetch immediately — see prefetch()'s own
-  // comment for why this, not audio.src/preload, is what actually gets a
-  // real head start on mobile. Fire-and-forget: playCurrent() awaits
+  // Kick off every shuffle track's prefetch immediately — see prefetch()'s
+  // own comment for why this, not audio.src/preload, is what actually gets
+  // a real head start on mobile. Fire-and-forget: playCurrent() awaits
   // whichever of these promises it needs, whenever it needs it.
-  // Boss tracks first, *before* the full shuffle — they have to be ready
-  // the instant an unpredictable trigger fires (a frigate sighting, the
-  // Devil appearing), while the regular shuffle only ever needs its next
-  // one or two tracks ready before it gets there. Reported on mobile as
-  // the Diable fight's music never switching: on a fast desktop connection
-  // every concurrent fetch below finishes in a couple seconds regardless of
-  // order, but on a slower/congested mobile connection the browser queues
-  // them, and with the full ~15-track shuffle fired first, the Diable
-  // track's own prefetch was queued dead last — reachable before its fetch
-  // had even started. See SPECIAL_TRACK_TIMEOUT_MS below for the other half
-  // of this fix (a hard ceiling, since reordering alone doesn't guarantee
-  // any one fetch finishes in time on a genuinely slow connection).
-  prefetch(BOSS_TRACK.src);
-  prefetch(DIABLE_TRACK.src);
-  prefetch(WENDIGO_TRACK.src);
-  prefetch(CHASSE_GALERIE_TRACK.src);
+  //
+  // Boss tracks are deliberately NOT prefetched here any more — playSpecial()
+  // below streams them straight from their own URL instead of going through
+  // the blob cache at all. This used to prefetch+blob them the same as the
+  // shuffle, racing that against a timeout; reported on mobile as a boss
+  // track sometimes never cutting in at all, on a plain desktop retest of
+  // the exact same build. Root cause was never pinned down for certain
+  // (competing theories: a queued-behind-the-whole-shuffle prefetch on a
+  // slow connection, or a blob: URL playback quirk specific to a mobile
+  // browser engine — both are real, documented classes of mobile/desktop
+  // divergence for this exact API surface). Rather than keep guessing and
+  // shipping unverified fixes, this removes the shared mechanism entirely
+  // for the four tracks that actually need to be reliable: plain streaming
+  // playback is the same, boring, standard path every <audio> tag on the
+  // web uses by default — it loses the zero-latency blob swap (a boss cue
+  // now buffers for a moment before playing, same as any other freshly-
+  // loaded audio element), but it isn't subject to either failure mode
+  // above. The regular shuffle keeps the blob-prefetch optimization; it
+  // isn't the one that's been breaking.
   for (const track of PLAYLIST) prefetch(track.src);
 
   // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
@@ -270,36 +249,50 @@ export function createMusic({ onTrack } = {}) {
     );
   }
 
-  // Same shape as playCurrent() above, but for a specific one-off track
+  // Same idea as playCurrent() above, but for a specific one-off track
   // instead of wherever the shuffle currently points — see BOSS_TRACK's own
-  // comment. Bumps generation so any in-flight normal playCurrent() fetch
-  // (or a previous playSpecial()) can't land after this one and undo it.
-  async function playSpecial(track) {
-    debug(`playSpecial requested: ${track.title}`);
+  // comment. Deliberately NOT going through prefetch()/the blob cache (see
+  // that call site's own comment for why) — audio.src is assigned straight
+  // to the track's own URL and the browser streams it natively, the same
+  // ordinary path every <audio> tag takes by default. Fully synchronous up
+  // to the play() call itself, so there's no async gap for a stale call to
+  // land in the way playCurrent() has to guard against; generation is still
+  // bumped so stop() and a concurrent playCurrent() know a special track is
+  // now in charge. One retry on a rejected play() (not a hard failure like
+  // AbortError, which just means something newer already took over) — cheap
+  // insurance against a transient rejection leaving a boss cue silently
+  // stuck on whatever was playing before, with no second attempt at all.
+  function playSpecial(track) {
     special = true;
     generation++;
     const requestedGeneration = generation;
-    const src = await withTimeout(prefetch(track.src), SPECIAL_TRACK_TIMEOUT_MS, track.src, track.title);
-    if (generation !== requestedGeneration) {
-      debug(`playSpecial(${track.title}): stale by the time prefetch settled, dropped`);
-      return;
-    }
-    audio.src = src;
+    debug(`playSpecial: ${track.title}`);
+    audio.pause();
+    audio.src = track.src;
+    audio.load();
     // track.volume overrides the shuffle's own DEFAULT_VOLUME — see
     // DIABLE_TRACK's own comment for why that one needs it; every other
     // special track just falls back to the same level the shuffle uses.
     audio.volume = track.volume ?? DEFAULT_VOLUME;
-    audio.play().then(
-      () => {
-        started = true;
-        debug(`playing special track ${track.title}`);
-        emitTrack(track);
-      },
-      (e) => {
-        if (e.name === 'AbortError') return;
-        debug(`special play() rejected: ${e.name}: ${e.message}`);
-      }
-    );
+    let retried = false;
+    const attempt = () => {
+      audio.play().then(
+        () => {
+          started = true;
+          debug(`playing special track ${track.title}`);
+          if (generation === requestedGeneration) emitTrack(track);
+        },
+        (e) => {
+          if (e.name === 'AbortError') return;
+          debug(`special play() rejected: ${e.name}: ${e.message}`);
+          if (!retried && generation === requestedGeneration) {
+            retried = true;
+            setTimeout(attempt, 400);
+          }
+        }
+      );
+    };
+    attempt();
   }
 
   audio.addEventListener('error', () => {
