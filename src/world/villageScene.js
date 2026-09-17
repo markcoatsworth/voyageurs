@@ -57,12 +57,12 @@ const MONTREAL_WORLD_TOP = -280;
 // anything about the town itself. The 1738 map draws real detail just
 // outside that gate too (St. Peter's River joining the St. Lawrence, the
 // General Hospital, the House of Monsieur de Callières) — genuine
-// suburb, not empty space the world happened to stop at. No wall runs
-// along this edge (MONTREAL_WALL_BAND only spans the north side), so
-// unlike the Mont-Royal district this needs no gate — you just walk out
-// past the Récollets buildings. worldLeft is 0 (not negative) for every
-// other village, collapsing the horizontal-minimum camera clamp exactly
-// the way worldTop/MONTREAL_WORLD_WIDTH already do for their own axes.
+// suburb, not empty space the world happened to stop at. The town's own
+// west wall (MONTREAL_WALLS, below) runs along this edge with a real
+// Récollets Gate, same as the Mont-Royal district's own gate to the
+// north. worldLeft is 0 (not negative) for every other village,
+// collapsing the horizontal-minimum camera clamp exactly the way
+// worldTop/MONTREAL_WORLD_WIDTH already do for their own axes.
 const MONTREAL_WORLD_LEFT = -240;
 
 // Anchor is the point where each building's front (door) sits; the
@@ -408,20 +408,68 @@ const CITY_WALL_H = 26; // the rampart sprite's own drawn height
 
 // Montreal's wall is a real, solid obstacle (isWalkable() checks this),
 // not just a backdrop like Quebec City's — you can't just stroll through
-// a fortification. MONTREAL_WALL_GATE is the one break in it: two whole
-// tiles (256-384, the pair straddling x=320) left undrawn in the tiling
-// loop below *and* excluded from the collision band, so the visual gap
-// and the walkable gap are pixel-for-pixel the same gate — right where
-// MONTREAL_DIRT_PATH_V actually crosses the wall on its way up to the
-// Mont-Royal district.
+// a fortification. MONTREAL_WALL_GATE is the one break in the north
+// wall: two whole tiles (256-384, the pair straddling x=320) left
+// undrawn in the tiling loop below *and* excluded from the collision
+// band, so the visual gap and the walkable gap are pixel-for-pixel the
+// same gate — right where MONTREAL_DIRT_PATH_V actually crosses the
+// wall on its way up to the Mont-Royal district.
 const MONTREAL_WALL_GATE = { x0: 256, x1: 384 };
-// x0: 0 bounds the collision band to the actual town wall's own extent
-// (the tile loop below never draws it west of x=0 either). Without this,
-// the band's y-range blocked movement at every x, including the western
-// suburb (x < 0, MONTREAL_WORLD_LEFT) added later past the Récollets
-// Gate -- an invisible wall out past the real, visible one, since
-// nothing is drawn to explain the block out there.
-const MONTREAL_WALL_BAND = { x0: 0, y0: CITY_WALL_Y, y1: CITY_WALL_Y + CITY_WALL_H, gateX0: MONTREAL_WALL_GATE.x0, gateX1: MONTREAL_WALL_GATE.x1 };
+
+// The wall used to be just this one north band — the Jefferys map
+// actually shows a full perimeter (west, east and a waterfront wall
+// too, not only the landward north side), so this is now one of four
+// segments in MONTREAL_WALLS, below.
+const CITY_WALL_SIDE_W = 20; // west/east wall thickness (x-direction)
+// The waterfront wall is shallower than the landward rampart — the map's
+// own legend says the whole fortification's parapet was "only about a
+// foot thick of Masonry" to begin with, and there's genuinely little
+// room here: the front-row buildings' own feet reach down to y=165,
+// WATER_TOP is 180, so this fits the real gap without moving anything.
+const MONTREAL_WATERFRONT_WALL_Y = 166;
+const MONTREAL_WATERFRONT_WALL_H = 13;
+
+// Each wall is a strip along one axis (axis: 'h' varies over x at a
+// fixed y-band; 'v' varies over y at a fixed x-band) with an optional
+// gate — a gap in the *other* axis's range where isWalkable() (and the
+// matching draw() segment) leaves it open. gateLo/gateHi === null means
+// solid, no gate at all.
+const MONTREAL_WALLS = [
+  // North wall — unchanged: the one A Gate, where the district road
+  // crosses (MONTREAL_WALL_GATE).
+  {
+    axis: 'h', lo: CITY_WALL_Y, hi: CITY_WALL_Y + CITY_WALL_H,
+    spanLo: 0, spanHi: MONTREAL_WORLD_WIDTH,
+    gateLo: MONTREAL_WALL_GATE.x0, gateHi: MONTREAL_WALL_GATE.x1,
+  },
+  // West wall — the Récollets Gate, right where the western suburb's
+  // own street (MONTREAL_DIRT_PATH_WEST, y: 148-162) crosses in from
+  // Maison Saint-Gabriel and the General Hospital.
+  {
+    axis: 'v', lo: -CITY_WALL_SIDE_W, hi: 0,
+    spanLo: CITY_WALL_Y + CITY_WALL_H, spanHi: MONTREAL_WATERFRONT_WALL_Y + MONTREAL_WATERFRONT_WALL_H,
+    gateLo: 145, gateHi: 167,
+  },
+  // East wall — the map shows a real gate here too, leading to a road
+  // further along the north shore, but that ground is outside this
+  // world's own edge (the margin check already stops the player past
+  // x: 630) and isn't built yet. Left solid rather than opening a gate
+  // onto nothing; a real spot to pick up from later.
+  {
+    axis: 'v', lo: 628, hi: 628 + CITY_WALL_SIDE_W,
+    spanLo: CITY_WALL_Y + CITY_WALL_H, spanHi: MONTREAL_WATERFRONT_WALL_Y + MONTREAL_WATERFRONT_WALL_H,
+    gateLo: null, gateHi: null,
+  },
+  // South/waterfront wall — the map shows a small cluster of gates
+  // right by the wharf (Market Gate, St Mary's Gate, Water Gate); one
+  // wide gate at the dock's own width stands in for all of them, since
+  // the dock is the only water-facing passage gameplay actually needs.
+  {
+    axis: 'h', lo: MONTREAL_WATERFRONT_WALL_Y, hi: MONTREAL_WATERFRONT_WALL_Y + MONTREAL_WATERFRONT_WALL_H,
+    spanLo: 0, spanHi: MONTREAL_WORLD_WIDTH,
+    gateLo: dockX0(MONTREAL_WORLD_WIDTH), gateHi: dockX1(MONTREAL_WORLD_WIDTH),
+  },
+];
 
 function buildingsForQuebecCity() {
   return QUEBEC_CITY_ONFOOT_BUILDINGS.map((b) => ({
@@ -670,12 +718,20 @@ function overlapsBuilding(buildings, x, y) {
 // active world's own width, not always CANVAS_WIDTH — see worldWidth);
 // over the water band they're restricted to the dock's width, i.e.
 // walking the plank back out to the boat rather than into the river.
-// wallBand (null everywhere but Montreal — see its own comment) blocks
-// the fortification wall's own strip except at the gate gap.
-function isWalkable(buildings, x, y, worldWidth, worldTop, wallBand, worldLeft) {
+// walls (null everywhere but Montreal — see MONTREAL_WALLS) is the full
+// perimeter: each strip blocks its own band except at its own gate.
+function isWalkable(buildings, x, y, worldWidth, worldTop, walls, worldLeft) {
   if (x < worldLeft + 10 || x > worldWidth - 10 || y < worldTop + 10 || y > CANVAS_HEIGHT - 4) return false;
   if (y > WATER_TOP && (x < dockX0(worldWidth) || x > dockX1(worldWidth))) return false;
-  if (wallBand && x >= wallBand.x0 && y >= wallBand.y0 && y <= wallBand.y1 && (x < wallBand.gateX0 || x > wallBand.gateX1)) return false;
+  if (walls) {
+    for (const w of walls) {
+      if (w.axis === 'h') {
+        if (y >= w.lo && y <= w.hi && x >= w.spanLo && x <= w.spanHi && (w.gateLo == null || x < w.gateLo || x > w.gateHi)) return false;
+      } else if (x >= w.lo && x <= w.hi && y >= w.spanLo && y <= w.spanHi && (w.gateLo == null || y < w.gateLo || y > w.gateHi)) {
+        return false;
+      }
+    }
+  }
   return !overlapsBuilding(buildings, x, y);
 }
 
@@ -738,6 +794,85 @@ function drawGardenPlot(ctx, x, y, w, h) {
   ctx.strokeStyle = '#5c4a30';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.restore();
+}
+
+// The west and east stretches of the town wall (MONTREAL_WALLS) — same
+// coursed-stone read as the north wall's rampartSprite tiles, but drawn
+// directly rather than a rotated sprite, so the crenellations sit
+// cleanly along whichever long edge actually faces outward. outward:
+// 'w' puts them on the strip's own left edge (the real west wall,
+// facing the suburb); 'e' puts them on the right edge (the east wall).
+function drawSideWall(ctx, x, y, w, h, outward) {
+  const stone = '#767066', stoneDark = '#54504a', stoneLight = '#96907f';
+  ctx.save();
+  ctx.fillStyle = stoneDark;
+  ctx.fillRect(x, y, w, h);
+  const faceX = outward === 'w' ? x + 4 : x;
+  const faceW = w - 4;
+  ctx.fillStyle = stone;
+  ctx.fillRect(faceX, y, faceW, h);
+  ctx.strokeStyle = stoneDark;
+  ctx.lineWidth = 0.8;
+  for (let lx = Math.ceil(faceX / 4) * 4; lx < faceX + faceW; lx += 4) {
+    ctx.beginPath();
+    ctx.moveTo(lx, y);
+    ctx.lineTo(lx, y + h);
+    ctx.stroke();
+  }
+  for (let ly = Math.ceil(y / 8) * 8; ly < y + h; ly += 8) {
+    ctx.beginPath();
+    ctx.moveTo(faceX, ly);
+    ctx.lineTo(faceX + faceW, ly);
+    ctx.stroke();
+  }
+  ctx.fillStyle = stoneLight;
+  ctx.fillRect(faceX, y, 1.2, h);
+  // crenellations along the outward edge
+  const crenX = outward === 'w' ? x : x + w - 6;
+  ctx.fillStyle = stoneDark;
+  for (let cy = Math.ceil(y / 10) * 10; cy < y + h - 4; cy += 10) ctx.fillRect(crenX, cy, 6, 6);
+  ctx.fillStyle = stone;
+  for (let cy = Math.ceil(y / 10) * 10; cy < y + h - 4; cy += 10) ctx.fillRect(crenX, cy, 5, 5);
+  ctx.restore();
+}
+
+// The south/waterfront wall (MONTREAL_WALLS) — screen-space-aligned
+// coursing like drawBrickRoad, rather than WALL_TILE_W tiles, so it can
+// stop exactly at the dock's own gate width (40px, narrower than one
+// 64px tile) without leaving a wider gap than the real opening. Battle-
+// ments face up (toward the water), matching the north wall's own
+// crenellations facing out toward the fields.
+function drawWaterfrontWall(ctx, x, y, w, h) {
+  const stone = '#767066', stoneDark = '#54504a', stoneLight = '#96907f';
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.fillStyle = stoneDark;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = stone;
+  ctx.fillRect(x, y + 3, w, h - 3);
+  ctx.strokeStyle = stoneDark;
+  ctx.lineWidth = 0.8;
+  for (let ly = Math.ceil((y + 3) / 4) * 4; ly < y + h; ly += 4) {
+    ctx.beginPath();
+    ctx.moveTo(x, ly);
+    ctx.lineTo(x + w, ly);
+    ctx.stroke();
+  }
+  for (let lx = Math.ceil(x / 8) * 8; lx < x + w; lx += 8) {
+    ctx.beginPath();
+    ctx.moveTo(lx, y + 3);
+    ctx.lineTo(lx, y + h);
+    ctx.stroke();
+  }
+  ctx.fillStyle = stoneLight;
+  ctx.fillRect(x, y + 3, w, 1.2);
+  ctx.fillStyle = stoneDark;
+  for (let cx = Math.ceil(x / 10) * 10; cx < x + w - 4; cx += 10) ctx.fillRect(cx, y, 6, 5);
+  ctx.fillStyle = stone;
+  for (let cx = Math.ceil(x / 10) * 10; cx < x + w - 4; cx += 10) ctx.fillRect(cx, y, 5, 4);
   ctx.restore();
 }
 
@@ -825,7 +960,7 @@ export function createVillageScene() {
   let worldWidth = CANVAS_WIDTH;
   let worldTop = 0;
   let worldLeft = 0;
-  let wallBand = null;
+  let walls = null;
   let repairShop = repairShopFor(worldWidth);
   let buildings = [...buildingsFor(0), repairShop];
   let trees = treesFor(0);
@@ -856,7 +991,7 @@ export function createVillageScene() {
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
       worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : 0;
-      wallBand = isMontreal ? MONTREAL_WALL_BAND : null;
+      walls = isMontreal ? MONTREAL_WALLS : null;
       repairShop = repairShopFor(worldWidth);
       buildings = isQuebecCity
         ? [...buildingsForQuebecCity(), repairShop]
@@ -912,8 +1047,8 @@ export function createVillageScene() {
         const ny = player.y + dy * step;
         // Resolve each axis separately so sliding along a wall/edge works
         // instead of a diagonal move being blocked entirely by one axis.
-        if (isWalkable(buildings, nx, player.y, worldWidth, worldTop, wallBand, worldLeft)) player.x = nx;
-        if (isWalkable(buildings, player.x, ny, worldWidth, worldTop, wallBand, worldLeft)) player.y = ny;
+        if (isWalkable(buildings, nx, player.y, worldWidth, worldTop, walls, worldLeft)) player.x = nx;
+        if (isWalkable(buildings, player.x, ny, worldWidth, worldTop, walls, worldLeft)) player.y = ny;
 
         strideTimer += dt;
         if (strideTimer > 0.28) {
@@ -1038,15 +1173,15 @@ export function createVillageScene() {
       // hard edge like a wall to hide its base against. Off-centre (real
       // Mont-Royal sits northwest of Old Montreal's waterfront, not dead
       // behind the church) rather than centred on the world. Its base
-      // (mrBottom) sits north of the wall's own band (MONTREAL_WALL_BAND,
-      // drawn next) rather than overlapping it — the mountain is genuinely
+      // (mrBottom) sits north of the north wall (MONTREAL_WALLS, drawn
+      // next) rather than overlapping it — the mountain is genuinely
       // outside the walled town, not something the fortifications cut
       // across.
       if (isMontreal) {
         const mrScale = 1.7;
         const mrW = montRoyalSprite.width * mrScale;
         const mrH = montRoyalSprite.height * mrScale;
-        const mrBottom = MONTREAL_WALL_BAND.y0 - 20;
+        const mrBottom = CITY_WALL_Y - 20;
         ctx.drawImage(montRoyalSprite, 190 - mrW / 2, mrBottom - mrH, mrW, mrH);
       }
 
@@ -1064,8 +1199,8 @@ export function createVillageScene() {
       // map's own farmland-beyond-the-fortifications. Behind everything
       // else, so it never occludes a building or the player.
       //
-      // Montreal's wall is a real obstacle (isWalkable()'s wallBand
-      // check), not just backdrop like Quebec City's — so the one gate
+      // Montreal's wall is a real obstacle (isWalkable()'s walls check),
+      // not just backdrop like Quebec City's — so the one gate
       // (MONTREAL_WALL_GATE, where MONTREAL_DIRT_PATH_V actually crosses
       // it) skips both tiles it falls under here too, leaving a real gap
       // in the stonework exactly where the collision gap is, rather than
@@ -1077,6 +1212,19 @@ export function createVillageScene() {
           if (isMontreal && tileX < MONTREAL_WALL_GATE.x1 && tileX + WALL_TILE_W > MONTREAL_WALL_GATE.x0) continue;
           ctx.drawImage(rampartSprite, tileX, CITY_WALL_Y);
         }
+      }
+      // The rest of the perimeter — west, east and the waterfront wall
+      // (MONTREAL_WALLS[1..3]) — same "real obstacle, matching gap"
+      // approach as the north wall above, just drawn directly rather
+      // than tiled (drawSideWall/drawWaterfrontWall, above) so each
+      // gate's visual gap can match its own exact collision width.
+      if (isMontreal) {
+        const [, west, east, south] = MONTREAL_WALLS;
+        drawSideWall(ctx, west.lo, west.spanLo, west.hi - west.lo, west.gateLo - west.spanLo, 'w');
+        drawSideWall(ctx, west.lo, west.gateHi, west.hi - west.lo, west.spanHi - west.gateHi, 'w');
+        drawSideWall(ctx, east.lo, east.spanLo, east.hi - east.lo, east.spanHi - east.spanLo, 'e');
+        drawWaterfrontWall(ctx, 0, south.lo, south.gateLo, south.hi - south.lo);
+        drawWaterfrontWall(ctx, south.gateHi, south.lo, worldWidth - south.gateHi, south.hi - south.lo);
       }
       if (!isQuebecCity) {
         for (const t of trees) {

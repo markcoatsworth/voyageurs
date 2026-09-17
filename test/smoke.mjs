@@ -705,17 +705,32 @@ await step('montreal: walk up to the gunsmith, get the pistol', () => {
   if (!g.game.ui.weaponPad.classList.contains('hidden')) {
     throw new Error('weapon controls showing before the pistol is picked up');
   }
-  // The gunsmith stands outside the Arsenal, near the east gate — the
-  // Jefferys 1738 map's own "Yard for Canoes & Battoes" — well east along
-  // the waterfront (Rue Saint-Paul) at the same height as the dock, so
-  // walking straight along the bank reaches him with no vertical approach
-  // needed any more.
+  // The gunsmith stands right at the dock, mirroring the repair trader's
+  // own dockX0-25 offset onto dockX1+25 -- but his own trigger point
+  // (the gun shop's door plus GUNSMITH_OFFSET) now sits inside the
+  // waterfront wall's own thickness (MONTREAL_WALLS' south segment),
+  // reachable only within its trigger radius from just north of the
+  // wall. The shop building itself also blocks a straight approach at
+  // street level, so this routes up and over it: north off the wharf,
+  // east past the shop's far side, then south again down to just above
+  // the wall, edging back toward the shop until the trigger radius
+  // catches it. (Careful not to overshoot into the reboard zone at the
+  // bottom of the dock -- that auto-grants the pistol on its own, which
+  // would make this test pass without ever actually reaching the
+  // gunsmith.)
   let armed = false;
-  for (let i = 0; i < 600 && !armed; i++) {
-    g.input.state.right = true;
-    g.game.update(1 / 30);
-    if (g.game.weapons.has('pistol')) armed = true;
-  }
+  const walk = (steps, keys) => {
+    for (let i = 0; i < steps && !armed; i++) {
+      for (const k of keys) g.input.state[k] = true;
+      g.game.update(1 / 30);
+      if (g.game.weapons.has('pistol')) armed = true;
+    }
+    for (const k of keys) g.input.state[k] = false;
+  };
+  walk(40, ['up']);
+  walk(35, ['right']);
+  walk(38, ['down']);
+  walk(12, ['left']);
   if (!armed) throw new Error('walking up to the Montreal gunsmith never granted the pistol');
   if (g.game.ui.weaponPad.classList.contains('hidden')) {
     throw new Error('weapon controls still hidden after picking up the pistol');
