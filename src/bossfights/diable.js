@@ -10,8 +10,10 @@
 // suspended for the duration; the Devil is the fight.
 //
 // MVP: one phase, one attack family (aimed fireballs that fan into a spread
-// as his health drops). Phases / the drag attack / imps / a weak point all
-// come later — see the design notes this came out of.
+// as his health drops), plus the feint (below) — a wind-up that sometimes
+// isn't real, so the telegraph itself has to be read rather than reacted to
+// on reflex. Phases / the drag attack / imps / a weak point all come later —
+// see the design notes this came out of.
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
 } from '../shared/config.js';
@@ -62,6 +64,19 @@ const TELEGRAPH = 0.5;        // wind-up before a shot: the flame in his hand sw
 const FIRE_INTERVAL_FULL = 1.8;   // seconds between shots at full health
 const FIRE_INTERVAL_LOW = 1.0;    // ...and when nearly dead
 
+// The feint — the trickster half of a "beau danseur" devil who's supposed
+// to charm and deceive, not just bludgeon. Some wind-ups are a real throw;
+// this fraction of them are a taunt instead (the flame flares and gutters
+// rather than launching), identical to a real one for the whole telegraph
+// so there's genuinely nothing to see until it resolves. Deliberately not
+// punishing either way: guessing wrong costs a wasted dodge, never health
+// (no fireball exists to hit you regardless) — this is about making the
+// telegraph worth reading, not adding danger. Left as a flat, constant
+// chance rather than ramping with hpFrac, so it reads as a fixed piece of
+// his character throughout the fight, not an escalating threat.
+const FEINT_CHANCE = 0.3;
+const FEINT_FLOURISH_TIME = 0.4; // how long the "gotcha" flourish plays
+
 const TAU = Math.PI * 2;
 function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -87,6 +102,8 @@ export function createDiable() {
   let sway = 0;       // sway clock (keeps advancing across phases)
   let fireTimer = FIRE_INTERVAL_FULL;
   let telegraph = 0;  // counts down while winding up a shot
+  let isFeint = false; // whether the current/last wind-up is a real throw
+  let feintFlourish = 0; // counts down the "gotcha" flourish after a feint resolves
   let hitFlash = 0;   // white flash when shot
   const fireballs = [];
   let justAppeared = false;
@@ -106,6 +123,8 @@ export function createDiable() {
     sway = 0;
     fireTimer = FIRE_INTERVAL_FULL;
     telegraph = 0;
+    isFeint = false;
+    feintFlourish = 0;
     hitFlash = 0;
     fireballs.length = 0;
     justAppeared = false;
@@ -157,6 +176,7 @@ export function createDiable() {
       t += dt;
       sway += dt;
       if (hitFlash > 0) hitFlash = Math.max(0, hitFlash - dt);
+      if (feintFlourish > 0) feintFlourish = Math.max(0, feintFlourish - dt);
 
       if (phase === 'appearing') {
         // He rises in over ~1s; the fight proper starts once the flow is
@@ -208,32 +228,39 @@ export function createDiable() {
         if (telegraph > 0) {
           telegraph -= dt;
           if (telegraph <= 0) {
-            // launched from the flame in his outstretched hand
-            const hand = handPos(cx, cy);
-            const sx = hand.x;
-            const sy = hand.y;
-            const ang = Math.atan2(canoe.y - sy, canoe.x - sx);
-            // Perpendicular to the aim line, so each shot in a volley is
-            // aimed at a point offset sideways from the canoe by a fixed
-            // pixel amount — a consistent gap no matter the range.
-            const px = -Math.sin(ang);
-            const py = Math.cos(ang);
-            const offsets = hpFrac < 0.45
-              ? [-SPREAD_GAP, 0, SPREAD_GAP]
-              : hpFrac < 0.8 ? [-SPREAD_GAP / 2, SPREAD_GAP / 2] : [0];
-            for (const off of offsets) {
-              const a = Math.atan2(
-                (canoe.y + py * off) - sy,
-                (canoe.x + px * off) - sx,
-              );
-              fireballs.push({
-                x: sx,
-                y: sy,
-                vx: Math.cos(a) * FIREBALL_SPEED,
-                // never let one drift upward — it must always come down at you
-                vy: Math.max(55, Math.sin(a) * FIREBALL_SPEED),
-                born: 0,
-              });
+            if (isFeint) {
+              // The flame flares and gutters instead of launching — the
+              // "gotcha" flourish (draw()) carries the tell that this one
+              // wasn't real. No fireball, no danger, just a taunt.
+              feintFlourish = FEINT_FLOURISH_TIME;
+            } else {
+              // launched from the flame in his outstretched hand
+              const hand = handPos(cx, cy);
+              const sx = hand.x;
+              const sy = hand.y;
+              const ang = Math.atan2(canoe.y - sy, canoe.x - sx);
+              // Perpendicular to the aim line, so each shot in a volley is
+              // aimed at a point offset sideways from the canoe by a fixed
+              // pixel amount — a consistent gap no matter the range.
+              const px = -Math.sin(ang);
+              const py = Math.cos(ang);
+              const offsets = hpFrac < 0.45
+                ? [-SPREAD_GAP, 0, SPREAD_GAP]
+                : hpFrac < 0.8 ? [-SPREAD_GAP / 2, SPREAD_GAP / 2] : [0];
+              for (const off of offsets) {
+                const a = Math.atan2(
+                  (canoe.y + py * off) - sy,
+                  (canoe.x + px * off) - sx,
+                );
+                fireballs.push({
+                  x: sx,
+                  y: sy,
+                  vx: Math.cos(a) * FIREBALL_SPEED,
+                  // never let one drift upward — it must always come down at you
+                  vy: Math.max(55, Math.sin(a) * FIREBALL_SPEED),
+                  born: 0,
+                });
+              }
             }
           }
         } else {
@@ -242,6 +269,7 @@ export function createDiable() {
             const interval = FIRE_INTERVAL_LOW + (FIRE_INTERVAL_FULL - FIRE_INTERVAL_LOW) * hpFrac;
             fireTimer = interval;
             telegraph = TELEGRAPH;
+            isFeint = Math.random() < FEINT_CHANCE;
           }
         }
       } else if (phase === 'dying') {
@@ -288,7 +316,7 @@ export function createDiable() {
         : 1 - dieK * 0.9;
       ctx.save();
       ctx.globalAlpha = 1;
-      drawDevil(ctx, cx, cy, time, telegraph, hitFlash, dieK, bodyFade);
+      drawDevil(ctx, cx, cy, time, telegraph, hitFlash, dieK, bodyFade, feintFlourish);
       ctx.restore();
 
       // His fireballs on top — thrown from the flame in his hand.
@@ -363,8 +391,11 @@ function devilTorsoPath(ctx) {
   ctx.quadraticCurveTo(0, -20, -8, -23);      // collar notch dips for the neck
   ctx.closePath();
 }
-function drawDevil(ctx, cx, cy, time, telegraph, hitFlash, dieK, fade = 1) {
+function drawDevil(ctx, cx, cy, time, telegraph, hitFlash, dieK, fade = 1, feintFlourish = 0) {
   const windK = telegraph > 0 ? clamp01(1 - telegraph / TELEGRAPH) : 0;
+  // The "gotcha" — head tips back an instant, same read as a silent laugh,
+  // right as a feinted wind-up resolves into nothing.
+  const feintK = feintFlourish > 0 ? clamp01(feintFlourish / FEINT_FLOURISH_TIME) : 0;
   const wag = Math.sin(time * 1.1) * 3;
 
   ctx.save();
@@ -373,6 +404,7 @@ function drawDevil(ctx, cx, cy, time, telegraph, hitFlash, dieK, fade = 1) {
   ctx.shadowBlur = 0;
   ctx.translate(cx, cy + dieK * 24);         // sinks into the fire as he's undone
   ctx.scale(SCALE, SCALE);
+  ctx.rotate(feintK * -0.12);                // leans back a touch — the "gotcha"
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
@@ -482,9 +514,16 @@ function drawDevil(ctx, cx, cy, time, telegraph, hitFlash, dieK, fade = 1) {
   ctx.fill();
 
   // --- the flame in his hand: small and steady, swelling white-hot the
-  //     instant before he throws (the only wind-up cue) ---
-  const fl = clamp01(0.5 + Math.sin(time * 11) * 0.18 + windK * 0.95);
-  const fr = (2.6 + windK * 7) * Math.max(0.5, fl);
+  //     instant before he throws (the only wind-up cue) — or, for a
+  //     feint, flaring bright right as the wind-up resolves and then
+  //     guttering back out over FEINT_FLOURISH_TIME, instead of snapping
+  //     straight back to idle the way a real throw's release does.
+  const fl = feintK > 0
+    ? feintK
+    : clamp01(0.5 + Math.sin(time * 11) * 0.18 + windK * 0.95);
+  const fr = feintK > 0
+    ? 2.6 + feintK * 9
+    : (2.6 + windK * 7) * Math.max(0.5, fl);
   const fg = ctx.createRadialGradient(hx, hy - 1, 0.4, hx, hy - 1, fr);
   fg.addColorStop(0, `rgba(255,247,220,${(0.95 * fl).toFixed(2)})`);
   fg.addColorStop(0.45, `rgba(255,150,42,${(0.72 * fl).toFixed(2)})`);
