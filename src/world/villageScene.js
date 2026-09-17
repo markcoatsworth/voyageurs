@@ -165,6 +165,13 @@ const MONTREAL_ONFOOT_BUILDINGS = [
   // France, whose own residence the map places right by St. Peter's
   // River (MONTREAL_ST_PETER_RIVER, drawn in draw()).
   { kind: 'stone', x: -90, y: 90, variant: 2, mirror: false },
+  // Maison Saint-Gabriel — the Congrégation de Notre-Dame's own farm
+  // (built 1698, still standing today as a museum), named directly on
+  // Belmont's 1702 côte survey ("c. la Congregation," right along the
+  // Rivière St-Pierre / Ville St-Gabriel route MONTREAL_STGABRIEL_ROAD
+  // now follows) — up the road from Callières' house, on the way to the
+  // mountain's foot rather than down by the wharf with everything else.
+  { kind: 'stone', x: -35, y: 40, variant: 1, mirror: true },
 
   // --- back row (inland, near the town wall) ---
   // Récollets Convent — west end, by the real Récollets Gate. Two
@@ -336,10 +343,11 @@ const MONTREAL_FARM_STRIPS = [
   { x: 485, y: -235, w: 50, h: 225, tone: 0 },
   { x: 535, y: -235, w: 50, h: 225, tone: 1 },
   { x: 585, y: -235, w: 45, h: 225, tone: 2 },
-  // Côte-des-Neiges, continuing the district past the fort/windmill onto
-  // the mountain's own west flank (see MONTREAL_COTE_DES_NEIGES_ROAD's own
-  // comment) — real habitant farm lots granted along that road, same
-  // strip-lot pattern as everything else here, out to the world's edge.
+  // The district's own west field, continuing past the fort/windmill to
+  // the world's edge — real habitant farm lots (see
+  // MONTREAL_STGABRIEL_ROAD's own comment for the actual documented route
+  // that connects this ground to the west suburb), same strip-lot pattern
+  // as everything else here.
   { x: -40, y: -235, w: 48, h: 225, tone: 1 },
   { x: -88, y: -235, w: 48, h: 225, tone: 2 },
   { x: -136, y: -235, w: 48, h: 225, tone: 0 },
@@ -359,16 +367,22 @@ const MONTREAL_DIRT_PATH_SPUR = { x: 60, y: -22, w: 250, h: 14 };
 // frontage) and runs out to the world's own western edge.
 const MONTREAL_DIRT_PATH_WEST = { x: MONTREAL_WORLD_LEFT, y: 148, w: 15 - MONTREAL_WORLD_LEFT, h: 14 };
 
-// Côte-des-Neiges — a real rural road documented under that name from
-// around 1698 (one of the Sulpicians' own seigneurial "côtes," granted
-// out along Mont-Royal's west flank), so genuinely there in the 1790s
-// setting even though the built-up Montreal district of the same name is
-// a much later, 19th-century thing. Forks west from the fort/windmill
-// spur (a short connector joins the two) and runs out to the world's own
-// west edge, flanking farmland (MONTREAL_FARM_STRIPS) the same way the
-// existing spur does past the fort.
-const MONTREAL_COTE_DES_NEIGES_ROAD = { x: MONTREAL_WORLD_LEFT, y: -100, w: 36 - MONTREAL_WORLD_LEFT, h: 14 };
-const MONTREAL_COTE_DES_NEIGES_CONNECTOR = { x: 53, y: -100, w: 14, h: 78 };
+// The road up to the district's west field was originally a guess (a
+// fork off the fort's own spur) made before a real source was in hand.
+// Belmont's own 1702 survey (the "divisée par costes" map, BAnQ) turned
+// up instead: its own habitant-by-habitant côte list runs "Depuis la
+// Riviere St Pierre ... jusques a la Ville a St Gabriel et jusques au
+// pied de la Montagne" -- from St. Peter's River (MONTREAL_ST_PETER_RIVER,
+// already in the west suburb) through the Congrégation de Notre-Dame's
+// farm at Ville Saint-Gabriel, to the foot of the mountain. That's a
+// real road running south-to-north along the world's own west edge, not
+// one forking off the fort in the north -- so this replaces the fort
+// spur/connector outright rather than sitting beside it. A single
+// straight track stands in for the whole real route (Verdun, Fort Rémy
+// and La Présentation, further south still, sit beyond this world's own
+// edge). Bottom end meets MONTREAL_DIRT_PATH_WEST (y: 148); top end
+// reaches the west field's own farm strips.
+const MONTREAL_STGABRIEL_ROAD = { x: -65, y: -235, w: 14, h: 148 + 14 - -235 };
 
 // St. Peter's River — real, shown joining the St. Lawrence just west of
 // the walls on the map, right where the General Hospital and the
@@ -987,10 +1001,10 @@ export function createVillageScene() {
         // brick, picking up where the town's own streets end.
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_V.x, MONTREAL_DIRT_PATH_V.y, MONTREAL_DIRT_PATH_V.w, MONTREAL_DIRT_PATH_V.h);
         drawDirtPath(ctx, MONTREAL_DIRT_PATH_SPUR.x, MONTREAL_DIRT_PATH_SPUR.y, MONTREAL_DIRT_PATH_SPUR.w, MONTREAL_DIRT_PATH_SPUR.h);
-        // Côte-des-Neiges — forks off the spur above, out along the
-        // mountain's west flank (see its own comment).
-        drawDirtPath(ctx, MONTREAL_COTE_DES_NEIGES_CONNECTOR.x, MONTREAL_COTE_DES_NEIGES_CONNECTOR.y, MONTREAL_COTE_DES_NEIGES_CONNECTOR.w, MONTREAL_COTE_DES_NEIGES_CONNECTOR.h);
-        drawDirtPath(ctx, MONTREAL_COTE_DES_NEIGES_ROAD.x, MONTREAL_COTE_DES_NEIGES_ROAD.y, MONTREAL_COTE_DES_NEIGES_ROAD.w, MONTREAL_COTE_DES_NEIGES_ROAD.h);
+        // The real Rivière St-Pierre / Ville St-Gabriel route up to the
+        // mountain's foot (see its own comment) — runs down the world's
+        // west edge to meet MONTREAL_DIRT_PATH_WEST below.
+        drawDirtPath(ctx, MONTREAL_STGABRIEL_ROAD.x, MONTREAL_STGABRIEL_ROAD.y, MONTREAL_STGABRIEL_ROAD.w, MONTREAL_STGABRIEL_ROAD.h);
         // Same, west out past the Récollets Gate toward the western
         // suburb, and St. Peter's River itself alongside it — plain
         // water fill, same pattern the main river uses.
