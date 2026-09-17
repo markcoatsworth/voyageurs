@@ -158,11 +158,38 @@ export function createMusic({ onTrack } = {}) {
 
   let order = shuffled(PLAYLIST);
   let index = 0;
-  // Bumped by stop() — playCurrent() is async now (it awaits prefetch()),
-  // so a capsize could in principle land while a fetch is still resolving;
-  // without this, the play() that fires right after would immediately
-  // undo the pause stop() just made.
+  // Bumped by stop() and playSpecial() — playCurrent() is async (it awaits
+  // prefetch()), so a capsize, or a boss track cutting in, could in
+  // principle land while a fetch is still resolving; without this, the
+  // play() that fires right after would immediately undo whatever just
+  // took over.
   let generation = 0;
+
+  // Attaches a *fresh*, one-shot 'ended' listener for the specific commit
+  // that just happened (playCurrent()/playSpecial() each call this right
+  // after assigning audio.src), rather than one permanent listener that
+  // has to infer from shared mutable state (the old `special` flag) what
+  // "ended" means right now. That inference broke: a shuffle track's own
+  // 'ended' event can be queued by the browser's media pipeline slightly
+  // before a same-frame playSpecial() call reassigns audio.src out from
+  // under it — by the time the old, single 'ended' handler ran, `special`
+  // already read true (set by the newer playSpecial()), so it treated a
+  // stale shuffle-track-ended event as "the special track ended on its
+  // own" and called playCurrent(), reassigning audio.src right back to
+  // the shuffle — while the special track's own still-pending play()
+  // attempt (waiting on 'canplay') went on to resolve and update the "now
+  // playing" card regardless, since nothing about *that* closure was
+  // invalidated. Reported as exactly that: correct title, wrong audio.
+  // Gating on `generation` here closes it the same way playSpecial's own
+  // 'canplay'/retry logic already does: a listener attached for an older
+  // generation silently no-ops once something newer has taken over,
+  // instead of acting on stale information.
+  function attachEndedHandler(requestedGeneration, onEnded) {
+    audio.addEventListener('ended', () => {
+      if (generation !== requestedGeneration) return;
+      onEnded();
+    }, { once: true });
+  }
 
   // Kick off every shuffle track's prefetch immediately — see prefetch()'s
   // own comment for why this, not audio.src/preload, is what actually gets
@@ -203,10 +230,11 @@ export function createMusic({ onTrack } = {}) {
     }
   }
 
-  // True while BOSS_TRACK is loaded instead of the shuffle — read by the
-  // 'ended' handler (resume the shuffle in place, don't advance it, once
-  // the boss track finishes on its own) and by endBossTrack() (cut it short
-  // early if the fight resolves before the track does).
+  // True while a boss track is loaded instead of the shuffle — read by
+  // playSpecial()'s own attached 'ended' handler (resume the shuffle in
+  // place, don't advance it, once the boss track finishes on its own) and
+  // by endBossTrack() (cut it short early if the fight resolves before
+  // the track does).
   let special = false;
 
   // Tried routing this through a MediaElementAudioSourceNode + AudioContext
@@ -231,6 +259,14 @@ export function createMusic({ onTrack } = {}) {
     // Always the shuffle's own level — undoes whatever a special track
     // (e.g. DIABLE_TRACK's own volume) left it at.
     audio.volume = DEFAULT_VOLUME;
+    attachEndedHandler(requestedGeneration, () => {
+      index++;
+      if (index >= order.length) {
+        order = shuffled(PLAYLIST);
+        index = 0;
+      }
+      playCurrent();
+    });
     audio.play().then(
       () => {
         started = true;
@@ -289,6 +325,15 @@ export function createMusic({ onTrack } = {}) {
     // DIABLE_TRACK's own comment for why that one needs it; every other
     // special track just falls back to the same level the shuffle uses.
     audio.volume = track.volume ?? DEFAULT_VOLUME;
+    // If this track plays out to its own natural end without the fight
+    // resolving first (endBossTrack() cutting it short), drop back into
+    // the shuffle right here — see attachEndedHandler's own comment for
+    // why this has to be freshly attached per commit, not one shared
+    // listener.
+    attachEndedHandler(requestedGeneration, () => {
+      special = false;
+      playCurrent();
+    });
 
     let retried = false;
     const attempt = () => {
@@ -323,25 +368,6 @@ export function createMusic({ onTrack } = {}) {
   audio.addEventListener('error', () => {
     const err = audio.error;
     debug(`audio error ${err?.code ?? '?'}: ${err?.message || '(no message)'}`);
-  });
-
-  // Advance to the next track when one ends, instead of looping the same
-  // one — reshuffle once the whole list has played through. If the boss
-  // track was what just ended (it ran its full length without the fight
-  // resolving first), drop back into the shuffle at the same spot it was
-  // interrupted rather than skipping a track ahead.
-  audio.addEventListener('ended', () => {
-    if (special) {
-      special = false;
-      playCurrent();
-      return;
-    }
-    index++;
-    if (index >= order.length) {
-      order = shuffled(PLAYLIST);
-      index = 0;
-    }
-    playCurrent();
   });
 
   let started = false;
