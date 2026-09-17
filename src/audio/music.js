@@ -83,12 +83,25 @@ const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-gouvernement.mp3', title: 'R
 
 const DEFAULT_VOLUME = 0.35;
 
-// Console-only diagnostics — playback state, fetch timing, play() rejections.
-// Kept from earlier on-device troubleshooting of a mobile startup delay.
-// (Separate from the player-facing "now playing" card, which shows just the
-// title and artist of the current track — see onTrack / emitTrack below.)
+// Playback state, fetch timing, play() rejections. Kept from earlier
+// on-device troubleshooting of a mobile startup delay. (Separate from the
+// player-facing "now playing" card, which shows just the title and artist
+// of the current track — see onTrack / emitTrack below.)
+//
+// console.log alone was useless for exactly the class of bug this exists
+// to catch: a mobile-only playback issue, on a phone with no devtools
+// attached — every past mobile investigation here started from a guess,
+// not a log. Also dispatched as a DOM event so main.js can render it
+// on-screen (behind ?musicdebug=1) for a phone with no attached devtools.
 function debug(text) {
   console.log('[music]', text);
+  // test/smoke.mjs runs this module against a minimal window stub with no
+  // real DOM event machinery — guarded the same way emitTrack already
+  // guards its own onTrack callback, so a missing/incomplete window can
+  // never turn a diagnostic into a crash.
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('voyageurs-music-debug', { detail: text }));
+  }
 }
 
 // Real fix for the multi-second gap before music starts: mobile browsers
@@ -132,9 +145,12 @@ function prefetch(url) {
 // natively instead of waiting for the whole blob), just without the
 // zero-latency swap a completed blob gives every other track.
 const SPECIAL_TRACK_TIMEOUT_MS = 1500;
-function withTimeout(promise, ms, fallback) {
+function withTimeout(promise, ms, fallback, label) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(fallback), ms);
+    const timer = setTimeout(() => {
+      debug(`${label}: prefetch still not ready after ${ms}ms, falling back to raw URL`);
+      resolve(fallback);
+    }, ms);
     promise.then((v) => {
       clearTimeout(timer);
       resolve(v);
@@ -259,11 +275,15 @@ export function createMusic({ onTrack } = {}) {
   // comment. Bumps generation so any in-flight normal playCurrent() fetch
   // (or a previous playSpecial()) can't land after this one and undo it.
   async function playSpecial(track) {
+    debug(`playSpecial requested: ${track.title}`);
     special = true;
     generation++;
     const requestedGeneration = generation;
-    const src = await withTimeout(prefetch(track.src), SPECIAL_TRACK_TIMEOUT_MS, track.src);
-    if (generation !== requestedGeneration) return;
+    const src = await withTimeout(prefetch(track.src), SPECIAL_TRACK_TIMEOUT_MS, track.src, track.title);
+    if (generation !== requestedGeneration) {
+      debug(`playSpecial(${track.title}): stale by the time prefetch settled, dropped`);
+      return;
+    }
     audio.src = src;
     // track.volume overrides the shuffle's own DEFAULT_VOLUME — see
     // DIABLE_TRACK's own comment for why that one needs it; every other

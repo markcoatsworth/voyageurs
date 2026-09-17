@@ -427,6 +427,26 @@ function showNowPlaying(track) {
 // this starts on the player's first keypress or click rather than on load.
 const music = createMusic({ onTrack: showNowPlaying });
 
+// music.js's own debug() calls, on-screen instead of console-only — behind
+// ?musicdebug=1, never shown otherwise. console.log alone is invisible on a
+// phone with no devtools attached, which is exactly the situation every
+// past mobile-only audio bug here has had to be diagnosed blind from (see
+// debug()'s own comment) — this exists so the *next* one doesn't have to be.
+if (new URLSearchParams(window.location.search).get('musicdebug') === '1') {
+  const panel = document.createElement('div');
+  panel.style.cssText =
+    'position:fixed;left:0;right:0;bottom:0;max-height:38vh;overflow-y:auto;' +
+    'z-index:2147483646;background:rgba(8,8,14,0.9);color:#8fe08f;' +
+    'font:10px/1.4 monospace;padding:6px 8px;white-space:pre-wrap;pointer-events:none';
+  document.body.appendChild(panel);
+  window.addEventListener('voyageurs-music-debug', (e) => {
+    const line = document.createElement('div');
+    line.textContent = `${new Date().toISOString().slice(11, 19)}  ${e.detail}`;
+    panel.appendChild(line);
+    panel.scrollTop = panel.scrollHeight;
+  });
+}
+
 // Registered before Game is constructed so a startup throw can't strand the
 // title screen on forever — the caption still fades out on its own timer
 // regardless of whether the game behind it came up.
