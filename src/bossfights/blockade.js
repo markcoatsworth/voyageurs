@@ -543,11 +543,21 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
 }
 
 function drawChaseShip(ctx, cameraWorldX, z0, chaseShipDistance) {
-  // Royal Navy gunboat - clear ship silhouette with pointed bow
+  // Royal Navy gunboat - clear ship silhouette with pointed bow.
+  // Deliberately a smaller hull than the blockade frigate (SHIP_DEPTH_Z=3.4)
+  // — a nimble single-chase cutter that can nearly match the canoe's own
+  // speed (CHASE_SHIP_SPEED), not another ship-of-the-line. worldToScreen
+  // has no perspective falloff (flat PIXELS_PER_UNIT scale), so these world
+  // units are screen pixels directly: at the old shipWidth=9/depth=5, the
+  // chase phase's own catch-up clamp (chaseShipDistance can close to 4
+  // units behind) put a 144x80px hull with masts reaching 160px above it
+  // into a 320x220px canvas — routinely wider than the canoe's lane and
+  // taller than the screen. This is ~3x the canoe's own 24x34px sprite,
+  // not 6x.
   const riverCenter = centerX(chaseShipDistance);
-  const shipWidth = 9;
-  const left = worldToScreen(riverCenter - shipWidth / 2, z0 - 2.5, cameraWorldX);
-  const right = worldToScreen(riverCenter + shipWidth / 2, z0 + 2.5, cameraWorldX);
+  const shipWidth = 5;
+  const left = worldToScreen(riverCenter - shipWidth / 2, z0 - 1.5, cameraWorldX);
+  const right = worldToScreen(riverCenter + shipWidth / 2, z0 + 1.5, cameraWorldX);
   const top = Math.min(left.y, right.y);
   const bottom = Math.max(left.y, right.y);
   const hullH = bottom - top;
