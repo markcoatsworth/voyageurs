@@ -326,6 +326,12 @@ const MONTREAL_SQUARE_CENTER = { x: MONTREAL_SQUARE.x + MONTREAL_SQUARE.w / 2, y
 const MONTREAL_ROAD_H2 = { y: 142, h: 16 };
 const MONTREAL_ROAD_V2 = { x: 106, y: MONTREAL_ROAD_H.y, w: 16, h: MONTREAL_ROAD_H2.y + MONTREAL_ROAD_H2.h - MONTREAL_ROAD_H.y };
 const MONTREAL_ROAD_V3 = { x: 250, y: MONTREAL_ROAD_H.y, w: 20, h: MONTREAL_ROAD_H2.y + MONTREAL_ROAD_H2.h - MONTREAL_ROAD_H.y };
+// A fourth cross street, east end — the map shows the grid continuing
+// past the Market Place too, not stopping there; dropped into the real
+// gap between Château de Ramezay and the Jesuit complex (the map's own
+// division between the governors' block and the Jesuits' separately
+// walled property).
+const MONTREAL_ROAD_V4 = { x: 536, y: MONTREAL_ROAD_H.y, w: 14, h: MONTREAL_ROAD_H2.y + MONTREAL_ROAD_H2.h - MONTREAL_ROAD_H.y };
 
 // The Parade — the town's own open drill ground, east of the Market
 // Place, near the Governor's Palace, per the map. Packed earth
@@ -342,7 +348,14 @@ const MONTREAL_PARADE = { x: 450, y: 138, w: 90, h: 30 };
 // (drawGardenPlot), not just more plain grass.
 const MONTREAL_GARDEN_PLOTS = [
   { x: 15, y: 100, w: 110, h: 30 }, // Récollets Convent Gardens, west end (town)
-  { x: 520, y: 100, w: 110, h: 30 }, // The Jesuits' Gardens, east end (town)
+  // The Jesuits' Gardens — moved up from y: 100 (which read more like a
+  // second market-level plot) to sit right behind the back row, against
+  // the wall itself, matching where the map actually draws it: a real
+  // wedge running east from the Jesuit Church along the wall's own
+  // angle, narrowing toward the tip — simplified here to a rectangle,
+  // like every other garden plot in this file, rather than a tapered
+  // shape drawGardenPlot doesn't support.
+  { x: 545, y: 44, w: 85, h: 28 },
   { x: 190, y: -250, w: 140, h: 38 }, // Monsieur Lignères' Gardens, north field
 ];
 
@@ -420,6 +433,16 @@ const MONTREAL_DIRT_PATH_WEST = { x: MONTREAL_WORLD_LEFT, y: 148, w: 15 - MONTRE
 // and runs out to the world's own eastern edge.
 const MONTREAL_DIRT_PATH_EAST = { x: 648, y: 100, w: MONTREAL_WORLD_RIGHT - 648, h: 14 };
 
+// Le Passage de Longueuil — a real, long-documented canoe/ferry crossing
+// from Montreal's own east end to Longueuil on the south shore, running
+// for centuries before any bridge existed. A short stub of planking at
+// the shore (not a full dock reaching into the water like the main one
+// — this isn't a second reboard point, just a landmark) plus a moored
+// canoe and a waiting ferryman. Kept short deliberately: DOCK_TOP to
+// WATER_TOP only, so it never enters the y > WATER_TOP band isWalkable()
+// otherwise restricts to the main dock's own width.
+const MONTREAL_FERRY_LANDING = { x: 700, w: 26 };
+
 // The road up to the district's west field was originally a guess (a
 // fork off the fort's own spur) made before a real source was in hand.
 // Belmont's own 1702 survey (the "divisée par costes" map, BAnQ) turned
@@ -487,13 +510,25 @@ const MONTREAL_WATERFRONT_WALL_H = 13;
 // gate — a gap in the *other* axis's range where isWalkable() (and the
 // matching draw() segment) leaves it open. gateLo/gateHi === null means
 // solid, no gate at all.
+// The real Water Gate, south wall, by the Parade — a second, genuinely
+// distinct opening from the Market/St Mary's Gate cluster at the dock
+// (MONTREAL_ONFOOT_BUILDINGS' own Parade comment), not just the one
+// dock gate standing in for everything any more. Decorative/walkable
+// only — the dock (MONTREAL_WALLS' own south segment, still the sole
+// reboard point) stays the only functional water crossing.
+const MONTREAL_WATER_GATE = { x0: 470, x1: 500 };
+
+// gates is a list of [lo, hi] openings along the wall's own span — empty
+// means solid, one entry a single gate, more than one a real multi-gate
+// wall like the waterfront's below. wallSegments() (near drawSideWall)
+// turns this into the solid stretches actually drawn/collided.
 const MONTREAL_WALLS = [
   // North wall — unchanged: the one A Gate, where the district road
   // crosses (MONTREAL_WALL_GATE).
   {
     axis: 'h', lo: CITY_WALL_Y, hi: CITY_WALL_Y + CITY_WALL_H,
     spanLo: 0, spanHi: MONTREAL_WORLD_WIDTH,
-    gateLo: MONTREAL_WALL_GATE.x0, gateHi: MONTREAL_WALL_GATE.x1,
+    gates: [[MONTREAL_WALL_GATE.x0, MONTREAL_WALL_GATE.x1]],
   },
   // West wall — the Récollets Gate, right where the western suburb's
   // own street (MONTREAL_DIRT_PATH_WEST, y: 148-162) crosses in from
@@ -501,7 +536,7 @@ const MONTREAL_WALLS = [
   {
     axis: 'v', lo: -CITY_WALL_SIDE_W, hi: 0,
     spanLo: CITY_WALL_Y + CITY_WALL_H, spanHi: MONTREAL_WATERFRONT_WALL_Y + MONTREAL_WATERFRONT_WALL_H,
-    gateLo: 145, gateHi: 167,
+    gates: [[145, 167]],
   },
   // East wall — the real gate here (by the Arsenal) leads out to "The
   // Fort" (MONTREAL_EAST_FORT, below), same idea as the west's Récollets
@@ -511,18 +546,37 @@ const MONTREAL_WALLS = [
   {
     axis: 'v', lo: 628, hi: 628 + CITY_WALL_SIDE_W,
     spanLo: CITY_WALL_Y + CITY_WALL_H, spanHi: MONTREAL_WATERFRONT_WALL_Y + MONTREAL_WATERFRONT_WALL_H,
-    gateLo: 96, gateHi: 120,
+    gates: [[96, 120]],
   },
-  // South/waterfront wall — the map shows a small cluster of gates
-  // right by the wharf (Market Gate, St Mary's Gate, Water Gate); one
-  // wide gate at the dock's own width stands in for all of them, since
-  // the dock is the only water-facing passage gameplay actually needs.
+  // South/waterfront wall — two real, distinct gates: the dock's own
+  // width stands in for the Market/St Mary's Gate cluster by the wharf
+  // (the only water-facing passage gameplay needs), and MONTREAL_WATER_
+  // GATE, further east by the Parade, is the map's own separate Water
+  // Gate — walkable, not another reboard point.
   {
     axis: 'h', lo: MONTREAL_WATERFRONT_WALL_Y, hi: MONTREAL_WATERFRONT_WALL_Y + MONTREAL_WATERFRONT_WALL_H,
     spanLo: 0, spanHi: MONTREAL_WORLD_WIDTH,
-    gateLo: dockX0(MONTREAL_WORLD_WIDTH), gateHi: dockX1(MONTREAL_WORLD_WIDTH),
+    gates: [
+      [dockX0(MONTREAL_WORLD_WIDTH), dockX1(MONTREAL_WORLD_WIDTH)],
+      [MONTREAL_WATER_GATE.x0, MONTREAL_WATER_GATE.x1],
+    ],
   },
 ];
+
+// Turns a wall's span + gates into the solid stretches actually drawn
+// and collided — the gap-free complement of the gate list, sorted so
+// unordered/overlapping gate entries still resolve sensibly.
+function wallSegments(w) {
+  const gates = [...w.gates].sort((a, b) => a[0] - b[0]);
+  const segments = [];
+  let cursor = w.spanLo;
+  for (const [gLo, gHi] of gates) {
+    if (gLo > cursor) segments.push([cursor, gLo]);
+    cursor = Math.max(cursor, gHi);
+  }
+  if (cursor < w.spanHi) segments.push([cursor, w.spanHi]);
+  return segments;
+}
 
 function buildingsForQuebecCity() {
   return QUEBEC_CITY_ONFOOT_BUILDINGS.map((b) => ({
@@ -803,11 +857,11 @@ function isWalkable(buildings, x, y, worldWidth, worldTop, walls, worldLeft, wor
   if (y > WATER_TOP && (x < dockX0(worldWidth) || x > dockX1(worldWidth))) return false;
   if (walls) {
     for (const w of walls) {
-      if (w.axis === 'h') {
-        if (y >= w.lo && y <= w.hi && x >= w.spanLo && x <= w.spanHi && (w.gateLo == null || x < w.gateLo || x > w.gateHi)) return false;
-      } else if (x >= w.lo && x <= w.hi && y >= w.spanLo && y <= w.spanHi && (w.gateLo == null || y < w.gateLo || y > w.gateHi)) {
-        return false;
-      }
+      const along = w.axis === 'h' ? x : y;
+      const across = w.axis === 'h' ? y : x;
+      if (across < w.lo || across > w.hi || along < w.spanLo || along > w.spanHi) continue;
+      const inGate = w.gates.some(([lo, hi]) => along >= lo && along <= hi);
+      if (!inGate) return false;
     }
   }
   return !overlapsBuilding(buildings, x, y);
@@ -1229,6 +1283,7 @@ export function createVillageScene() {
         drawBrickRoad(ctx, MONTREAL_ROAD_V.x, MONTREAL_ROAD_V.y, MONTREAL_ROAD_V.w, MONTREAL_ROAD_V.h);
         drawBrickRoad(ctx, MONTREAL_ROAD_V2.x, MONTREAL_ROAD_V2.y, MONTREAL_ROAD_V2.w, MONTREAL_ROAD_V2.h);
         drawBrickRoad(ctx, MONTREAL_ROAD_V3.x, MONTREAL_ROAD_V3.y, MONTREAL_ROAD_V3.w, MONTREAL_ROAD_V3.h);
+        drawBrickRoad(ctx, MONTREAL_ROAD_V4.x, MONTREAL_ROAD_V4.y, MONTREAL_ROAD_V4.w, MONTREAL_ROAD_V4.h);
         drawMarketWell(ctx, MONTREAL_SQUARE_CENTER.x, MONTREAL_SQUARE_CENTER.y);
         drawDirtPath(ctx, MONTREAL_PARADE.x, MONTREAL_PARADE.y, MONTREAL_PARADE.w, MONTREAL_PARADE.h);
         for (const g of MONTREAL_GARDEN_PLOTS) drawGardenPlot(ctx, g.x, g.y, g.w, g.h);
@@ -1267,6 +1322,30 @@ export function createVillageScene() {
         ctx.moveTo(dX0, py);
         ctx.lineTo(dX1, py);
         ctx.stroke();
+      }
+
+      // Le Passage de Longueuil (MONTREAL_FERRY_LANDING's own comment) —
+      // a short stub of planking at the shore, east of the wall, plus a
+      // moored canoe. Not a second reboard point, so it stops at
+      // WATER_TOP rather than reaching CANVAS_HEIGHT the way the real
+      // dock above does.
+      if (isMontreal) {
+        const fX0 = MONTREAL_FERRY_LANDING.x, fX1 = fX0 + MONTREAL_FERRY_LANDING.w;
+        ctx.fillStyle = '#3f2b1a';
+        ctx.fillRect(fX0 - 1, DOCK_TOP - 1, fX1 - fX0 + 2, WATER_TOP - DOCK_TOP + 1);
+        ctx.fillStyle = '#8a5a34';
+        ctx.fillRect(fX0, DOCK_TOP, fX1 - fX0, WATER_TOP - DOCK_TOP);
+        ctx.strokeStyle = '#5f3b20';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(fX0, DOCK_TOP + 6);
+        ctx.lineTo(fX1, DOCK_TOP + 6);
+        ctx.stroke();
+        ctx.save();
+        ctx.translate((fX0 + fX1) / 2, WATER_TOP + 4);
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(parkedCanoeSprite, -parkedCanoeSprite.width / 2, -parkedCanoeSprite.height / 2);
+        ctx.restore();
       }
 
       // Mont-Royal itself — real Montreal's one unmistakable landmark,
@@ -1326,12 +1405,9 @@ export function createVillageScene() {
       // gate's visual gap can match its own exact collision width.
       if (isMontreal) {
         const [, west, east, south] = MONTREAL_WALLS;
-        drawSideWall(ctx, west.lo, west.spanLo, west.hi - west.lo, west.gateLo - west.spanLo, 'w');
-        drawSideWall(ctx, west.lo, west.gateHi, west.hi - west.lo, west.spanHi - west.gateHi, 'w');
-        drawSideWall(ctx, east.lo, east.spanLo, east.hi - east.lo, east.gateLo - east.spanLo, 'e');
-        drawSideWall(ctx, east.lo, east.gateHi, east.hi - east.lo, east.spanHi - east.gateHi, 'e');
-        drawWaterfrontWall(ctx, 0, south.lo, south.gateLo, south.hi - south.lo);
-        drawWaterfrontWall(ctx, south.gateHi, south.lo, worldWidth - south.gateHi, south.hi - south.lo);
+        for (const [s0, s1] of wallSegments(west)) drawSideWall(ctx, west.lo, s0, west.hi - west.lo, s1 - s0, 'w');
+        for (const [s0, s1] of wallSegments(east)) drawSideWall(ctx, east.lo, s0, east.hi - east.lo, s1 - s0, 'e');
+        for (const [s0, s1] of wallSegments(south)) drawWaterfrontWall(ctx, s0, south.lo, s1 - s0, south.hi - south.lo);
       }
       if (!isQuebecCity) {
         for (const t of trees) {
@@ -1379,6 +1455,13 @@ export function createVillageScene() {
         ...(gunsmithPos ? [{
           y: gunsmithPos.y,
           draw: (c) => c.drawImage(gunsmithSprite, gunsmithPos.x - gunsmithSprite.width / 2, gunsmithPos.y - gunsmithSprite.height + 2),
+        }] : []),
+        // The ferryman waiting at Le Passage de Longueuil — purely
+        // decorative (no trigger, unlike the trader/gunsmith), reusing
+        // the trader's own sprite rather than a bespoke one.
+        ...(isMontreal ? [{
+          y: WATER_TOP - 4,
+          draw: (c) => c.drawImage(traderSprite, MONTREAL_FERRY_LANDING.x + MONTREAL_FERRY_LANDING.w + 6 - traderSprite.width / 2, WATER_TOP - 4 - traderSprite.height + 2),
         }] : []),
         {
           y: player.y,
