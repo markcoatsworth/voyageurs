@@ -27,14 +27,24 @@ export const DIABLE_FLOW_DISTANCE = FLIGHT_END - 45;
 // clamps, so the encounter has a moment of dread before it locks in.
 const APPROACH = 16;
 
-// The fight's original HP total, kept as its own constant: hpFrac (below)
-// anchors the difficulty ramp to *this*, not to the live HP_MAX, so
-// stretching HP_MAX only lengthens the safe opening, never the dangerous
-// finale — see hpFrac's own comment for why that distinction actually
-// matters (a first pass here that skipped it made the fight's last 45%
-// last twice as long too, which quietly broke it for anyone who doesn't
-// actively dodge).
-const ORIGINAL_HP_MAX = 240;
+// How the fight escalates as hp drops, 0 (full health) -> 1 (dead) — see
+// rampT's own comment at the call site for the formula. Replaces an
+// earlier version that anchored the ramp to the fight's *original* 240 HP
+// pool (a fixed window at the very end) rather than the live HP_MAX
+// (3840, after a past "make the fight longer" pass 8x'd the pool without
+// touching the ramp) — that kept the finale exactly as dangerous as the
+// original short fight, but meant the ramp never engaged at all for
+// roughly the first 94% of a now-several-minutes fight: reported as "too
+// easy," and flat-until-the-last-few-seconds is exactly why. A naive fix
+// (scale the same percentage thresholds against the new HP_MAX directly)
+// was tried once already and made the *hardest* tier alone last over a
+// minute of continuous dodging — unsurvivable for anyone not perfectly
+// dodging the whole time. RAMP_GAMMA > 1 is what avoids repeating that:
+// it biases the curve to stay low through the opening (still a real safe
+// stretch, just no longer the entire fight) and only climbs to full
+// intensity in roughly the last 15% of hp — a real, felt finale (~24s of
+// hardest-tier dodging at steady damage), not a multi-minute wall.
+const RAMP_GAMMA = 1.7;
 // A first pass doubled this (240 -> 480) and landed way short: a real
 // playtest cleared it in ~30s. At FIRE_COOLDOWN (weapons.js, 0.16s) and
 // BULLET_DAMAGE below, holding the trigger on a well-tracked target caps
@@ -85,7 +95,7 @@ const FIRE_INTERVAL_LOW = 1.0;    // ...and when nearly dead
 // punishing either way: guessing wrong costs a wasted dodge, never health
 // (no fireball exists to hit you regardless) — this is about making the
 // telegraph worth reading, not adding danger. Left as a flat, constant
-// chance rather than ramping with hpFrac, so it reads as a fixed piece of
+// chance rather than ramping with rampT, so it reads as a fixed piece of
 // his character throughout the fight, not an escalating threat.
 const FEINT_CHANCE = 0.3;
 const FEINT_FLOURISH_TIME = 0.4; // how long the "gotcha" flourish plays
@@ -224,20 +234,15 @@ export function createDiable() {
         }
 
         // --- his attack: a fireball aimed at the canoe, fanning to a
-        //     3-shot spread once he's badly hurt ---
-        // Anchored to ORIGINAL_HP_MAX, not the live HP_MAX: while hp is
-        // still above that (the "bonus" length added on top of the
-        // original fight), this reads as 1 — full-health behaviour,
-        // single shots at the slow interval — the same way the original
-        // fight opened. Only once hp actually drops into the original
-        // 0-240 range does the ramp (including the 3-shot spread below
-        // 45%) kick in, and from there it's pixel-for-pixel the same
-        // ramp the original, shorter fight always had. Extending HP_MAX
-        // without this anchor stretches the *dangerous* finale by the
-        // same factor as the *safe* opening — which is what silently
-        // turned "longer" into "a non-dodging strategy can't survive the
-        // last 45% anymore" (see HP_MAX's own comment).
-        const hpFrac = Math.min(hp, ORIGINAL_HP_MAX) / ORIGINAL_HP_MAX;
+        //     3-shot spread as he escalates ---
+        // rampT: 0 at full health, climbing smoothly to 1 at death — see
+        // RAMP_GAMMA's own comment for why this is a continuous curve
+        // across the whole fight rather than a percentage cutoff (which
+        // broke once tried directly against a much bigger HP_MAX) or an
+        // anchor to a fixed end-of-fight HP window (which is what this
+        // replaced — technically safe, but never escalated at all until
+        // the last few seconds).
+        const rampT = Math.pow(clamp01(1 - hp / HP_MAX), RAMP_GAMMA);
         if (telegraph > 0) {
           telegraph -= dt;
           if (telegraph <= 0) {
@@ -257,9 +262,9 @@ export function createDiable() {
               // pixel amount — a consistent gap no matter the range.
               const px = -Math.sin(ang);
               const py = Math.cos(ang);
-              const offsets = hpFrac < 0.45
+              const offsets = rampT > 0.75
                 ? [-SPREAD_GAP, 0, SPREAD_GAP]
-                : hpFrac < 0.8 ? [-SPREAD_GAP / 2, SPREAD_GAP / 2] : [0];
+                : rampT > 0.4 ? [-SPREAD_GAP / 2, SPREAD_GAP / 2] : [0];
               for (const off of offsets) {
                 const a = Math.atan2(
                   (canoe.y + py * off) - sy,
@@ -279,7 +284,7 @@ export function createDiable() {
         } else {
           fireTimer -= dt;
           if (fireTimer <= 0) {
-            const interval = FIRE_INTERVAL_LOW + (FIRE_INTERVAL_FULL - FIRE_INTERVAL_LOW) * hpFrac;
+            const interval = FIRE_INTERVAL_FULL - (FIRE_INTERVAL_FULL - FIRE_INTERVAL_LOW) * rampT;
             fireTimer = interval;
             telegraph = TELEGRAPH;
             isFeint = Math.random() < FEINT_CHANCE;
