@@ -1265,7 +1265,8 @@ export function createVillageScene() {
         const [, west, east, south] = MONTREAL_WALLS;
         drawSideWall(ctx, west.lo, west.spanLo, west.hi - west.lo, west.gateLo - west.spanLo, 'w');
         drawSideWall(ctx, west.lo, west.gateHi, west.hi - west.lo, west.spanHi - west.gateHi, 'w');
-        drawSideWall(ctx, east.lo, east.spanLo, east.hi - east.lo, east.spanHi - east.spanLo, 'e');
+        drawSideWall(ctx, east.lo, east.spanLo, east.hi - east.lo, east.gateLo - east.spanLo, 'e');
+        drawSideWall(ctx, east.lo, east.gateHi, east.hi - east.lo, east.spanHi - east.gateHi, 'e');
         drawWaterfrontWall(ctx, 0, south.lo, south.gateLo, south.hi - south.lo);
         drawWaterfrontWall(ctx, south.gateHi, south.lo, worldWidth - south.gateHi, south.hi - south.lo);
       }
