@@ -76,17 +76,17 @@ const RAMP_GAMMA = 1.9;
 // number moves (it already has, three times).
 export const HP_MAX = 2880;
 const BULLET_DAMAGE = 4;      // per pistol hit
-// A fireball that connects (game.js applies INVULN_TIME). Was 30 — ~3 hits
-// and the 4th kills. Every death resets Diable's own hp back to HP_MAX
-// (game.js's start() calls diable.reset()), so for anyone who dies even
-// once, total time-to-clear is dominated by how often they die and have
-// to re-grind the whole pool from scratch, not raw dps — a request for
-// "tone it down a little, ~5min for a skilled clean run, ~7min for a
-// slower player" is really a request for fewer deaths, not a shorter
-// pool (a skilled clean run is already close to 5min; HP_MAX shrinking
-// would undershoot that). 25 gives one more hit of margin (4 survived,
-// the 5th kills) without touching the pool or the escalation shape.
-const CONTACT_DAMAGE = 25;
+// A fireball that connects (game.js applies INVULN_TIME). Dropped to 25 for
+// a "tone it down" request, on the reasoning that death resets Diable's own
+// hp to full, so total time-to-clear is dominated by death frequency. That
+// reasoning only bites if hits actually land — reported straight after as
+// clearing the whole fight without taking a single one, i.e. the dodge
+// mechanics themselves (FIREBALL_SPEED/TELEGRAPH/SPREAD_GAP below) were the
+// real problem, not how much any one hit costs. Reverted back to 30 (~3
+// hits and the 4th kills) now that those are being tightened instead — real
+// stakes on the hits that do land, rather than a softened number chasing a
+// symptom.
+const CONTACT_DAMAGE = 30;
 
 // --- his screen footprint. He stands in the upper half of the channel; the
 // canoe is pulled low for the fight (chasseGalerie.js's boss hover height),
@@ -97,19 +97,41 @@ const BASE_CY = 64;           // torso centre at rest — head & horns clear the
 const SWAY_X = CANVAS_WIDTH * 0.17;
 
 // --- his fireballs
-const FIREBALL_SPEED = 98;    // px/sec — slow enough to read and dodge over the arena
+// First tightened once already (reported as clearing without taking a
+// single hit — see FIRE_INTERVAL_FULL/LOW's own history). This pass is a
+// different axis: back then every number was flat across the whole fight,
+// so "tougher" meant "tougher throughout," not an escalating arc. Now
+// FIREBALL_SPEED, TELEGRAPH and FIRE_INTERVAL are each a FULL/LOW pair
+// interpolated by rampT the same way spread count already was — the
+// opening is calmer than the last pass left it (more speed/warning margin
+// at rampT=0) and the finale is considerably worse (less of both, plus a
+// 4th spread tier), so "way more brutal as it drags on" is a real widening
+// gap, not just a uniformly harder fight.
+const FIREBALL_SPEED_FULL = 112; // px/sec at full health — readable
+const FIREBALL_SPEED_LOW = 170;  // px/sec once badly hurt — a real jump, not just more shots
 const FIREBALL_R = 6;         // collision radius
 const CANOE_HIT_R = 5;        // the canoe's a thin sliver — only a near-centre hit counts
 // The multi-shot volleys aim at points spread perpendicular to the canoe by
 // this many pixels *at the canoe's range*, rather than by a fixed angle
 // (which fans out tight up close and wide far away, so you couldn't thread
 // it when pressed toward the Devil). This gap leaves a
-// SPREAD_GAP - 2*(FIREBALL_R + CANOE_HIT_R) ≈ 12px lane to slip through —
-// threadable, but it takes a committed dodge rather than a nudge.
-const SPREAD_GAP = 34;
-const TELEGRAPH = 0.5;        // wind-up before a shot: the flame in his hand swells
+// SPREAD_GAP - 2*(FIREBALL_R + CANOE_HIT_R) ≈ 6px lane to slip through —
+// a genuinely tight, committed dodge, same width as the last pass; the
+// 4-shot tier below (SPREAD_TIGHT_GAP) is where the real late-fight squeeze
+// comes from now instead of narrowing this one further.
+const SPREAD_GAP = 28;
+// The 4-shot tier's own spacing (only above rampT 0.92, right near death).
+// Deliberately tighter than the 3-shot spread's own math above: adjacent
+// shots' hit-radii (2*(FIREBALL_R+CANOE_HIT_R) = 22px) now overlap the
+// 20px gap between them, so there's no lane to thread *between* any two
+// of the four — only around the outside of the whole volley. A wall to
+// get past, not another gap to slip through; the rare, genuinely brutal
+// exception, not the model for every tier.
+const SPREAD_TIGHT_GAP = 20;
+const TELEGRAPH_FULL = 0.5;   // wind-up at full health — a fair, readable tell
+const TELEGRAPH_LOW = 0.22;   // wind-up once badly hurt — barely enough to react
 const FIRE_INTERVAL_FULL = 1.8;   // seconds between shots at full health
-const FIRE_INTERVAL_LOW = 1.0;    // ...and when nearly dead
+const FIRE_INTERVAL_LOW = 0.65;   // ...and when nearly dead — genuinely relentless
 
 // The feint — the trickster half of a "beau danseur" devil who's supposed
 // to charm and deceive, not just bludgeon. Some wind-ups are a real throw;
@@ -149,6 +171,11 @@ export function createDiable() {
   let sway = 0;       // sway clock (keeps advancing across phases)
   let fireTimer = FIRE_INTERVAL_FULL;
   let telegraph = 0;  // counts down while winding up a shot
+  // The telegraph's own starting length for the wind-up currently in
+  // progress — needed because that length now varies with rampT (see
+  // TELEGRAPH_FULL/LOW), so drawDevil's windK (0..1 progress through the
+  // wind-up) can't just divide by a single fixed constant any more.
+  let telegraphTotal = TELEGRAPH_FULL;
   let isFeint = false; // whether the current/last wind-up is a real throw
   let feintFlourish = 0; // counts down the "gotcha" flourish after a feint resolves
   let hitFlash = 0;   // white flash when shot
@@ -170,6 +197,7 @@ export function createDiable() {
     sway = 0;
     fireTimer = FIRE_INTERVAL_FULL;
     telegraph = 0;
+    telegraphTotal = TELEGRAPH_FULL;
     isFeint = false;
     feintFlourish = 0;
     hitFlash = 0;
@@ -197,7 +225,7 @@ export function createDiable() {
     // Live fireballs, for the same "is this fair" checks.
     getFireballs() { return fireballs; },
     // Whether he's mid-windup right now (the flame swelling in his hand) —
-    // the one real dodge tell (TELEGRAPH's own comment). A shot's flight
+    // the one real dodge tell (TELEGRAPH_FULL/LOW's own comment). A shot's flight
     // time is short enough that reacting only once it's airborne doesn't
     // leave room to actually clear the gap between shots in a spread; the
     // real move is to already be moving by the time he throws.
@@ -302,9 +330,16 @@ export function createDiable() {
               // pixel amount — a consistent gap no matter the range.
               const px = -Math.sin(ang);
               const py = Math.cos(ang);
-              const offsets = rampT > 0.75
-                ? [-SPREAD_GAP, 0, SPREAD_GAP]
-                : rampT > 0.4 ? [-SPREAD_GAP / 2, SPREAD_GAP / 2] : [0];
+              // A 4th tier right at the end (SPREAD_TIGHT_GAP, its own
+              // comment) — the widening escalation gap this pass adds asks
+              // for a ceiling worse than the 3-shot spread the fight had
+              // before, not just reaching that same ceiling sooner.
+              const offsets =
+                rampT > 0.92 ? [-1.5 * SPREAD_TIGHT_GAP, -0.5 * SPREAD_TIGHT_GAP, 0.5 * SPREAD_TIGHT_GAP, 1.5 * SPREAD_TIGHT_GAP]
+                : rampT > 0.75 ? [-SPREAD_GAP, 0, SPREAD_GAP]
+                : rampT > 0.4 ? [-SPREAD_GAP / 2, SPREAD_GAP / 2]
+                : [0];
+              const speed = lerp(FIREBALL_SPEED_FULL, FIREBALL_SPEED_LOW, rampT);
               for (const off of offsets) {
                 const a = Math.atan2(
                   (canoe.y + py * off) - sy,
@@ -313,9 +348,9 @@ export function createDiable() {
                 fireballs.push({
                   x: sx,
                   y: sy,
-                  vx: Math.cos(a) * FIREBALL_SPEED,
+                  vx: Math.cos(a) * speed,
                   // never let one drift upward — it must always come down at you
-                  vy: Math.max(55, Math.sin(a) * FIREBALL_SPEED),
+                  vy: Math.max(55, Math.sin(a) * speed),
                   born: 0,
                 });
               }
@@ -326,7 +361,8 @@ export function createDiable() {
           if (fireTimer <= 0) {
             const interval = FIRE_INTERVAL_FULL - (FIRE_INTERVAL_FULL - FIRE_INTERVAL_LOW) * rampT;
             fireTimer = interval;
-            telegraph = TELEGRAPH;
+            telegraph = lerp(TELEGRAPH_FULL, TELEGRAPH_LOW, rampT);
+            telegraphTotal = telegraph;
             isFeint = Math.random() < FEINT_CHANCE;
           }
         }
@@ -374,7 +410,7 @@ export function createDiable() {
         : 1 - dieK * 0.9;
       ctx.save();
       ctx.globalAlpha = 1;
-      drawDevil(ctx, cx, cy, time, telegraph, hitFlash, dieK, bodyFade, feintFlourish);
+      drawDevil(ctx, cx, cy, time, telegraph, telegraphTotal, hitFlash, dieK, bodyFade, feintFlourish);
       ctx.restore();
 
       // His fireballs on top — thrown from the flame in his hand.
@@ -449,8 +485,12 @@ function devilTorsoPath(ctx) {
   ctx.quadraticCurveTo(0, -20, -8, -23);      // collar notch dips for the neck
   ctx.closePath();
 }
-function drawDevil(ctx, cx, cy, time, telegraph, hitFlash, dieK, fade = 1, feintFlourish = 0) {
-  const windK = telegraph > 0 ? clamp01(1 - telegraph / TELEGRAPH) : 0;
+function drawDevil(ctx, cx, cy, time, telegraph, telegraphTotal, hitFlash, dieK, fade = 1, feintFlourish = 0) {
+  // telegraphTotal is this wind-up's own starting length, not a fixed
+  // constant — it varies with rampT (TELEGRAPH_FULL down to TELEGRAPH_LOW),
+  // so windK (0..1 progress through the wind-up) has to divide by whatever
+  // length *this* wind-up actually started at.
+  const windK = telegraph > 0 ? clamp01(1 - telegraph / telegraphTotal) : 0;
   // The "gotcha" — head tips back an instant, same read as a silent laugh,
   // right as a feinted wind-up resolves into nothing.
   const feintK = feintFlourish > 0 ? clamp01(feintFlourish / FEINT_FLOURISH_TIME) : 0;
