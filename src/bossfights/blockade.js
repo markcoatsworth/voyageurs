@@ -658,98 +658,119 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
   // Royal Navy gunboat - clear ship silhouette with pointed bow.
   // Deliberately a smaller hull than the blockade frigate (SHIP_DEPTH_Z=3.4)
   // — a nimble single-chase cutter, not another ship-of-the-line.
-  // worldToScreen has no perspective falloff (flat PIXELS_PER_UNIT scale), so these world
-  // units are screen pixels directly: this is ~3x the canoe's own 24x34px
-  // sprite, not 6x. shipWorldX is the orbit-adjusted position update()
-  // computed this frame (see CHASE_ORBIT_* above), not the river centerline
-  // — the old version always drew dead-center on the channel regardless of
-  // where the canoe actually was, which read as "floating next to you"
-  // rather than a boat actually maneuvering around your position.
-  const shipWidth = 5;
-  const left = worldToScreen(shipWorldX - shipWidth / 2, z0 - 1.5, cameraWorldX);
-  const right = worldToScreen(shipWorldX + shipWidth / 2, z0 + 1.5, cameraWorldX);
+  // worldToScreen has no perspective falloff (flat PIXELS_PER_UNIT scale),
+  // so these world units are screen pixels directly. shipWorldX is the
+  // orbit-adjusted position update() computed this frame (see CHASE_ORBIT_*
+  // above), not the river centerline.
+  //
+  // BEAM (across) vs LENGTH_HALF (along direction of travel): a first pass
+  // used a 5-unit beam against only a 3-unit (1.5 each way) length, i.e. a
+  // hull *wider than it is long* — backwards for any boat, and exactly what
+  // read as "too wide, doesn't look like a real boat." A real ship's length
+  // is a multiple of its beam, never the other way around. Every dimension
+  // below is deliberately built off BEAM (width axis, left/right.x) or
+  // LENGTH_PX (length axis, top/bottom.y) separately — a few of the old
+  // sail/yard measurements mistakenly scaled off the *length* axis, which
+  // is harmless when both axes happen to be similar (the old, wrong
+  // proportions) but blows up into oversized sails the instant the length
+  // axis actually gets longer than the beam, as it must for the hull shape
+  // itself to be fixed.
+  const BEAM = 3;
+  const LENGTH_HALF = 3.5; // full length 7 units vs 3 beam — ~2.3:1, a real hull ratio
+  const left = worldToScreen(shipWorldX - BEAM / 2, z0 - LENGTH_HALF, cameraWorldX);
+  const right = worldToScreen(shipWorldX + BEAM / 2, z0 + LENGTH_HALF, cameraWorldX);
   const top = Math.min(left.y, right.y);
   const bottom = Math.max(left.y, right.y);
-  const hullH = bottom - top;
-  const hullW = right.x - left.x;
+  const lenPx = bottom - top; // along the hull's length (bow-to-stern axis)
+  const beamPx = right.x - left.x; // across the hull's beam (side-to-side axis)
   const shipCenterX = (left.x + right.x) / 2;
 
-  // Wake: two foam lines trailing from the stern, drawn first so the hull
-  // covers their near end — the single cheapest cue that this thing is
-  // actually underway and fast, not sitting still.
-  ctx.strokeStyle = 'rgba(220, 235, 240, 0.55)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(shipCenterX - hullW * 0.22, bottom - 2);
-  ctx.lineTo(shipCenterX - hullW * 0.55, bottom + hullH * 0.9);
-  ctx.moveTo(shipCenterX + hullW * 0.22, bottom - 2);
-  ctx.lineTo(shipCenterX + hullW * 0.55, bottom + hullH * 0.9);
-  ctx.stroke();
+  // Wake: two curved, fading foam streaks trailing from the stern, drawn
+  // first so the hull covers their near end — the cheapest cue that this
+  // thing is actually underway and fast, not sitting still. A pair of
+  // straight uniform lines read as thin spindly legs stuck on the bottom
+  // of the hull rather than water — curving them outward (a real wake
+  // widens as it falls behind) and fading them out with alpha instead of
+  // a flat stroke reads as spreading foam instead.
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(shipCenterX + side * beamPx * 0.18, bottom - 2);
+    ctx.quadraticCurveTo(
+      shipCenterX + side * beamPx * 0.35, bottom + lenPx * 0.18,
+      shipCenterX + side * beamPx * 0.7, bottom + lenPx * 0.32,
+    );
+    ctx.strokeStyle = 'rgba(220, 235, 240, 0.4)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  }
 
-  // HULL SHAPE - pointed bow, tapered stern
-  // Bow (front, pointing toward player) is at TOP
+  // HULL SHAPE - pointed bow, flat-ish transom stern. The taper is entirely
+  // in beamPx-relative fractions so the outline scales correctly regardless
+  // of hull size, and — critically — the gunport stripe below is placed
+  // well clear of the taper zones at both ends so it can never overflow
+  // past the hull's actual (narrower, at that height) silhouette the way a
+  // flat full-beam rectangle did when it was placed too close to the stern
+  // taper: it showed ochre color sticking out past the hull outline there.
   ctx.fillStyle = '#3a2716';
   ctx.strokeStyle = '#0d0805';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  // Pointed bow
-  ctx.moveTo(shipCenterX, top - 8);
-  // Right side hull
-  ctx.lineTo(right.x, top + hullH * 0.25);
-  ctx.lineTo(right.x - 4, bottom - hullH * 0.15);
-  // Tapered stern (back)
-  ctx.lineTo(shipCenterX + hullW * 0.25, bottom);
-  ctx.lineTo(shipCenterX - hullW * 0.25, bottom);
-  // Left side hull
-  ctx.lineTo(left.x + 4, bottom - hullH * 0.15);
-  ctx.lineTo(left.x, top + hullH * 0.25);
+  ctx.moveTo(shipCenterX, top - beamPx * 0.3); // pointed bow
+  ctx.lineTo(right.x, top + lenPx * 0.22); // full beam reached
+  ctx.lineTo(right.x - beamPx * 0.06, bottom - lenPx * 0.08); // start narrowing to the transom
+  ctx.lineTo(shipCenterX + beamPx * 0.42, bottom); // stern corner — a flat transom, not a second point
+  ctx.lineTo(shipCenterX - beamPx * 0.42, bottom); // stern corner
+  ctx.lineTo(left.x + beamPx * 0.06, bottom - lenPx * 0.08);
+  ctx.lineTo(left.x, top + lenPx * 0.22);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
   // "Nelson chequer" — an ochre stripe with black gunport squares along
   // each side, the single detail that reads unmistakably as "old warship"
-  // rather than an unrecognizable brown hull (this is the same cue the
-  // stationary frigate's own drawShip already relies on, just adapted to a
-  // hull that tapers instead of running parallel-sided).
-  const stripeY = bottom - hullH * 0.32;
-  const stripeH = hullH * 0.22;
+  // rather than an unrecognizable brown hull (the same cue the stationary
+  // frigate's own drawShip already relies on). Kept to the hull's known
+  // full-beam midsection (between the bow and stern taper zones above, with
+  // real margin) so it never overflows the outline.
+  const stripeY = top + lenPx * 0.5;
+  const stripeH = lenPx * 0.12;
   ctx.fillStyle = '#b98a3e';
-  ctx.fillRect(left.x + 3, stripeY, hullW - 6, stripeH);
+  ctx.fillRect(left.x + beamPx * 0.06, stripeY, beamPx * 0.88, stripeH);
   const portSize = Math.max(2.5, stripeH * 0.6);
-  const portCount = 4;
+  const portCount = 3;
   for (let i = 0; i < portCount; i++) {
-    const px = left.x + 8 + (i / (portCount - 1)) * (hullW - 16);
+    const px = left.x + beamPx * 0.2 + (i / (portCount - 1)) * beamPx * 0.6;
     ctx.fillStyle = '#0c0805';
     ctx.fillRect(px - portSize / 2, stripeY + stripeH / 2 - portSize / 2, portSize, portSize);
   }
 
-  // Deck - lighter wood showing ship interior
+  // Deck - lighter wood showing ship interior, inset from the hull outline
+  // by beamPx-relative margins (an absolute pixel inset looked fine at the
+  // old ~80px beam but oversized now that beamPx is a genuinely ship-sized
+  // ~48px).
   ctx.fillStyle = '#4a3520';
   ctx.beginPath();
-  ctx.moveTo(shipCenterX, top - 4);
-  ctx.lineTo(right.x - 6, top + hullH * 0.3);
-  ctx.lineTo(right.x - 8, bottom - hullH * 0.2);
-  ctx.lineTo(shipCenterX + hullW * 0.15, bottom - 4);
-  ctx.lineTo(shipCenterX - hullW * 0.15, bottom - 4);
-  ctx.lineTo(left.x + 8, bottom - hullH * 0.2);
-  ctx.lineTo(left.x + 6, top + hullH * 0.3);
+  ctx.moveTo(shipCenterX, top - beamPx * 0.1);
+  ctx.lineTo(right.x - beamPx * 0.15, top + lenPx * 0.26);
+  ctx.lineTo(right.x - beamPx * 0.2, bottom - lenPx * 0.16);
+  ctx.lineTo(shipCenterX + beamPx * 0.2, bottom - lenPx * 0.03);
+  ctx.lineTo(shipCenterX - beamPx * 0.2, bottom - lenPx * 0.03);
+  ctx.lineTo(left.x + beamPx * 0.2, bottom - lenPx * 0.16);
+  ctx.lineTo(left.x + beamPx * 0.15, top + lenPx * 0.26);
   ctx.closePath();
   ctx.fill();
 
-  // Three masts - clear vertical elements. Kept short and close over the
-  // hull on purpose — the first version ran these to top-hullH*2 with sails
-  // starting at top-hullH*1.3, which at this hull's actual size put the
-  // sails a good 100+ screen px above the hull with nothing but two thin
-  // lines connecting them: reads as two unrelated shapes floating apart,
-  // not "a boat," especially against a dark water background that the
-  // thin mast strokes barely stand out from. Compressed so the sail block
-  // sits directly over the hull, overlapping it visually the way a real
-  // top-down ship sprite would.
+  // Three masts - clear vertical elements, positioned along the hull's
+  // length (lenPx) but sized across (yard/sail width) off beamPx — mixing
+  // those up is exactly what made an earlier pass balloon the sails the
+  // moment the hull was actually made longer than it was wide (see the
+  // function's own opening comment). A real yard does run a bit past the
+  // hull's own beam, so these intentionally overhang beamPx slightly rather
+  // than staying inside it.
   const mastPositions = [
     shipCenterX,
-    shipCenterX - hullW * 0.2,
-    shipCenterX + hullW * 0.2
+    shipCenterX - beamPx * 0.55,
+    shipCenterX + beamPx * 0.55,
   ];
 
   for (const mx of mastPositions) {
@@ -757,41 +778,41 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
     ctx.strokeStyle = '#2a1a10';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(mx, top + hullH * 0.15);
-    ctx.lineTo(mx, top - hullH * 0.85);
+    ctx.moveTo(mx, top + lenPx * 0.06);
+    ctx.lineTo(mx, top - lenPx * 0.36);
     ctx.stroke();
 
     // Horizontal sail yard
     ctx.strokeStyle = '#2a1a10';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(mx - hullH * 0.5, top - hullH * 0.55);
-    ctx.lineTo(mx + hullH * 0.5, top - hullH * 0.55);
+    ctx.moveTo(mx - beamPx * 0.9, top - lenPx * 0.24);
+    ctx.lineTo(mx + beamPx * 0.9, top - lenPx * 0.24);
     ctx.stroke();
 
     // Sail
     ctx.fillStyle = '#e8e0d0';
-    ctx.fillRect(mx - hullH * 0.45, top - hullH * 0.78, hullH * 0.9, hullH * 0.4);
+    ctx.fillRect(mx - beamPx * 0.8, top - lenPx * 0.33, beamPx * 1.6, lenPx * 0.17);
 
     // Sail shading
     ctx.fillStyle = '#d0c8b8';
-    ctx.fillRect(mx - hullH * 0.45, top - hullH * 0.45, hullH * 0.9, hullH * 0.1);
+    ctx.fillRect(mx - beamPx * 0.8, top - lenPx * 0.19, beamPx * 1.6, lenPx * 0.04);
   }
 
   // Bow details - make the front clear
   ctx.fillStyle = '#0a0805';
   // Bowsprit (front pole)
-  ctx.fillRect(shipCenterX - 2, top - 12, 4, 8);
+  ctx.fillRect(shipCenterX - beamPx * 0.05, top - beamPx * 0.45, beamPx * 0.1, beamPx * 0.3);
 
   // Union Jack flag at bow
   const flagW = 12;
   const flagH = 8;
   const flagX = shipCenterX - flagW / 2;
-  const flagY = top - hullH * 1.15;
+  const flagY = top - lenPx * 0.49;
 
   // Flag pole
   ctx.fillStyle = '#2a1a10';
-  ctx.fillRect(shipCenterX - 1, top - hullH * 1.15, 2, hullH * 0.4);
+  ctx.fillRect(shipCenterX - 1, top - lenPx * 0.49, 2, lenPx * 0.17);
 
   // Union Jack
   ctx.fillStyle = '#012169';
