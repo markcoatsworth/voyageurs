@@ -1063,8 +1063,21 @@ export class Game {
       this.lateralVX -= Math.sign(this.lateralOffset) * TREE_PUSHBACK * dt;
       // Outside the held fight, the treetops still fence and bite (dodging
       // Diable's fire while he's holding is challenge enough — the arena is
-      // its own wide space, not the gorge channel).
-      if (!this.diable.isActive()) this.handleHit({ type: 'tree' });
+      // its own wide space, not the gorge channel). Also covered by
+      // _steepleGraceUntil (same distance window consumeJustDefeated() sets
+      // for steeples, below) — DIABLE_ARENA_HALF (7 units) is wider than
+      // this channel's own waterEdge (~2.55 here), so the arena's own dodge
+      // room routinely leaves the canoe well outside waterEdge right as the
+      // fight ends; isActive() alone only covers the fixed 2.4s 'dying'
+      // animation, not however long it actually takes to drift back inside
+      // waterEdge afterward. Missing this exact protection was a genuine
+      // gap in an otherwise-deliberate "don't punish a hard-fought win"
+      // design (the steeple grace's own comment already describes this
+      // scenario) — folded in here rather than left as a hazard type the
+      // grace period happened to not cover.
+      if (!this.diable.isActive() && this.flowDistance > (this._steepleGraceUntil ?? -Infinity)) {
+        this.handleHit({ type: 'tree' });
+      }
     }
 
     this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
