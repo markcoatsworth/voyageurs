@@ -27,9 +27,8 @@ it's not the same running order every session:
   Quebec*, sourced from [Internet Archive](https://archive.org/details/lp_songs-and-dances-of-quebec_jean-carignan-aldor-morin-edgar-morin-b).
 - "Gigue du Poteau Blanc," "Quadrille Acadien," and "Quadrille Français,"
   performed by Joseph Allard, sourced from Library and Archives Canada.
-- "La Reel du Terreur" and "Le Reel du Diable," performed by Jos Bouchard;
-  "Avec les Ruine-Babine" and "Les Batteux," performed by Louis « Pitou »
-  Boudreault.
+- "Le Reel du Diable," performed by Jos Bouchard; "Avec les Ruine-Babine"
+  and "Les Batteux," performed by Louis « Pitou » Boudreault.
 - "St. Anne's Reel," performed by Joe Dobbs with The 1937 Flood — reserved
   for the Wendigo encounter (the first fight in the game, on the lower
   fjord), not in the regular shuffle. It's a genuine French-Canadian
@@ -49,6 +48,10 @@ it's not the same running order every session:
   in the regular shuffle instead. Supplied directly rather than sourced from
   Internet Archive/LAC like the rest of this catalog — provenance and rights
   status not independently verified.
+- "La Reel du Terreur," performed by Jos Bouchard — reserved for the
+  Loup-garou encounter (just before Québec City), not in the regular
+  shuffle. Picked for the title alone ("Reel of Terror") once that fight
+  needed its own cue.
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published

@@ -1282,9 +1282,12 @@ export class Game {
       if (this.loupGarou.consumeJustSpotted()) {
         this.showBanner('LOUP-GAROU');
         playWolfHowl();
+        this.music?.start(); // safe even if ?start=loup-garou drops in before a gesture
+        this.music?.playLoupGarouTrack();
       }
       if (this.loupGarou.consumeJustDelivered()) {
         this.showBanner('The lights of Québec City — the beast falls back');
+        this.music?.endBossTrack();
       }
     }
 

@@ -28,13 +28,12 @@ const PLAYLIST = [
   { src: '/audio/gigue-du-poteau-blanc.mp3', title: 'Gigue du Poteau Blanc', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-acadien.mp3', title: 'Quadrille Acadien', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-francais.mp3', title: 'Quadrille Français', artist: 'Joseph Allard' },
-  { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du Terreur', artist: 'Jos Bouchard' },
   { src: '/audio/avec-les-ruine-babine.mp3', title: 'Avec les Ruine-Babine', artist: 'Louis « Pitou » Boudreault' },
   { src: '/audio/les-batteux.mp3', title: 'Les Batteux', artist: 'Louis « Pitou » Boudreault' },
-  // Formerly the Diable boss cue (DIABLE_TRACK below) — freed up when
-  // "Reel du Paradis et Enfer" took over that role. Kept in the catalog
-  // rather than dropped; it's a fine reel on its own merits outside the fight.
-  { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' },
+  // Formerly the Chasse-galerie boss cue (CHASSE_GALERIE_TRACK below) —
+  // freed up when "Le Reel du Diable" took over that role. A fine tune on
+  // its own merits, kept in the catalog rather than dropped.
+  { src: '/audio/reel-du-gouvernement.mp3', title: 'Reel du Gouvernement', artist: 'Les Chevaliers du Folklore' },
 ];
 
 // Not part of the shuffle above — this only ever plays on cue, the moment
@@ -65,6 +64,12 @@ const DIABLE_TRACK = { src: '/audio/le-reel-du-paradis-et-enfer.mp3', title: 'Re
 // Appalachian old-time jam session — see README.md's Music section), which
 // is exactly why it reads as "something's different" the moment it cuts in.
 const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel", artist: 'Joe Dobbs & The 1937 Flood' };
+// Le Loup-garou's cue, pulled out of the shuffle for the same reason as the
+// others — a boss fight deserves a cut-in cue, not whatever the shuffle
+// happened to already be playing. "La Reel du Terreur" ("Reel of Terror")
+// was already in the catalog; its own title is the whole reason it's this
+// one and not some other reshuffled track.
+const LOUP_GAROU_TRACK = { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du Terreur', artist: 'Jos Bouchard' };
 // The Chasse-galerie flight's cue, cut in the instant the canoe lifts off
 // (game.js). The original pick here was Joseph Allard's "Reel du
 // Voyageur" — its own title ties straight to the legend, voyageurs flying
@@ -72,14 +77,18 @@ const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel
 // Canada's Virtual Gramophone, which this dev environment can't reach
 // (and it isn't in Internet Archive's Great 78 Project — confirmed via
 // their search API, not just a missed guess). Swapped for "Reel du
-// Gouvernement," performed by Les Chevaliers du Folklore (accordion,
-// violin, guitar — Starr Records, 1937), same Great 78 Project pool as
-// the rest of this catalog and genuinely downloadable, so the boss cue
-// actually plays instead of silently 404ing. Reserved like the other
-// three; endBossTrack() drops it (or Le Diable's own reel, which cuts in
-// over top of it the same way once his fight starts) back into the
-// shuffle.
-const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-gouvernement.mp3', title: 'Reel du Gouvernement', artist: 'Les Chevaliers du Folklore' };
+// Gouvernement," a fine tune but not the right fit — flying to a pact with
+// the Devil calls for something that actually says so. "Le Reel du
+// Diable" was sitting unused in the regular shuffle (freed up once
+// DIABLE_TRACK below got its own newer, dedicated reel) — using it here
+// instead means the flight's own cue names the devil you're flying
+// toward, then the fight itself cuts to a *different* track (Reel du
+// Paradis et Enfer), not a repeat of the same one. Reserved like the
+// other three; endBossTrack() drops it (or Le Diable's own real fight
+// track, which cuts in over top of it the same way once his fight starts)
+// back into the shuffle. Reel du Gouvernement moves back into the regular
+// shuffle instead of sitting unused.
+const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' };
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -442,6 +451,11 @@ export function createMusic({ onTrack } = {}) {
     // back into the shuffle same as the other two.
     playWendigoTrack() {
       playSpecial(WENDIGO_TRACK);
+    },
+    // Le Loup-garou's cue — same cut-in-now behaviour; endBossTrack() drops
+    // it back into the shuffle same as every other fight.
+    playLoupGarouTrack() {
+      playSpecial(LOUP_GAROU_TRACK);
     },
     // The Chasse-galerie flight's cue — same cut-in-now behaviour. Le
     // Diable's own track (playDiableTrack) cuts in over top of this one
