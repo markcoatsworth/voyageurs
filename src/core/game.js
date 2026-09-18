@@ -1370,6 +1370,14 @@ export class Game {
         console.log('[GAME] Chase phase started. Canoe visible:', this.canoeVisible, 'Position:', this.flowDistance);
         // Music already playing from blockade - don't restart
       }
+      if (this.blockade.consumeJustSunk()) {
+        console.log('[GAME] Chase ship sunk, ending boss track');
+        playCannonBoom(); // an extra boom on top of the hit sparks — the kill shot should land harder than a regular one
+        this.music?.endBossTrack();
+        const nextVillage = VILLAGES.find(v => v.segment === this.segment && v.flowDistance > this.flowDistance);
+        const villageName = nextVillage ? nextVillage.name : 'Safe Waters';
+        this.showBanner(`SHE'S GOING DOWN! — ${villageName} Ahead`);
+      }
       if (this.blockade.consumeJustEscaped()) {
         console.log('[GAME] Blockade escaped, ending boss track');
         this.music?.endBossTrack();

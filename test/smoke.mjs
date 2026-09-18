@@ -58,7 +58,7 @@ const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
 const { getDockHit } = await import('../src/world/villages.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
-const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
+const { SHIP_FLOW_DISTANCE, CHASE_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
 const { DIABLE_FLOW_DISTANCE, HP_MAX: DIABLE_HP_MAX } = await import('../src/bossfights/diable.js');
 const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
@@ -311,6 +311,56 @@ await step('blockade: approach -> pursuit -> escape -> on to Kingston', () => {
   }
   if (!won) throw new Error('escaped the blockade but never reached Kingston — the run home is broken');
   notes.push('  note blockade ran on the Rideau; chase resolved, then reached the Kingston finish');
+});
+
+// --- scenario 4a: the chase ship is now shootable, and sinkable ------------
+
+await step('blockade: shooting the chase ship sinks it', () => {
+  // Same drop-through-the-gap setup as the escape scenario above, straight
+  // into the chase phase — this scenario is about the gunfight, not
+  // re-proving the approach dodge.
+  const g = newGame('rideau', SHIP_FLOW_DISTANCE + 2);
+  g.game.lateralOffset = widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5;
+  let inChase = false;
+  for (let i = 0; i < 500 && !inChase; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    if (g.game.flowDistance > SHIP_FLOW_DISTANCE + 5 && g.game.blockadePct !== null) inChase = true;
+  }
+  if (!inChase) throw new Error('never entered the chase phase to test the gunfight');
+
+  // Steer to line up under the chase ship and fire. The ship spends most of
+  // its orbit ahead of the canoe (see blockade.js's CHASE_ORBIT_* comment on
+  // why) — that's what makes it reachable by weapons.js's forward-only
+  // bullets at all — so lining up laterally and firing whenever the ship
+  // isn't too far behind is a real, if simple, aim strategy, not a script
+  // that only works because it knows the ship's exact position out of band
+  // (debugChaseShipPosition() is the same kind of test-only accessor
+  // diable.js's debugCentreX() already provides).
+  let resolved = false;
+  for (let i = 0; i < 4000 && !resolved && g.game.blockadePct !== null; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    const pos = g.game.blockade.debugChaseShipPosition();
+    const err = g.game.canoeWorldX - pos.worldX;
+    g.input.state.left = err > 0.3;
+    g.input.state.right = err < -0.3;
+    if (Math.abs(err) < 1.5 && pos.flowDistance > g.game.flowDistance - 2) g.input.onWeaponFire?.('pistol');
+    g.game.update(1 / 30);
+    if (g.game.state === 'gameover') throw new Error('died trying to shoot down the chase ship');
+    if (g.game.blockadePct === null) resolved = true;
+  }
+  if (!resolved) throw new Error('the chase never resolved (sunk or escaped) within budget');
+  // Confirm this was actually a sinking, not the distance-escape from the
+  // scenario above happening to also satisfy the same exit condition —
+  // sinking ends the chase well short of the full CHASE_DISTANCE made good,
+  // since it's an immediate resolution on the kill shot, not an outrun.
+  const madeGood = g.game.flowDistance - SHIP_FLOW_DISTANCE;
+  if (madeGood > CHASE_DISTANCE) {
+    throw new Error(`resolved via distance (${madeGood | 0}/${CHASE_DISTANCE}) instead of sinking — the gunfight itself was never exercised`);
+  }
+  notes.push(`  note blockade: sank the chase ship at ${madeGood | 0}/${CHASE_DISTANCE} made good`);
 });
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---

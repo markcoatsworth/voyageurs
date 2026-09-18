@@ -7,10 +7,14 @@
 // player already has the pistol (guaranteed past Montréal, well before
 // Gatineau/the Rideau), so it now shoots back: see the hull hit-test below.
 // Landing hits on the hull suppresses its broadside, a real dogfight on top
-// of the dodging, not a substitute for it. The chase-phase gunboat is NOT
-// shootable — weapons.js only ever fires bullets forward (increasing
-// flowDistance), and the chase ship is behind the canoe by construction, so
-// there's no way to aim a shot at it with the current weapon system.
+// of the dodging, not a substitute for it. The chase-phase gunboat IS
+// shootable too (see CHASE_HULL_HP below) — it wasn't originally, back when
+// it only ever sat behind the canoe and weapons.js's forward-only bullets
+// could never reach it, but once the chase became an orbit that swings the
+// ship out ahead (see CHASE_ORBIT_* below), landing shots on it became
+// possible, and it now sinks outright as a real alternative to just
+// outrunning it — "a fight where I shoot with guns, instead of just dodge
+// and evade."
 //
 // It used to sit just past Québec City; it was moved onto the run into
 // Kingston (a British naval station in this era — the frigate fits the
@@ -189,6 +193,32 @@ const CHASE_INTRO_EXTRA_GAP = 10; // how much further behind it starts, easing t
 const CHASE_BANK_MARGIN = 3; // keep the hull's own half-width clear of the bank while orbiting
 const MUZZLE_FLASH_LIFETIME = 0.3;
 
+// The chase ship's own hull dimensions — module-level (not local to
+// drawChaseShip) so update()'s hit-test below and the drawing use exactly
+// the same hull, not two independently-guessed sizes. Reported as "too
+// big" alongside the wide/janky proportions fixed earlier; shrunk further
+// here on top of that fix, keeping the same ~2.3:1 length:beam ratio.
+const CHASE_SHIP_BEAM = 2.2;
+const CHASE_SHIP_LENGTH_HALF = 2.5;
+
+// Shootable: the orbit above already swings the ship out ahead of the
+// canoe (see its own comment on why), which is exactly what makes it
+// reachable by weapons.js's forward-only bullets — this used to be
+// impossible when the ship only ever sat behind. Landing enough hits
+// sinks it outright, ending the chase instantly as an alternative to
+// simply outrunning it (madeGood/CHASE_DISTANCE below still works too —
+// this is an additional way to win the encounter, not a replacement).
+// Same per-hit damage as the approach frigate's own hull (BULLET_DAMAGE_
+// TO_HULL) for consistency, but a smaller pool (8 hits vs the approach
+// hull's 15) — a small, moving, fast target is already a harder shot to
+// land than the approach's fixed lane, so it shouldn't also demand as
+// many hits once you do connect.
+const CHASE_HULL_HP = 64;
+// Wider than HULL_HIT_D_TOLERANCE (the stationary frigate's own, smaller
+// tolerance) because the target itself is moving every frame here, not
+// just the bullet crossing a fixed band.
+const CHASE_HULL_D_TOLERANCE = 2.2;
+
 export function createBlockade() {
   // null until the encounter first activates — decided once, right then
   // (see the module comment on why a late swing isn't fair here), not
@@ -216,6 +246,11 @@ export function createBlockade() {
   let chaseEscaped = false;
   let justStartedChase = false;
   let muzzleFlashes = [];
+  // Shootable hull: separate pool from the approach frigate's hullHP above
+  // (a different ship, a different fight) — see CHASE_HULL_HP's own comment.
+  let chaseHullHP = CHASE_HULL_HP;
+  let chaseSunk = false;
+  let justSunk = false;
 
   function reset() {
     gapSide = null;
@@ -236,6 +271,9 @@ export function createBlockade() {
     chaseEscaped = false;
     justStartedChase = false;
     muzzleFlashes = [];
+    chaseHullHP = CHASE_HULL_HP;
+    chaseSunk = false;
+    justSunk = false;
   }
 
   return {
@@ -278,6 +316,16 @@ export function createBlockade() {
       const v = chaseEscaped && !chasePhase; // only true for one frame
       if (v) chaseEscaped = false;
       return v;
+    },
+    consumeJustSunk() {
+      const v = justSunk;
+      justSunk = false;
+      return v;
+    },
+    // Same convention as diable.js's debugCentreX() — test/autopilot support
+    // for aiming at a moving target, not used by game.js's own rendering.
+    debugChaseShipPosition() {
+      return { worldX: chaseShipWorldX, flowDistance: chaseShipD };
     },
     // No gapSide() accessor on purpose — which side is clear is deliberately
     // never surfaced to game.js; finding it is the point of the fight, not
@@ -444,41 +492,81 @@ export function createBlockade() {
         const c = centerX(chaseShipD);
         chaseShipWorldX = clamp(playerWorldX + orbitLateral, c - half, c + half);
 
-        // Bow cannon: a real volley, aimed the same led-target way the
-        // approach-phase broadside is (see that spawn site's own comment on
-        // why leading is mandatory, not optional) — tagged with the ship's
-        // current position so drawHazard can render the shot as actually
-        // coming from the hull, not materializing out of nowhere.
-        volleyTimer -= dt;
-        if (volleyTimer <= 0) {
-          volleyTimer = CHASE_VOLLEY_INTERVAL;
-          muzzleFlashes.push({ x: chaseShipWorldX, d: chaseShipD, t: 0 });
-          hazards.push({
-            d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME + (Math.random() * 2 - 1) * 1.2,
-            x: playerWorldX + (Math.random() * 2 - 1) * 3.5,
-            t: 0,
-            hit: false,
-            boomed: false,
-            fromX: chaseShipWorldX,
-            fromD: chaseShipD,
-          });
+        // Shootable: the orbit swings this ship out ahead of the canoe (see
+        // CHASE_HULL_HP's own comment on why that's what makes it reachable
+        // at all), so a bullet's flowDistance can land near chaseShipD just
+        // like the approach hull's own hit-test lands near its fixed
+        // SHIP_FLOW_DISTANCE — the target just moves every frame here.
+        // Chasing this against `bullets` even while sinking is harmless
+        // (chaseHullHP is already clamped to 0 by then) so no extra guard
+        // is needed to stop hits piling up past zero.
+        for (const b of bullets) {
+          if (Math.abs(b.flowDistance - chaseShipD) < CHASE_HULL_D_TOLERANCE
+            && Math.abs(b.worldX - chaseShipWorldX) < CHASE_SHIP_BEAM / 2 + 1) {
+            hitBullets.push(b);
+            if (chaseHullHP > 0) {
+              chaseHullHP -= BULLET_DAMAGE_TO_HULL;
+              sparks.push({ x: b.worldX, d: chaseShipD, t: 0 });
+              if (chaseHullHP <= 0) {
+                chaseHullHP = 0;
+                // A small burst on top of the usual single spark — the kill
+                // shot should read as more than just another hit.
+                for (let i = 0; i < 5; i++) {
+                  sparks.push({ x: chaseShipWorldX + (Math.random() * 2 - 1) * CHASE_SHIP_BEAM, d: chaseShipD, t: -i * 0.05 });
+                }
+              }
+            }
+          }
         }
 
-        // Escape is a fixed distance made good past the frigate's own line,
-        // not a lead over a pursuer that can be faster than you — the old
-        // lead check never resolved for a slower boat, so the fight (and its
-        // music) ran forever.
-        const madeGood = playerFlowDistance - SHIP_FLOW_DISTANCE - CLEAR_MARGIN;
-        if (madeGood > CHASE_DISTANCE) {
+        if (chaseHullHP <= 0) {
           chasePhase = false;
-          chaseEscaped = true;
-          console.log('[CHASE] Escaped!');
+          chaseSunk = true;
+          justSunk = true;
+          // A shot already in flight from a volley fired moments earlier
+          // shouldn't still land after the ship that fired it is gone.
+          hazards = [];
+          console.log('[CHASE] Sunk!');
+        } else {
+          // Bow cannon: a real volley, aimed the same led-target way the
+          // approach-phase broadside is (see that spawn site's own comment
+          // on why leading is mandatory, not optional) — tagged with the
+          // ship's current position so drawHazard can render the shot as
+          // actually coming from the hull, not materializing out of
+          // nowhere.
+          volleyTimer -= dt;
+          if (volleyTimer <= 0) {
+            volleyTimer = CHASE_VOLLEY_INTERVAL;
+            muzzleFlashes.push({ x: chaseShipWorldX, d: chaseShipD, t: 0 });
+            hazards.push({
+              d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME + (Math.random() * 2 - 1) * 1.2,
+              x: playerWorldX + (Math.random() * 2 - 1) * 3.5,
+              t: 0,
+              hit: false,
+              boomed: false,
+              fromX: chaseShipWorldX,
+              fromD: chaseShipD,
+            });
+          }
+
+          // Escape is a fixed distance made good past the frigate's own
+          // line, not a lead over a pursuer that can be faster than you —
+          // the old lead check never resolved for a slower boat, so the
+          // fight (and its music) ran forever. Sinking the ship above is a
+          // separate, immediate way to end the chase — this is the other one.
+          const madeGood = playerFlowDistance - SHIP_FLOW_DISTANCE - CLEAR_MARGIN;
+          if (madeGood > CHASE_DISTANCE) {
+            chasePhase = false;
+            chaseEscaped = true;
+            console.log('[CHASE] Escaped!');
+          }
         }
 
         for (const f of muzzleFlashes) f.t += dt;
         muzzleFlashes = muzzleFlashes.filter((f) => f.t < MUZZLE_FLASH_LIFETIME);
 
-        const chaseProgressPct = clamp((madeGood / CHASE_DISTANCE) * 100, 0, 100);
+        const madeGoodPct = playerFlowDistance - SHIP_FLOW_DISTANCE - CLEAR_MARGIN;
+        const chaseProgressPct = clamp((madeGoodPct / CHASE_DISTANCE) * 100, 0, 100);
         return { active: true, progressPct: chaseProgressPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance: chaseShipD, hitBullets };
       }
 
@@ -674,9 +762,11 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
   // is harmless when both axes happen to be similar (the old, wrong
   // proportions) but blows up into oversized sails the instant the length
   // axis actually gets longer than the beam, as it must for the hull shape
-  // itself to be fixed.
-  const BEAM = 3;
-  const LENGTH_HALF = 3.5; // full length 7 units vs 3 beam — ~2.3:1, a real hull ratio
+  // itself to be fixed. Module-level (CHASE_SHIP_BEAM/CHASE_SHIP_LENGTH_HALF
+  // above) so update()'s hit-test uses this exact same hull, not a second,
+  // independently-guessed size.
+  const BEAM = CHASE_SHIP_BEAM;
+  const LENGTH_HALF = CHASE_SHIP_LENGTH_HALF;
   const left = worldToScreen(shipWorldX - BEAM / 2, z0 - LENGTH_HALF, cameraWorldX);
   const right = worldToScreen(shipWorldX + BEAM / 2, z0 + LENGTH_HALF, cameraWorldX);
   const top = Math.min(left.y, right.y);
@@ -804,9 +894,15 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
   // Bowsprit (front pole)
   ctx.fillRect(shipCenterX - beamPx * 0.05, top - beamPx * 0.45, beamPx * 0.1, beamPx * 0.3);
 
-  // Union Jack flag at bow
-  const flagW = 12;
-  const flagH = 8;
+  // Union Jack flag at bow — made deliberately bigger and more prominent
+  // than a strict scale-model would call for (flagW/H below are roughly
+  // double the old fixed 12x8), the clearest single "this is the British
+  // pursuit ship" cue on a hull that's otherwise shrunk down. Every stripe
+  // below is a flagW/flagH-relative fraction rather than an absolute pixel
+  // count, so it keeps its correct proportions if this size ever changes
+  // again rather than needing every sub-element retuned by hand.
+  const flagW = 22;
+  const flagH = 14;
   const flagX = shipCenterX - flagW / 2;
   const flagY = top - lenPx * 0.49;
 
@@ -820,7 +916,7 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
 
   // White diagonals
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = flagW * 0.2;
   ctx.beginPath();
   ctx.moveTo(flagX, flagY);
   ctx.lineTo(flagX + flagW, flagY + flagH);
@@ -830,7 +926,7 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
 
   // Red diagonals
   ctx.strokeStyle = '#C8102E';
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = flagW * 0.12;
   ctx.beginPath();
   ctx.moveTo(flagX, flagY);
   ctx.lineTo(flagX + flagW, flagY + flagH);
@@ -840,13 +936,13 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
 
   // White cross
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(flagX + flagW / 2 - 1.5, flagY, 3, flagH);
-  ctx.fillRect(flagX, flagY + flagH / 2 - 1, flagW, 2);
+  ctx.fillRect(flagX + flagW / 2 - flagW * 0.125, flagY, flagW * 0.25, flagH);
+  ctx.fillRect(flagX, flagY + flagH / 2 - flagH * 0.125, flagW, flagH * 0.25);
 
   // Red cross
   ctx.fillStyle = '#C8102E';
-  ctx.fillRect(flagX + flagW / 2 - 0.75, flagY, 1.5, flagH);
-  ctx.fillRect(flagX, flagY + flagH / 2 - 0.5, flagW, 1);
+  ctx.fillRect(flagX + flagW / 2 - flagW * 0.0625, flagY, flagW * 0.125, flagH);
+  ctx.fillRect(flagX, flagY + flagH / 2 - flagH * 0.0625, flagW, flagH * 0.125);
 }
 
 // A landed pistol shot on the hull: a quick bright burst that fades over
