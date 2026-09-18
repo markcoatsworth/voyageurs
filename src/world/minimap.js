@@ -318,12 +318,50 @@ export function createMinimap() {
   }
   svg.appendChild(rapids);
 
+  // The three river-view towns that get a hand-authored, walled/stone
+  // treatment in villages.js — everyone else (La Malbaie, Tadoussac
+  // included — see its own on-foot layout's comment: "not a big town")
+  // gets the small-village icon instead. Keyed on `name`, not `label`,
+  // since name is the stable underlying identity even where a point sets
+  // a custom display label.
+  const BIG_CITY_NAMES = new Set(['Quebec City', 'Trois-Rivieres', 'Montreal']);
+
+  // A small house silhouette instead of a plain dot/pin, so a landing
+  // point reads as an actual place to put in, not just a position marker
+  // — wood-toned and modest for an ordinary village, stone-toned and a
+  // size bigger for the three real cities (BIG_CITY_NAMES), matching
+  // which material each place's own hand-authored buildings actually use
+  // (createCabinSprite's log-cabin palette vs createStoneBuildingSprite's
+  // stone one, translated down to a shape this small can still read at).
+  // Anchored at its own bottom-centre (tipX, tipY) — the exact landing
+  // coordinate — same as the pin shape this replaced.
+  function drawHouseIcon(tipX, tipY, big) {
+    const halfW = big ? 0.7 : 0.55;
+    const bodyH = big ? 1.1 : 0.9;
+    const overhang = big ? 0.12 : 0.15; // stone roofs oversail the wall less than a log cabin's does
+    const roofH = big ? 0.5 : 0.55;
+    const wall = big ? '#b8b0a0' : '#a3672f';
+    const wallStroke = big ? '#5c554a' : '#4a2f18';
+    const roof = big ? '#4a5560' : '#6b4226';
+    const roofStroke = big ? '#26303a' : '#3a2413';
+    const wallTopY = tipY - bodyH;
+    svg.appendChild(svgEl('rect', {
+      x: (tipX - halfW).toFixed(2), y: wallTopY.toFixed(2),
+      width: (halfW * 2).toFixed(2), height: bodyH.toFixed(2),
+      fill: wall, stroke: wallStroke, 'stroke-width': 0.3,
+    }));
+    svg.appendChild(svgEl('path', {
+      d: `M${(tipX - halfW - overhang).toFixed(2)},${wallTopY.toFixed(2)} `
+        + `L${tipX.toFixed(2)},${(wallTopY - roofH).toFixed(2)} `
+        + `L${(tipX + halfW + overhang).toFixed(2)},${wallTopY.toFixed(2)} Z`,
+      fill: roof, stroke: roofStroke, 'stroke-width': 0.3,
+    }));
+  }
+
   // Waypoint markers, every one labeled with its real name, snapped to the
-  // real riverbank they stand on (shoreMarkerPoint's own comment) — a small
-  // landing-place pin, not a plain dot floating on the water, so each one
-  // unmistakably reads as "put in here," not just a position label. Light
-  // fill with a dark halo on both the pin and the label text, since either
-  // can land on the deep green land or right on top of the blue river.
+  // real riverbank they stand on (shoreMarkerPoint's own comment) — a
+  // landing-place icon, not a plain dot floating on the water, so each one
+  // unmistakably reads as "put in here," not just a position label.
   //
   // Iterated per segment (route.js's own SEGMENTS, not a flattened cross-
   // segment list — that's what the old version of this loop used, and had
@@ -332,28 +370,17 @@ export function createMinimap() {
   // there — a flattened list would hand a fjord waypoint its neighbour from
   // a completely different branch.
   //
-  // Two exclusions, left on the plain centerline dot instead: Tadoussac
+  // Two exclusions, left on the plain centerline instead of shore-snapped
+  // (still get the house icon, just not offset to an edge): Tadoussac
   // (appears three times — end of the fjord, start of both Saint Lawrence
   // arms — each with a different local "sideways," which would scatter
-  // three offset pins around one junction instead of one clean mark) and
+  // three offset icons around one junction instead of one clean mark) and
   // anything mapSkipRibbon (Charlemagne/Montreal — the real Island of
   // Montreal channels replace the ordinary ribbon there, so a centerline-
   // relative shore snap doesn't correspond to a real edge; both already get
   // dedicated, hand-verified placement elsewhere in this file).
-  function drawWaypointMarker(p, snapped) {
-    if (snapped) {
-      const tipX = p.x, tipY = p.y;
-      const headY = tipY - 1.5;
-      svg.appendChild(svgEl('path', {
-        d: `M${tipX.toFixed(2)},${tipY.toFixed(2)} L${(tipX - 0.55).toFixed(2)},${(headY + 0.55).toFixed(2)} `
-          + `A0.78,0.78 0 1 1 ${(tipX + 0.55).toFixed(2)},${(headY + 0.55).toFixed(2)} Z`,
-        fill: '#f4ead2', stroke: '#16240f', 'stroke-width': 0.4,
-      }));
-    } else {
-      svg.appendChild(svgEl('circle', {
-        cx: p.x, cy: p.y, r: 0.9, fill: '#f4ead2', stroke: '#16240f', 'stroke-width': 0.4,
-      }));
-    }
+  function drawWaypointMarker(p) {
+    drawHouseIcon(p.x, p.y, BIG_CITY_NAMES.has(p.name));
     const label = p.label || p.name;
     const pos = p.labelPos || { dx: 1.4, dy: -2.2, anchor: 'start' };
     const text = svgEl('text', {
@@ -370,11 +397,23 @@ export function createMinimap() {
     text.textContent = label;
     svg.appendChild(text);
   }
+  // Tadoussac's own three identical-position occurrences (fjord end,
+  // lawrenceEast start, lawrenceWest start) were meant to be genuinely
+  // harmless redundant paint — same icon on top of itself, invisible. That
+  // held for the icon (solid fill, pixel-identical every time) but not for
+  // the label: only the fjord entry carries an explicit label/labelPos
+  // (route.js), so the other two fall back to the *default* offset instead
+  // of matching it, landing "Tadoussac" at two different positions around
+  // one icon — reported as the title appearing twice. Dedup by name
+  // instead of trying to keep three copies' labelPos in sync by hand.
+  const drawnNames = new Set();
   for (const segment of Object.values(SEGMENTS)) {
     segment.points.forEach((raw, i) => {
+      if (drawnNames.has(raw.name)) return;
+      drawnNames.add(raw.name);
       const skip = raw.name === 'Tadoussac' || raw.mapSkipRibbon;
       const p = skip ? raw : { ...raw, ...shoreMarkerPoint(segment.points, i) };
-      drawWaypointMarker(p, !skip);
+      drawWaypointMarker(p);
     });
   }
 
