@@ -113,11 +113,26 @@ const FJORD_WAYPOINTS = [
   // start, without touching the real-distance math at all.
   { name: 'Lac Saint-Jean', lat: 48.4283, lon: -71.0622, label: 'Lac Saint-Jean', labelPos: { dx: -15, dy: -3, anchor: 'middle' }, riverWidthKm: 4 },
   // North shore (Route 172) — the name says so, and so does the map.
-  { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 2 },
+  // side flipped to -1 (was 1): reported in-game as rendering on the wrong
+  // bank. This stretch's `side` is hand-set per waypoint against the
+  // stylized fjord curve (path.js), not derived from true compass bearing,
+  // so which signed offset actually reads as "north" on screen isn't
+  // something to re-derive from the lat/lon alone — going with the
+  // in-game report over the sign that seemed right on paper.
+  { name: 'Sainte-Rose-du-Nord', lat: 48.3833, lon: -70.5833, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1, riverWidthKm: 2 },
   // South shore (Route 170) — in Fjord-du-Saguenay National Park's Baie
   // Éternité sector, a real wide bay off the main channel.
   { name: 'Riviere-Eternite', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 2.5 },
-  { name: "L'Anse-Saint-Jean", lat: 48.2330, lon: -70.2000, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1, riverWidthKm: 2 }, // south shore, Route 170
+  // 48.2330/-70.2000 (still visible below in git history) was Wikipedia's
+  // *municipality* centroid — the inland village core up the Rivière
+  // Saint-Jean valley, not on the Saguenay itself. A canoe on the fjord
+  // wouldn't pass that point at all; it'd pass the mouth of Saint-Jean Bay,
+  // where the Rivière Saint-Jean actually opens into the Saguenay's south
+  // shore — 48.24139/-70.19805, confirmed against the river's own Wikipedia
+  // entry ("Saint-Jean River (Saguenay River tributary)"). Real waypoint
+  // coordinates should be the point on the navigable fjord itself, not a
+  // settlement's administrative centre, whenever the two diverge.
+  { name: "L'Anse-Saint-Jean", lat: 48.2414, lon: -70.1981, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1, riverWidthKm: 2 }, // south shore, Route 170
   { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 2.2 }, // south shore, Route 170
   // North shore — reached via Route 172, not the Route 170/ferry side.
   // Still the fjord's own mouth here, just short of the dramatically wider
@@ -155,7 +170,16 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // the river's north bank, not the alternating pattern's south. The
   // estuary is still tens of km wide out here, narrowing steadily as it
   // approaches Quebec City.
-  { name: 'La Malbaie', lat: 47.6500, lon: -70.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 17 },
+  // 47.6500/-70.1500 (Wikipedia's municipality coordinate, still visible in
+  // git history) is measured at the mouth of the *Malbaie River* — a real
+  // point, but set back from the St. Lawrence itself across the wide
+  // estuary here, which put the minimap dot out in open water instead of on
+  // the north shore. Pointe-au-Pic, the actual point of land on the St.
+  // Lawrence (site of the real 19th-century steamer wharf — used here just
+  // for the coordinate, not claiming that wharf existed in this game's
+  // 1790 setting), is the real waterfront point a river traveller would
+  // actually pass.
+  { name: 'La Malbaie', lat: 47.6228, lon: -70.1408, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 17 },
   { name: 'Baie-Saint-Paul', lat: 47.4400, lon: -70.5000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: 1, riverWidthKm: 12 }, // Charlevoix, north shore
   // A short hop downriver of Quebec City itself — mainly here to give
   // testers (and anyone who capsizes right at the capital) a closer
