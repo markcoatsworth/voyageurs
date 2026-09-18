@@ -1300,7 +1300,10 @@ export class Game {
       // No "hold still" prompts — the tell is the telegraph (it rears, the
       // eyes flare, the drawn breath) and the first listen never strikes.
       if (this.wendigo.consumeJustSpotted()) {
-        this.showBanner('WENDIGO');
+        // The big title card (#boss-banner), not the small milestone one —
+        // same treatment the British Blockade gets: this is the game's
+        // first boss fight, it earns real fanfare, not a routine callout.
+        this.showBossBanner('WENDIGO');
         playWendigoBreath();
         this.music?.start(); // safe even if ?start=wendigo drops in before a gesture
         this.music?.playWendigoTrack();
