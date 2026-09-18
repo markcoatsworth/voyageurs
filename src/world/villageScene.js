@@ -271,11 +271,14 @@ const TADOUSSAC_ONFOOT_BUILDINGS = [
 // house cluster (near its own "D") around the point to the habitation
 // (its own "C") — a real coastal path connecting the two clusters, not
 // invented. Packed earth (drawDirtPath), not cobbled — this is a fur-trade
-// post's own worn track, not a paved street. One through-path between the
-// two ends, with a short spur up to the chapel door since it sits back
-// off the path rather than directly on it.
+// post's own worn track, not a paved street.
 const TADOUSSAC_PATH = { x: 25, y: 116, w: 285, h: 12 };
-const TADOUSSAC_CHAPEL_SPUR = { x: 159, y: 96, w: 12, h: 22 };
+// The chapel's own spur, running all the way down to the dock — not just
+// out to the through-path above (which it also crosses on the way down,
+// same as any real track crossing another) — so stepping off the canoe
+// puts you on a real, walkable line straight up to the church door, the
+// most direct route a landing party would actually take.
+const TADOUSSAC_CHAPEL_SPUR = { x: 159, y: 96, w: 12, h: DOCK_TOP - 96 };
 
 // Montréal's on-foot layout — rebuilt from an actual period source: Thomas
 // Jefferys' 1738 "Plan of the Town and Fortifications of Montreal or Ville
