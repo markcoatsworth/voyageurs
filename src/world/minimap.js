@@ -14,7 +14,7 @@
 // route/label markup itself never needs rebuilding, only which segment's
 // cumulative-distance math update() uses to place the marker changes.
 import {
-  SEGMENTS, ALL_POINTS, LAC_SAINT_JEAN_SHAPE,
+  SEGMENTS, LAC_SAINT_JEAN_SHAPE,
   MONTREAL_ISLAND_MAP_SHAPE, SAINTE_HELENE_MAP_POINT, NUNS_ISLAND_MAP_POINT, LACHINE_RAPIDS_MAP_POINT,
   MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE, MONT_ROYAL_MAP_POINT,
 } from './river/route.js';
@@ -80,35 +80,60 @@ function halfWidthKmAt(p) {
   return Math.max(MIN_RIVER_HALF_WIDTH_KM, (p.riverWidthKm ?? MIN_RIVER_HALF_WIDTH_KM * 2) / 2);
 }
 
+// The *averaged* direction of a vertex's incoming and outgoing segments (a
+// standard cheap miter), perpendicular-rotated into a unit normal. Shared by
+// ribbonPolygon below (built once per vertex, left/right edges from the same
+// values so consecutive quads share an edge exactly instead of leaving
+// seams/gaps) and shoreMarkerPoint further down (snapping a waypoint marker
+// to the correct riverbank uses the exact same "which way is sideways here"
+// math the ribbon itself is drawn with — anything else risks the marker and
+// the bank it's supposed to sit on silently disagreeing).
+function vertexNormal(points, i) {
+  let dx = 0, dy = 0;
+  if (i > 0) {
+    const len = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y) || 1;
+    dx += (points[i].x - points[i - 1].x) / len;
+    dy += (points[i].y - points[i - 1].y) / len;
+  }
+  if (i < points.length - 1) {
+    const len = Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y) || 1;
+    dx += (points[i + 1].x - points[i].x) / len;
+    dy += (points[i + 1].y - points[i].y) / len;
+  }
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: -dy / len, y: dx / len };
+}
+
 // Turns a polyline + a half-width per vertex into a single closed ribbon
 // polygon (left edge forward, right edge backward) instead of the old
 // fixed-stroke-width path, so the water actually reads as narrow or wide
-// where the real river is. Per-vertex normals are the *averaged* direction
-// of each vertex's incoming and outgoing segments (a standard cheap miter),
-// not a fresh per-segment normal, so consecutive quads share an edge
-// exactly instead of leaving seams/gaps at each waypoint.
+// where the real river is.
 function ribbonPolygon(points, halfWidths) {
-  const n = points.length;
-  const normals = [];
-  for (let i = 0; i < n; i++) {
-    let dx = 0, dy = 0;
-    if (i > 0) {
-      const len = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y) || 1;
-      dx += (points[i].x - points[i - 1].x) / len;
-      dy += (points[i].y - points[i - 1].y) / len;
-    }
-    if (i < n - 1) {
-      const len = Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y) || 1;
-      dx += (points[i + 1].x - points[i].x) / len;
-      dy += (points[i + 1].y - points[i].y) / len;
-    }
-    const len = Math.hypot(dx, dy) || 1;
-    normals.push({ x: -dy / len, y: dx / len });
-  }
+  const normals = points.map((_, i) => vertexNormal(points, i));
   const left = points.map((p, i) => ({ x: p.x + normals[i].x * halfWidths[i], y: p.y + normals[i].y * halfWidths[i] }));
   const right = points.map((p, i) => ({ x: p.x - normals[i].x * halfWidths[i], y: p.y - normals[i].y * halfWidths[i] }));
   right.reverse();
   return [...left, ...right];
+}
+
+// Where a waypoint's own marker actually belongs: the real riverbank edge
+// on its real side, not the ribbon's centerline the raw projected lat/lon
+// sits on by construction (every point IS a centerline vertex — that's
+// what makes the ribbon polygon above). Reported as village markers
+// floating in the middle of the river — this is why: nothing ever moved
+// them off the centerline to the shore they actually stand on. `side` is
+// ribbonPolygon's own left(+1)/right(-1) convention (verified against two
+// waypoints with an independently-confirmed real bank — La Malbaie and
+// Sainte-Rose-du-Nord both land on their correct shore with this sign, not
+// its opposite). Missing `side` (only the made-up Rideau leg, which has no
+// real bank to pin to) falls back to the ribbon's own outer edge, +1,
+// rather than leaving it on the centerline.
+function shoreMarkerPoint(points, i) {
+  const p = points[i];
+  const side = p.side ?? 1;
+  const normal = vertexNormal(points, i);
+  const half = halfWidthKmAt(p);
+  return { x: p.x + normal.x * half * side, y: p.y + normal.y * half * side };
 }
 
 // Splits a segment's point list into separate runs wherever a waypoint is
@@ -293,18 +318,42 @@ export function createMinimap() {
   }
   svg.appendChild(rapids);
 
-  // Waypoint dots, every one labeled with its real name, in absolute
-  // projection coordinates — the panning viewBox brings each into view as
-  // the canoe approaches it. Light fill with a dark halo on both the dots
-  // and the label text, since either can land on the deep green land or
-  // right on top of the blue river. Tadoussac appears at the end of the
-  // fjord's own point list and again as the start of both Saint Lawrence
-  // segments' — drawing it three times over is harmless (same position,
-  // same label, just redundant paint).
-  for (const p of ALL_POINTS) {
-    svg.appendChild(svgEl('circle', {
-      cx: p.x, cy: p.y, r: 0.9, fill: '#f4ead2', stroke: '#16240f', 'stroke-width': 0.4,
-    }));
+  // Waypoint markers, every one labeled with its real name, snapped to the
+  // real riverbank they stand on (shoreMarkerPoint's own comment) — a small
+  // landing-place pin, not a plain dot floating on the water, so each one
+  // unmistakably reads as "put in here," not just a position label. Light
+  // fill with a dark halo on both the pin and the label text, since either
+  // can land on the deep green land or right on top of the blue river.
+  //
+  // Iterated per segment (route.js's own SEGMENTS, not a flattened cross-
+  // segment list — that's what the old version of this loop used, and had
+  // to be dropped for exactly this) since the shore snap needs each point's
+  // own neighbours within its own segment to know which way is sideways
+  // there — a flattened list would hand a fjord waypoint its neighbour from
+  // a completely different branch.
+  //
+  // Two exclusions, left on the plain centerline dot instead: Tadoussac
+  // (appears three times — end of the fjord, start of both Saint Lawrence
+  // arms — each with a different local "sideways," which would scatter
+  // three offset pins around one junction instead of one clean mark) and
+  // anything mapSkipRibbon (Charlemagne/Montreal — the real Island of
+  // Montreal channels replace the ordinary ribbon there, so a centerline-
+  // relative shore snap doesn't correspond to a real edge; both already get
+  // dedicated, hand-verified placement elsewhere in this file).
+  function drawWaypointMarker(p, snapped) {
+    if (snapped) {
+      const tipX = p.x, tipY = p.y;
+      const headY = tipY - 1.5;
+      svg.appendChild(svgEl('path', {
+        d: `M${tipX.toFixed(2)},${tipY.toFixed(2)} L${(tipX - 0.55).toFixed(2)},${(headY + 0.55).toFixed(2)} `
+          + `A0.78,0.78 0 1 1 ${(tipX + 0.55).toFixed(2)},${(headY + 0.55).toFixed(2)} Z`,
+        fill: '#f4ead2', stroke: '#16240f', 'stroke-width': 0.4,
+      }));
+    } else {
+      svg.appendChild(svgEl('circle', {
+        cx: p.x, cy: p.y, r: 0.9, fill: '#f4ead2', stroke: '#16240f', 'stroke-width': 0.4,
+      }));
+    }
     const label = p.label || p.name;
     const pos = p.labelPos || { dx: 1.4, dy: -2.2, anchor: 'start' };
     const text = svgEl('text', {
@@ -320,6 +369,13 @@ export function createMinimap() {
     });
     text.textContent = label;
     svg.appendChild(text);
+  }
+  for (const segment of Object.values(SEGMENTS)) {
+    segment.points.forEach((raw, i) => {
+      const skip = raw.name === 'Tadoussac' || raw.mapSkipRibbon;
+      const p = skip ? raw : { ...raw, ...shoreMarkerPoint(segment.points, i) };
+      drawWaypointMarker(p, !skip);
+    });
   }
 
   const marker = svgEl('circle', { r: 3.2, fill: '#ffd23f', stroke: '#1a1208', 'stroke-width': 0.8 });

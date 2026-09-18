@@ -517,15 +517,6 @@ export const LACHINE_RAPIDS_MAP_POINT = project({ lat: 45.4331, lon: -73.6808 })
 // leaving it flat green.
 export const MONT_ROYAL_MAP_POINT = project({ lat: 45.5045, lon: -73.5878 });
 
-// Every real point across all three segments, for the minimap to draw as
-// one continuous picture regardless of which segment is actually active.
-export const ALL_POINTS = [
-  ...SEGMENTS.fjord.points,
-  ...SEGMENTS.lawrenceEast.points,
-  ...SEGMENTS.lawrenceWest.points,
-  ...SEGMENTS.rideau.points,
-];
-
 // Flat, cross-segment village list — villages.js/game.js iterate this
 // exactly like the old non-branching route's single VILLAGES array, since
 // every entry's flowDistance already lives in a disjoint numeric range per
