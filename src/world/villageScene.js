@@ -142,11 +142,30 @@ const QUEBEC_WORLD_WIDTH = 560;
 const QUEBEC_CITY_GATE = { x0: 255, x1: 305 };
 const QUEBEC_CLIFF_Y = 120;
 const QUEBEC_CLIFF_H = 12;
+// The landward wall's own y-band — same numbers as CITY_WALL_Y/CITY_WALL_H
+// further down (where the backdrop sprite itself is tiled and drawn;
+// declared there, not here, since that's where they're actually used for
+// rendering) — kept in sync by hand rather than reordering the file to
+// share one declaration.
+const QUEBEC_LANDWARD_Y = 6;
+const QUEBEC_LANDWARD_H = 26;
 const QUEBEC_CITY_WALLS = [
   {
     axis: 'h', lo: QUEBEC_CLIFF_Y, hi: QUEBEC_CLIFF_Y + QUEBEC_CLIFF_H,
     spanLo: 0, spanHi: QUEBEC_WORLD_WIDTH,
     gates: [[QUEBEC_CITY_GATE.x0, QUEBEC_CITY_GATE.x1]],
+  },
+  // Was backdrop-only (a rampart sprite tiled behind everything, per the
+  // river-view QC layout's own long-standing treatment) — reported as
+  // walkable straight through, unlike Montréal's own landward wall, which
+  // has always been a real obstacle. No gate: there's no ground beyond it
+  // (this scene stops at the walled town itself — see the module comment
+  // on why), so a solid wall is the honest version, not a doorway to
+  // nowhere.
+  {
+    axis: 'h', lo: QUEBEC_LANDWARD_Y, hi: QUEBEC_LANDWARD_Y + QUEBEC_LANDWARD_H,
+    spanLo: 0, spanHi: QUEBEC_WORLD_WIDTH,
+    gates: [],
   },
 ];
 
@@ -184,11 +203,25 @@ const QUEBEC_GARDEN_PLOTS = [
   { x: 370, y: 22, w: 100, h: 38 },
 ];
 
+// Named institutions from the map's own legend, plus ordinary infill —
+// merchant houses, residences — filling the real gaps between them. A
+// walled 1790s capital had far more of the latter than named landmarks;
+// the first pass here only placed the named ones and read as too empty
+// for a real capital. Same mix Montréal's own on-foot layout already
+// uses (named buildings from Jefferys' map plus generic infill), just
+// catching Québec City's own count up toward it (19 -> 26).
 const QUEBEC_CITY_ONFOOT_BUILDINGS = [
   // --- Haute-Ville back row (further from Place d'Armes/the Côte) ---
   // Les Récollets ("d") — west end, near the citadel point.
   { kind: 'stone', x: 100, y: 62, variant: 0, mirror: false },
   { kind: 'stone', x: 140, y: 58, variant: 1, mirror: true },
+  // Ordinary infill, back row — the real gap between the Récollets and the
+  // Ursulines was never actually empty ground.
+  { kind: 'stone', x: 200, y: 66, variant: 2, mirror: false },
+  { kind: 'stone', x: 245, y: 58, variant: 0, mirror: true },
+  { kind: 'stone', x: 290, y: 68, variant: 1, mirror: false },
+  { kind: 'stone', x: 335, y: 60, variant: 2, mirror: true },
+  { kind: 'stone', x: 385, y: 66, variant: 0, mirror: false },
   // Les Ursulines ("f") — east of the Séminaire cluster.
   { kind: 'stone', x: 440, y: 64, variant: 2, mirror: false },
   { kind: 'stone', x: 478, y: 60, variant: 0, mirror: true },
@@ -202,6 +235,8 @@ const QUEBEC_CITY_ONFOOT_BUILDINGS = [
   { kind: 'stone', x: 180, y: 108, variant: 0, mirror: true },
   // L'Évêché ("h") — the Bishop's Palace, flanking the square's west side.
   { kind: 'stone', x: 220, y: 112, variant: 1, mirror: true },
+  // (Place d'Armes itself, QUEBEC_PLACE_DARMES, fills the ground right here
+  // — a real parade square stays open, not infilled.)
   // La Paroisse avec le Séminaire et dépendances ("g") — the Cathedral
   // (Notre-Dame de Québec) east of the square, the Séminaire itself right
   // beside it (twin-tower sprite reused honestly, same institution type
@@ -218,10 +253,17 @@ const QUEBEC_CITY_ONFOOT_BUILDINGS = [
   { kind: 'stone', x: 70, y: 162, variant: 1, mirror: false },
   { kind: 'stone', x: 105, y: 166, variant: 2, mirror: true },
   { kind: 'stone', x: 200, y: 158, variant: 0, mirror: false },
+  // Ordinary infill along the waterfront, squeezed into the real gap
+  // between that last building and the Côte's own road corridor
+  // (x 255-305, QUEBEC_CITY_GATE — has to stay clear, it's the one way up
+  // to Haute-Ville) — Basse-Ville was a packed strip, not a scattering of
+  // buildings with open ground between them.
+  { kind: 'stone', x: 234, y: 158, variant: 0, mirror: false },
   // Le Sault au Matelot ("l") — the waterfront row continuing east, past
   // the Côte, toward the St-Charles.
   { kind: 'stone', x: 355, y: 164, variant: 1, mirror: true },
   { kind: 'stone', x: 400, y: 158, variant: 2, mirror: false },
+  { kind: 'stone', x: 435, y: 160, variant: 1, mirror: false },
   // L'Intendance ("m") — the Intendant's Palace, furthest east, nearest
   // the real St-Charles-side site.
   { kind: 'stone', x: 470, y: 160, variant: 0, mirror: true },
