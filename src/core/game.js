@@ -7,7 +7,12 @@ import { createCanoeSprites } from '../world/canoe.js';
 import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
-import { createBlockade } from '../bossfights/blockade.js';
+import {
+  createBlockade,
+  SHIP_FLOW_DISTANCE as BLOCKADE_SHIP_FLOW_DISTANCE,
+  APPROACH_RANGE as BLOCKADE_APPROACH_RANGE,
+  CHASE_DISTANCE as BLOCKADE_CHASE_DISTANCE,
+} from '../bossfights/blockade.js';
 import { createChasseGalerie, lightningFlash, BOSS_HOVER_HEIGHT } from '../bossfights/chasseGalerie.js';
 import { createDiable, DIABLE_FLOW_DISTANCE } from '../bossfights/diable.js';
 import { createLoupGarou } from '../bossfights/loupGarou.js';
@@ -887,7 +892,29 @@ export class Game {
     // Rapids push *with* the current, so on lawrenceWest — where the
     // current itself runs backward — hitting whitewater means fighting a
     // stronger current, not getting a boost: same magnitude, flipped sign.
-    const rapids = rapidsStrength(this.flowDistance);
+    //
+    // Silenced across the blockade's own "clear water" span (blockade.js's
+    // own comment on APPROACH_RANGE/CHASE_DISTANCE explicitly describes
+    // this stretch that way) — river/path.js's rapids are a periodic
+    // pattern with no knowledge of what's placed on top of them, and this
+    // particular encounter happens to land inside one of those periodic
+    // stretches by pure coincidence. Found chasing a report that backing
+    // away from the hull "wasn't cooking in": retreat speed was real (the
+    // retreating fix above), but decayed toward zero as the rapids grew
+    // stronger the further upstream (away from the ship) the canoe got —
+    // at peak strength, RAPIDS_BOOST alone very nearly equals
+    // MAX_REVERSE_SPEED, so paddling backward here could stall out
+    // asymptotically rather than actually clearing the hull, no matter how
+    // long Down was held. A boss encounter fighting unrelated ambient
+    // whitewater on top of cannon fire and a solid hull was never the
+    // intent (this segment's own AMBIENT_CURRENT/UPRIVER_CURRENT design is
+    // about lawrenceWest, not the calm Rideau denouement rideau is meant
+    // to be) — silencing it here fixes the actual reported bug at its
+    // second, less obvious cause, rather than only its first.
+    const nearBlockade = this.segment === 'rideau'
+      && this.flowDistance > BLOCKADE_SHIP_FLOW_DISTANCE - BLOCKADE_APPROACH_RANGE
+      && this.flowDistance < BLOCKADE_SHIP_FLOW_DISTANCE + BLOCKADE_CHASE_DISTANCE;
+    const rapids = nearBlockade ? 0 : rapidsStrength(this.flowDistance);
     const rapidsDirection = this.segment === 'lawrenceWest' ? -1 : 1;
 
     // Chasse-galerie: once airborne the canoe holds a slow, steady glide,
@@ -920,9 +947,25 @@ export class Game {
     // the world-X check (this frame's isn't computed until just below) is a
     // one-frame-stale approximation, same tradeoff the bank check already
     // makes implicitly — lateralOffset can't move far in one frame.
+    //
+    // retreating guards against a real soft-lock this used to have: once
+    // pinned against the hull, isHullBlocking() doesn't know or care which
+    // way you're trying to go — it just says "still inside the hull's own
+    // z-depth, still on the wrong side of the gap," true whether you're
+    // pushing further in OR backing straight out the way you came. Without
+    // this check, "held in place" fired on the backward attempt too, every
+    // single frame, silently undoing the escape bounce below and any
+    // manual reversing on top of it — flowDistance could never actually
+    // move, so "back away, then come around the other side" simply didn't
+    // work no matter how long Down was held. Comparing distance-from-the-
+    // ship before and after lets retreat through even while still
+    // nominally "inside" the blocked zone; only closing the distance (or
+    // holding it) still gets stopped.
     if (this.segment === 'rideau') {
       const tentativeWorldX = centerX(proposedFlowDistance) + this.lateralOffset;
-      if (this.blockade.isHullBlocking(proposedFlowDistance, tentativeWorldX)) {
+      const retreating = Math.abs(proposedFlowDistance - BLOCKADE_SHIP_FLOW_DISTANCE)
+        > Math.abs(this.flowDistance - BLOCKADE_SHIP_FLOW_DISTANCE);
+      if (!retreating && this.blockade.isHullBlocking(proposedFlowDistance, tentativeWorldX)) {
         proposedFlowDistance = this.flowDistance; // held in place, not pushed through
         // Bounce off the hull: strong backward push so you can escape
         this.speed = -8 * speedScale;

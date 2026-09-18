@@ -57,7 +57,12 @@ export const SHIP_FLOW_DISTANCE = KINGSTON.flowDistance - SHIP_D_OFFSET;
 // seconds at cruising speed to close a ~40-unit channel, with real margin
 // left over for reacting to cannon fire along the way rather than needing
 // to commit blind at frame one.
-const APPROACH_RANGE = 190;
+// Exported alongside CHASE_DISTANCE below so game.js can silence the
+// periodic rapids pattern (river/path.js's rapidsStrength) across this same
+// "clear water" span — see that call site's own comment for why a fixed
+// naval encounter fighting unrelated ambient whitewater turned out to be a
+// real bug, not a difficulty feature.
+export const APPROACH_RANGE = 190;
 // A single commitment, decided (and telegraphed) the moment the ship is
 // first spotted, not a late swing partway through — the same steering-speed
 // math above makes a *fair* late swing impossible: reacting to a switch
@@ -133,7 +138,7 @@ const BULLET_DAMAGE_TO_HULL = 8; // 15 solid hits silences the guns
 const HULL_HIT_D_TOLERANCE = 1.5;
 const SPARK_LIFETIME = 0.35;
 
-const CHASE_DISTANCE = 150; // how far you must get ahead to escape
+export const CHASE_DISTANCE = 150; // how far you must get ahead to escape
 const CHASE_SHIP_SPEED = 15.5; // gunboat chases FAST - nearly matches max player speed
 const CHASE_VOLLEY_INTERVAL = 1.3; // bow cannon fires rapidly
 
