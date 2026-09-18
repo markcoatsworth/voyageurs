@@ -26,6 +26,19 @@ import {
 // fjord's tightly-spaced villages all blur together at the start.
 const VIEW_SIZE = 90;
 
+// The SVG viewBox is always exactly VIEW_SIZE x VIEW_SIZE (panned, never
+// zoomed — see update()'s own viewBox line), stretched to fill #minimap's
+// own fixed 190px CSS size (style.css) — so this is the one, constant
+// units-to-screen-pixels ratio for the whole widget, letting anything that
+// needs to read as a specific physical size on screen (the house icons
+// below, not the ribbon/land geometry, which is meant to be at true
+// relative scale) be sized in real pixels instead of an arbitrary unit
+// count that would silently drift if VIEW_SIZE or #minimap's own CSS size
+// ever changed independently.
+const MINIMAP_CSS_SIZE_PX = 190;
+const PX_PER_UNIT = MINIMAP_CSS_SIZE_PX / VIEW_SIZE;
+const px = (n) => n / PX_PER_UNIT;
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 function svgEl(tag, attrs) {
   const el = document.createElementNS(SVG_NS, tag);
@@ -335,11 +348,18 @@ export function createMinimap() {
   // stone one, translated down to a shape this small can still read at).
   // Anchored at its own bottom-centre (tipX, tipY) — the exact landing
   // coordinate — same as the pin shape this replaced.
+  //
+  // Sized in real screen pixels (px(), not a raw unit count). Was 32px/38px
+  // (tall enough to actually see, but reported as too big — overlapping
+  // close neighbours at this widget's zoom level, per this comment's own
+  // earlier warning); halved to 16px for an ordinary village, 19px for the
+  // three real cities.
   function drawHouseIcon(tipX, tipY, big) {
-    const halfW = big ? 0.7 : 0.55;
-    const bodyH = big ? 1.1 : 0.9;
-    const overhang = big ? 0.12 : 0.15; // stone roofs oversail the wall less than a log cabin's does
-    const roofH = big ? 0.5 : 0.55;
+    const halfW = px(big ? 8 : 6.5);
+    const bodyH = px(big ? 11 : 9);
+    const overhang = px(1.5); // stone roofs oversail the wall less than a log cabin's does
+    const roofH = px(big ? 8 : 7);
+    const strokeW = px(0.6);
     const wall = big ? '#b8b0a0' : '#a3672f';
     const wallStroke = big ? '#5c554a' : '#4a2f18';
     const roof = big ? '#4a5560' : '#6b4226';
@@ -348,13 +368,13 @@ export function createMinimap() {
     svg.appendChild(svgEl('rect', {
       x: (tipX - halfW).toFixed(2), y: wallTopY.toFixed(2),
       width: (halfW * 2).toFixed(2), height: bodyH.toFixed(2),
-      fill: wall, stroke: wallStroke, 'stroke-width': 0.3,
+      fill: wall, stroke: wallStroke, 'stroke-width': strokeW.toFixed(2),
     }));
     svg.appendChild(svgEl('path', {
       d: `M${(tipX - halfW - overhang).toFixed(2)},${wallTopY.toFixed(2)} `
         + `L${tipX.toFixed(2)},${(wallTopY - roofH).toFixed(2)} `
         + `L${(tipX + halfW + overhang).toFixed(2)},${wallTopY.toFixed(2)} Z`,
-      fill: roof, stroke: roofStroke, 'stroke-width': 0.3,
+      fill: roof, stroke: roofStroke, 'stroke-width': strokeW.toFixed(2),
     }));
   }
 
