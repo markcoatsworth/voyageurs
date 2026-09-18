@@ -28,27 +28,23 @@ export const DIABLE_FLOW_DISTANCE = FLIGHT_END - 45;
 const APPROACH = 16;
 
 // How the fight escalates as hp drops, 0 (full health) -> 1 (dead) — see
-// rampT's own comment at the call site for the formula. Replaces an
-// earlier version that anchored the ramp to the fight's *original* 240 HP
-// pool (a fixed window at the very end) rather than the live HP_MAX
-// (3840, after a past "make the fight longer" pass 8x'd the pool without
-// touching the ramp) — that kept the finale exactly as dangerous as the
-// original short fight, but meant the ramp never engaged at all for
-// roughly the first 94% of a now-several-minutes fight: reported as "too
-// easy," and flat-until-the-last-few-seconds is exactly why. A naive fix
-// (scale the same percentage thresholds against the new HP_MAX directly)
-// was tried once already and made the *hardest* tier alone last over a
-// minute of continuous dodging — unsurvivable for anyone not perfectly
-// dodging the whole time. RAMP_GAMMA > 1 is what avoids repeating that:
-// it biases the curve to stay low through the opening (still a real safe
-// stretch, just no longer the entire fight) and only climbs to full
-// intensity in roughly the last 14% of hp — a real, felt finale, not a
-// multi-minute wall. Nudged up from 1.7 (which put that threshold at
-// 15.6%) alongside CONTACT_DAMAGE's own reduction (see its comment) after
-// a request to tone the fight down slightly — a fractionally later,
-// gentler climb into the hardest tier, not a reversal of the escalation
-// itself.
-const RAMP_GAMMA = 1.9;
+// rampT's own comment at the call site for the formula.
+//
+// GAMMA > 1 pushes escalation LATE (rampT stays low for longer, only
+// climbing near the end); GAMMA < 1 pushes it EARLY (rampT climbs fast
+// even from a small amount of progress, then levels off). This has swung
+// both ways already: originally anchored to a fixed end-of-fight HP
+// window (never escalated at all until ~94% dealt — "too easy," flat-
+// until-the-last-few-seconds), then a naive linear percentage version
+// (made the hardest tier alone last over a minute — unsurvivable), then
+// GAMMA=1.9 (2-shot at 62% dealt, 3-shot at 86%, 4-shot at 96% — still
+// reported as "too easy," escalation not starting until past the
+// midpoint). Dropped to 0.7 for a request that escalation start "much
+// earlier": 2-shot now at 27% dealt, 3-shot at 66%, 4-shot at 89% — real
+// pressure within the first quarter of the fight, not held back past the
+// midpoint, while the most extreme tier stays a late, rare climax rather
+// than becoming the fight's default state throughout.
+const RAMP_GAMMA = 0.7;
 // A first pass doubled this (240 -> 480) and landed way short: a real
 // playtest cleared it in ~30s. At FIRE_COOLDOWN (weapons.js, 0.16s) and
 // BULLET_DAMAGE below, holding the trigger on a well-tracked target caps
@@ -66,15 +62,17 @@ const RAMP_GAMMA = 1.9;
 // has been trending shorter each round, not longer). Using the same
 // ~16 dmg/sec real-world baseline above (not the ~25 dmg/sec theoretical
 // max, which assumes a stationary target and no need to dodge): 3min *
-// 16 = 2880. A slower player naturally lands fewer hits per second while
-// also dodging, so the same pool stretches to ~5min for them without a
-// second number to separately tune — one pool, and completion time
-// falls out of whatever dps the player actually manages, the same way a
-// real boss fight would scale with skill on its own.
+// 16 = 2880. Real data point since then, not another assumption: reported
+// as 2 minutes to reach half strength at 2880, i.e. ~12 dmg/sec actually
+// achieved once RAMP_GAMMA's own drop made escalation start much earlier
+// (more time spent dodging, less time landing shots, than the ~16 dps this
+// fight had been tuned against since the original calibration). Rescaled
+// off that real 12 dps figure instead of the old assumption: a request
+// for "~3min total" -> 180 * 12 = 2160.
 // Exported so the smoke test's own frame budget can scale off the real
 // value instead of a hardcoded ratio that goes stale the next time this
-// number moves (it already has, three times).
-export const HP_MAX = 2880;
+// number moves (it already has, four times).
+export const HP_MAX = 2160;
 const BULLET_DAMAGE = 4;      // per pistol hit
 // A fireball that connects (game.js applies INVULN_TIME). Dropped to 25 for
 // a "tone it down" request, on the reasoning that death resets Diable's own
