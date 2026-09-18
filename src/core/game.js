@@ -500,7 +500,7 @@ export class Game {
       this.ui.gameoverTitle.textContent =
         byDiable ? 'THE DEVIL COLLECTS'
           : byWolf ? 'THE BEAST TAKES YOU'
-            : byWendigo ? 'THE HUNGER TAKES YOU'
+            : byWendigo ? 'THE WENDIGO TAKES YOU'
               : 'CAPSIZED';
     }
     this.ui.gameoverScreen.classList.remove('hidden');
