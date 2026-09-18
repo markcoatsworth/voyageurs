@@ -247,6 +247,36 @@ const TROIS_RIVIERES_ONFOOT_BUILDINGS = [
   { kind: 'church', x: 160, y: 100, mirror: false },
 ];
 
+// Tadoussac's on-foot layout — same real geography as villages.js's own
+// TADOUSSAC_BUILDINGS/TADOUSSAC_CHAPEL (see their comment for the sourcing:
+// the real site's own point/cove shape, buildings updated to 1790 from the
+// ~1600 map's own "l'abitation du Capitaine Chauvin" post), just mapped
+// onto this fixed on-foot screen instead of the flowing river band. West
+// end is the point (the trading post), east end the cove (the dwelling
+// cluster), the chapel set back and central between them — not a big town,
+// so seven buildings total, not Trois-Rivières' thirteen.
+const TADOUSSAC_ONFOOT_BUILDINGS = [
+  // The King's Posts trading post and its own outbuilding, on the point.
+  { kind: 'stone', x: 36, y: 90, variant: 2, mirror: false },
+  { kind: 'stone', x: 74, y: 150, variant: 0, mirror: true },
+  // The 1747 chapel, set back and central.
+  { kind: 'church', x: 165, y: 96, mirror: false },
+  // A small cluster of trader/fisher dwellings, by the cove.
+  { kind: 'stone', x: 200, y: 86, variant: 1, mirror: false },
+  { kind: 'stone', x: 235, y: 152, variant: 2, mirror: true },
+  { kind: 'stone', x: 270, y: 88, variant: 0, mirror: false },
+  { kind: 'stone', x: 300, y: 150, variant: 1, mirror: true },
+];
+// The map itself draws a thin track tracing the shore from the small
+// house cluster (near its own "D") around the point to the habitation
+// (its own "C") — a real coastal path connecting the two clusters, not
+// invented. Packed earth (drawDirtPath), not cobbled — this is a fur-trade
+// post's own worn track, not a paved street. One through-path between the
+// two ends, with a short spur up to the chapel door since it sits back
+// off the path rather than directly on it.
+const TADOUSSAC_PATH = { x: 25, y: 116, w: 285, h: 12 };
+const TADOUSSAC_CHAPEL_SPUR = { x: 159, y: 96, w: 12, h: 22 };
+
 // Montréal's on-foot layout — rebuilt from an actual period source: Thomas
 // Jefferys' 1738 "Plan of the Town and Fortifications of Montreal or Ville
 // Marie in Canada" (dropped into the repo as montreal-1700s.jpg — not
@@ -690,6 +720,18 @@ function buildingsForQuebecCity() {
 
 function buildingsForTroisRivieres() {
   return TROIS_RIVIERES_ONFOOT_BUILDINGS.map((b) => ({
+    kind: b.kind,
+    variant: b.variant ?? 0,
+    mirror: b.mirror,
+    anchorX: b.x,
+    anchorY: b.y,
+    footHalfW: b.kind === 'church' ? 12 : 13,
+    footHeight: b.kind === 'church' ? 26 : 24,
+  }));
+}
+
+function buildingsForTadoussac() {
+  return TADOUSSAC_ONFOOT_BUILDINGS.map((b) => ({
     kind: b.kind,
     variant: b.variant ?? 0,
     mirror: b.mirror,
@@ -1221,6 +1263,7 @@ export function createVillageScene() {
   let isQuebecCity = false;
   let isTroisRivieres = false;
   let isMontreal = false;
+  let isTadoussac = false;
   let wasNearTrader = false;
   let traderPos = traderPosFor(repairShop);
   let reboardZone = { x0: dockX0(worldWidth), x1: dockX1(worldWidth), y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
@@ -1242,6 +1285,7 @@ export function createVillageScene() {
       isQuebecCity = village && village.name === 'Quebec City';
       isTroisRivieres = village && village.name === 'Trois-Rivieres';
       isMontreal = village && village.name === 'Montreal';
+      isTadoussac = village && village.name === 'Tadoussac';
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : isQuebecCity ? QUEBEC_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
       worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : 0;
@@ -1258,6 +1302,8 @@ export function createVillageScene() {
         ? [...buildingsForTroisRivieres(), repairShop]
         : isMontreal
         ? [...buildingsForMontreal(), repairShop]
+        : isTadoussac
+        ? [...buildingsForTadoussac(), repairShop]
         : [...buildingsFor(seed), repairShop];
       trees = treesClearOfBuildings(treesFor(seed, isMontreal ? MONTREAL_TREE_SPOTS : TREE_SPOTS), buildings);
       traderPos = traderPosFor(repairShop);
@@ -1421,6 +1467,14 @@ export function createVillageScene() {
         drawBrickRoad(ctx, QUEBEC_ROAD_V.x, QUEBEC_ROAD_V.y, QUEBEC_ROAD_V.w, QUEBEC_ROAD_V.h);
         drawDirtPath(ctx, QUEBEC_PLACE_DARMES.x, QUEBEC_PLACE_DARMES.y, QUEBEC_PLACE_DARMES.w, QUEBEC_PLACE_DARMES.h);
         for (const g of QUEBEC_GARDEN_PLOTS) drawGardenPlot(ctx, g.x, g.y, g.w, g.h);
+      }
+
+      // Tadoussac's own track (TADOUSSAC_PATH's own comment — traced from
+      // the map itself, not invented), connecting the trading post to the
+      // dwelling cluster, with a short spur up to the chapel door.
+      if (isTadoussac) {
+        drawDirtPath(ctx, TADOUSSAC_PATH.x, TADOUSSAC_PATH.y, TADOUSSAC_PATH.w, TADOUSSAC_PATH.h);
+        drawDirtPath(ctx, TADOUSSAC_CHAPEL_SPUR.x, TADOUSSAC_CHAPEL_SPUR.y, TADOUSSAC_CHAPEL_SPUR.w, TADOUSSAC_CHAPEL_SPUR.h);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe

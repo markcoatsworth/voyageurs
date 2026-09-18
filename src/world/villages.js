@@ -177,6 +177,44 @@ const TROIS_RIVIERES_BUILDINGS = buildTroisRivieresBuildings();
 // Ursuline convent (built 1697) - set back from waterfront
 const TROIS_RIVIERES_CONVENT = { dOffset: 2, depth: 5.2 };
 
+// Tadoussac — not a big town (villageLayout()'s usual 3-5 buildings would
+// undersell it), but a real, continuously-worked fur-trade post since 1600
+// and the three-way junction the whole river forks at, so it earns a hand-
+// authored spread too, just a modest one: two real landmarks plus a small
+// handful of ordinary dwellings, not Trois-Rivières' full waterfront row.
+// Shaped after "Plan de la Ville de Quebec"'s own 1600-era depiction of the
+// harbour (tadoussac-1970s.jpg, gitignored — a reference image only, and
+// despite the filename actually a ~1600 chart centred on "l'abitation du
+// Capitaine Chauvin de l'an 1600," the original trading post) — real
+// geography (a point at one end, a sheltered cove at the other) carried
+// forward, real buildings updated to what would actually be standing in
+// this game's 1790: the original 1600 post is long gone, but Tadoussac
+// never stopped trading — it became a King's Posts (Domaine du Roi) post
+// in 1720, under British leaseholders since the Conquest (Dunn, Gray &
+// Murray held the lease 1762-86; the North West Company's own lease doesn't
+// start until 1802, so no NWC branding here). "trading post" is kept
+// generic rather than naming a specific 1790 leaseholder that hasn't been
+// independently confirmed for that exact year.
+const TADOUSSAC_SPAN = 9; // half-width along riverbank — modest, not Trois-Rivières' 14
+const TADOUSSAC_BUILDINGS = [
+  // The King's Posts trading post, on the point — the dominant structure,
+  // same real site the 1600 map centres on.
+  { dOffset: -7, depth: 2.0, variant: 2, mirror: false },
+  { dOffset: -5, depth: 3.2, variant: 0, mirror: true }, // its own warehouse/outbuilding
+  // A small cluster of trader/fisher dwellings near the cove (the map's own
+  // small-house grouping), the other end of the span from the post.
+  { dOffset: 2.5, depth: 1.8, variant: 1, mirror: false },
+  { dOffset: 4.5, depth: 2.6, variant: 2, mirror: true },
+  { dOffset: 6.5, depth: 1.6, variant: 0, mirror: false },
+  { dOffset: 8.0, depth: 2.8, variant: 1, mirror: true },
+];
+// The Tadoussac Chapel — built 1747 by the Jesuits, the oldest wooden
+// church in North America and still standing today, so unambiguously
+// present by 1790. Set back and central, between the post and the
+// dwellings, the same "rises over the row in front of it" skyline read
+// every other village's church gets.
+const TADOUSSAC_CHAPEL = { dOffset: -1.5, depth: 5.5 };
+
 // Quebec City — a real 1790s colonial capital, not another fur-trade
 // village, so it gets its own hand-authored layout instead of
 // villageLayout()'s small random cluster — shaped after an actual 1790
@@ -346,6 +384,7 @@ export function isNearVillage(d, side) {
     if (v.name === 'Quebec City') halfD = QUEBEC_CITY_SPAN + 4;
     else if (v.name === 'Trois-Rivieres') halfD = TROIS_RIVIERES_SPAN + 2;
     else if (v.name === 'Montreal') halfD = MONTREAL_SPAN + 4;
+    else if (v.name === 'Tadoussac') halfD = TADOUSSAC_SPAN + 2;
     if (v.side === side && Math.abs(d - v.flowDistance) < halfD) return true;
   }
   return false;
@@ -552,6 +591,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   const isQuebecCity = v.name === 'Quebec City';
   const isTroisRivieres = v.name === 'Trois-Rivieres';
   const isMontreal = v.name === 'Montreal';
+  const isTadoussac = v.name === 'Tadoussac';
 
   // Buildings and their surrounding trees, merged into one painter's-
   // algorithm pass (sorted so the nearer thing — larger z — draws last, on
@@ -577,6 +617,13 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
       const d = v.flowDistance + b.dOffset;
       const z = worldDistance - d;
       const worldX = clampToIsland(shoreEdgeAt(d, v.side, true) + inlandSign(v) * (BUILDING_SHORE_OFFSET + b.depth), d);
+      return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
+    });
+  } else if (isTadoussac) {
+    scenery = TADOUSSAC_BUILDINGS.map((b) => {
+      const d = v.flowDistance + b.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
       return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
     });
   } else {
@@ -638,6 +685,15 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
       const d = v.flowDistance + MONTREAL_CHURCH.dOffset;
       const z = worldDistance - d;
       const worldX = clampToIsland(shoreEdgeAt(d, v.side, true) + inlandSign(v) * (BUILDING_SHORE_OFFSET + MONTREAL_CHURCH.depth), d);
+      scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
+    }
+  } else if (isTadoussac) {
+    // The Tadoussac Chapel (see TADOUSSAC_CHAPEL's own comment) - a real
+    // 1747 landmark set back between the trading post and the dwellings.
+    {
+      const d = v.flowDistance + TADOUSSAC_CHAPEL.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + TADOUSSAC_CHAPEL.depth);
       scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
     }
   } else {
