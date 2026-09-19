@@ -112,13 +112,22 @@ export function flightWind(flowDistance, time, altFrac) {
 // on a bend; the ones that "reach" far enough to force a real dodge get
 // denser the closer you are to Le Diable — see STEEPLE_DEFS below.
 const STEEPLE_HIT_Z = 1.9;     // half-depth of the collision box along the flow
-const REACH_NORMAL = 2.7;      // how far a normal church reaches in from its
-                               // bank — enough that it noticeably narrows
-                               // its side of the channel and a loose centre
-                               // line will clip it on the bends, but always
-                               // short of the centre line itself (< the
-                               // gorge's minimum half-width, so it never
-                               // ends up standing in open water)
+// How far a normal church reaches in from its bank. Was 2.7 — reported as
+// basically cosmetic, and the real numbers back that up: the gorge's own
+// half-width (river/gorge.js) runs 5.25 units at the flight's start down to
+// 3.10 at its tightest, right at Diable's arena, and 2.7 never closed that
+// last 0.4-unit gap even there — a normal church could never actually
+// threaten a straight down-the-middle line anywhere in the whole flight.
+// 3.3 changes that on purpose, not by accident: still generous early on
+// (1.95 units of clearance at the wide start, easing the player in same as
+// before), but by the back half of the flight — where the gorge has
+// already narrowed past ~6.6 units wide — a normal church starts eating
+// into the centre line for real, and right at the tightest point it
+// crosses it by the same REACH_MIN_INNER a "reaching" church does. The
+// escalation this creates (harmless early, a real threat late) matches
+// STEEPLE_DEFS' own authored reaching-frequency ramp instead of fighting
+// it — both levers now tighten toward the same climax together.
+const REACH_NORMAL = 3.3;
 const REACH_REACHING = 5;      // a "reaching" church crosses the centre line —
                                // large so it always clamps to REACH_MIN_INNER
 const REACH_MIN_INNER = 0.15;   // how far past centre a reaching church's inner
