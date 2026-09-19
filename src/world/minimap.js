@@ -141,11 +141,21 @@ function ribbonPolygon(points, halfWidths) {
 // its opposite). Missing `side` (only the made-up Rideau leg, which has no
 // real bank to pin to) falls back to the ribbon's own outer edge, +1,
 // rather than leaving it on the centerline.
+// The offset above is realistic-scale (half the real river width), which
+// for most of the game's narrow reaches (the Rideau canal towns run as
+// little as 0.15km) works out to a screen nudge of a couple of pixels or
+// less — real, but easy to miss entirely, which is exactly what got
+// reported ("not obvious which side the village markers are on"). A wide
+// reach's own already-generous realistic offset is left alone (it's
+// already well clear of the ribbon); this only raises the floor for the
+// narrow reaches that would otherwise round down to invisible.
+const MIN_SHORE_OFFSET_KM = 6 / PX_PER_UNIT;
+
 function shoreMarkerPoint(points, i) {
   const p = points[i];
   const side = p.side ?? 1;
   const normal = vertexNormal(points, i);
-  const half = halfWidthKmAt(p);
+  const half = Math.max(halfWidthKmAt(p) + OUTLINE_BORDER_KM, MIN_SHORE_OFFSET_KM);
   return { x: p.x + normal.x * half * side, y: p.y + normal.y * half * side };
 }
 
@@ -399,7 +409,22 @@ export function createMinimap() {
   // Montreal channels replace the ordinary ribbon there, so a centerline-
   // relative shore snap doesn't correspond to a real edge; both already get
   // dedicated, hand-verified placement elsewhere in this file).
-  function drawWaypointMarker(p) {
+  function drawWaypointMarker(p, riverPoint) {
+    // A short leader line from the river's own centerline point to the
+    // icon's shore-snapped position — MIN_SHORE_OFFSET_KM keeps the nudge
+    // itself legible, but a bare offset still reads as "the icon is near
+    // the river," not "the icon is pulled to *this side* of it." The line
+    // makes that relationship explicit regardless of how far the nudge
+    // ends up being. Skipped for the two cases shoreMarkerPoint itself
+    // isn't used for (riverPoint is null then) — see this function's own
+    // caller.
+    if (riverPoint) {
+      svg.appendChild(svgEl('line', {
+        x1: riverPoint.x.toFixed(2), y1: riverPoint.y.toFixed(2),
+        x2: p.x.toFixed(2), y2: p.y.toFixed(2),
+        stroke: '#f4ead2', 'stroke-width': px(0.5).toFixed(2), 'stroke-opacity': 0.7,
+      }));
+    }
     drawHouseIcon(p.x, p.y, BIG_CITY_NAMES.has(p.name));
     const label = p.label || p.name;
     const pos = p.labelPos || { dx: 1.4, dy: -2.2, anchor: 'start' };
@@ -433,7 +458,7 @@ export function createMinimap() {
       drawnNames.add(raw.name);
       const skip = raw.name === 'Tadoussac' || raw.mapSkipRibbon;
       const p = skip ? raw : { ...raw, ...shoreMarkerPoint(segment.points, i) };
-      drawWaypointMarker(p);
+      drawWaypointMarker(p, skip ? null : raw);
     });
   }
 

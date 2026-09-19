@@ -94,6 +94,14 @@ function normalizeStartName(s) {
 // Rideau start instead, which is the same real place. "kingston" is a real
 // village name and already works the normal way (a short paddle short of
 // the finish line).
+//
+// "musket" is the one keyword below that isn't a flowDistance/segment pair
+// at all (see START_KEYWORDS' own shape) — it opens Gatineau's on-foot
+// scene directly (startedAtMusketShop, further down), the only way to
+// actually reach the musket master's shop from a URL: a river-position
+// cheat can't land there at all, since the dock sits 63 units past the
+// Diable arena's own hold-the-river clamp, which fires on position alone
+// regardless of how the canoe got there.
 const RIDEAU_START = { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' };
 const START_KEYWORDS = {
   [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FLOW_DISTANCE - 24, segment: 'fjord' },
@@ -122,6 +130,19 @@ function parseStartLocation() {
 const { flowDistance: startFlowDistance, segment: startSegment } = parseStartLocation();
 const startedAtDiable =
   normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('diable');
+// "?start=musket" — Gatineau's own on-foot dock, where the musket master
+// stands. Not reachable through the normal river-position machinery above:
+// "gatineau" the plain village name already means something else
+// (RIDEAU_START, past the Diable arena — see that keyword's own comment on
+// why), and dropping the canoe on the river at Gatineau's own flowDistance
+// would just get clamped straight into the Diable fight anyway (its arena
+// sits 63 units upstream of the dock, and the hold-the-river clamp doesn't
+// care how the canoe got there, only where it currently is). The only real
+// way in is to skip the river and open the village scene directly, the way
+// actually docking there does — same pattern armDiableCheckpoint() below
+// uses for its own can't-express-this-as-flowDistance case.
+const startedAtMusketShop =
+  normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('musket');
 
 // A ?start= cheat is a one-shot for THIS page load. Strip it from the address
 // bar now that it's been read, so a reload, a restored tab, or a home-screen
@@ -472,6 +493,12 @@ try {
   // ?start=diable is a checkpoint, not just a spawn point — hand over the
   // pistol and mark it so a capsize respawns at the fight.
   if (startedAtDiable) game.armDiableCheckpoint();
+  // ?start=musket — open Gatineau's on-foot scene directly, the same call
+  // the real dock-touch path uses (see startedAtMusketShop's own comment).
+  if (startedAtMusketShop) {
+    const gatineau = VILLAGES.find((v) => v.name === 'Gatineau' && v.segment === 'lawrenceWest');
+    if (gatineau) game.enterVillage(gatineau);
+  }
 
   // Lets the index.html error handler word later crashes as "running the
   // game" rather than "loading the game".
