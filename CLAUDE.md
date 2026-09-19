@@ -130,8 +130,8 @@ src/
   MOUTH_DISTANCE or a village's flowDistance.
 - **`?start=<name>`** (main.js): dev cheat, one-shot (stripped from URL after
   use). Real village names (accent/hyphen-insensitive, incl. `kingston`) plus
-  keywords `wendigo`, `loup-garou`, `british-blockade`, `chasse-galerie`,
-  `diable`, `rideau`.
+  keywords `wendigo`, `loup-garou`, `british-blockade`, `pursuit`,
+  `chasse-galerie`, `diable`, `rideau`.
   `?start=diable` also arms a checkpoint (hands over the pistol, respawn returns
   there); `enterRideau()` clears that checkpoint and moves it to the Rideau start.
 - **Mobile**: `isTouchPrimary()` (CSS `hover:none` + `pointer:coarse`) scales

@@ -83,6 +83,13 @@ function normalizeStartName(s) {
 // before the beast is spotted (bossfights/loupGarou.js) — the last encounter
 // before Québec City.
 //
+// "pursuit" drops the canoe just past the frigate's own line
+// (SHIP_FLOW_DISTANCE + 10 — comfortably past blockade.js's own CLEAR_MARGIN
+// crossing threshold, so update()'s "just cleared the gap" branch fires on
+// the very first frame) — straight into the chase phase against the
+// shootable gunboat, skipping the gap-threading approach entirely. Testing
+// the chase/dogfight on its own doesn't need to re-run the frigate every time.
+//
 // "rideau" drops the canoe at the head of the made-up Ottawa-to-Kingston leg
 // (world/river/route.js) — past Le Diable, the storm gone, on the calm wide
 // water heading for the finish. "kingston" is a real village name and
@@ -102,6 +109,7 @@ const START_KEYWORDS = {
   [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FLOW_DISTANCE - 24, segment: 'fjord' },
   [normalizeStartName('loup-garou')]: { flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
+  [normalizeStartName('pursuit')]: { flowDistance: SHIP_FLOW_DISTANCE + 10, segment: 'rideau' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
