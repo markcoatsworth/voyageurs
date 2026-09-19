@@ -48,12 +48,13 @@
     </div>
 
     <!-- Weapon controls: the mirror of #touch-dpad on the opposite (left)
-         edge. Hidden until the pistol is picked up from the Montréal
-         gunsmith (game.js toggles .hidden); main.js's resize() keeps it
-         level with the move controls. Just the Z button for now — more
-         slots join it here as further guns unlock. -->
+         edge. The pad itself is hidden until at least one gun is owned;
+         each button inside it is separately hidden until that specific gun
+         is (game.js's syncWeaponControls() toggles both). main.js's
+         resize() keeps the pad level with the move controls. -->
     <div id="weapon-dpad" class="hidden">
       <button id="fire-z" class="weapon-key" title="Fire pistol (Z)">Z</button>
+      <button id="fire-x" class="weapon-key hidden" title="Fire musket (X)">X</button>
     </div>
 
     <!-- The top-left column: score/health/speed, then the "now playing"

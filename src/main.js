@@ -362,6 +362,11 @@ const ui = {
   milestoneBanner: document.getElementById('milestone-banner'),
   bossBanner: document.getElementById('boss-banner'),
   weaponPad: weaponDpad,
+  // Individual buttons inside the pad — game.js's syncWeaponControls()
+  // toggles each independently so a pistol-only run doesn't show an X
+  // button that does nothing (and vice versa for a musket-only respawn).
+  fireZBtn: document.getElementById('fire-z'),
+  fireXBtn: document.getElementById('fire-x'),
   // Called by game.js right after it un-hides the weapon pad, so the pad is
   // positioned immediately instead of waiting for the next window resize.
   layoutWeaponPad: positionWeaponPad,
@@ -536,6 +541,19 @@ fireBtn.addEventListener('pointerdown', (e) => {
 const clearFireBtn = () => fireBtn.classList.remove('active');
 for (const evt of ['pointerup', 'pointercancel', 'pointerleave']) {
   fireBtn.addEventListener(evt, clearFireBtn);
+}
+
+// The musket's own on-screen fire button (index.html #fire-x) — same
+// wiring as #fire-z above, one weapon name over.
+const fireMusketBtn = document.getElementById('fire-x');
+fireMusketBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  input.onWeaponFire?.('musket');
+  fireMusketBtn.classList.add('active');
+});
+const clearFireMusketBtn = () => fireMusketBtn.classList.remove('active');
+for (const evt of ['pointerup', 'pointercancel', 'pointerleave']) {
+  fireMusketBtn.addEventListener(evt, clearFireMusketBtn);
 }
 
 let lastTime = performance.now();

@@ -26,9 +26,10 @@ export class Input {
 
     // On-screen keycap per weapon key, lit while the key is held so a
     // keypress and a tap of the button look the same (see style.css's
-    // .weapon-key.active). Only the pistol's Z button exists so far.
+    // .weapon-key.active).
     this.weaponKeyEls = {
       KeyZ: document.getElementById('fire-z'),
+      KeyX: document.getElementById('fire-x'),
     };
 
     this._onKeyDown = (e) => {

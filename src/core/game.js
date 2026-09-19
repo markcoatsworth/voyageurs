@@ -747,8 +747,9 @@ export class Game {
 
   // The gun shop at Montréal — walk up to the gunsmith standing outside and
   // the pistol is yours, free (villageScene.js fires gunsmithMet once per
-  // approach). One gun for now; this is where the eventual small/medium/large
-  // weapon choices will live (see core/weapons.js). No-op once you have it.
+  // approach). The small gun; see acquireMusket() below for the medium one,
+  // and core/weapons.js's own header comment for where the large one will
+  // eventually slot in. No-op once you have it.
   acquirePistol() {
     if (this.weapons.has('pistol')) return;
     this.weapons.unlock('pistol');
@@ -757,14 +758,32 @@ export class Game {
     this.showBanner('PISTOL ACQUIRED — Press Z to Fire!');
   }
 
+  // Gatineau's own musket shop — walk up to the musket master standing
+  // outside and the medium gun is yours (villageScene.js fires
+  // musketMasterMet the same one-per-approach way gunsmithMet already
+  // works for the pistol). No-op once you have it.
+  acquireMusket() {
+    if (this.weapons.has('musket')) return;
+    this.weapons.unlock('musket');
+    this.syncWeaponControls();
+    playPeltChime();
+    this.showBanner('MUSKET ACQUIRED — Press X to Fire!');
+  }
+
   // Show the on-screen weapon controls (index.html #weapon-dpad, opposite
   // the move controls) exactly when you actually have a gun — so it's up
-  // after picking the pistol up, and gone again after a capsize+restart
-  // (start() below clears the weapon pool). layoutWeaponPad re-pins it the
-  // moment it stops being display:none, since resize() may not fire then.
+  // after picking a first weapon up, and gone again after a capsize+restart
+  // (start() below clears the weapon pool). Each weapon's own button inside
+  // the pad is separately toggled so a pistol-only run doesn't show an X
+  // button that does nothing. layoutWeaponPad re-pins the pad the moment it
+  // stops being display:none, since resize() may not fire then.
   syncWeaponControls() {
-    const armed = this.weapons.has('pistol');
+    const hasPistol = this.weapons.has('pistol');
+    const hasMusket = this.weapons.has('musket');
+    const armed = hasPistol || hasMusket;
     this.ui.weaponPad?.classList.toggle('hidden', !armed);
+    this.ui.fireZBtn?.classList.toggle('hidden', !hasPistol);
+    this.ui.fireXBtn?.classList.toggle('hidden', !hasMusket);
     if (armed) this.ui.layoutWeaponPad?.();
   }
 
@@ -846,9 +865,10 @@ export class Game {
     }
 
     if (this.mode === 'village') {
-      const { reboard, tradeRequested, gunsmithMet } = this.villageScene.update(dt, this.input.state);
+      const { reboard, tradeRequested, gunsmithMet, musketMasterMet } = this.villageScene.update(dt, this.input.state);
       if (tradeRequested) this.tryRepairTrade();
       if (gunsmithMet) this.acquirePistol();
+      if (musketMasterMet) this.acquireMusket();
       this.villageScene.draw(this.ctx);
       if (reboard) this.leaveVillage();
       return;

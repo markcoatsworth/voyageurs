@@ -73,6 +73,7 @@ function makeUi(minimap) {
     gameoverTitle: el('over-title'),
     finalStats: el('stats'), restartBtn: el('restart'), pauseScreen: el('pause'),
     milestoneBanner: el('banner'), bossBanner: el('boss-banner'), weaponPad: el('weapon-dpad'), layoutWeaponPad: () => {},
+    fireZBtn: el('fire-z'), fireXBtn: el('fire-x'),
     minimap,
   };
 }
@@ -672,6 +673,41 @@ await step('gatineau: casting off from the winter camp jumps onto the Rideau', (
   if (g.game.startSegment !== 'rideau') throw new Error('the Rideau did not become the respawn checkpoint');
   run(g, 300, 1 / 30, (s) => { s.up = true; });
   if (g.game.segment !== 'rideau') throw new Error('drifted off the Rideau leg while paddling it');
+});
+
+await step('gatineau: walk up to the musket master, get the musket', () => {
+  const gatineau = VILLAGES.find((v) => v.name === 'Gatineau');
+  const g = newGame(gatineau.segment, gatineau.flowDistance - 20);
+  g.game.enterVillage(gatineau);
+  if (g.game.weapons.has('musket')) {
+    throw new Error('musket unlocked on arrival — it should require walking up to the musket master');
+  }
+  // Gatineau's shop sits just right of the dock, close to the player's own
+  // start height (unlike Montréal's walled, multi-turn approach) — holding
+  // right alone closes the whole gap.
+  let armed = false;
+  for (let i = 0; i < 60 && !armed; i++) {
+    g.input.state.right = true;
+    g.game.update(1 / 30);
+    if (g.game.weapons.has('musket')) armed = true;
+  }
+  if (!armed) throw new Error('walking up to the Gatineau musket master never granted the musket');
+  if (g.game.ui.weaponPad.classList.contains('hidden')) {
+    throw new Error('weapon controls still hidden after picking up the musket');
+  }
+  if (g.game.ui.fireXBtn.classList.contains('hidden')) {
+    throw new Error('musket fire button (X) still hidden after picking up the musket');
+  }
+  // Never having the pistol at all, the Z button should stay hidden even
+  // though the pad itself is now showing for the musket.
+  if (!g.game.ui.fireZBtn.classList.contains('hidden')) {
+    throw new Error('pistol fire button (Z) showing without ever having the pistol');
+  }
+  // A capsize + restart clears the weapon pool — pad and both buttons go too.
+  g.game.start();
+  if (!g.game.ui.weaponPad.classList.contains('hidden')) {
+    throw new Error('weapon controls still showing after restart cleared the weapons');
+  }
 });
 
 await step('rideau: paddle the whole leg and reach Kingston -> won', () => {

@@ -63,7 +63,18 @@ export function createWeapons() {
           break;
 
         case 'musket':
-          // Future: faster, single bullet
+          // The medium gun — a single heavier ball, same shared cooldown/
+          // speed as the pistol for now (see FIRE_COOLDOWN's own comment;
+          // it's one clock across all three weapons, not a per-weapon
+          // rate yet). Reads as its own gun in draw() below via `type`.
+          bullets.push({
+            worldX: canoeWorldX,
+            flowDistance: canoeFlowDistance,
+            altitude,
+            speed: BULLET_SPEED,
+            createdAt: clock,
+            type: 'musket',
+          });
           break;
 
         case 'blunderbuss':
@@ -95,14 +106,26 @@ export function createWeapons() {
         // shadow — same screen-space offset the canoe sprite gets in game.js.
         const y = screen.y - (b.altitude || 0) * PIXELS_PER_UNIT;
 
-        // Draw bullet as a small yellow/orange flash
+        // Pistol: a small yellow/orange flash. Musket: a bigger, heavier-
+        // looking reddish ball — reads as the medium gun at a glance,
+        // moving/hitting identically to the pistol's shot for now (see
+        // fire()'s own comment).
         ctx.save();
-        ctx.fillStyle = '#ffdd44';
-        ctx.shadowColor = '#ff8800';
-        ctx.shadowBlur = 4;
-        ctx.beginPath();
-        ctx.arc(screen.x, y, 3, 0, Math.PI * 2);
-        ctx.fill();
+        if (b.type === 'musket') {
+          ctx.fillStyle = '#ff8844';
+          ctx.shadowColor = '#ff4400';
+          ctx.shadowBlur = 6;
+          ctx.beginPath();
+          ctx.arc(screen.x, y, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = '#ffdd44';
+          ctx.shadowColor = '#ff8800';
+          ctx.shadowBlur = 4;
+          ctx.beginPath();
+          ctx.arc(screen.x, y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
         ctx.restore();
       }
     },

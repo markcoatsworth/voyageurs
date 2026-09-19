@@ -7,7 +7,7 @@ import { createGrassTile, createWaterTile, createSandTile } from './tiles.js';
 import {
   createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
   createStoneBuildingSprite, createChurchSprite, createRampartSprite, createGunShopSprite, createGunsmithSprite,
-  createSulpicianTowersSprite, createMontRoyalSprite, createWindmillSprite,
+  createSulpicianTowersSprite, createMontRoyalSprite, createWindmillSprite, createMusketShopSprite, createMusketMasterSprite,
 } from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../shared/hash.js';
@@ -925,6 +925,30 @@ const TRADER_TRIGGER_RADIUS = 16;
 const GUNSMITH_OFFSET = { x: 4, y: 11 };
 const GUNSMITH_TRIGGER_RADIUS = 20;
 
+// Gatineau only: the musket shop, mirrored off the repair shop's own
+// placement (repairShopFor above) but on the opposite side of the dock —
+// same "close to shore, different anchorY band than the procedural
+// cabins" reasoning, so it never fights the seeded layout for a footprint
+// either, and never collides with the repair shop since they're on
+// opposite sides of the dock lane.
+function musketShopFor(worldWidth) {
+  return {
+    isMusketShop: true,
+    mirror: true,
+    anchorX: dockX1(worldWidth) + 27,
+    anchorY: WATER_TOP - 20,
+    footHalfW: 13,
+    footHeight: 22,
+  };
+}
+
+// The musket master standing outside it — same "proximity alone" trigger
+// as the Montréal gunsmith, offset toward the musket rack/pelts side of
+// the shop rather than copying GUNSMITH_OFFSET's exact numbers (this
+// building's door and details sit at different local coordinates).
+const MUSKET_MASTER_OFFSET = { x: -3, y: 11 };
+const MUSKET_MASTER_TRIGGER_RADIUS = 20;
+
 function playerStartFor(worldWidth) {
   return { x: worldWidth / 2, y: WATER_TOP - 10 };
 }
@@ -952,6 +976,8 @@ const repairShopSprite = createRepairShopSprite();
 const gunShopSprite = createGunShopSprite();
 const traderSprite = createTraderSprite();
 const gunsmithSprite = createGunsmithSprite();
+const musketShopSprite = createMusketShopSprite();
+const musketMasterSprite = createMusketMasterSprite();
 const walkerFrames = [createWalkerSprite(false), createWalkerSprite(true)];
 const parkedCanoeSprite = createCanoeSprite(1);
 const treeSprites = [0, 1, 2].map(createPineTreeSprite);
@@ -964,6 +990,7 @@ const TREE_DRAW_ANCHOR = 0.72;
 function buildingSprite(b) {
   if (b.isRepairShop) return repairShopSprite;
   if (b.isGunShop) return gunShopSprite;
+  if (b.isMusketShop) return musketShopSprite;
   if (b.kind === 'church') return churchSprite;
   if (b.kind === 'seminary') return seminarySprite;
   if (b.kind === 'windmill') return montrealWindmillSprite;
@@ -1317,6 +1344,10 @@ export function createVillageScene() {
   // every other village (no gun shop, nobody to draw or range-check).
   let gunsmithPos = null;
   let wasNearGunsmith = false;
+  // The musket master outside Gatineau's own shop — same idea as
+  // gunsmithPos, null everywhere but Gatineau.
+  let musketMasterPos = null;
+  let wasNearMusketMaster = false;
   const player = { x: worldWidth / 2, y: WATER_TOP - 10 };
   // How far the camera has scrolled — always {0, 0} when worldWidth ===
   // CANVAS_WIDTH and worldTop === 0 (every village but Montreal), which is
@@ -1331,6 +1362,7 @@ export function createVillageScene() {
       isTroisRivieres = village && village.name === 'Trois-Rivieres';
       isMontreal = village && village.name === 'Montreal';
       isTadoussac = village && village.name === 'Tadoussac';
+      const isGatineau = village && village.name === 'Gatineau';
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : isQuebecCity ? QUEBEC_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
       worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : 0;
@@ -1350,6 +1382,12 @@ export function createVillageScene() {
         : isTadoussac
         ? [...buildingsForTadoussac(), repairShop]
         : [...buildingsFor(seed), repairShop];
+      // Gatineau's own musket shop is layered on top of whichever branch
+      // above ran (the plain procedural one, same as every other ordinary
+      // village) rather than replacing it with a bespoke layout the way
+      // Montréal/Québec City/Trois-Rivières/Tadoussac get — it's one extra
+      // fixed building, not a whole rebuilt town.
+      if (isGatineau) buildings = [...buildings, musketShopFor(worldWidth)];
       trees = treesClearOfBuildings(treesFor(seed, isMontreal ? MONTREAL_TREE_SPOTS : TREE_SPOTS), buildings);
       traderPos = traderPosFor(repairShop);
       reboardZone = { x0: dockX0(worldWidth), x1: dockX1(worldWidth), y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
@@ -1358,6 +1396,11 @@ export function createVillageScene() {
         ? { x: gunShop.anchorX + GUNSMITH_OFFSET.x, y: gunShop.anchorY + GUNSMITH_OFFSET.y }
         : null;
       wasNearGunsmith = false;
+      const musketShop = buildings.find((b) => b.isMusketShop) || null;
+      musketMasterPos = musketShop
+        ? { x: musketShop.anchorX + MUSKET_MASTER_OFFSET.x, y: musketShop.anchorY + MUSKET_MASTER_OFFSET.y }
+        : null;
+      wasNearMusketMaster = false;
       const start = playerStartFor(worldWidth);
       player.x = start.x;
       player.y = start.y;
@@ -1372,13 +1415,13 @@ export function createVillageScene() {
       wasNearTrader = false;
     },
 
-    // Returns { reboard, tradeRequested, gunsmithMet }: reboard is true the
-    // moment the player steps into the reboard zone; tradeRequested and
-    // gunsmithMet are each true for one frame only, the moment the player
-    // first comes within range of the repair trader / the Montréal gunsmith
-    // (not held true the whole time they stand there, so game.js can treat
-    // each as a single action per approach rather than repeating it every
-    // frame).
+    // Returns { reboard, tradeRequested, gunsmithMet, musketMasterMet }:
+    // reboard is true the moment the player steps into the reboard zone;
+    // the other three are each true for one frame only, the moment the
+    // player first comes within range of the repair trader / the Montréal
+    // gunsmith / Gatineau's musket master (not held true the whole time
+    // they stand there, so game.js can treat each as a single action per
+    // approach rather than repeating it every frame).
     update(dt, keys) {
       let dx = 0, dy = 0;
       if (keys.left) dx -= 1;
@@ -1437,7 +1480,14 @@ export function createVillageScene() {
         wasNearGunsmith = nearGunsmith;
       }
 
-      return { reboard, tradeRequested, gunsmithMet };
+      let musketMasterMet = false;
+      if (musketMasterPos) {
+        const nearMusketMaster = Math.hypot(player.x - musketMasterPos.x, player.y - musketMasterPos.y) < MUSKET_MASTER_TRIGGER_RADIUS;
+        musketMasterMet = nearMusketMaster && !wasNearMusketMaster;
+        wasNearMusketMaster = nearMusketMaster;
+      }
+
+      return { reboard, tradeRequested, gunsmithMet, musketMasterMet };
     },
 
     draw(ctx) {
@@ -1680,6 +1730,10 @@ export function createVillageScene() {
         ...(gunsmithPos ? [{
           y: gunsmithPos.y,
           draw: (c) => c.drawImage(gunsmithSprite, gunsmithPos.x - gunsmithSprite.width / 2, gunsmithPos.y - gunsmithSprite.height + 2),
+        }] : []),
+        ...(musketMasterPos ? [{
+          y: musketMasterPos.y,
+          draw: (c) => c.drawImage(musketMasterSprite, musketMasterPos.x - musketMasterSprite.width / 2, musketMasterPos.y - musketMasterSprite.height + 2),
         }] : []),
         // The ferryman waiting at Le Passage de Longueuil — purely
         // decorative (no trigger, unlike the trader/gunsmith), reusing

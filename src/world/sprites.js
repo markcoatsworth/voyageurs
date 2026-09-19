@@ -854,6 +854,173 @@ export function createGunsmithSprite() {
   });
 }
 
+// The armourer's post at Gatineau — the medium gun (the musket, "X") comes
+// from here, not Montréal. Deliberately NOT a smaller copy of Montréal's
+// coursed-stone armoury: this is the winter camp at the head of the
+// Chasse-galerie, so it's built the same log-cabin way every cabin here is
+// (see createCabinSprite), with three cues marking it as the gun shop
+// instead of a house: a mossy shake roof dusted with snow along the ridge
+// (no other building here has snow on it — a wintering post, not a summer
+// town), a musket rack by the door (the same read-at-a-glance cue the
+// Montréal shop uses), and a couple of fur pelts drying against the wall —
+// the fur trade this whole camp exists for.
+const MUSKET_SHOP_PALETTE = { roof: '#4a5348', roofDark: '#2c332a', roofLight: '#6b7864', wall: '#5c4530', wallDark: '#40301f', wallLight: '#77593d' };
+
+export function createMusketShopSprite() {
+  const w = 36, h = 40;
+  const pal = MUSKET_SHOP_PALETTE;
+
+  return makeSprite(w, h, (ctx) => {
+    const cx = w / 2 - 3;
+    const wallW = 24;
+    const wallH = 21;
+    const wallTop = h - wallH - 4;
+    const wallBot = wallTop + wallH;
+
+    groundShadow(ctx, cx, h - 4, wallW / 2 + 3, 4);
+
+    // log wall
+    ctx.fillStyle = pal.wallDark;
+    ctx.fillRect(cx - wallW / 2 - 1, wallTop - 1, wallW + 2, wallH + 2);
+    ctx.fillStyle = pal.wall;
+    ctx.fillRect(cx - wallW / 2, wallTop, wallW, wallH);
+    ctx.strokeStyle = pal.wallDark;
+    ctx.lineWidth = 1;
+    for (let ly = wallTop + 3; ly < wallBot; ly += 3.5) {
+      ctx.beginPath();
+      ctx.moveTo(cx - wallW / 2, ly);
+      ctx.lineTo(cx + wallW / 2, ly);
+      ctx.stroke();
+    }
+    ctx.fillStyle = pal.wallLight;
+    ctx.fillRect(cx - wallW / 2, wallTop, 2, wallH);
+
+    // door
+    ctx.fillStyle = '#20160c';
+    ctx.fillRect(cx - 3, wallBot - 9, 6, 9);
+
+    // sign board over the door: crossed muskets, not the repair shop's
+    // crossed paddles
+    ctx.fillStyle = '#3f2b1a';
+    ctx.fillRect(cx - 6, wallTop + 4, 12, 7);
+    ctx.fillStyle = '#c9a86a';
+    ctx.fillRect(cx - 5, wallTop + 5, 10, 5);
+    ctx.strokeStyle = '#5a3d24';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(cx - 4, wallTop + 9); ctx.lineTo(cx + 4, wallTop + 5.5);
+    ctx.moveTo(cx + 4, wallTop + 9); ctx.lineTo(cx - 4, wallTop + 5.5);
+    ctx.stroke();
+
+    // fur pelts drying against the wall, right of the door
+    for (const [dx, dy, r] of [[7, -2, 3.6], [10.5, 1, 3]]) {
+      ctx.fillStyle = '#7a5230';
+      ctx.beginPath();
+      ctx.ellipse(cx + dx, wallBot - 6 + dy, r, r * 1.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#5c3c22';
+      ctx.beginPath();
+      ctx.ellipse(cx + dx, wallBot - 6 + dy, r * 0.6, r * 0.9, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // musket rack, left of the door — same cue the Montréal gun shop uses
+    for (let i = 0; i < 3; i++) {
+      const bx = cx - wallW / 2 - 3 + i * 2.6;
+      ctx.strokeStyle = i % 2 ? '#9a9aa2' : '#82828c';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(bx, wallBot - 1);
+      ctx.lineTo(bx + 2, wallTop + 5);
+      ctx.stroke();
+      ctx.strokeStyle = '#4a3220';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(bx, wallBot - 1);
+      ctx.lineTo(bx + 0.9, wallBot - 4);
+      ctx.stroke();
+    }
+
+    // roof — mossy shake, snow along the ridge
+    const roofW = wallW + 10;
+    const roofH = 19;
+    const roofTop = wallTop - roofH + 6;
+    triangle(ctx, cx, roofTop - 4, roofTop + 2, roofW / 2 - 1, pal.roofDark);
+    ctx.fillStyle = pal.roofDark;
+    ctx.fillRect(cx - roofW / 2, roofTop, roofW, roofH);
+    ctx.fillStyle = pal.roof;
+    ctx.fillRect(cx - roofW / 2 + 1, roofTop + 1, roofW - 2, roofH - 2);
+    ctx.fillStyle = pal.roofLight;
+    ctx.fillRect(cx - 1, roofTop + 1, 2, roofH - 2);
+    ctx.fillStyle = '#e8ecec';
+    ctx.fillRect(cx - roofW / 2 + 1, roofTop + 1, roofW - 2, 2.2);
+
+    // stone chimney with a thin plume of smoke
+    ctx.fillStyle = '#6b6a63';
+    ctx.fillRect(cx + roofW / 2 - 8, roofTop - 2, 4, 6);
+    ctx.fillStyle = '#8a887c';
+    ctx.fillRect(cx + roofW / 2 - 8, roofTop - 2, 1.5, 6);
+    for (const [dx, dy, r, a] of [[0, -1, 1.6, 0.4], [1.5, -4, 2, 0.28]]) {
+      ctx.fillStyle = `rgba(210,212,214,${a})`;
+      ctx.beginPath();
+      ctx.arc(cx + roofW / 2 - 6 + dx, roofTop - 2 + dy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+// The musket master at Gatineau's own shop — read at a glance as backwoods
+// fur-trade, not the Montréal gunsmith's regimental blue coat and tricorne:
+// a fur toque, a fringed hide coat with a sash, and the musket slung
+// diagonally across the back rather than held upright at his side.
+export function createMusketMasterSprite() {
+  const w = 16, h = 26;
+  return makeSprite(w, h, (ctx) => {
+    const cx = 7;
+    groundShadow(ctx, cx, h - 1, 4.5, 2);
+
+    // musket slung diagonally across the back
+    ctx.strokeStyle = '#4a3220';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 4, 17);
+    ctx.lineTo(cx + 6, 4);
+    ctx.stroke();
+    ctx.strokeStyle = '#8c8c94';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx + 1, 11);
+    ctx.lineTo(cx + 6, 4);
+    ctx.stroke();
+
+    // legs — hide leggings into moccasins
+    ctx.fillStyle = '#5c4028';
+    ctx.fillRect(cx - 3, 18, 2.6, 6);
+    ctx.fillRect(cx + 0.5, 18, 2.6, 6);
+
+    // fringed hide coat
+    ctx.fillStyle = '#7a5230';
+    ctx.fillRect(cx - 5, 7, 10, 13);
+    ctx.fillStyle = '#8f6a42';
+    ctx.fillRect(cx - 4, 8, 8, 11);
+    ctx.fillStyle = '#5c3c22';
+    for (let i = 0; i < 5; i++) {
+      ctx.fillRect(cx - 4 + i * 2, 18.5, 1, 2);
+    }
+    // sash
+    ctx.fillStyle = '#8a2a2a';
+    ctx.fillRect(cx - 5, 12, 10, 2);
+
+    // head + fur toque
+    ctx.fillStyle = '#c98a5e';
+    ctx.fillRect(cx - 3, 3, 6, 5);
+    ctx.fillStyle = '#3f2f22';
+    ctx.fillRect(cx - 3.6, 1.4, 7.2, 3);
+    ctx.fillStyle = '#5a4632';
+    ctx.fillRect(cx - 3.6, 0.4, 7.2, 1.6);
+  });
+}
+
 // Québec City's own building set (villages.js/villageScene.js special-
 // case it by name) — meant to read as a real 1790s colonial town at a
 // glance, not a bigger version of the fur-trade villages' log cabins.
