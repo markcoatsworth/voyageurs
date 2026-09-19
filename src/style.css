@@ -666,20 +666,21 @@ button:hover {
 }
 
 /* Weapon controls — the mirror image of #touch-dpad on the left edge, shown
-   only once you've picked up a gun (game.js toggles .hidden). One Z button
-   for now; more slots stack below it as further guns unlock. Same
-   per-input-type treatment as the steer pad: a real tappable button on
-   touch, a light-up "how to play" keycap on desktop where the keyboard's Z
-   is the real control. left/top are set by main.js's resize() so it stays
-   level with the move controls opposite it; the values here are the
-   before-JS fallback. */
+   only once you've picked up a gun (game.js toggles .hidden). Z first, more
+   slots lining up beside it as further guns unlock (row, not column —
+   easier to glance across for which guns are live than to scan down a
+   stack). Same per-input-type treatment as the steer pad: a real tappable
+   button on touch, a light-up "how to play" keycap on desktop where the
+   keyboard's Z is the real control. left/top are set by main.js's resize()
+   so it stays level with the move controls opposite it; the values here are
+   the before-JS fallback. */
 #weapon-dpad {
   position: fixed;
   left: 20px;
   bottom: 20px;
   z-index: 5;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 10px;
 }
 
