@@ -159,10 +159,23 @@ html, body {
   background: #d66a45;
 }
 
-/* Only shown during the Château Gauntlet (bossfights/blockade.js) — a red readout
-   so it reads as an alert/combat status, distinct from the neutral speed
-   and health bars above it. Same wrap/fill structure as those on purpose:
-   one consistent HUD-bar language, not a bespoke widget. */
+/* The Château Gauntlet/Pursuit progress (bossfights/blockade.js) — a red
+   readout so it reads as an alert/combat status, distinct from the neutral
+   speed and health bars above it. Same wrap/fill structure as those, and
+   the same centred-top position as #hud-diable below (the two never show
+   at once — different segments) rather than a bespoke placement. */
+#hud-blockade {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
 #hud-blockade-label {
   font-size: 9px;
   color: #e6a0a0;

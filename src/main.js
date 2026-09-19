@@ -373,6 +373,7 @@ const ui = {
   hudSpeedFill: document.getElementById('hud-speed-fill'),
   hudHealthFill: document.getElementById('hud-health-fill'),
   hudBlockade: document.getElementById('hud-blockade'),
+  hudBlockadeLabel: document.getElementById('hud-blockade-label'),
   hudBlockadeFill: document.getElementById('hud-blockade-fill'),
   hudDiable: document.getElementById('hud-diable'),
   hudDiableFill: document.getElementById('hud-diable-fill'),

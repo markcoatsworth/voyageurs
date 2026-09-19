@@ -86,6 +86,16 @@
       <div id="hud-diable-wrap"><div id="hud-diable-fill"></div></div>
     </div>
 
+    <!-- The British Blockade/Pursuit progress, shown across both phases
+         (game.js drives it from blockadePct) — the label text itself
+         switches between the two so it always names whichever phase is
+         actually live. Never on screen at the same time as #hud-diable
+         (different segments), so it reuses the same centred-top slot. -->
+    <div id="hud-blockade" class="hidden">
+      <div id="hud-blockade-label">BRITISH BLOCKADE</div>
+      <div id="hud-blockade-wrap"><div id="hud-blockade-fill"></div></div>
+    </div>
+
     <div id="damage-flash"></div>
 
     <div id="title-screen" class="screen intro">

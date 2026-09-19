@@ -1834,5 +1834,23 @@ export class Game {
     } else {
       this.ui.hudDiable?.classList.add('hidden');
     }
+
+    // The Château Gauntlet/Pursuit bar — one readout across both phases of
+    // the encounter (blockadePct already covers both; see blockade.js's
+    // update()), the label swapping so it always names whichever phase is
+    // actually live: "BRITISH BLOCKADE" while closing on the frigate
+    // (progressPct = how much of the gap's been closed), "BRITISH PURSUIT"
+    // once the chase starts (progressPct = CHASE_HOLD_TIME survived — see
+    // that constant's own comment; sinking the ship ends the fight outright
+    // rather than showing up as a second way to fill this bar).
+    if (this.blockadePct != null) {
+      this.ui.hudBlockade?.classList.remove('hidden');
+      if (this.ui.hudBlockadeFill) this.ui.hudBlockadeFill.style.width = `${clamp(this.blockadePct, 0, 100)}%`;
+      if (this.ui.hudBlockadeLabel) {
+        this.ui.hudBlockadeLabel.textContent = this.blockade.isChaseHolding() ? 'BRITISH PURSUIT' : 'BRITISH BLOCKADE';
+      }
+    } else {
+      this.ui.hudBlockade?.classList.add('hidden');
+    }
   }
 }
