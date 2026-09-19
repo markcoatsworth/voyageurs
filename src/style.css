@@ -720,13 +720,20 @@ button:hover {
   box-shadow: none;
 }
 
-/* Desktop: the keyboard's Z is the real control, so this is a labelled
+/* Desktop: the keyboard's Z/X are the real controls, so this is a labelled
    keycap cue filling the left sidebar — sized off the same --key main.js
    computes for the MOVE cue (set on :root there so both cues read it), with
-   a "FIRE" caption above it mirroring the move cue's "MOVE". */
+   a "FIRE" caption above it mirroring the move cue's "MOVE". Scaled up 1.3x
+   over the move keycaps' own size (reported as easy to miss entirely —
+   guns are less self-explanatory than arrow keys, so they get the extra
+   emphasis the move cue doesn't need) rather than left at 1:1.
+   Sized off the SAME --key regardless of how many guns are actually
+   unlocked (one key or two) — each key visible right now (game.js's
+   syncWeaponControls() toggles them independently) is exactly this size,
+   not shrunk to fit more of them into the column. */
 @media (hover: hover) and (pointer: fine) {
   #weapon-dpad {
-    --k: var(--key, 34px);
+    --k: calc(var(--key, 34px) * 1.3);
   }
   .weapon-key {
     width: var(--k);

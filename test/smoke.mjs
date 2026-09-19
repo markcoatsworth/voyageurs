@@ -925,6 +925,19 @@ await step('rideau: a ?start= cheat straight onto the leg still gets the pistol'
   if (g.game.ui.weaponPad.classList.contains('hidden')) throw new Error('weapon pad still hidden after the auto-grant');
 });
 
+await step('rideau: a ?start= cheat straight onto the leg also gets the musket', () => {
+  // Same reasoning as the pistol backstop just above, one gun over — the
+  // musket used to be Gatineau-shop-only, so a straight cheat onto the
+  // Rideau (or just paddling past Gatineau's dock without stopping) left
+  // the British Blockade's chase ship unshootable. Reported directly: the
+  // second fire button never showed up after Gatineau.
+  const g = newGame('rideau', SEGMENT_SHAPE_OFFSET.rideau + 3);
+  if (g.game.weapons.has('musket')) throw new Error('musket already unlocked before the first frame ran');
+  g.game.update(1 / 30);
+  if (!g.game.weapons.has('musket')) throw new Error('landed on the Rideau via a cheat start and never got the musket');
+  if (g.game.ui.fireXBtn.classList.contains('hidden')) throw new Error('musket fire button (X) still hidden after the auto-grant');
+});
+
 // --- scenario 5: a village visit ----------------------------------------
 
 await step('village: dock, walk, trade, cast off', () => {

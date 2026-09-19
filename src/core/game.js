@@ -759,9 +759,13 @@ export class Game {
   }
 
   // Gatineau's own musket shop — walk up to the musket master standing
-  // outside and the medium gun is yours (villageScene.js fires
+  // outside and the medium gun is yours early (villageScene.js fires
   // musketMasterMet the same one-per-approach way gunsmithMet already
-  // works for the pistol). No-op once you have it.
+  // works for the pistol). Cosmetic now, not the only way in: the
+  // guaranteed-musket check further down in update() grants it regardless
+  // once you're on the Rideau, so skipping the shop just means picking it
+  // up a bit later rather than not having it for the Blockade fight. No-op
+  // once you have it either way.
   acquireMusket() {
     if (this.weapons.has('musket')) return;
     this.weapons.unlock('musket');
@@ -1018,6 +1022,19 @@ export class Game {
     if (((this.segment === 'lawrenceWest' && this.flowDistance > MONTREAL_FLOW_DISTANCE)
       || this.segment === 'rideau') && !this.weapons.has('pistol')) {
       this.acquirePistol();
+    }
+
+    // Guaranteed musket on the Rideau — same reasoning as the pistol
+    // fallback just above, one gun over. Visiting Gatineau's musket master
+    // is cosmetic now, not load-bearing: the British Blockade's chase ship
+    // is shootable (bossfights/blockade.js), and a player who paddled
+    // straight past the dock shouldn't be locked out of that just for
+    // skipping a shop. this.segment === 'rideau' alone is sufficient (unlike
+    // the pistol's own two-part condition) — there's no way onto this
+    // segment, normal play or any ?start= cheat, that isn't already past
+    // Gatineau.
+    if (this.segment === 'rideau' && !this.weapons.has('musket')) {
+      this.acquireMusket();
     }
 
     let steerInput = 0;
