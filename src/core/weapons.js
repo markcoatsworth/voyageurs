@@ -106,17 +106,39 @@ export function createWeapons() {
         // shadow — same screen-space offset the canoe sprite gets in game.js.
         const y = screen.y - (b.altitude || 0) * PIXELS_PER_UNIT;
 
-        // Pistol: a small yellow/orange flash. Musket: a bigger, heavier-
-        // looking reddish ball — reads as the medium gun at a glance,
-        // moving/hitting identically to the pistol's shot for now (see
-        // fire()'s own comment).
+        // Pistol: a small yellow spark, nothing trailing it — reads as
+        // light and quick. Musket: a dark lead ball behind a hot corona,
+        // dragging a fading smoke trail — a bigger radius alone (the old
+        // version) still read as "the same spark, slightly bigger" at a
+        // glance, so the musket now gets its own silhouette, not just its
+        // own size. Bullets only ever move in +flowDistance (see fire()'s
+        // own comment), i.e. straight up-screen, so "behind" the ball is
+        // just a fixed downward offset — no angle math needed.
         ctx.save();
         if (b.type === 'musket') {
-          ctx.fillStyle = '#ff8844';
+          for (let i = 3; i >= 1; i--) {
+            ctx.globalAlpha = 0.22 * i;
+            ctx.fillStyle = '#5a5148';
+            ctx.beginPath();
+            ctx.arc(screen.x, y + i * 3.2, 3.4 - i * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
           ctx.shadowColor = '#ff4400';
-          ctx.shadowBlur = 6;
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = 'rgba(255,110,30,0.55)';
+          ctx.beginPath();
+          ctx.arc(screen.x, y, 6.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 4;
+          ctx.fillStyle = '#2a2622';
           ctx.beginPath();
           ctx.arc(screen.x, y, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#6b6258';
+          ctx.beginPath();
+          ctx.arc(screen.x - 1.3, y - 1.3, 1.4, 0, Math.PI * 2);
           ctx.fill();
         } else {
           ctx.fillStyle = '#ffdd44';
