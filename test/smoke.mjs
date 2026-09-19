@@ -58,7 +58,7 @@ const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
 const { getDockHit } = await import('../src/world/villages.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
-const { SHIP_FLOW_DISTANCE, CHASE_DISTANCE } = await import('../src/bossfights/blockade.js');
+const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
 const { DIABLE_FLOW_DISTANCE, HP_MAX: DIABLE_HP_MAX } = await import('../src/bossfights/diable.js');
 const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
@@ -282,16 +282,20 @@ await step('blockade: approach -> pursuit -> escape -> on to Kingston', () => {
   // Part 2 — the pursuit MUST resolve (the bug: a boat slower than the chase
   // ship never "got ahead", so the chase and its Rule Britannia ran
   // forever). Drop the canoe already through the frigate's hull depth and
-  // lined up in the gap, so this exercises the chase, not the gauntlet.
+  // lined up in the gap, so this exercises the chase, not the gauntlet. The
+  // chase is a held arena now (blockade.js's own opening comment) — no
+  // amount of paddling ends it early, only CHASE_HOLD_TIME surviving it (or
+  // sinking the ship, not exercised by this no-combat scenario) does, so
+  // the budget below has to clear that floor, not just a travel distance.
   const g = newGame('rideau', SHIP_FLOW_DISTANCE + 2);
   g.game.lateralOffset = widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // gap centre
   let clearedFrigate = false;
   let escaped = false;
-  for (let i = 0; i < 6000 && !escaped; i++) {
+  for (let i = 0; i < 7000 && !escaped; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     g.game.update(1 / 30);
-    if (g.game.flowDistance > SHIP_FLOW_DISTANCE + 5) clearedFrigate = true;
+    if (g.game.blockade.isChaseHolding()) clearedFrigate = true;
     if (clearedFrigate && g.game.blockadePct === null) escaped = true;
     if (g.game.state === 'gameover') throw new Error('died in the chase with a clear lane — blockade too harsh');
   }
@@ -327,7 +331,7 @@ await step('blockade: shooting the chase ship sinks it', () => {
     g.input.state.up = true;
     g.game.health = 100;
     g.game.update(1 / 30);
-    if (g.game.flowDistance > SHIP_FLOW_DISTANCE + 5 && g.game.blockadePct !== null) inChase = true;
+    if (g.game.blockade.isChaseHolding()) inChase = true;
   }
   if (!inChase) throw new Error('never entered the chase phase to test the gunfight');
 
@@ -339,8 +343,15 @@ await step('blockade: shooting the chase ship sinks it', () => {
   // that only works because it knows the ship's exact position out of band
   // (debugChaseShipPosition() is the same kind of test-only accessor
   // diable.js's debugCentreX() already provides).
+  // Budget well under CHASE_HOLD_TIME (210s) — the chase is a held arena
+  // now (blockade.js's own opening comment), so if the gunnery genuinely
+  // isn't sinking the ship within a couple minutes, that's a real
+  // regression to catch, not something the 210s timeout should quietly
+  // paper over.
   let resolved = false;
-  for (let i = 0; i < 4000 && !resolved && g.game.blockadePct !== null; i++) {
+  let sunk = false;
+  let frames = 0;
+  for (; frames < 4000 && !resolved && g.game.blockadePct !== null; frames++) {
     g.input.state.up = true;
     g.game.health = 100;
     const pos = g.game.blockade.debugChaseShipPosition();
@@ -349,19 +360,17 @@ await step('blockade: shooting the chase ship sinks it', () => {
     g.input.state.right = err < -0.3;
     if (Math.abs(err) < 1.5 && pos.flowDistance > g.game.flowDistance - 2) g.input.onWeaponFire?.('pistol');
     g.game.update(1 / 30);
+    // game.js's own update() already consumes blockade.consumeJustSunk()
+    // internally (to fire its own banner/SFX), so it always reads false by
+    // the time this loop gets a turn — the banner text it leaves behind is
+    // the only signal left to tell a sinking from a timeout from out here.
+    if (g.game.ui.milestoneBanner.textContent.includes('GOING DOWN')) sunk = true;
     if (g.game.state === 'gameover') throw new Error('died trying to shoot down the chase ship');
     if (g.game.blockadePct === null) resolved = true;
   }
   if (!resolved) throw new Error('the chase never resolved (sunk or escaped) within budget');
-  // Confirm this was actually a sinking, not the distance-escape from the
-  // scenario above happening to also satisfy the same exit condition —
-  // sinking ends the chase well short of the full CHASE_DISTANCE made good,
-  // since it's an immediate resolution on the kill shot, not an outrun.
-  const madeGood = g.game.flowDistance - SHIP_FLOW_DISTANCE;
-  if (madeGood > CHASE_DISTANCE) {
-    throw new Error(`resolved via distance (${madeGood | 0}/${CHASE_DISTANCE}) instead of sinking — the gunfight itself was never exercised`);
-  }
-  notes.push(`  note blockade: sank the chase ship at ${madeGood | 0}/${CHASE_DISTANCE} made good`);
+  if (!sunk) throw new Error('resolved via the CHASE_HOLD_TIME timeout instead of sinking — the gunfight itself was never exercised');
+  notes.push(`  note blockade: sank the chase ship after ${(frames / 30).toFixed(1)}s of gunnery`);
 });
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---

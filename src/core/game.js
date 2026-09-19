@@ -666,7 +666,10 @@ export class Game {
       this.takeDamage(BANK_DAMAGE);
       this.invulnTimer = BANK_INVULN_TIME;
     } else if (entry.type === 'cannon') {
-      this.takeDamage(CANNON_DAMAGE);
+      // entry.damage overrides for the Pursuit chase phase's own, lighter
+      // cannon (bossfights/blockade.js's CHASE_CANNON_DAMAGE) — the approach
+      // frigate's broadside still hits for the full CANNON_DAMAGE below.
+      this.takeDamage(entry.damage ?? CANNON_DAMAGE);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'shiphull') {
       this.takeDamage(SHIP_HULL_DAMAGE);
@@ -994,6 +997,15 @@ export class Game {
         // Bounce off the hull: strong backward push so you can escape
         this.speed = -8 * speedScale;
         this.handleHit({ type: 'shiphull' });
+      }
+      // Pursuit's own held arena, same pattern as Diable's below — once the
+      // frigate is cleared, forward progress is clamped at the point the
+      // chase began until it resolves (sunk or CHASE_HOLD_TIME survived —
+      // see blockade.js's own opening comment for why a plain "paddle past
+      // it" resolution couldn't be stretched past about a minute no matter
+      // how the fight itself was tuned).
+      if (this.blockade.isChaseHolding()) {
+        proposedFlowDistance = this.blockade.getChaseHoldFlowDistance();
       }
     }
 
@@ -1402,10 +1414,12 @@ export class Game {
         this.showBanner('GUNS SILENCED — find the gap!');
       }
       if (this.blockade.consumeJustCleared()) {
-        // Past the frigate itself — drop Rule Britannia back to the normal
-        // shuffle here rather than blaring it through the whole pursuit. The
-        // chase is a footnote now, not the boss.
-        this.music?.endBossTrack();
+        // Past the frigate itself, into the chase — cut from Rule Britannia
+        // to the Pursuit's own cue (music.js's PURSUIT_TRACK) rather than
+        // either blaring the frigate's track through the chase too or
+        // dropping to silence/the shuffle. The chase is its own fight now,
+        // not a footnote of the approach.
+        this.music?.playPursuitTrack();
       }
       // Catch-all: the instant the encounter is no longer active at all —
       // approach abandoned, chase escaped, whatever — make sure the boss
@@ -1418,7 +1432,8 @@ export class Game {
       if (this.blockade.consumeJustStartedChase()) {
         this.showBanner('PURSUIT');
         console.log('[GAME] Chase phase started. Canoe visible:', this.canoeVisible, 'Position:', this.flowDistance);
-        // Music already playing from blockade - don't restart
+        // Music already cut over to PURSUIT_TRACK above (consumeJustCleared
+        // fires the same frame, processed first) — nothing to start here.
       }
       if (this.blockade.consumeJustSunk()) {
         console.log('[GAME] Chase ship sunk, ending boss track');

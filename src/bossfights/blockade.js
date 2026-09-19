@@ -16,6 +16,24 @@
 // outrunning it — "a fight where I shoot with guns, instead of just dodge
 // and evade."
 //
+// The chase phase (post-frigate) is a HELD encounter, same pattern as
+// bossfights/diable.js's arena: game.js clamps flowDistance at
+// getChaseHoldFlowDistance() while isChaseHolding() is true, so it resolves
+// on CHASE_HOLD_TIME survived or the hull sunk, never on distance covered.
+// It didn't start that way — the chase used to just end once you'd made
+// CHASE_DISTANCE units of headway past the frigate, the same "outrun it"
+// shape as the approach's own gap-finding. Reported through several rounds
+// as "impossible," then "still too difficult," and finally "stretch this to
+// 3-4 minutes" — that last one is what broke the distance model for good:
+// Newboro's dock sits only ~155 units past the frigate (see
+// SHIP_D_OFFSET's own comment below), capping CHASE_DISTANCE at 150, and
+// the Rideau's own ambient current alone covers that in about a minute with
+// zero input at all. No combination of damage/speed/HP tuning can stretch a
+// distance-gated fight past what the current carries you through in ~60s —
+// only actually holding position, the way Diable's arena already does,
+// can. CHASE_DISTANCE is kept (see its own comment) for the unrelated span
+// it still legitimately describes, not as the win condition any more.
+//
 // It used to sit just past Québec City; it was moved onto the run into
 // Kingston (a British naval station in this era — the frigate fits the
 // harbour approach better than the St. Lawrence capital). Québec City will
@@ -142,8 +160,32 @@ const BULLET_DAMAGE_TO_HULL = 8; // 15 solid hits silences the guns
 const HULL_HIT_D_TOLERANCE = 1.5;
 const SPARK_LIFETIME = 0.35;
 
-export const CHASE_DISTANCE = 150; // how far you must get ahead to escape
-const CHASE_VOLLEY_INTERVAL = 1.3; // bow cannon fires rapidly
+// Reported as "impossible," then "still too difficult" through two rounds
+// of tone-down — landing shots on a moving target while also dodging its
+// return fire, at anything close to the approach frigate's own
+// CANNON_DAMAGE/fire rate, left no margin for the learning curve of
+// tracking a swinging ship. Cut hard this pass, not incrementally: a third
+// of the original 12-damage broadside, and — see CHASE_VOLLEY_INTERVAL
+// below — well under half the original fire rate.
+const CHASE_CANNON_DAMAGE = 4;
+// No longer the chase's win condition (see the module's own opening
+// comment on why a distance-gated chase couldn't be stretched past ~60s) —
+// kept for the two things it still legitimately describes: the real ceiling
+// on how much "clear water" this whole encounter can occupy before
+// Newboro's own dock (~155 units past SHIP_FLOW_DISTANCE — going much past
+// 150 here would put the chase on top of it), and the span game.js silences
+// ambient rapids across / auto-resolves a downstream ?start= cheat past.
+export const CHASE_DISTANCE = 150;
+const CHASE_VOLLEY_INTERVAL = 3.2; // was 2.2, then 1.6, then 1.3 — under half the original rate now
+// The chase's real win condition now: survive this long, held in place (see
+// the module's own opening comment), and it's called off — same idea as
+// simply outrunning it used to be, just time-gated instead of
+// distance-gated so it can't be resolved in under a minute by construction.
+// 210s (3.5min) — the middle of the requested 3-4 minute range. Sinking the
+// ship (CHASE_HULL_HP below) still ends it immediately for a player who'd
+// rather fight than wait it out — a skill-based shortcut, not a
+// replacement for this floor.
+const CHASE_HOLD_TIME = 210;
 
 // Circling pursuit: reported as "floats next to me instead of engaging" —
 // the old chase just held a straight trailing distance directly behind on
@@ -163,14 +205,35 @@ const CHASE_VOLLEY_INTERVAL = 1.3; // bow cannon fires rapidly
 // behind to well out in front, so "chasing from behind" becomes a real
 // naval pass, cutting across the bow to bring its guns to bear, rather
 // than a boat that's mathematically present but never actually visible.
-const CHASE_ORBIT_PERIOD = 3.4; // seconds per full lap
-const CHASE_ORBIT_RADIUS_X = 6.5; // world units of lateral swing around the canoe
-const CHASE_ORBIT_RADIUS_Z = 5; // world units the orbit swings ahead/behind CHASE_ANCHOR_LEAD
-// Where the orbit centers along the flow axis, relative to the player —
-// negative means ahead. With RADIUS_Z=5 this gives a gap (see `gap` below)
-// ranging from 8 units ahead (fully on screen, near the top) to 2 units
-// behind (still on screen, near the bottom) — never the ~4+ units behind
-// that used to vanish under the canvas edge.
+// Reported again once the ship *was* reliably visible: "too chaotic... a
+// random mess that screams all over the interface" — not "I can't see it"
+// any more but "I can't track or aim at it." Root cause was the full circle
+// itself: half of every lap swung the ship into the "behind" half of the
+// orbit (down toward CHASE_ANCHOR_LEAD - RADIUS_Z, i.e. as close as 2 units
+// behind — see the still-accurate history above on how little screen room
+// that leaves), so twice a lap it shrank toward the bottom edge and swelled
+// back out, on top of cutting side to side the whole time — a target that's
+// simultaneously changing range, side, and size doesn't read as "a ship to
+// shoot," it reads as noise. Fixed by keeping the forward offset one-signed:
+// orbitForward in update() below now runs 0..RADIUS_Z (a bob, not a swing),
+// so the ship only ever moves *further* ahead of CHASE_ANCHOR_LEAD and back,
+// never behind — always on screen, always closing/receding in one
+// predictable rhythm. Slowed down too (3.4s -> the current value) so that
+// rhythm reads as a pattern instead of a blur, and the lateral throw trimmed
+// a little (6.5 -> 5.5) so it swings less often into CHASE_BANK_MARGIN's
+// hard clamp — a smooth sine hitting a clamp reads as a snap, not motion,
+// and was adding its own jerk on top of the orbit's.
+// Slowed and tightened again — reported as "slow down the speed of that
+// boat" even after the first slowdown (3.4s -> 5.2s) and trim (6.5 -> 5.5)
+// above. Nearly double the period again, and both radii trimmed further —
+// a gentle, easy-to-predict bob rather than a boat that's constantly on
+// the move.
+const CHASE_ORBIT_PERIOD = 9; // was 5.2, then 3.4
+const CHASE_ORBIT_RADIUS_X = 3; // was 5.5, then 4
+const CHASE_ORBIT_RADIUS_Z = 4; // was 5
+// Where the orbit's forward bob starts from, relative to the player — the
+// ship's actual lead now ranges CHASE_ANCHOR_LEAD..CHASE_ANCHOR_LEAD+RADIUS_Z
+// (3 to 8 units ahead), always in front, never behind.
 const CHASE_ANCHOR_LEAD = 3;
 // The ship's position is computed directly from the player's own current
 // flowDistance every frame (see update()) rather than tracked through a
@@ -209,15 +272,23 @@ const CHASE_SHIP_LENGTH_HALF = 2.5;
 // simply outrunning it (madeGood/CHASE_DISTANCE below still works too —
 // this is an additional way to win the encounter, not a replacement).
 // Same per-hit damage as the approach frigate's own hull (BULLET_DAMAGE_
-// TO_HULL) for consistency, but a smaller pool (8 hits vs the approach
-// hull's 15) — a small, moving, fast target is already a harder shot to
-// land than the approach's fixed lane, so it shouldn't also demand as
-// many hits once you do connect.
-const CHASE_HULL_HP = 64;
+// TO_HULL) for consistency. Raised well past the two earlier tone-down
+// passes (64, then 40) once those turned out to be solving the wrong
+// problem: CHASE_DISTANCE (150, its own real ceiling — see that constant's
+// own comment) plus the segment's own ambient current mean simply drifting
+// resolves the encounter within about a minute no matter what this pool is
+// — so a low HP made standing and fighting trivially fast instead of making
+// the *encounter* longer. 200 (25 hits) makes actually sinking it a real,
+// sustained dogfight for a player who engages rather than flees, without
+// this alone being able to stretch the whole encounter past what
+// CHASE_DISTANCE/the current already cap it at.
+const CHASE_HULL_HP = 200;
 // Wider than HULL_HIT_D_TOLERANCE (the stationary frigate's own, smaller
 // tolerance) because the target itself is moving every frame here, not
-// just the bullet crossing a fixed band.
-const CHASE_HULL_D_TOLERANCE = 2.2;
+// just the bullet crossing a fixed band. Loosened further (2.2 -> 3) in the
+// same pass as CHASE_HULL_HP — a near-miss on a swinging target should
+// still land.
+const CHASE_HULL_D_TOLERANCE = 3;
 
 export function createBlockade() {
   // null until the encounter first activates — decided once, right then
@@ -245,6 +316,13 @@ export function createBlockade() {
   let chaseShipWorldX = 0; // ditto, lateral position
   let chaseEscaped = false;
   let justStartedChase = false;
+  // Held-arena state (see the module's own opening comment on why the chase
+  // is time-gated, not distance-gated). chaseHoldFlowDistance is captured
+  // once, the instant the chase starts — game.js clamps flowDistance there
+  // every frame isChaseHolding() is true, same pattern as diable.js's own
+  // held arena.
+  let chaseHoldFlowDistance = 0;
+  let chaseHoldT = 0;
   let muzzleFlashes = [];
   // Shootable hull: separate pool from the approach frigate's hullHP above
   // (a different ship, a different fight) — see CHASE_HULL_HP's own comment.
@@ -274,6 +352,8 @@ export function createBlockade() {
     chaseHullHP = CHASE_HULL_HP;
     chaseSunk = false;
     justSunk = false;
+    chaseHoldFlowDistance = 0;
+    chaseHoldT = 0;
   }
 
   return {
@@ -289,6 +369,16 @@ export function createBlockade() {
       if (flowDistance < SHIP_FLOW_DISTANCE - half || flowDistance > SHIP_FLOW_DISTANCE + half) return false;
       const { gapLo, gapHi } = gapBounds(gapSide);
       return worldX < gapLo || worldX > gapHi;
+    },
+    // Held arena, same contract as diable.js's isHolding(): true while the
+    // chase is live and unresolved, so game.js clamps flowDistance at
+    // getChaseHoldFlowDistance() every frame this holds — see the module's
+    // own opening comment on why the chase needs this at all.
+    isChaseHolding() {
+      return chasePhase;
+    },
+    getChaseHoldFlowDistance() {
+      return chaseHoldFlowDistance;
     },
     // Consumed once by game.js so each event fires exactly one banner, not
     // one every frame the condition happens to still be true.
@@ -379,6 +469,11 @@ export function createBlockade() {
           chaseIntroT = 0; // opening "closing in" ease starts now — see CHASE_INTRO_*
           chaseOrbitAngle = 0;
           justStartedChase = true;
+          // Held arena starts here — game.js clamps flowDistance at this
+          // exact point (wherever the player happened to clear the frigate)
+          // for the rest of the chase. See the module's own opening comment.
+          chaseHoldFlowDistance = playerFlowDistance;
+          chaseHoldT = 0;
           volleyTimer = CHASE_VOLLEY_INTERVAL;
           // Clear ALL cannonballs - no cannon fire after passing the frigate
           hazards = [];
@@ -461,7 +556,10 @@ export function createBlockade() {
         if (hot && !h.hit) {
           if (Math.abs(playerFlowDistance - h.d) < SPLASH_D_TOLERANCE && Math.abs(playerWorldX - h.x) < SPLASH_HIT_RADIUS) {
             h.hit = true;
-            onHit({ type: 'cannon' });
+            // Chase-phase shots (tagged with fromX/fromD, see their spawn
+            // site below) hit for less than the approach frigate's own
+            // broadside — see CHASE_CANNON_DAMAGE's own comment.
+            onHit({ type: 'cannon', damage: h.fromX != null ? CHASE_CANNON_DAMAGE : undefined });
           }
         }
       }
@@ -486,7 +584,9 @@ export function createBlockade() {
 
         chaseOrbitAngle += dt * (2 * Math.PI / CHASE_ORBIT_PERIOD);
         const orbitLateral = Math.sin(chaseOrbitAngle) * CHASE_ORBIT_RADIUS_X;
-        const orbitForward = Math.cos(chaseOrbitAngle) * CHASE_ORBIT_RADIUS_Z;
+        // 0..RADIUS_Z, never negative — see CHASE_ORBIT_PERIOD's own comment
+        // on why the ship no longer swings behind the canoe at all.
+        const orbitForward = (1 - Math.cos(chaseOrbitAngle)) * 0.5 * CHASE_ORBIT_RADIUS_Z;
         chaseShipD = playerFlowDistance + CHASE_ANCHOR_LEAD + orbitForward - introExtraGap;
         const half = widthAt(chaseShipD) / 2 - CHASE_BANK_MARGIN;
         const c = centerX(chaseShipD);
@@ -499,10 +599,14 @@ export function createBlockade() {
         // SHIP_FLOW_DISTANCE — the target just moves every frame here.
         // Chasing this against `bullets` even while sinking is harmless
         // (chaseHullHP is already clamped to 0 by then) so no extra guard
-        // is needed to stop hits piling up past zero.
+        // is needed to stop hits piling up past zero. Lateral tolerance
+        // (the "+ 1.6" below, was "+ 1") widened in the same "impossible"
+        // tone-down pass as CHASE_HULL_HP/CHASE_HULL_D_TOLERANCE — a shot
+        // that's close but not dead-center on a swinging target should
+        // still connect.
         for (const b of bullets) {
           if (Math.abs(b.flowDistance - chaseShipD) < CHASE_HULL_D_TOLERANCE
-            && Math.abs(b.worldX - chaseShipWorldX) < CHASE_SHIP_BEAM / 2 + 1) {
+            && Math.abs(b.worldX - chaseShipWorldX) < CHASE_SHIP_BEAM / 2 + 1.6) {
             hitBullets.push(b);
             if (chaseHullHP > 0) {
               chaseHullHP -= BULLET_DAMAGE_TO_HULL;
@@ -549,13 +653,12 @@ export function createBlockade() {
             });
           }
 
-          // Escape is a fixed distance made good past the frigate's own
-          // line, not a lead over a pursuer that can be faster than you —
-          // the old lead check never resolved for a slower boat, so the
-          // fight (and its music) ran forever. Sinking the ship above is a
-          // separate, immediate way to end the chase — this is the other one.
-          const madeGood = playerFlowDistance - SHIP_FLOW_DISTANCE - CLEAR_MARGIN;
-          if (madeGood > CHASE_DISTANCE) {
+          // Time survived, held in place, not distance made good — see the
+          // module's own opening comment on why. Sinking the ship above is
+          // a separate, immediate way to end the chase; this is the floor
+          // everyone gets to regardless of how the gunnery goes.
+          chaseHoldT += dt;
+          if (chaseHoldT >= CHASE_HOLD_TIME) {
             chasePhase = false;
             chaseEscaped = true;
             console.log('[CHASE] Escaped!');
@@ -565,8 +668,7 @@ export function createBlockade() {
         for (const f of muzzleFlashes) f.t += dt;
         muzzleFlashes = muzzleFlashes.filter((f) => f.t < MUZZLE_FLASH_LIFETIME);
 
-        const madeGoodPct = playerFlowDistance - SHIP_FLOW_DISTANCE - CLEAR_MARGIN;
-        const chaseProgressPct = clamp((madeGoodPct / CHASE_DISTANCE) * 100, 0, 100);
+        const chaseProgressPct = clamp((chaseHoldT / CHASE_HOLD_TIME) * 100, 0, 100);
         return { active: true, progressPct: chaseProgressPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance: chaseShipD, hitBullets };
       }
 
