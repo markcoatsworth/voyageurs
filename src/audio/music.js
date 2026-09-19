@@ -323,55 +323,97 @@ export function createMusic({ onTrack } = {}) {
   // any desktop testing. Waiting for 'canplay' — the browser's own signal
   // that the *new* resource is actually decoded and ready — closes that
   // race by construction instead of hoping the timing works out.
-  function playSpecial(track) {
+  // How often (ms) fadeOutThenCommit below steps audio.volume down — real
+  // wall-clock delay, not tied to the game loop (music.js has no access to
+  // it), so it costs real time in anything that drives this repeatedly
+  // fast (a scripted respawn loop, say) — but only the *last* fade actually
+  // requested ever survives to really run: every earlier one's own next
+  // step immediately finds `generation` has moved on and stops there,
+  // costing one cheap timer firing each, not a full chain.
+  const FADE_STEP_MS = 50;
+
+  function playSpecial(track, fadeOutMs = 0) {
     special = true;
     generation++;
     const requestedGeneration = generation;
-    debug(`playSpecial: ${track.title}`);
-    audio.pause();
-    audio.src = track.src;
-    // track.volume overrides the shuffle's own DEFAULT_VOLUME — see
-    // DIABLE_TRACK's own comment for why that one needs it; every other
-    // special track just falls back to the same level the shuffle uses.
-    audio.volume = track.volume ?? DEFAULT_VOLUME;
-    // If this track plays out to its own natural end without the fight
-    // resolving first (endBossTrack() cutting it short), drop back into
-    // the shuffle right here — see attachEndedHandler's own comment for
-    // why this has to be freshly attached per commit, not one shared
-    // listener.
-    attachEndedHandler(requestedGeneration, () => {
-      special = false;
-      playCurrent();
-    });
 
-    let retried = false;
-    const attempt = () => {
+    // The actual commit — pause, swap src, wait for canplay, play — same
+    // as before fadeOutMs existed, just pulled into its own function so it
+    // can run either immediately or after the fade-out below finishes.
+    const commit = () => {
       if (generation !== requestedGeneration) return;
-      audio.play().then(
-        () => {
-          started = true;
-          debug(`playing special track ${track.title}`);
-          if (generation === requestedGeneration) emitTrack(track);
-        },
-        (e) => {
-          if (e.name === 'AbortError') return;
-          debug(`special play() rejected: ${e.name}: ${e.message}`);
-          if (!retried && generation === requestedGeneration) {
-            retried = true;
-            setTimeout(attempt, 400);
+      debug(`playSpecial: ${track.title}`);
+      audio.pause();
+      audio.src = track.src;
+      // track.volume overrides the shuffle's own DEFAULT_VOLUME — see
+      // DIABLE_TRACK's own comment for why that one needs it; every other
+      // special track just falls back to the same level the shuffle uses.
+      // Set here (after any fade-out above already dragged audio.volume
+      // toward 0) so the new track always starts at its own real level,
+      // not wherever the old one's fade happened to leave the element.
+      audio.volume = track.volume ?? DEFAULT_VOLUME;
+      // If this track plays out to its own natural end without the fight
+      // resolving first (endBossTrack() cutting it short), drop back into
+      // the shuffle right here — see attachEndedHandler's own comment for
+      // why this has to be freshly attached per commit, not one shared
+      // listener.
+      attachEndedHandler(requestedGeneration, () => {
+        special = false;
+        playCurrent();
+      });
+
+      let retried = false;
+      const attempt = () => {
+        if (generation !== requestedGeneration) return;
+        audio.play().then(
+          () => {
+            started = true;
+            debug(`playing special track ${track.title}`);
+            if (generation === requestedGeneration) emitTrack(track);
+          },
+          (e) => {
+            if (e.name === 'AbortError') return;
+            debug(`special play() rejected: ${e.name}: ${e.message}`);
+            if (!retried && generation === requestedGeneration) {
+              retried = true;
+              setTimeout(attempt, 400);
+            }
           }
-        }
-      );
+        );
+      };
+      let ready = false;
+      const onReady = () => {
+        if (ready) return;
+        ready = true;
+        attempt();
+      };
+      audio.addEventListener('canplay', onReady, { once: true });
+      setTimeout(onReady, CANPLAY_FALLBACK_MS);
+      audio.load();
     };
-    let ready = false;
-    const onReady = () => {
-      if (ready) return;
-      ready = true;
-      attempt();
-    };
-    audio.addEventListener('canplay', onReady, { once: true });
-    setTimeout(onReady, CANPLAY_FALLBACK_MS);
-    audio.load();
+
+    // Easing into a fight instead of a hard cut — reported for the Diable
+    // cue specifically (see playDiableTrack's own comment for why just
+    // that one). Ramps whatever's audibly playing right now down to
+    // silence over fadeOutMs, *then* commits to the new track — a beat of
+    // the old music trailing off before the new one lands, not two tracks
+    // overlapping (that's a proper crossfade, a bigger feature this isn't
+    // trying to be). Skipped entirely if nothing's actually playing to
+    // fade (audio.paused) — there's nothing to ease out of.
+    if (fadeOutMs > 0 && !audio.paused) {
+      const startVolume = audio.volume;
+      const startedAt = Date.now();
+      const step = () => {
+        if (generation !== requestedGeneration) return; // superseded mid-fade
+        const t = Math.min(1, (Date.now() - startedAt) / fadeOutMs);
+        audio.volume = startVolume * (1 - t);
+        if (t < 1) setTimeout(step, FADE_STEP_MS);
+        else commit();
+      };
+      step();
+    } else {
+      commit();
+    }
   }
 
   audio.addEventListener('error', () => {
@@ -442,10 +484,13 @@ export function createMusic({ onTrack } = {}) {
     playBossTrack() {
       playSpecial(BOSS_TRACK);
     },
-    // The Diable fight's reel — same cut-in-now behaviour as playBossTrack;
-    // endBossTrack() drops either one back into the shuffle.
+    // The Diable fight's reel — requested as an easing-in rather than the
+    // other boss tracks' hard cut: 2.5s of whatever's already playing
+    // trailing off before his own reel lands, dread building instead of a
+    // sudden jump-cut. endBossTrack() (no fade — the fight resolving is
+    // its own sudden beat) drops back into the shuffle same as the others.
     playDiableTrack() {
-      playSpecial(DIABLE_TRACK);
+      playSpecial(DIABLE_TRACK, 2500);
     },
     // The Wendigo's cue — same cut-in-now behaviour; endBossTrack() drops it
     // back into the shuffle same as the other two.
