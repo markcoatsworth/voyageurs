@@ -1430,7 +1430,7 @@ export class Game {
         this._bossTrackCued = false;
       }
       if (this.blockade.consumeJustStartedChase()) {
-        this.showBanner('PURSUIT');
+        this.showBanner('BRITISH PURSUIT');
         console.log('[GAME] Chase phase started. Canoe visible:', this.canoeVisible, 'Position:', this.flowDistance);
         // Music already cut over to PURSUIT_TRACK above (consumeJustCleared
         // fires the same frame, processed first) — nothing to start here.
