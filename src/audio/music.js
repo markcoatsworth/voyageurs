@@ -89,6 +89,15 @@ const LOUP_GAROU_TRACK = { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du
 // back into the shuffle. Reel du Gouvernement moves back into the regular
 // shuffle instead of sitting unused.
 const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' };
+// Reserved for the Pursuit chase phase of the British Blockade fight
+// (bossfights/blockade.js) — cuts in the instant the frigate itself is
+// cleared (game.js's consumeJustCleared()), replacing BOSS_TRACK ("Rule,
+// Britannia!") for the shootable gunboat chase that follows, rather than
+// letting the frigate's own cue run through the whole pursuit. Supplied
+// directly like DIABLE_TRACK, not sourced from an archive — see README.md's
+// Music section for the same rights caveat every other directly-supplied
+// track here carries.
+const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de la Folie', artist: 'Unknown' };
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -509,6 +518,12 @@ export function createMusic({ onTrack } = {}) {
     // same as it does after every other fight.
     playChasseGalerieTrack() {
       playSpecial(CHASSE_GALERIE_TRACK);
+    },
+    // The Pursuit chase's own cue — cut in once the frigate is cleared (see
+    // PURSUIT_TRACK's own comment); endBossTrack() drops it back into the
+    // shuffle the same as every other boss track once the chase resolves.
+    playPursuitTrack() {
+      playSpecial(PURSUIT_TRACK);
     },
     // Cuts the boss track short and drops back into the normal shuffle —
     // called the moment the fight resolves, rather than waiting out the

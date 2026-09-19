@@ -52,6 +52,11 @@ it's not the same running order every session:
   Loup-garou encounter (just before Québec City), not in the regular
   shuffle. Picked for the title alone ("Reel of Terror") once that fight
   needed its own cue.
+- "La Mer de la Folie" — reserved for the Pursuit chase phase of the
+  British Blockade fight (cuts in once the frigate itself is cleared,
+  replacing "Rule, Britannia!" for the gunboat chase that follows).
+  Supplied directly like "Reel du Paradis et Enfer" above, not sourced
+  from an archive — performer not documented.
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
@@ -66,11 +71,11 @@ there's no reason to assume they're any more settled. St. Anne's Reel is a diffe
 2009 recording, clearly still under whatever copyright the band/podcast
 holds, used here on the assumption that a jam-session recording shared
 publicly on the band's own podcast feed is low-risk for casual/personal
-use — not the same thing as a rights clearance. "Reel du Paradis et Enfer"
-is a further step removed again: supplied directly rather than pulled from
+use — not the same thing as a rights clearance. "Reel du Paradis et Enfer" and "La Mer de la Folie"
+are a further step removed again: supplied directly rather than pulled from
 a documented archive, so there's no source link to point to and no
-independent confirmation of who holds what rights — treat it as the least
-cleared track in the catalog, not more settled just because it lacks a
+independent confirmation of who holds what rights — treat them as the least
+cleared tracks in the catalog, not more settled just because they lack a
 paper trail. All are included as a deliberate, informed choice for
 casual/personal use, not because the rights are clean — swap the
 `public/audio/*.mp3` files for something with airtight licensing before
