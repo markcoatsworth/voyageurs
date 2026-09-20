@@ -338,8 +338,16 @@ await step('britishWarship: triggers near the old Kingston Mills spot, held unti
   if (!escaped) throw new Error('the Warship fight never resolved — it (and its music) would run forever');
 
   // Past the Warship, the short remaining stretch to Kingston still works.
+  // Its dock is oversized (world/villages.js's KINGSTON_DOCK_REACH) and now
+  // walks the canoe ashore like any other village (enterVillage(), mode
+  // becomes 'village') rather than winning outright, so this has to leave
+  // again the same way any village visit would before the finish is
+  // reachable.
   let won = false;
   for (let i = 0; i < 3000 && !won; i++) {
+    if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') {
+      g.game.leaveVillage();
+    }
     g.input.state.up = true;
     g.game.health = 100;
     const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
@@ -445,6 +453,40 @@ await step('britishWarship: Up/Down keeps the ship on screen', () => {
       throw new Error(`holding ${label} put the ship off-screen: y ranged ${minY.toFixed(0)}..${maxY.toFixed(0)}, canvas is 0..${CANVAS_HEIGHT}`);
     }
   }
+});
+
+// --- scenario 4d: Kingston's dock is a real entrance into the town ---------
+
+await step('kingston: running into the dock enters the town on foot', () => {
+  // Reported: "no obvious way to actually get into Kingston" — its dock
+  // used to win the run outright (game.js), never enterVillage(), so there
+  // was no way to walk around the town at all. A dedicated bridge stood in
+  // as the entrance for a while; removed in favour of just making the dock
+  // itself (world/villages.js's KINGSTON_DOCK_REACH) the unmissable "so big
+  // I cannot miss it" landmark, same as Quebec City's King's Wharf, so it
+  // now doubles as both the entrance and (once cast off from) the finish.
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  if (!kingston) throw new Error('no "Kingston" in VILLAGES — a name/lookup drifted');
+  const g = newGame('rideau', kingston.flowDistance - 20);
+  let entered = false;
+  for (let i = 0; i < 200 && !entered; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+    if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') entered = true;
+  }
+  if (!entered) throw new Error('running into the dock never entered Kingston on foot');
+  if (g.game.state === 'won') throw new Error('entering via the dock should not win the run by itself — only reaching the dock/flowDistance does');
+
+  // Leaving (same as any other village) pushes flowDistance past Kingston's
+  // own line, so the next frame reaching the water completes the journey —
+  // the "walk the town, then cast off to finish" flow the report implied.
+  g.game.leaveVillage();
+  let won = false;
+  for (let i = 0; i < 30 && !won; i++) {
+    g.game.update(1 / 30);
+    if (g.game.state === 'won') won = true;
+  }
+  if (!won) throw new Error('casting off from Kingston after the dock never reached the win condition');
 });
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---
@@ -810,6 +852,13 @@ await step('rideau: paddle the whole leg and reach Kingston -> won', () => {
   // failure to find the gap fails this test loudly.
   const gapX = centerX(SHIP_FLOW_DISTANCE) + widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // right-side lane
   for (let i = 0; i < 12000 && !won; i++) {
+    // Kingston's oversized dock (world/villages.js's KINGSTON_DOCK_REACH)
+    // is the real entrance to the town now — holding Up straight through
+    // walks the canoe into it (enterVillage()), so leave again the same way
+    // any village visit would before the finish is reachable.
+    if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') {
+      g.game.leaveVillage();
+    }
     g.input.state.up = true;
     // blockade.js no longer exposes a progress field at all (no health/
     // hull/hold-time concept during a pure dodge-and-thread-the-gap leg);
@@ -892,21 +941,33 @@ await step('rideau: casting off from Kars survives drifting back onto its own do
   if (away.game.flowDistance <= before) throw new Error('no forward progress leaving Kars');
 });
 
-await step('rideau: reaching Kingston by its dock also wins', () => {
+await step('rideau: reaching Kingston by its dock enters the town, then casting off wins', () => {
+  // Kingston's dock walks the player ashore now (game.js's dockHit branch),
+  // same as every other village — it no longer wins the run the instant it's
+  // touched. The finish is still the dock: it's the "so big I cannot miss
+  // it" landmark, so this is the path most runs actually take.
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
   const g = newGame('rideau', kingston.flowDistance - 12);
   // Steer onto Kingston's own bank so the dock check catches the canoe
   // before it crosses the finish line on its own.
-  let won = false;
-  for (let i = 0; i < 1500 && !won; i++) {
+  let entered = false;
+  for (let i = 0; i < 1500 && !entered; i++) {
     g.input.state.up = true;
     g.input.state[kingston.side === 1 ? 'right' : 'left'] = true;
-    g.game.health = 100; // testing the dock->win path, not the obstacle run
+    g.game.health = 100; // testing the dock->village path, not the obstacle run
     g.game.update(1 / 30);
-    if (g.game.mode === 'village') throw new Error('Kingston opened its on-foot scene instead of ending the run');
+    if (g.game.state === 'won') throw new Error('Kingston\'s dock won the run outright instead of walking the player ashore');
+    if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') entered = true;
+  }
+  if (!entered) throw new Error('never reached Kingston\'s dock');
+
+  g.game.leaveVillage();
+  let won = false;
+  for (let i = 0; i < 30 && !won; i++) {
+    g.game.update(1 / 30);
     if (g.game.state === 'won') won = true;
   }
-  if (!won) throw new Error('never won despite paddling into Kingston');
+  if (!won) throw new Error('casting off from Kingston by its dock never reached the win condition');
 });
 
 // --- scenario 4c: casting off from Montreal doesn't loop back in ----------

@@ -1315,11 +1315,12 @@ export class Game {
       (this._castOffGrace > 0 && dockHit === this._castOffGraceVillage) ||
       this.chasseGalerie.isActive();
     if (dockHit && !suppressed) {
-      // Kingston's dock is the finish line, not a village to walk around.
-      if (dockHit.name === 'Kingston') {
-        this.win();
-        return;
-      }
+      // Kingston's dock walks the player ashore exactly like every other
+      // village now (it used to win the run outright here, before a
+      // separate bridge stood in as the actual walk-around entrance — see
+      // world/villages.js's own comment on KINGSTON_DOCK_REACH). The win
+      // still happens below, once leaveVillage() pushes flowDistance past
+      // Kingston's own line on cast-off.
       this.enterVillage(dockHit);
       return;
     }

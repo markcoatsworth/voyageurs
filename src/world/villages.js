@@ -22,9 +22,45 @@ export { VILLAGES };
 // still takes real steering to the correct side, and a narrow stretch has
 // its two banks close together anyway, so "generous" converges to "hit
 // the correct half of the river."
+//
+// That reasoning held when it was written but stopped being true as the
+// game's own geography grew: a lot of real stretches (lawrenceEast/West
+// routinely run 40-57 units wide; several Rideau reaches do too — see
+// GENERIC_DOCK_REACH_FRACTION's own comment) are far wider than "half of
+// DOCK_LENGTH=6" was ever calibrated against. Reported as "cannot find the
+// dock" on Newboro specifically, but the same fixed 6-unit reach applied
+// to every ordinary village regardless of the real channel width there —
+// on the wider stretches a dock this small read as a barely-there sliver,
+// nowhere near reaching the "correct half of the river" the comment above
+// assumed. These three stay as the floor for narrow rivers (where they
+// already worked); genericDockReach()/genericDockWidthZ()/
+// genericDockHitZ() below now scale up from here with the real channel
+// width for everything wider.
 const DOCK_LENGTH = 6; // world units the dock reaches from shore into the channel
 const DOCK_WIDTH_Z = 2.2; // dock's own extent along the river's flow axis
 const DOCK_HIT_Z = 1.3; // how close (in flowDistance) counts as "touching" the dock
+// Half the channel's own width, similar in spirit to Quebec City's dock
+// reaching "~72% of the full channel width" (see QUEBEC_CITY_DOCK_REACH's
+// own comment) — not pushed that far here, and deliberately NOT split the
+// difference either: a first pass at 0.5 reached the hit zone (dockReach,
+// via hitsDock()'s worldX bounds) past centerX on several real stretches,
+// which is a *different* problem than visibility — it meant simply holding
+// a roughly-centred course auto-docked at every village passed on the
+// correct side, with no need to actually steer toward the bank at all.
+// Caught by three unrelated smoke-test failures (the fjord/lawrenceWest
+// mouth crossing snagging on Tadoussac's own dock — its flowDistance sits
+// exactly at MOUTH_DISTANCE — and a loup-garou dodge run snagging on
+// Beaupré's), not by anything Rideau/Kingston-specific, so this wasn't a
+// narrow edge case. GENERIC_DOCK_WIDTH_Z_FRACTION below is the one that
+// actually addresses "hard to find" without that risk — it's pure
+// rendering size (the drawn rectangle's extent along the shore/flow axis,
+// see dockWidthZ()), never checked by hitsDock() at all, so it can scale
+// generously with zero effect on where the hit zone actually is. REACH and
+// HIT_Z stay modest — enough to meaningfully close the gap on wide rivers
+// without turning "paddle roughly down the middle" into "dock everywhere."
+const GENERIC_DOCK_REACH_FRACTION = 0.22;
+const GENERIC_DOCK_WIDTH_Z_FRACTION = 0.24;
+const GENERIC_DOCK_HIT_Z_FRACTION = 0.06;
 
 // Quebec City's dock isn't a village pier at all — it's the King's Wharf, a
 // working port for the capital, and it's drawn to match: a genuinely huge
@@ -56,6 +92,17 @@ const MONTREAL_DOCK_HIT_Z = 8; // generous hit zone
 const MONTREAL_NORTH_DOCK_REACH = 6;
 const MONTREAL_NORTH_DOCK_WIDTH_Z = 8;
 const MONTREAL_NORTH_DOCK_HIT_Z = 5;
+
+// Kingston's dock is the journey's end, not a village pier to pass through
+// — it used to be marked by a separate bridge structure upstream (removed;
+// see git history), but a bridge is still just a landmark you have to
+// separately notice and then still find the dock past it. Simpler to make
+// the dock itself the unmissable "you've arrived" moment, same oversizing
+// as Quebec City's King's Wharf (QUEBEC_CITY_DOCK_REACH above) rather than
+// inventing a second one-off.
+const KINGSTON_DOCK_REACH = 30; // ~ Quebec City's own reach, channel here is a similar width
+const KINGSTON_DOCK_WIDTH_Z = 12;
+const KINGSTON_DOCK_HIT_Z = 7;
 
 // A synthetic village-like object for that second pier: same flowDistance/
 // seed/name as the real Montreal (so every island-geometry helper above —
@@ -326,6 +373,51 @@ function buildQuebecCityCitadel() {
 }
 const QUEBEC_CITY_CITADEL = buildQuebecCityCitadel();
 
+// Kingston — journey's end, built on the site of Fort Frontenac (1673,
+// rebuilt in stone by 1695), the key French fur-trade/military post
+// controlling the western approach and La Salle's own base. Had no
+// hand-authored content at all before this — still rendering as a
+// generic small-village dot despite being the actual win condition.
+// Reported as needing to be "enormous and obnoxious like the ones from
+// Montreal and Quebec City" (their own oversized landmarks: Quebec's
+// ramparts + giant King's Wharf, Montreal's fortification walls) — this
+// gives it the same skyline-of-buildings treatment, plus a landmark:
+// KINGSTON_FORT (below, period-correct — a modest stone-walled post, not
+// a dramatic star fort like the later 1832 Fort Henry). Kingston's own
+// dock (see KINGSTON_DOCK_REACH below) gets the same "so big I cannot
+// miss it" oversizing as Quebec City's King's Wharf — it's the actual
+// entrance to the town, and used to be a separate bridge structure
+// upstream of it; that's gone now, replaced by just making the dock
+// itself unmissable instead of adding a second landmark to find.
+const KINGSTON_SPAN = 20; // half-width of the town along the riverbank, world units
+const KINGSTON_BAND = { count: 9, depthMin: 1.8, depthMax: 3.8 };
+function buildKingstonBuildings() {
+  const buildings = [];
+  const { count, depthMin, depthMax } = KINGSTON_BAND;
+  for (let i = 0; i < count; i++) {
+    const t = count > 1 ? (i / (count - 1)) * 2 - 1 : 0;
+    const dOffset = t * KINGSTON_SPAN + Math.sin(i * 2.1) * 1.6;
+    const depth = depthMin + ((Math.sin(i * 1.5) + 1) / 2) * (depthMax - depthMin);
+    buildings.push({ dOffset, depth, variant: i % stoneSprites.length, mirror: i % 2 === 0 });
+  }
+  return buildings;
+}
+const KINGSTON_BUILDINGS = buildKingstonBuildings();
+
+// Fort Frontenac's own corner, at the upstream tip of town — same "small
+// cluster standing apart from the main spread" treatment as Quebec City's
+// own citadel corner (QUEBEC_CITY_CITADEL above), just a smaller pool of
+// segments to match a real fur-trade post rather than a walled capital.
+function buildKingstonFort() {
+  const tip = -KINGSTON_SPAN - 1;
+  return [
+    { dOffset: tip - 1.2, depth: 2.0 },
+    { dOffset: tip, depth: 2.8 },
+    { dOffset: tip + 1.2, depth: 2.2 },
+  ];
+}
+const KINGSTON_FORT = buildKingstonFort();
+
 // The near shoreline at d, on the given side. `isMontreal` is a real
 // exception, not just another `side`-pinned mainland town: it sits ON the
 // Island of Montreal (river/islands.js), so its shore is the *island's*
@@ -385,6 +477,7 @@ export function isNearVillage(d, side) {
     else if (v.name === 'Trois-Rivieres') halfD = TROIS_RIVIERES_SPAN + 2;
     else if (v.name === 'Montreal') halfD = MONTREAL_SPAN + 4;
     else if (v.name === 'Tadoussac') halfD = TADOUSSAC_SPAN + 2;
+    else if (v.name === 'Kingston') halfD = KINGSTON_SPAN + 3; // covers KINGSTON_FORT's tip too
     if (v.side === side && Math.abs(d - v.flowDistance) < halfD) return true;
   }
   return false;
@@ -418,13 +511,15 @@ function inlandSign(v) {
 function dockReach(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_REACH;
   if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_REACH : MONTREAL_NORTH_DOCK_REACH;
-  return DOCK_LENGTH * villageLayout(v.seed).dock.lengthScale;
+  if (v.name === 'Kingston') return KINGSTON_DOCK_REACH;
+  return Math.max(DOCK_LENGTH * villageLayout(v.seed).dock.lengthScale, widthAt(v.flowDistance) * GENERIC_DOCK_REACH_FRACTION);
 }
 
 function dockWidthZ(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_WIDTH_Z;
   if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_WIDTH_Z : MONTREAL_NORTH_DOCK_WIDTH_Z;
-  return DOCK_WIDTH_Z;
+  if (v.name === 'Kingston') return KINGSTON_DOCK_WIDTH_Z;
+  return Math.max(DOCK_WIDTH_Z, widthAt(v.flowDistance) * GENERIC_DOCK_WIDTH_Z_FRACTION);
 }
 
 // Exported so game.js can push the canoe back out past the dock's own
@@ -437,7 +532,8 @@ function dockWidthZ(v) {
 export function dockHitZ(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_HIT_Z;
   if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_HIT_Z : MONTREAL_NORTH_DOCK_HIT_Z;
-  return DOCK_HIT_Z;
+  if (v.name === 'Kingston') return KINGSTON_DOCK_HIT_Z;
+  return Math.max(DOCK_HIT_Z, widthAt(v.flowDistance) * GENERIC_DOCK_HIT_Z_FRACTION);
 }
 
 // Returns the village whose dock the canoe is currently touching, or null.
@@ -592,6 +688,7 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   const isTroisRivieres = v.name === 'Trois-Rivieres';
   const isMontreal = v.name === 'Montreal';
   const isTadoussac = v.name === 'Tadoussac';
+  const isKingston = v.name === 'Kingston';
 
   // Buildings and their surrounding trees, merged into one painter's-
   // algorithm pass (sorted so the nearer thing — larger z — draws last, on
@@ -621,6 +718,13 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
     });
   } else if (isTadoussac) {
     scenery = TADOUSSAC_BUILDINGS.map((b) => {
+      const d = v.flowDistance + b.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
+      return { z, worldX, sprite: stoneSprites[b.variant], mirror: b.mirror, anchor: 0.85 };
+    });
+  } else if (isKingston) {
+    scenery = KINGSTON_BUILDINGS.map((b) => {
       const d = v.flowDistance + b.dOffset;
       const z = worldDistance - d;
       const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
@@ -696,6 +800,16 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
       const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + TADOUSSAC_CHAPEL.depth);
       scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
     }
+  } else if (isKingston) {
+    // Fort Frontenac's corner (see KINGSTON_FORT's own comment) — the
+    // period-correct landmark here, standing apart from the main spread
+    // the same way Quebec City's own citadel does.
+    KINGSTON_FORT.forEach((r) => {
+      const d = v.flowDistance + r.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + r.depth);
+      scenery.push({ z, worldX, sprite: rampartSprite, mirror: false, anchor: 0.95 });
+    });
   } else {
     VILLAGE_TREE_LAYOUT.slice(0, layout.treeCount).forEach((t, i) => {
       const jitterD = hashRange(vIndex * 41 + i, 601, -0.35, 0.35);

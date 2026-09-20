@@ -37,13 +37,17 @@ import { VILLAGES } from '../world/villages.js';
 
 const KINGSTON = VILLAGES.find((v) => v.name === 'Kingston');
 // Kingston Mills sat at 44.3010N, 76.4570W (see route.js's own removal
-// comment) — 85 units upstream of Kingston on this route's cumulative-
-// distance model, measured before it was removed from the waypoint list.
-// Comfortably clear of both neighbours: ~330 units past Jones Falls
+// comment) — roughly 85 units upstream of Kingston on this route's
+// cumulative-distance model, measured before it was removed from the
+// waypoint list. Nudged a bit further upstream than that real position
+// (85 -> 95) to open up more clearance before Kingston's own dock: the
+// "well past the trigger" auto-resolve below (used by ?start=kingston,
+// main.js) needs room after it to actually read as an approach to the
+// dock rather than dropping the player right on top of it. Comfortably
+// clear of both neighbours either way: ~330 units past Jones Falls
 // upstream, and the held arena itself never needs runway (flowDistance
-// freezes the instant it triggers), so 85 units of clearance before
-// Kingston's own dock is plenty.
-const WARSHIP_D_OFFSET = 85;
+// freezes the instant it triggers).
+const WARSHIP_D_OFFSET = 95;
 export const TRIGGER_DISTANCE = KINGSTON.flowDistance - WARSHIP_D_OFFSET;
 
 const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;

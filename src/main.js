@@ -100,9 +100,24 @@ function normalizeStartName(s) {
 //
 // "rideau" drops the canoe at the head of the made-up Ottawa-to-Kingston leg
 // (world/river/route.js) — past Le Diable, the storm gone, on the calm wide
-// water heading for the finish. "kingston" is a real village name and
-// already works the normal way (a short paddle short of the finish line).
+// water heading for the finish.
 //
+// "kingston" used to just work the normal way every real village name
+// does — flowDistance - START_APPROACH_BUFFER (25) — which for Kingston
+// specifically landed past the British Warship's own trigger and only ~11
+// units short of its dock (bossfights/britishWarship.js,
+// world/villages.js's KINGSTON_DOCK_REACH), i.e. dropped in "directly in
+// front of Kingston" rather than anywhere near a real approach. Given its
+// own override instead: landing just past Jones Falls put the whole
+// Warship fight back in the way of a cheat whose entire point is to skip
+// straight to Kingston — reported as "too far back, needs to be after the
+// Warship." Anchored off WARSHIP_FLOW_DISTANCE instead, past its own
+// "well past the trigger" auto-resolve threshold (+50, britishWarship.js)
+// so the fight quietly resolves itself with no banner or hold, leaving a
+// real stretch of open water before the dock rather than the old
+// dropped-right-on-top-of-it problem.
+//
+
 // "gatineau" is the one keyword below that isn't a flowDistance/segment
 // pair at all (see START_KEYWORDS' own shape) — it opens Gatineau's own
 // on-foot dock scene directly (startedAtGatineau, further down), the only
@@ -121,6 +136,11 @@ const START_KEYWORDS = {
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
+  // See the module comment above on why this overrides the generic
+  // per-village fallback below instead of falling through to it. +55, not
+  // +50 exactly, to land a few units past britishWarship.js's own
+  // auto-resolve threshold rather than right on the boundary.
+  [normalizeStartName('kingston')]: { flowDistance: WARSHIP_FLOW_DISTANCE + 55, segment: 'rideau' },
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
