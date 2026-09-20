@@ -8,7 +8,7 @@ import { hashRange } from '../shared/hash.js';
 import { VILLAGES } from './river/route.js';
 import {
   createCabinSprite, createPineTreeSprite, createRepairShopSprite,
-  createStoneBuildingSprite, createChurchSprite, createRampartSprite,
+  createStoneBuildingSprite, createChurchSprite, createRampartSprite, createIslandSprite,
 } from './sprites.js';
 
 export { VILLAGES };
@@ -277,6 +277,7 @@ const TADOUSSAC_CHAPEL = { dOffset: -1.5, depth: 5.5 };
 const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
 const churchSprite = createChurchSprite();
 const rampartSprite = createRampartSprite();
+const islandSprite = createIslandSprite();
 
 // Montreal — New France's great commercial capital and inland port, larger
 // and more prosperous than Quebec City by 1790. Founded 1642, sits at the
@@ -389,16 +390,54 @@ const QUEBEC_CITY_CITADEL = buildQuebecCityCitadel();
 // entrance to the town, and used to be a separate bridge structure
 // upstream of it; that's gone now, replaced by just making the dock
 // itself unmissable instead of adding a second landmark to find.
-const KINGSTON_SPAN = 20; // half-width of the town along the riverbank, world units
-const KINGSTON_BAND = { count: 9, depthMin: 1.8, depthMax: 3.8 };
+//
+// Rebuilt again against an actual 1820s-30s defence survey of Kingston
+// harbour dropped into the repo root (kingston-1700s.jpg — the filename's
+// off, the map itself shows Martello towers and a star-fort footprint at
+// Point Henry, decades past 1700, but it's still the earliest real layout
+// on hand and by far the most detailed source used for any town in this
+// game). Two things came out of reading it: KINGSTON_CHURCH (the town
+// itself was already right — grid streets on a point, the old fort's
+// corner at the tip nearest the harbour mouth), and the real headline —
+// the far shore. The survey shows the harbour Kingston sits on isn't a
+// plain open bay: it's flanked by a second, heavily fortified shore —
+// Navy Bay's Royal Naval Dockyard behind Point Frederick, and Point
+// Henry's works guarding the bay mouth a little further out toward Lake
+// Ontario, with small fortified islands (Cedar Island among them) further
+// out still. KINGSTON_NAVY_BAY/KINGSTON_POINT_HENRY/KINGSTON_CEDAR_ISLAND
+// below put all of that on the opposite bank from the town (`-v.side` in
+// drawOneVillage) — before this the far shore at Kingston was just empty
+// water, the one hand-authored harbour in the game with real geography on
+// only one side of it.
+// Reported: still reads as "a little village" next to Montreal/Quebec City
+// despite KINGSTON_FORT and the new far shore — because it was still a
+// single 9-building band at one shallow depth (1.8-3.8), the same flat-row
+// treatment villageLayout() gives an ordinary unnamed stop, just with more
+// buildings in it. Montreal/Quebec City's own "big city" read never came
+// from a wall (Montreal doesn't have one in this game either — see
+// MONTREAL_BANDS) — it's the multi-band skyline: several rows tiled at
+// increasing depth so the town has real visual depth (a waterfront, then a
+// town behind it, then a quarter behind that) instead of one strip of
+// buildings between the dock and the treeline. KINGSTON_BANDS below is the
+// same three-tier shape as MONTREAL_BANDS, same total building count (18,
+// vs. Quebec City's 14) — Kingston was the garrison town and the gateway
+// to the upper Great Lakes, no less built-up than either.
+const KINGSTON_SPAN = 24; // was 20 — bumped to Quebec City's own span for a comparably wide spread
+const KINGSTON_BANDS = [
+  { count: 7, depthMin: 1.8, depthMax: 3.2, salt: 0 },   // the waterfront — wharves, warehouses, merchants' row
+  { count: 6, depthMin: 4.4, depthMax: 6.2, salt: 100 }, // the town proper — shops, inns, the courthouse block
+  { count: 5, depthMin: 7.2, depthMax: 9.0, salt: 200 }, // upper Kingston, back from the harbour
+];
 function buildKingstonBuildings() {
   const buildings = [];
-  const { count, depthMin, depthMax } = KINGSTON_BAND;
-  for (let i = 0; i < count; i++) {
-    const t = count > 1 ? (i / (count - 1)) * 2 - 1 : 0;
-    const dOffset = t * KINGSTON_SPAN + Math.sin(i * 2.1) * 1.6;
-    const depth = depthMin + ((Math.sin(i * 1.5) + 1) / 2) * (depthMax - depthMin);
-    buildings.push({ dOffset, depth, variant: i % stoneSprites.length, mirror: i % 2 === 0 });
+  for (const band of KINGSTON_BANDS) {
+    for (let i = 0; i < band.count; i++) {
+      const t = band.count > 1 ? (i / (band.count - 1)) * 2 - 1 : 0;
+      const salted = i + band.salt;
+      const dOffset = t * KINGSTON_SPAN + Math.sin(salted * 2.2) * 1.8;
+      const depth = band.depthMin + ((Math.sin(salted * 1.6) + 1) / 2) * (band.depthMax - band.depthMin);
+      buildings.push({ dOffset, depth, variant: salted % stoneSprites.length, mirror: i % 2 === 0 });
+    }
   }
   return buildings;
 }
@@ -417,6 +456,55 @@ function buildKingstonFort() {
   ];
 }
 const KINGSTON_FORT = buildKingstonFort();
+
+// St. George's — the town's own Anglican church (built 1825, now St.
+// George's Cathedral), set back deeper than KINGSTON_BANDS' own deepest
+// row (9.0) so it reads as rising over the whole town, the same "set back
+// and much taller stands in for up on the bluff" convention QUEBEC_CITY_
+// CHURCH/MONTREAL_CHURCH use (both just above, both deeper than their own
+// bands' max for the same reason) — this game has no real elevation.
+const KINGSTON_CHURCH = { dOffset: 1, depth: 9.8 };
+
+// An 1820s-30s defence survey of Kingston harbour (the source for this
+// whole buildout — see the module's own comment, and see path.js's
+// rideauWidthAt on why the channel already flares out to its widest in the
+// game right here) shows the town on its own point, and — across the
+// water it flares open onto — a second, thoroughly built-up shore: Point
+// Frederick's Royal Naval Dockyard closing off Navy Bay to its west, and
+// Point Henry's fortification guarding the bay's mouth a little further
+// out toward the open lake. Nothing rendered over there before this — the
+// far bank at Kingston was just empty water, wrong for the one harbour in
+// the game with real landmarks on both shores. Placed with `-v.side`
+// (drawOneVillage) rather than a second VILLAGES entry the way Montreal's
+// north pier gets one (montrealNorthTwin) — these aren't dockable, just
+// backdrop, so they don't need hit-testing or their own dock geometry.
+const KINGSTON_NAVY_BAY = [
+  { dOffset: -5, depth: 2.2 },
+  { dOffset: -2.5, depth: 3.0 },
+  { dOffset: 0.5, depth: 2.4 },
+];
+// A little further out than Navy Bay (see KINGSTON_NAVY_BAY's own comment)
+// — reads as sitting further toward the open lake, same relative
+// positioning the real point has past Navy Bay's mouth. Same rampart
+// cluster treatment as Fort Frontenac/Québec's citadel (KINGSTON_FORT,
+// QUEBEC_CITY_CITADEL) since it's the same kind of landmark: a small
+// fortified point standing apart from the built-up shore behind it.
+const KINGSTON_POINT_HENRY = [
+  { dOffset: 9, depth: 2.0 },
+  { dOffset: 11, depth: 2.8 },
+  { dOffset: 13, depth: 2.2 },
+];
+// Cedar Island — one of several small islands the survey marks with their
+// own little Martello towers out past Point Henry; just the island itself
+// here (createIslandSprite(), the same sprite obstacles.js pools as a mid-
+// channel hazard elsewhere) since it's scenery, not something to collide
+// with this far off the real channel. Furthest out of the three, and
+// pushed back with `depth` rather than `dOffset` to read as "far away" —
+// a dOffset much past Point Henry's own would land past
+// VISIBLE_Z_RANGE (world/villages.js's own visibility gate) for the whole
+// approach, since nothing here ever sees d values past Kingston's own
+// flowDistance from up close (the run ends there).
+const KINGSTON_CEDAR_ISLAND = { dOffset: 15, depth: 9 };
 
 // The near shoreline at d, on the given side. `isMontreal` is a real
 // exception, not just another `side`-pinned mainland town: it sits ON the
@@ -466,6 +554,13 @@ function toScreen(worldX, z, cameraWorldX) {
   };
 }
 
+// Kingston's far shore (KINGSTON_NAVY_BAY -> KINGSTON_CEDAR_ISLAND, dOffset
+// -5..15) needs its own clearing on the *opposite* bank from the town's own
+// (below) — every other hand-authored village only ever builds on its own
+// side, so isNearVillage() below never had to clear both banks at once
+// before Kingston got a far shore too.
+const KINGSTON_FAR_SHORE_HALF_D = 17;
+
 // Used by terrain.js to keep the forest scatter from covering a village.
 export function isNearVillage(d, side) {
   for (const v of VILLAGES) {
@@ -473,12 +568,14 @@ export function isNearVillage(d, side) {
     // their hand-authored spreads - the wilderness forest showing up between
     // buildings would defeat "established town."
     let halfD = CLEARING_HALF_D;
+    let matchSide = v.side;
     if (v.name === 'Quebec City') halfD = QUEBEC_CITY_SPAN + 4;
     else if (v.name === 'Trois-Rivieres') halfD = TROIS_RIVIERES_SPAN + 2;
     else if (v.name === 'Montreal') halfD = MONTREAL_SPAN + 4;
     else if (v.name === 'Tadoussac') halfD = TADOUSSAC_SPAN + 2;
-    else if (v.name === 'Kingston') halfD = KINGSTON_SPAN + 3; // covers KINGSTON_FORT's tip too
-    if (v.side === side && Math.abs(d - v.flowDistance) < halfD) return true;
+    else if (v.name === 'Kingston' && side === v.side) halfD = KINGSTON_SPAN + 3; // covers KINGSTON_FORT's tip too
+    else if (v.name === 'Kingston' && side === -v.side) { halfD = KINGSTON_FAR_SHORE_HALF_D; matchSide = side; }
+    if (matchSide === side && Math.abs(d - v.flowDistance) < halfD) return true;
   }
   return false;
 }
@@ -810,6 +907,35 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
       const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + r.depth);
       scenery.push({ z, worldX, sprite: rampartSprite, mirror: false, anchor: 0.95 });
     });
+    // St. George's, set back into the grid (see KINGSTON_CHURCH's own
+    // comment).
+    {
+      const d = v.flowDistance + KINGSTON_CHURCH.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) + v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + KINGSTON_CHURCH.depth);
+      scenery.push({ z, worldX, sprite: churchSprite, mirror: false, anchor: 0.85 });
+    }
+    // The far shore — Navy Bay's dockyard, Point Henry's fort, and Cedar
+    // Island out past both (see KINGSTON_NAVY_BAY's own comment on why
+    // these use `-v.side` instead of a second dockable VILLAGES entry).
+    KINGSTON_NAVY_BAY.forEach((b, i) => {
+      const d = v.flowDistance + b.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) - v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + b.depth);
+      scenery.push({ z, worldX, sprite: stoneSprites[i % stoneSprites.length], mirror: i % 2 === 0, anchor: 0.85 });
+    });
+    KINGSTON_POINT_HENRY.forEach((r) => {
+      const d = v.flowDistance + r.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) - v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + r.depth);
+      scenery.push({ z, worldX, sprite: rampartSprite, mirror: false, anchor: 0.95 });
+    });
+    {
+      const d = v.flowDistance + KINGSTON_CEDAR_ISLAND.dOffset;
+      const z = worldDistance - d;
+      const worldX = centerX(d) - v.side * (widthAt(d) / 2 + BUILDING_SHORE_OFFSET + KINGSTON_CEDAR_ISLAND.depth);
+      scenery.push({ z, worldX, sprite: islandSprite, mirror: false, anchor: 0.85 });
+    }
   } else {
     VILLAGE_TREE_LAYOUT.slice(0, layout.treeCount).forEach((t, i) => {
       const jitterD = hashRange(vIndex * 41 + i, 601, -0.35, 0.35);
