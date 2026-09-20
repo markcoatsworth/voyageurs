@@ -459,8 +459,31 @@ export function createMusic({ onTrack } = {}) {
     // already started. Now `started` only flips true on actual success
     // (see playCurrent()'s .then above), so main.js can safely call this on
     // every qualifying gesture and it keeps retrying until one works.
+    //
+    // Second real bug this fixes: `started` only flips true once a
+    // playCurrent()/playSpecial() attempt's own audio.play() promise
+    // *resolves* — which, for a special track, is genuinely async (it waits
+    // on 'canplay' or the ~2s CANPLAY_FALLBACK_MS timeout in playSpecial()
+    // below). A ?start= cheat that drops straight into a boss fight can hit
+    // consumeJustSpotted()/consumeJustCleared() (game.js) before the
+    // player's very first keydown/click has fired at all, so `started` is
+    // still false when playBossTrack()/playPursuitTrack() commit — and if
+    // the player's actual first gesture (pressing a movement key, which
+    // they do almost immediately) lands in that still-pending window,
+    // main.js's own gesture listeners call start() again. Without the
+    // `special` check, that saw `started` still false and called
+    // playCurrent() — which passed its own generation check clean (nothing
+    // else had bumped generation since the boss track's commit) and
+    // clobbered the correctly-playing special track with a random shuffle
+    // pick a second or two in. Reported exactly that way: "La Mer de la
+    // Folie" started right, then a random track took over almost
+    // immediately. `special` (set synchronously the instant playSpecial()
+    // is called, well before any of this async settling) is the correct
+    // signal for "something has already been commanded, don't re-bootstrap"
+    // — playSpecial()'s own attempt() has its own independent retry-on-
+    // failure logic, so this doesn't need start() to cover that case too.
     start() {
-      if (started) return;
+      if (started || special) return;
       debug('start() called');
       playCurrent();
     },

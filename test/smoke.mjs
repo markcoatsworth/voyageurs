@@ -1021,6 +1021,38 @@ await step('music: playlist metadata + onTrack fires a well-formed track', async
   if (music.nowPlaying == null) throw new Error('music.nowPlaying still null after playback started');
 });
 
+// --- scenario 9a: a ?start= cheat's boss track survives the player's own --
+// --- first real gesture landing mid-commit --------------------------------
+
+await step('music: a boss track survives start() firing again right after it', async () => {
+  // Reproduces a real report: a ?start= cheat can hit game.js's
+  // consumeJustSpotted()/consumeJustCleared() — which call music.start()
+  // then a boss track — before the player's own first keydown/click has
+  // fired at all (see main.js's gesture listeners). That real gesture,
+  // landing almost immediately after, calls music.start() again — while
+  // `started` was still false (a special track's own play() hadn't
+  // resolved yet). Without the `special` guard in music.js's start(), that
+  // second call fell through to playCurrent() and clobbered the boss track
+  // with a random shuffle pick a moment later — reported as "La Mer de la
+  // Folie started right, then a different song took over almost
+  // immediately." The second start() call here is deliberately synchronous
+  // (same tick, before any canplay microtask can run) — the actual bug
+  // window in a real browser, where canplay is genuinely async, is wider
+  // than this, not narrower, so this is the sharpest reproduction, not a
+  // loose one.
+  const mod = await import('../src/audio/music.js');
+  const seen = [];
+  const music = mod.createMusic({ onTrack: (t) => seen.push(t.title) });
+  music.start();
+  music.playBossTrack();
+  music.playPursuitTrack();
+  music.start();
+  await new Promise((r) => setTimeout(r, 2200)); // past CANPLAY_FALLBACK_MS
+  if (music.nowPlaying?.title !== 'La Mer de la Folie') {
+    throw new Error(`expected the Pursuit track to survive, got "${music.nowPlaying?.title}" (history: ${seen.join(' -> ')})`);
+  }
+});
+
 // --- report ------------------------------------------------------------------
 
 restoreConsole();
