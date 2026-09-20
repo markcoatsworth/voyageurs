@@ -272,17 +272,21 @@ const CHASE_SHIP_LENGTH_HALF = 2.5;
 // simply outrunning it (madeGood/CHASE_DISTANCE below still works too —
 // this is an additional way to win the encounter, not a replacement).
 // Same per-hit damage as the approach frigate's own hull (BULLET_DAMAGE_
-// TO_HULL) for consistency. Raised well past the two earlier tone-down
-// passes (64, then 40) once those turned out to be solving the wrong
-// problem: CHASE_DISTANCE (150, its own real ceiling — see that constant's
-// own comment) plus the segment's own ambient current mean simply drifting
-// resolves the encounter within about a minute no matter what this pool is
-// — so a low HP made standing and fighting trivially fast instead of making
-// the *encounter* longer. 200 (25 hits) makes actually sinking it a real,
-// sustained dogfight for a player who engages rather than flees, without
-// this alone being able to stretch the whole encounter past what
-// CHASE_DISTANCE/the current already cap it at.
-const CHASE_HULL_HP = 200;
+// TO_HULL) for consistency. Went through three passes before this one: 64,
+// then 40, both from before the held-arena redesign (see the module's own
+// opening comment) — solving the wrong problem back then, since the old
+// distance-gated escape capped the whole encounter under a minute
+// regardless of this number. Then 200, right after the redesign — reported
+// as "way too easy... went down in just a handful of shots," which tracks:
+// a scripted continuous-fire test bot (same aim strategy as this file's own
+// smoke-test scenario, just left running instead of stopping at first
+// resolution) sank 200 HP in under 5 seconds. Recalibrated against that same
+// bot rather than guessed again — it took ~180s at 3000, ~203s at 3400,
+// landing this value just under CHASE_HOLD_TIME (210s) below: even a
+// best-case, never-misses run doesn't meaningfully undercut the survive-it
+// floor any more, and a real human — slower and less consistent than a
+// scripted bot — lands squarely in the requested 3-4 minutes either way.
+const CHASE_HULL_HP = 3400;
 // Wider than HULL_HIT_D_TOLERANCE (the stationary frigate's own, smaller
 // tolerance) because the target itself is moving every frame here, not
 // just the bullet crossing a fixed band. Loosened further (2.2 -> 3) in the
@@ -965,30 +969,41 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
     shipCenterX + beamPx * 0.55,
   ];
 
+  // Reported as "the sail is in front of the boat instead of on top of it" —
+  // accurate: every offset below used to be *negative* (top - lenPx*…),
+  // i.e. entirely above/ahead of `top`, the bow's own screen position (see
+  // the hull-shape comment above confirming `top` is the bow). With nothing
+  // but a thin 3px mast line connecting them, the sails read as a separate
+  // shape floating ahead of the hull rather than something mounted on it.
+  // Shifted onto positive offsets from `top` so the sail block now overlaps
+  // the hull's own forward deck — drawn after the deck (above, in source
+  // order) so it correctly layers on top of it, not the open water ahead of
+  // the bow.
   for (const mx of mastPositions) {
-    // Mast pole
+    // Mast pole — short now; it only needs to peek above the sail, not
+    // carry the whole height cue the old, much taller line did.
     ctx.strokeStyle = '#2a1a10';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(mx, top + lenPx * 0.06);
-    ctx.lineTo(mx, top - lenPx * 0.36);
+    ctx.moveTo(mx, top + lenPx * 0.32);
+    ctx.lineTo(mx, top - lenPx * 0.08);
     ctx.stroke();
 
     // Horizontal sail yard
     ctx.strokeStyle = '#2a1a10';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(mx - beamPx * 0.9, top - lenPx * 0.24);
-    ctx.lineTo(mx + beamPx * 0.9, top - lenPx * 0.24);
+    ctx.moveTo(mx - beamPx * 0.9, top + lenPx * 0.02);
+    ctx.lineTo(mx + beamPx * 0.9, top + lenPx * 0.02);
     ctx.stroke();
 
     // Sail
     ctx.fillStyle = '#e8e0d0';
-    ctx.fillRect(mx - beamPx * 0.8, top - lenPx * 0.33, beamPx * 1.6, lenPx * 0.17);
+    ctx.fillRect(mx - beamPx * 0.8, top - lenPx * 0.02, beamPx * 1.6, lenPx * 0.17);
 
     // Sail shading
     ctx.fillStyle = '#d0c8b8';
-    ctx.fillRect(mx - beamPx * 0.8, top - lenPx * 0.19, beamPx * 1.6, lenPx * 0.04);
+    ctx.fillRect(mx - beamPx * 0.8, top + lenPx * 0.12, beamPx * 1.6, lenPx * 0.04);
   }
 
   // Bow details - make the front clear

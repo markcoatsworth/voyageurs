@@ -343,15 +343,15 @@ await step('blockade: shooting the chase ship sinks it', () => {
   // that only works because it knows the ship's exact position out of band
   // (debugChaseShipPosition() is the same kind of test-only accessor
   // diable.js's debugCentreX() already provides).
-  // Budget well under CHASE_HOLD_TIME (210s) — the chase is a held arena
-  // now (blockade.js's own opening comment), so if the gunnery genuinely
-  // isn't sinking the ship within a couple minutes, that's a real
-  // regression to catch, not something the 210s timeout should quietly
-  // paper over.
+  // Budget just past CHASE_HOLD_TIME (210s) — CHASE_HULL_HP is calibrated
+  // (see its own comment) so even this same continuous-fire bot takes ~200s
+  // to sink it, deliberately just under the hold-time floor. A real budget
+  // tighter than that would make this scenario fail on the exact tuning
+  // it's meant to confirm, not catch an actual regression.
   let resolved = false;
   let sunk = false;
   let frames = 0;
-  for (; frames < 4000 && !resolved && g.game.blockadePct !== null; frames++) {
+  for (; frames < 6600 && !resolved && g.game.blockadePct !== null; frames++) {
     g.input.state.up = true;
     g.game.health = 100;
     const pos = g.game.blockade.debugChaseShipPosition();
