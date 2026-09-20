@@ -376,6 +376,51 @@ await step('blockade: shooting the chase ship sinks it', () => {
   notes.push(`  note blockade: sank the chase ship after ${(frames / 30).toFixed(1)}s of gunnery`);
 });
 
+// --- scenario 4a-2: the chase ship's fore/aft hold never renders off-screen -
+
+await step('blockade: British Warship Up/Down keeps the ship on screen', () => {
+  // Reported as "Up/Down don't do anything" — the ship WAS moving (verified
+  // separately), but worldToScreen has no perspective falloff (z maps
+  // straight to screen Y), and CHASE_HOLD_Z_MIN used to be large enough
+  // (-6) that opening range at the orbit's own farthest phase rendered the
+  // ship at y = -43 — off the top of the 220px canvas entirely, which reads
+  // as "broken," not "farther away." Holds Down (and separately Up) through
+  // more than a full CHASE_ORBIT_PERIOD so every phase of the orbit gets
+  // combined with the hold offset at least once, and checks the resulting
+  // screen Y (same z = worldDistance - chaseShipD math draw() itself uses,
+  // via debugChaseShipPosition()) never leaves [0, CANVAS_HEIGHT].
+  const g = newGame('rideau', SHIP_FLOW_DISTANCE + 2);
+  g.game.lateralOffset = widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5;
+  for (let i = 0; i < 500 && !g.game.blockade.isChaseHolding(); i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (!g.game.blockade.isChaseHolding()) throw new Error('never entered the chase to test the fore/aft hold');
+
+  for (const [label, dir] of [['down (opening)', 'down'], ['up (closing)', 'up']]) {
+    let minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < 400; i++) { // > CHASE_ORBIT_PERIOD (9s) at 1/30
+      g.input.state.up = dir === 'up';
+      g.input.state.down = dir === 'down';
+      g.game.update(1 / 30);
+      // Skip the ~1.1s "closing in" opening beat (blockade.js's
+      // CHASE_INTRO_TIME) — that intentionally starts the ship further
+      // behind/out of range and eases it in, a separate, known, brief
+      // quirk of its own (also capable of a momentary off-screen render),
+      // not the steady-state hold this scenario is checking.
+      if (i < 40) continue;
+      const pos = g.game.blockade.debugChaseShipPosition();
+      const z = g.game.flowDistance - pos.flowDistance;
+      const y = CANOE_SCREEN_Y + z * PIXELS_PER_UNIT;
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+    if (minY < 0 || maxY > CANVAS_HEIGHT) {
+      throw new Error(`holding ${label} put the ship off-screen: y ranged ${minY.toFixed(0)}..${maxY.toFixed(0)}, canvas is 0..${CANVAS_HEIGHT}`);
+    }
+  }
+});
+
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---
 
 await step('chasse-galerie: fly the gorge, no landing, glide down', () => {

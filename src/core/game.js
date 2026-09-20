@@ -94,6 +94,15 @@ const STEER_DAMPING = 6;
 // with no analog magnitude, so the only "sensitivity" knob is this number,
 // and dodging fireballs on a phone needs it to really move.
 const FIGHT_LATERAL_SPEED = isTouchPrimary() ? 28 : 15;
+// Same idea, same reason, for the British Warship's held chase — reported
+// as "the boss is too much faster than me." The gunboat's own lateral orbit
+// (blockade.js's CHASE_ORBIT_RADIUS_X/PERIOD) peaks at radius*(2π/period) ≈
+// 2.1 units/sec; the ramped STEER_ACCEL/STEER_DAMPING physics below always
+// lag a beat behind a target that's continuously reversing direction, same
+// failure as Diable's fight before FIGHT_LATERAL_SPEED existed. Set well
+// past that 2.1 peak so out-tracking the ship is a given, not a fight of
+// its own on top of the actual fight.
+const CHASE_LATERAL_SPEED = isTouchPrimary() ? 8 : 4.5;
 // The Diable fight sits at the head of the Ottawa gorge, where the river
 // itself is only ~6-10 units across (path.js's Ottawa branch) — far too
 // tight to dodge aimed hellfire in. The held fight gets its own lateral
@@ -209,9 +218,18 @@ const FIGHT_HOVER_RECENTER = 1.6; // units/sec drift back to the baseline when i
 // bullets are forward-only regardless — a max any higher broke exactly
 // this, caught by the smoke test's continuous-fire scenario (which holds Up
 // the whole fight) timing out instead of ever sinking the ship. Opening the
-// range (CHASE_HOLD_Z_MIN) has no such ceiling to respect, so it gets the
-// larger, more lateral-movement-sized number.
-const CHASE_HOLD_Z_MIN = -6;   // opened range, farther from the gunboat
+// range (CHASE_HOLD_Z_MIN) was first given a much larger, unconstrained
+// number on the reasoning that there's no such gameplay ceiling on that
+// side — true for the hit-test, but it missed a *screen* one: reported as
+// "Up/Down don't do anything," and worldToScreen's own flat (no
+// perspective) scale means z maps straight to screen Y with nothing to
+// stop it running off the top of the 220px canvas. At the old -6, the
+// worst point in the ship's own orbit rendered at screen y = -43 — off the
+// canvas entirely, not just subtle — which reads as "broken" long before a
+// player gets anywhere near noticing the *other* direction's smaller,
+// legitimate 2-unit shift. -2 keeps the ship on screen (y ≥ 21px from the
+// top) across the whole orbit, any hold position.
+const CHASE_HOLD_Z_MIN = -2;   // opened range, farther from the gunboat — was -6, see above
 const CHASE_HOLD_Z_MAX = 2;    // closed range — capped, see above
 const CHASE_HOLD_Z_SPEED = 5;  // units/sec of fore/aft move under input — matches FIGHT_HOVER_SPEED
 const CHASE_HOLD_Z_RECENTER = 1.6; // units/sec drift back to centre when idle
@@ -1096,6 +1114,8 @@ export class Game {
     // the canoe to a dead stop, same as the up/down dodge.
     if (this.diable.isHolding()) {
       this.lateralVX = steerInput * FIGHT_LATERAL_SPEED;
+    } else if (this.blockade.isChaseHolding()) {
+      this.lateralVX = steerInput * CHASE_LATERAL_SPEED;
     } else {
       // Fighting the current: steering authority drops the harder the
       // whitewater is pushing — but not in the air (Chasse-galerie), where the
@@ -1503,7 +1523,18 @@ export class Game {
         this._bossTrackCued = false;
       }
       if (this.blockade.consumeJustStartedChase()) {
-        this.showBanner('BRITISH WARSHIP');
+        // The big title card (#boss-banner), not the small milestone one —
+        // same treatment as BRITISH BLOCKADE above, not a lesser callout.
+        // Reported as still reading "BRITISH BLOCKADE" for a ?start=
+        // british-warship run: that cheat drops in past the frigate, so
+        // consumeJustSpotted() and consumeJustStartedChase() both fire on
+        // the very same frame — showBossBanner() below simply overwrites
+        // whatever showBossBanner('BRITISH BLOCKADE') just set (it clears
+        // and resets its own timeout on every call), so this one wins for
+        // that entry point, while a normal playthrough still sees both,
+        // one after the other, as the encounter actually progresses through
+        // its two phases.
+        this.showBossBanner('BRITISH WARSHIP');
         console.log('[GAME] Chase phase started. Canoe visible:', this.canoeVisible, 'Position:', this.flowDistance);
         // Music already cut over to PURSUIT_TRACK above (consumeJustCleared
         // fires the same frame, processed first) — nothing to start here.
@@ -1673,8 +1704,15 @@ export class Game {
       ctx.restore();
     }
 
-    // Same segment guards as the update() calls above.
-    if (this.segment === 'rideau') this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+    // Same segment guards as the update() calls above. flowDistance -
+    // _chaseHoldZ (0 outside the chase hold) matches the shifted argument
+    // update() already passes blockade.update() — without it here too, the
+    // ship (and its hazards) would render against the OLD fixed reference
+    // while the canoe sprite (see canoeScreenY above) now visibly moves,
+    // decoupling the two: the ship would appear to jump/drift independently
+    // of the gap actually closing rather than the canoe visibly approaching
+    // it.
+    if (this.segment === 'rideau') this.blockade.draw(ctx, this.flowDistance - this._chaseHoldZ, cameraWorldX, this.time);
     if (this.segment === 'lawrenceWest') {
       // The moon for the Loup-garou night — hung high and mostly off the top
       // of the frame (the far distance up-river reads as the horizon/sky), so
@@ -1755,7 +1793,15 @@ export class Game {
 
       // Bobbing grows in as the canoe leaves the water
       const bob = Math.sin(this.time * 2) * 3 * lift;
-      const canoeScreenY = CANOE_SCREEN_Y - altitude * PIXELS_PER_UNIT + bob;
+      // British Warship chase: reported as "I still can't move up or down" —
+      // the previous fix (blockade.js's isChaseHolding()) moved the *ship*
+      // in response to Up/Down, which is real (verified separately) but
+      // never reads as "my own movement," the same way left/right already
+      // does by moving the canoe itself. This term does that instead — same
+      // sign convention as altitude above (subtracting moves the canoe up-
+      // screen, toward the ship, on closing) — and _chaseHoldZ is 0 outside
+      // the hold, so it's a no-op everywhere else.
+      const canoeScreenY = CANOE_SCREEN_Y - altitude * PIXELS_PER_UNIT + bob - this._chaseHoldZ * PIXELS_PER_UNIT;
 
       if (lift > 0.05) {
         // Shadow on the water below, deepening as the canoe climbs
@@ -1819,7 +1865,13 @@ export class Game {
     }
 
     // Draw bullets
-    this.weapons.draw(ctx, this.flowDistance, cameraWorldX, worldToScreen);
+    // Same reasoning as blockade.draw() above — bullets are spawned at the
+    // real, frozen this.flowDistance and travel in real flowDistance space
+    // regardless of _chaseHoldZ, so rendering them against the same shifted
+    // reference keeps them visually leaving from the canoe's own (now
+    // possibly offset) screen position and landing on the ship's, instead
+    // of drifting off both.
+    this.weapons.draw(ctx, this.flowDistance - this._chaseHoldZ, cameraWorldX, worldToScreen);
 
     // Storm mood, over everything — all of it faded in by `storm`.
     if (storm > 0) {
