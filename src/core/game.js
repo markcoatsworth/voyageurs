@@ -1395,7 +1395,13 @@ export class Game {
         (entry) => this.handleHit(entry), this.weapons.getBullets(),
       );
       for (const ref of blockade.hitBullets) this.weapons.removeBullet(ref);
-      this.blockadePct = blockade.active ? blockade.progressPct : null;
+      // Reported: a bar showing during the approach ("British Blockade")
+      // itself, even though that leg is pure dodge-and-thread-the-gap —
+      // there's no health, hull, or hold-time concept to show yet, just
+      // whether you found the gap. The bar now only ever appears once the
+      // chase ("British Pursuit") actually starts, where progressPct is a
+      // real hull-HP readout (see that field's own comment in blockade.js).
+      this.blockadePct = (blockade.active && blockade.isChase) ? blockade.progressPct : null;
       this.blockadeCrossCurrent = blockade.crossCurrent || 0;
       // One boom per impact, hit or miss — a volley landing several shots
       // at once fires this the same number of times in the same frame.
@@ -1835,20 +1841,17 @@ export class Game {
       this.ui.hudDiable?.classList.add('hidden');
     }
 
-    // The Château Gauntlet/Pursuit bar — one readout across both phases of
-    // the encounter (blockadePct already covers both; see blockade.js's
-    // update()), the label swapping so it always names whichever phase is
-    // actually live: "BRITISH BLOCKADE" while closing on the frigate
-    // (progressPct = how much of the gap's been closed), "BRITISH PURSUIT"
-    // once the chase starts (progressPct = CHASE_HOLD_TIME survived — see
-    // that constant's own comment; sinking the ship ends the fight outright
-    // rather than showing up as a second way to fill this bar).
+    // The Pursuit's own health bar — the approach ("British Blockade") is
+    // pure dodge-and-thread-the-gap with no health/hull/hold-time concept
+    // to show, so blockadePct (set above) stays null through the whole
+    // approach and this only ever appears once the chase actually starts,
+    // always labeled for that phase. progressPct is the chase ship's own
+    // hull HP (blockade.js's own comment on that field) — full when the
+    // chase starts, draining as it's damaged, empty exactly as it sinks.
     if (this.blockadePct != null) {
       this.ui.hudBlockade?.classList.remove('hidden');
       if (this.ui.hudBlockadeFill) this.ui.hudBlockadeFill.style.width = `${clamp(this.blockadePct, 0, 100)}%`;
-      if (this.ui.hudBlockadeLabel) {
-        this.ui.hudBlockadeLabel.textContent = this.blockade.isChaseHolding() ? 'BRITISH PURSUIT' : 'BRITISH BLOCKADE';
-      }
+      if (this.ui.hudBlockadeLabel) this.ui.hudBlockadeLabel.textContent = 'BRITISH PURSUIT';
     } else {
       this.ui.hudBlockade?.classList.add('hidden');
     }

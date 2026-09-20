@@ -274,7 +274,10 @@ await step('blockade: approach -> pursuit -> escape -> on to Kingston', () => {
   for (let i = 0; i < 5000 && !sawFight; i++) {
     approach.input.state.up = true;
     approach.game.update(1 / 30);
-    if (approach.game.blockadePct !== null) sawFight = true;
+    // Not blockadePct — the bar (and blockadePct) no longer shows during the
+    // approach at all (reported as "a health bar during a pure dodge-and-
+    // thread-the-gap leg" — see game.js's own comment on that assignment).
+    if (approach.game.blockade.isApproachEngaged()) sawFight = true;
     if (approach.game.state === 'gameover') approach.game.start();
   }
   if (!sawFight) throw new Error('blockade never activated across the whole approach');
@@ -737,7 +740,10 @@ await step('rideau: paddle the whole leg and reach Kingston -> won', () => {
   const gapX = centerX(SHIP_FLOW_DISTANCE) + widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // right-side lane
   for (let i = 0; i < 12000 && !won; i++) {
     g.input.state.up = true;
-    const threading = g.game.blockadePct !== null && g.game.flowDistance < SHIP_FLOW_DISTANCE + 6;
+    // Not blockadePct — it no longer covers the approach (see the other
+    // fix's own comment above); isApproachEngaged() is the non-consuming
+    // status check that still does.
+    const threading = g.game.blockade.isApproachEngaged() && g.game.flowDistance < SHIP_FLOW_DISTANCE + 6;
     const wantX = threading ? gapX : centerX(g.game.flowDistance);
     const err = g.game.canoeWorldX - wantX;
     g.input.state.left = err > 0.4;

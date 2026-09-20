@@ -381,6 +381,18 @@ export function createBlockade() {
     isChaseHolding() {
       return chasePhase;
     },
+    // True only during the live approach — spotted, not yet cleared into
+    // the chase. A non-consuming, repeatable status check (unlike
+    // consumeJustSpotted()/consumeJustCleared() below, already drained
+    // every frame by game.js's own update() for its banner logic, so a
+    // second reader like the smoke test can't also use them without racing
+    // that internal consumption) for anything that needs to know "is the
+    // gauntlet currently live" — game.js no longer has its own always-set
+    // flag for this now that blockadePct stays null through the whole
+    // approach (see that assignment's own comment).
+    isApproachEngaged() {
+      return gapSide !== null && !resolved;
+    },
     getChaseHoldFlowDistance() {
       return chaseHoldFlowDistance;
     },
@@ -672,8 +684,17 @@ export function createBlockade() {
         for (const f of muzzleFlashes) f.t += dt;
         muzzleFlashes = muzzleFlashes.filter((f) => f.t < MUZZLE_FLASH_LIFETIME);
 
-        const chaseProgressPct = clamp((chaseHoldT / CHASE_HOLD_TIME) * 100, 0, 100);
-        return { active: true, progressPct: chaseProgressPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance: chaseShipD, hitBullets };
+        // Reported as "a health bar that starts right next to 0" — it used
+        // to be chaseHoldT/CHASE_HOLD_TIME (time survived, so it always
+        // opened near-empty and only read as a real "how close am I"
+        // signal in the final stretch). Exposing the ship's own hull HP
+        // instead gives an actual health bar: full when the chase starts,
+        // draining toward 0 exactly as it sinks — the CHASE_HOLD_TIME
+        // survival clock is still the floor everyone gets regardless of
+        // gunnery (see that constant's own comment), it just isn't what
+        // this bar shows any more.
+        const chaseHullPct = clamp((chaseHullHP / CHASE_HULL_HP) * 100, 0, 100);
+        return { active: true, progressPct: chaseHullPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance: chaseShipD, hitBullets };
       }
 
       if (!engaged) return { active: false, progressPct: 0, boomCount, crossCurrent: 0, gapSide: null, hitBullets };
