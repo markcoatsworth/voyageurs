@@ -514,6 +514,20 @@ export const LACHINE_RAPIDS_MAP_POINT = project({ lat: 45.4331, lon: -73.6808 })
 // leaving it flat green.
 export const MONT_ROYAL_MAP_POINT = project({ lat: 45.5045, lon: -73.5878 });
 
+// Kingston's own far shore — same 1820s-30s defence survey world/villages.js
+// builds its river-view landmarks from (KINGSTON_NAVY_BAY/KINGSTON_POINT_
+// HENRY/KINGSTON_CEDAR_ISLAND, that file's own comment), now with real
+// coordinates for the minimap: Point Frederick (Royal Military College
+// today) closing off Navy Bay just east of the town, Point Henry (Fort
+// Henry) guarding the harbour mouth further out, and Cedar Island further
+// out again in the lake. All three sit close enough together (under 3km)
+// that project()'s single-reference-point compression (this file's own
+// comment on LAT_REF/LON_REF) barely matters at this local scale, same
+// caveat as the Rideau leg generally.
+export const KINGSTON_POINT_FREDERICK_MAP_POINT = project({ lat: 44.22889, lon: -76.46861 });
+export const KINGSTON_FORT_HENRY_MAP_POINT = project({ lat: 44.23026, lon: -76.45968 });
+export const KINGSTON_CEDAR_ISLAND_MAP_POINT = project({ lat: 44.22742, lon: -76.45249 });
+
 // Flat, cross-segment village list — villages.js/game.js iterate this
 // exactly like the old non-branching route's single VILLAGES array, since
 // every entry's flowDistance already lives in a disjoint numeric range per

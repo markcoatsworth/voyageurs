@@ -17,6 +17,7 @@ import {
   SEGMENTS, LAC_SAINT_JEAN_SHAPE,
   MONTREAL_ISLAND_MAP_SHAPE, SAINTE_HELENE_MAP_POINT, NUNS_ISLAND_MAP_POINT, LACHINE_RAPIDS_MAP_POINT,
   MONTREAL_NORTH_CHANNEL_MAP_SHAPE, MONTREAL_SOUTH_CHANNEL_MAP_SHAPE, MONT_ROYAL_MAP_POINT,
+  KINGSTON_POINT_FREDERICK_MAP_POINT, KINGSTON_FORT_HENRY_MAP_POINT, KINGSTON_CEDAR_ISLAND_MAP_POINT,
 } from './river/route.js';
 
 // Width/height of the visible window, in the same km-equivalent units as
@@ -340,6 +341,48 @@ export function createMinimap() {
     rapids.appendChild(svgEl('path', { d: `M${(cx - 0.5).toFixed(2)},${(cy - 0.35).toFixed(2)} L${cx.toFixed(2)},${(cy + 0.35).toFixed(2)} L${(cx + 0.5).toFixed(2)},${(cy - 0.35).toFixed(2)}` }));
   }
   svg.appendChild(rapids);
+
+  // Kingston's own far shore — Point Frederick and Point Henry, real land
+  // closing off Navy Bay and the harbour mouth just east of the town (see
+  // world/river/route.js's own comment on the source), plus Cedar Island
+  // further out in the lake. Same small-fixed-marker treatment as Île
+  // Sainte-Hélène/Nuns' Island above (SOUTH_ISLAND_MARKER_RADIUS) rather
+  // than a surveyed polygon — the point is "real land sits here, on the
+  // opposite bank from the town," not an accurate coastline. Drawn after
+  // the Rideau ribbon (already painted by the segment loop above) so they
+  // read as land cut into the harbour, not decoration floating over the
+  // bank.
+  //
+  // Their real distances from Kingston (1.3-2.5km) land every one of them
+  // underneath or inside Kingston's own house icon, which is itself ~3km
+  // wide at this widget's scale (px(6.5) — see drawHouseIcon) — reported as
+  // "doesn't show the new landmarks," and this is why: they were drawn,
+  // just fully obscured. Same fix as MIN_SHORE_OFFSET_KM above (a real
+  // offset too small to read at this scale gets a legible floor, not left
+  // at its true tiny size): push each one out along its own real bearing
+  // from Kingston to at least a minimum distance, increasing per landmark
+  // so the three stay in their correct real order (Point Frederick
+  // closest, then Fort Henry, then Cedar Island furthest out) rather than
+  // all landing on one shared ring.
+  const kingstonMapPoint = SEGMENTS.rideau.points.find((p) => p.name === 'Kingston');
+  function pushPastKingston(p, minKm) {
+    const dx = p.x - kingstonMapPoint.x, dy = p.y - kingstonMapPoint.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    if (dist >= minKm) return p;
+    const scale = minKm / dist;
+    return { x: kingstonMapPoint.x + dx * scale, y: kingstonMapPoint.y + dy * scale };
+  }
+  const KINGSTON_LANDMARK_RADIUS = 1.1;
+  const kingstonLandmarks = [
+    pushPastKingston(KINGSTON_POINT_FREDERICK_MAP_POINT, 5),
+    pushPastKingston(KINGSTON_FORT_HENRY_MAP_POINT, 7.5),
+    pushPastKingston(KINGSTON_CEDAR_ISLAND_MAP_POINT, 10),
+  ];
+  for (const p of kingstonLandmarks) {
+    svg.appendChild(svgEl('circle', {
+      cx: p.x, cy: p.y, r: KINGSTON_LANDMARK_RADIUS, fill: MINIMAP_LAND_COLOR, stroke: MINIMAP_COASTLINE, 'stroke-width': 0.6,
+    }));
+  }
 
   // The three river-view towns that get a hand-authored, walled/stone
   // treatment in villages.js — everyone else (La Malbaie, Tadoussac

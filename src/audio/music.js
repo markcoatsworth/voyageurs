@@ -116,9 +116,21 @@ const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de 
 // endBossTrack() for this one (see win()'s own comment in game.js) — arriving
 // at Kingston is the end of the run, not a fight that resolves back into the
 // ambient shuffle.
-const KINGSTON_TRACK = { src: '/audio/les-chevaliers-un-siecle-davance.mp3', title: "Un Siècle d'Avance", artist: 'Les Chevaliers' };
+// volume overrides DEFAULT_VOLUME — reported as too quiet at the shuffle's
+// own level, same as DIABLE_TRACK/PURSUIT_TRACK above (this file measures at
+// the same -21 LUFS as the rest of the catalog — it's not mis-normalized,
+// the shuffle's own default level is just genuinely quiet). Same ceiling,
+// same fix: 1.0 is as loud as audio.volume goes; if that's still not enough,
+// the fix has to move to the file itself (see those two tracks' own comments).
+const KINGSTON_TRACK = { src: '/audio/les-chevaliers-un-siecle-davance.mp3', title: "Un Siècle d'Avance", artist: 'Les Chevaliers', volume: 1.0 };
 
-const DEFAULT_VOLUME = 0.35;
+// Reported as quiet on the whole, relative to other applications running
+// at the same time — not a single track's own mix, the shuffle's own
+// baseline level. 1.0 is the HTMLMediaElement ceiling (audio.volume can't
+// go any higher — see DIABLE_TRACK's own comment), so there's real room
+// left between this and that before the same "the fix has to move to the
+// file itself" limit applies. Was 0.35.
+const DEFAULT_VOLUME = 0.7;
 
 // Playback state, fetch timing, play() rejections. Kept from earlier
 // on-device troubleshooting of a mobile startup delay. (Separate from the

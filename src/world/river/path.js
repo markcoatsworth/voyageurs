@@ -108,13 +108,46 @@ export const ESTUARY_WIDTH_THRESHOLD = 30;
 // look like a flat, characterless pipe instead of a real river.
 const ESTUARY_AMP_SCALE = 2.8;
 
+// Kingston sits on its own point (route.js's `side: 1`), with a much
+// bigger body of water opening up on the opposite bank — Navy Bay, then
+// Point Henry, then the open lake (see world/villages.js's KINGSTON_NAVY_BAY
+// comment for the source). widthAt()'s own harbour flare below already
+// widens the channel symmetrically around centerX as Kingston approaches;
+// a symmetric flare alone reads as the town's own shore receding just as
+// fast as the far one opens up, which isn't what the real map shows — the
+// town's waterfront is a fixed, real place. Skewing centerX toward
+// Kingston's own +side bank over that same flare keeps the near (town)
+// edge relatively stable while the far edge — where the far-shore
+// landmarks already stand — opens up disproportionately, matching that
+// asymmetry. Same HARBOUR_FROM window rideauWidthAt() uses, so the skew
+// and the width flare ease in together, not staggered.
+export const KINGSTON_HARBOUR_SKEW = 15;
+function kingstonHarbourSkew(d) {
+  const frac = Math.min(1, Math.max(0, (d - RIDEAU_OFFSET) / RIDEAU_SPAN_DISTANCE));
+  const HARBOUR_FROM = 0.84; // matches rideauWidthAt's own threshold
+  if (frac < HARBOUR_FROM) return 0;
+  const p = (frac - HARBOUR_FROM) / (1 - HARBOUR_FROM);
+  const eased = p * p * (3 - 2 * p);
+  return KINGSTON_HARBOUR_SKEW * eased;
+}
+
 export function centerX(d) {
   // The Chasse-galerie gorge (river/gorge.js) — baked, checked first for
   // the same reason widthAt() below checks its own baked stretches first:
   // it's a narrow slice of the shared number line that shouldn't blend
   // with the ambient sine formula surrounding it.
   if (d >= GORGE_RANGE[0] && d <= GORGE_RANGE[1]) return gorgeCenterXAt(d);
-  return Math.sin(d * 0.09) * 3 + Math.sin(d * 0.21 + 1.7) * 1.5;
+  const base = Math.sin(d * 0.09) * 3 + Math.sin(d * 0.21 + 1.7) * 1.5;
+  // Checked the same way widthAt() checks its own Rideau branch first —
+  // the skew only ever applies past RIDEAU_OFFSET, so it can't leak into
+  // any other segment's own centerline. Subtracted, not added: Kingston's
+  // town bank is centerX + side*halfWidth with side=+1 (route.js), so
+  // *lowering* centerX as the harbour flares is what keeps that edge
+  // (mostly) tracking just the width growth alone rather than the width
+  // growth *plus* the skew stacking on top of it — see kingstonHarbourSkew's
+  // own comment for the intent this has to produce.
+  if (d >= RIDEAU_OFFSET) return base - kingstonHarbourSkew(d);
+  return base;
 }
 
 export function estuaryProgress(d) {

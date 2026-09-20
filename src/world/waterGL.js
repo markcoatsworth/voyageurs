@@ -13,7 +13,7 @@
 // JS function to the GPU — keep the two in sync if you retune the course.
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT, AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
-import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE, OTTAWA_EASE_START, OTTAWA_EASE_LEN } from './river/path.js';
+import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE, OTTAWA_EASE_START, OTTAWA_EASE_LEN, KINGSTON_HARBOUR_SKEW } from './river/path.js';
 import {
   MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL,
   LACHINE_RAPIDS_KEYFRAMES, FEATURE_ISLAND_RANGE, LACHINE_RAPIDS_RANGE,
@@ -78,6 +78,7 @@ const float RAPIDS_PERIOD = ${RAPIDS_PERIOD.toFixed(2)};
 const float RAPIDS_LENGTH = ${RAPIDS_LENGTH.toFixed(2)};
 const float RIDEAU_OFFSET = ${SEGMENT_SHAPE_OFFSET.rideau.toFixed(2)};
 const float RIDEAU_SPAN = ${RIDEAU_SPAN_DISTANCE.toFixed(2)};
+const float KINGSTON_HARBOUR_SKEW = ${KINGSTON_HARBOUR_SKEW.toFixed(2)};
 const float OTTAWA_EASE_START = ${OTTAWA_EASE_START.toFixed(2)};
 const float OTTAWA_EASE_LEN = ${OTTAWA_EASE_LEN.toFixed(2)};
 const float ISLAND_D_MIN = ${FEATURE_ISLAND_RANGE[0].toFixed(2)};
@@ -100,11 +101,25 @@ float gorgeCenterXAt(float d) {
 ${glslKeyframeChain('d', GORGE_CENTERX_KEYFRAMES, ['centerX'], { centerX: 'cx' })}
   return cx;
 }
+// Mirrors world/river/path.js's kingstonHarbourSkew() — see its own
+// comment for why centerX() skews toward Kingston's own bank as the
+// harbour opens, not just widthAt() flaring symmetrically.
+float kingstonHarbourSkew(float d) {
+  float frac = clamp((d - RIDEAU_OFFSET) / RIDEAU_SPAN, 0.0, 1.0);
+  float HARBOUR_FROM = 0.84;
+  if (frac < HARBOUR_FROM) return 0.0;
+  float p = (frac - HARBOUR_FROM) / (1.0 - HARBOUR_FROM);
+  float eased = p * p * (3.0 - 2.0 * p);
+  return KINGSTON_HARBOUR_SKEW * eased;
+}
 float centerX(float d) {
   // The Chasse-galerie gorge — baked, checked first, same as the JS
   // mirror in river/path.js.
   if (d >= GORGE_D_MIN && d <= GORGE_D_MAX) return gorgeCenterXAt(d);
-  return sin(d * 0.09) * 3.0 + sin(d * 0.21 + 1.7) * 1.5;
+  float base = sin(d * 0.09) * 3.0 + sin(d * 0.21 + 1.7) * 1.5;
+  // Subtracted, not added — see path.js's own comment on centerX().
+  if (d >= RIDEAU_OFFSET) return base - kingstonHarbourSkew(d);
+  return base;
 }
 float estuaryProgress(float d) {
   // 1700.0 (WIDTH_EASE_DISTANCE), not 900.0 (MOUTH_DISTANCE/where Tadoussac
