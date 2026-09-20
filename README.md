@@ -57,6 +57,13 @@ it's not the same running order every session:
   the British Blockade (the frigate gauntlet) — cuts in the instant it
   triggers, replacing whatever's playing. Supplied directly like "Reel du
   Paradis et Enfer" above, not sourced from an archive.
+- "Un Siècle d'Avance," performed by Les Chevaliers — Kingston's own arrival
+  cue, journey's end. Cuts in on the approach (the same "KINGSTON — Fort
+  Frontenac ahead" banner trigger, well before the dock), not in the regular
+  shuffle, and — unlike every other reserved track above — never drops back
+  into it either: once it starts, it plays through the dock, the walk
+  around town, and the victory card. Supplied directly like "Reel du
+  Paradis et Enfer"/"La Mer de la Folie" above, not sourced from an archive.
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
@@ -71,7 +78,8 @@ there's no reason to assume they're any more settled. St. Anne's Reel is a diffe
 2009 recording, clearly still under whatever copyright the band/podcast
 holds, used here on the assumption that a jam-session recording shared
 publicly on the band's own podcast feed is low-risk for casual/personal
-use — not the same thing as a rights clearance. "Reel du Paradis et Enfer" and "La Mer de la Folie"
+use — not the same thing as a rights clearance. "Reel du Paradis et Enfer,"
+"La Mer de la Folie," and "Un Siècle d'Avance"
 are a further step removed again: supplied directly rather than pulled from
 a documented archive, so there's no source link to point to and no
 independent confirmation of who holds what rights — treat them as the least

@@ -105,6 +105,18 @@ const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel
 // file itself (re-normalize the source to a louder integrated target) —
 // see that constant's own comment.
 const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de la Folie', artist: 'Les Chevaliers', volume: 1.0 };
+// Kingston's own arrival cue — supplied directly like DIABLE_TRACK/
+// PURSUIT_TRACK above (same "Les Chevaliers" artist, same normalize-audio.mjs
+// treatment, same README.md rights caveat), reserved rather than left in the
+// shuffle: journey's end deserves a deliberate needle-drop, not whatever the
+// shuffle happens to already be playing. Cut in at the same flowDistance as
+// the "KINGSTON — Fort Frontenac ahead" banner (game.js) — well before the
+// dock, so it's already playing under the on-foot scene, the cast-off, and
+// the victory card. Unlike every other boss track, nothing ever calls
+// endBossTrack() for this one (see win()'s own comment in game.js) — arriving
+// at Kingston is the end of the run, not a fight that resolves back into the
+// ambient shuffle.
+const KINGSTON_TRACK = { src: '/audio/les-chevaliers-un-siecle-davance.mp3', title: "Un Siècle d'Avance", artist: 'Les Chevaliers' };
 
 const DEFAULT_VOLUME = 0.35;
 
@@ -554,6 +566,14 @@ export function createMusic({ onTrack } = {}) {
     // shuffle the same as every other boss track once the chase resolves.
     playPursuitTrack() {
       playSpecial(PURSUIT_TRACK);
+    },
+    // Kingston's arrival cue — same cut-in-now behaviour as the other
+    // trigger-fired tracks, but deliberately never handed to endBossTrack()
+    // by any caller (see KINGSTON_TRACK's own comment) — once it starts, it
+    // plays through to the end of the run rather than resolving back into
+    // the shuffle.
+    playKingstonTrack() {
+      playSpecial(KINGSTON_TRACK);
     },
     // Cuts the boss track short and drops back into the normal shuffle —
     // called the moment the fight resolves, rather than waiting out the

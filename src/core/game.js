@@ -674,11 +674,14 @@ export class Game {
     this.ui.gameoverScreen.classList.remove('hidden');
     this.startSegment = 'fjord';
     this.startFlowDistance = 0;
-    // Let the fiddle tune keep playing under the victory card — this isn't a
-    // death, so no capsize horn and no music.stop(). But if the player blitzed
-    // into Kingston while the blockade chase was still on, drop Rule Britannia
-    // back to the shuffle so it isn't what's frozen under the card.
-    this.music?.endBossTrack();
+    // Let whatever's playing keep playing under the victory card — this
+    // isn't a death, so no capsize horn and no music.stop(). Used to also
+    // call endBossTrack() here, to drop a stale Warship/Blockade track back
+    // to the shuffle if the player blitzed into Kingston before it resolved
+    // — no longer needed, and would now be actively wrong: the only way to
+    // reach win() is crossing KINGSTON_FLOW_DISTANCE, which is always at
+    // least 70 units past where playKingstonTrack() already cut in (see its
+    // own call site above), so KINGSTON_TRACK is always what's playing here.
   }
 
   leaveVillage() {
@@ -1341,6 +1344,12 @@ export class Game {
       if (!this.kingstonAnnounced && this.flowDistance >= KINGSTON_FLOW_DISTANCE - 70) {
         this.kingstonAnnounced = true;
         this.showBanner('KINGSTON — Fort Frontenac ahead');
+        // Journey's end gets its own deliberate cue, not whatever the
+        // shuffle happens to be playing — same trigger point as the banner
+        // above, so it's already running under the approach, the dock, and
+        // the victory card (see KINGSTON_TRACK's own comment, audio/music.js).
+        this.music?.start(); // safe even if ?start=kingston drops in before a gesture
+        this.music?.playKingstonTrack();
       }
       if (this.flowDistance >= KINGSTON_FLOW_DISTANCE) {
         this.win();

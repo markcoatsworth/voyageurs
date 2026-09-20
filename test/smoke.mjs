@@ -1000,6 +1000,42 @@ await step('rideau: reaching Kingston by its dock enters the town, then casting 
   if (!won) throw new Error('casting off from Kingston by its dock never reached the win condition');
 });
 
+await step('kingston: the arrival track cuts in at the approach banner and survives to the win screen', async () => {
+  // A static, deliberate needle-drop, not part of the shuffle — reported as
+  // "I want this to be a static song, not a random one, play every time."
+  // Cuts in at the same flowDistance as the "KINGSTON — Fort Frontenac
+  // ahead" banner (game.js), well before the dock, and — unlike every other
+  // boss track — nothing ever calls endBossTrack() for it (see win()'s own
+  // comment): it should still be playing under the victory card, not have
+  // reverted to the ambient shuffle.
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  // -40 is past both the approach banner's own trigger (-70) and the
+  // British Warship's "well past the trigger" auto-resolve threshold
+  // (WARSHIP_FLOW_DISTANCE + 50, i.e. -45 from Kingston) — starting any
+  // further back lands inside the Warship's real held-fight zone, same as
+  // ?start=kingston itself has to clear (see its own comment in main.js).
+  const g = newGame('rideau', kingston.flowDistance - 40);
+  g.game.update(1 / 30);
+  await new Promise((r) => setTimeout(r, 20)); // let the fake play()/canplay promises resolve
+  if (g.game.music.nowPlaying?.title !== "Un Siècle d'Avance") {
+    throw new Error(`arrival track never cut in — playing "${g.game.music.nowPlaying?.title}" instead`);
+  }
+
+  let won = false;
+  for (let i = 0; i < 2000 && !won; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') g.game.leaveVillage();
+    if (g.game.state === 'won') won = true;
+  }
+  if (!won) throw new Error('never reached the win condition after the arrival track cut in');
+  await new Promise((r) => setTimeout(r, 20));
+  if (g.game.music.nowPlaying?.title !== "Un Siècle d'Avance") {
+    throw new Error(`arrival track didn't survive to the win screen — playing "${g.game.music.nowPlaying?.title}" instead`);
+  }
+});
+
 // --- scenario 4c: casting off from Montreal doesn't loop back in ----------
 
 await step('montreal: cast off without re-docking', () => {
