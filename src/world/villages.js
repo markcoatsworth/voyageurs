@@ -667,10 +667,25 @@ export function getDockHit(flowDistance, canoeWorldX) {
 // going"); see test/smoke.mjs's own regression test for it.
 export const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;
 
+// Kingston's own hand-authored spread (KINGSTON_FORT's tip at -25,
+// KINGSTON_CEDAR_ISLAND at +15) now reaches past VISIBLE_Z_RANGE on the
+// near-shore side. That's the *outer*, per-village gate below deciding
+// whether drawOneVillage() runs at all this frame — not the same thing as
+// an individual building's own screen position, which is still clipped to
+// the camera's real view naturally. Left too narrow, the far end of the
+// spread doesn't get a chance to scroll into view gradually during an
+// ordinary approach — it only starts drawing (and by then is already
+// close) once worldDistance is already within VISIBLE_Z_RANGE of Kingston's
+// own flowDistance, well after a -25 tip would otherwise have come into
+// camera range. +10 covers the full spread with room to spare.
+const KINGSTON_RENDER_GATE_EXTRA = 10;
+export const KINGSTON_RENDER_GATE = VISIBLE_Z_RANGE + KINGSTON_RENDER_GATE_EXTRA;
+
 export function drawVillages(ctx, worldDistance, cameraWorldX, time = 0) {
   VILLAGES.forEach((v, i) => {
     const z = worldDistance - v.flowDistance;
-    if (Math.abs(z) > VISIBLE_Z_RANGE) return;
+    const range = v.name === 'Kingston' ? KINGSTON_RENDER_GATE : VISIBLE_Z_RANGE;
+    if (Math.abs(z) > range) return;
     drawOneVillage(ctx, v, i, worldDistance, cameraWorldX, time);
   });
 }

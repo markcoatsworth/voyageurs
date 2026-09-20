@@ -108,21 +108,30 @@ function normalizeStartName(s) {
 // units short of its dock (bossfights/britishWarship.js,
 // world/villages.js's KINGSTON_DOCK_REACH), i.e. dropped in "directly in
 // front of Kingston" rather than anywhere near a real approach. Given its
-// own override instead: landing just past Jones Falls put the whole
-// Warship fight back in the way of a cheat whose entire point is to skip
-// straight to Kingston — reported as "too far back, needs to be after the
-// Warship." Re-anchored off Kingston's own flowDistance (- 15) instead of
-// WARSHIP_FLOW_DISTANCE + 55 — that landed past the Warship fine, but 40
-// units short of the dock, and world/villages.js's drawVillages() doesn't
-// draw a village *at all* until the canoe is within VISIBLE_Z_RANGE
-// (~18.75 units) of its own flowDistance. Landing 40 units out meant nothing
-// Kingston-related rendered — not the dock, not a single building — until
-// ~21 more units of paddling closed that gap, which read as "the town
-// isn't there" rather than "keep paddling." -15 lands inside that render
-// gate immediately (the whole town is visible on the very first frame) and
-// is still comfortably past britishWarship.js's own "well past the
-// trigger" auto-resolve threshold (+50 past TRIGGER_DISTANCE), so the
-// Warship still resolves quietly with no banner or hold.
+// own override instead, through two more rounds of tuning:
+//   1. Landing just past Jones Falls put the whole Warship fight back in
+//      the way of a cheat whose entire point is to skip straight to
+//      Kingston — reported as "too far back, needs to be after the
+//      Warship."
+//   2. Re-anchored to WARSHIP_FLOW_DISTANCE + 55, comfortably past the
+//      Warship — but 40 units short of the dock, and world/villages.js's
+//      drawVillages() doesn't draw a village *at all* until the canoe is
+//      within its render gate of its own flowDistance. Landing that far out
+//      meant nothing Kingston-related rendered until ~21 more units of
+//      paddling closed the gap — reported as "not showing up," no console
+//      errors, because it wasn't a crash.
+//   3. Re-anchored to -15, inside the render gate — but with
+//      KINGSTON_DOCK_HIT_Z (7) that close, paddling Up for even a couple of
+//      seconds crossed straight into the dock and onto its on-foot scene
+//      (villageScene.js, untouched by any of the river-view work) before
+//      there was any real look at the approach — reported as landing
+//      "almost directly on the dock," and wanting to "watch the coastline."
+// -26 below leaves real runway (~19 units, past KINGSTON_DOCK_HIT_Z) to
+// paddle and actually see the approach before docking, while still landing
+// inside world/villages.js's KINGSTON_RENDER_GATE (the widened gate — see
+// its own comment on why the plain VISIBLE_Z_RANGE stopped being enough
+// once the town's spread grew past it) and comfortably past the Warship's
+// own auto-resolve threshold (+50 past TRIGGER_DISTANCE).
 //
 
 // "gatineau" is the one keyword below that isn't a flowDistance/segment
@@ -149,13 +158,8 @@ export const START_KEYWORDS = {
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
-  // See the module comment above on why this overrides the generic
-  // per-village fallback below instead of falling through to it. -15 lands
-  // inside world/villages.js's VISIBLE_Z_RANGE render gate (the whole town
-  // is on screen immediately) while staying well past WARSHIP_FLOW_DISTANCE
-  // + 50, britishWarship.js's own "well past the trigger" auto-resolve
-  // threshold — the fight still resolves quietly, no banner or hold.
-  [normalizeStartName('kingston')]: { flowDistance: KINGSTON_FLOW_DISTANCE - 15, segment: 'rideau' },
+  // See the module comment above (three rounds of tuning) on why -26.
+  [normalizeStartName('kingston')]: { flowDistance: KINGSTON_FLOW_DISTANCE - 26, segment: 'rideau' },
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
