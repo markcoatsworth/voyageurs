@@ -658,7 +658,14 @@ export function getDockHit(flowDistance, canoeWorldX) {
   return null;
 }
 
-const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;
+// Exported so anything placing a village outside the normal "arrive by
+// continuous paddling" flow (main.js's ?start= cheats) can check it lands
+// within this — a village draws nothing at all, not even its dock, until
+// the canoe is within this many units of its own flowDistance. Missed once
+// (?start=kingston landed 40 units out, so nothing rendered for the first
+// ~21 units of paddling — read as "the town isn't there" instead of "keep
+// going"); see test/smoke.mjs's own regression test for it.
+export const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;
 
 export function drawVillages(ctx, worldDistance, cameraWorldX, time = 0) {
   VILLAGES.forEach((v, i) => {

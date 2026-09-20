@@ -56,7 +56,7 @@ const { createMinimap } = await import('../src/world/minimap.js');
 const { createMusic } = await import('../src/audio/music.js');
 const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
-const { getDockHit } = await import('../src/world/villages.js');
+const { getDockHit, VISIBLE_Z_RANGE } = await import('../src/world/villages.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
@@ -487,6 +487,30 @@ await step('kingston: running into the dock enters the town on foot', () => {
     if (g.game.state === 'won') won = true;
   }
   if (!won) throw new Error('casting off from Kingston after the dock never reached the win condition');
+});
+
+// --- scenario 4e: ?start=kingston lands where the town actually renders ----
+
+await step('kingston: the ?start= cheat lands inside the render gate, not just past the Warship', async () => {
+  // Reported: "still not showing up" after ?start=kingston, in a browser,
+  // no console errors — not a crash. world/villages.js's drawVillages()
+  // doesn't draw a village *at all* (not the dock, not one building) until
+  // the canoe is within VISIBLE_Z_RANGE of its own flowDistance; the cheat
+  // used to land 40 units short (past the Warship, but nowhere near that
+  // gate), so the very thing the cheat exists to let you jump straight to
+  // was invisible for the first ~21 units of paddling. Every keyword that
+  // targets a hand-authored village needs to clear this, not just Kingston
+  // — checked generically here so the next one doesn't ship the same gap.
+  // Fresh import resolves from the module cache (the "main.js loads"
+  // scenario above already evaluated it once) rather than re-running it.
+  const { START_KEYWORDS } = await import('../src/main.js');
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  const start = START_KEYWORDS['kingston'];
+  if (!start) throw new Error('no "kingston" entry in START_KEYWORDS — a name/lookup drifted');
+  const gap = Math.abs(kingston.flowDistance - start.flowDistance);
+  if (gap >= VISIBLE_Z_RANGE) {
+    throw new Error(`?start=kingston lands ${gap.toFixed(1)} units from Kingston's own flowDistance — outside VISIBLE_Z_RANGE (${VISIBLE_Z_RANGE.toFixed(1)}), so nothing renders on arrival`);
+  }
 });
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---

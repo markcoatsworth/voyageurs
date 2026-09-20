@@ -111,11 +111,18 @@ function normalizeStartName(s) {
 // own override instead: landing just past Jones Falls put the whole
 // Warship fight back in the way of a cheat whose entire point is to skip
 // straight to Kingston — reported as "too far back, needs to be after the
-// Warship." Anchored off WARSHIP_FLOW_DISTANCE instead, past its own
-// "well past the trigger" auto-resolve threshold (+50, britishWarship.js)
-// so the fight quietly resolves itself with no banner or hold, leaving a
-// real stretch of open water before the dock rather than the old
-// dropped-right-on-top-of-it problem.
+// Warship." Re-anchored off Kingston's own flowDistance (- 15) instead of
+// WARSHIP_FLOW_DISTANCE + 55 — that landed past the Warship fine, but 40
+// units short of the dock, and world/villages.js's drawVillages() doesn't
+// draw a village *at all* until the canoe is within VISIBLE_Z_RANGE
+// (~18.75 units) of its own flowDistance. Landing 40 units out meant nothing
+// Kingston-related rendered — not the dock, not a single building — until
+// ~21 more units of paddling closed that gap, which read as "the town
+// isn't there" rather than "keep paddling." -15 lands inside that render
+// gate immediately (the whole town is visible on the very first frame) and
+// is still comfortably past britishWarship.js's own "well past the
+// trigger" auto-resolve threshold (+50 past TRIGGER_DISTANCE), so the
+// Warship still resolves quietly with no banner or hold.
 //
 
 // "gatineau" is the one keyword below that isn't a flowDistance/segment
@@ -128,7 +135,13 @@ function normalizeStartName(s) {
 // got there — landing anywhere near the real flowDistance just gets
 // clamped straight into the fight instead of reaching the village.
 const RIDEAU_START = { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' };
-const START_KEYWORDS = {
+const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flowDistance ?? Infinity;
+// Exported for test/smoke.mjs — a regression test checks every keyword
+// that targets a hand-authored village lands within that village's own
+// render gate (world/villages.js's VISIBLE_Z_RANGE), not just past
+// whatever boss fight happens to sit in front of it. See "kingston"'s own
+// comment above for the bug this is guarding against.
+export const START_KEYWORDS = {
   [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FLOW_DISTANCE - 24, segment: 'fjord' },
   [normalizeStartName('loup-garou')]: { flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
@@ -137,10 +150,12 @@ const START_KEYWORDS = {
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
   // See the module comment above on why this overrides the generic
-  // per-village fallback below instead of falling through to it. +55, not
-  // +50 exactly, to land a few units past britishWarship.js's own
-  // auto-resolve threshold rather than right on the boundary.
-  [normalizeStartName('kingston')]: { flowDistance: WARSHIP_FLOW_DISTANCE + 55, segment: 'rideau' },
+  // per-village fallback below instead of falling through to it. -15 lands
+  // inside world/villages.js's VISIBLE_Z_RANGE render gate (the whole town
+  // is on screen immediately) while staying well past WARSHIP_FLOW_DISTANCE
+  // + 50, britishWarship.js's own "well past the trigger" auto-resolve
+  // threshold — the fight still resolves quietly, no banner or hold.
+  [normalizeStartName('kingston')]: { flowDistance: KINGSTON_FLOW_DISTANCE - 15, segment: 'rideau' },
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
