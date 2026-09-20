@@ -185,6 +185,37 @@ const FIGHT_HOVER_MIN = -1.0;   // fully retreated — low on screen, near the b
 const FIGHT_HOVER_MAX = 4.6;    // pressed up toward him
 const FIGHT_HOVER_SPEED = 5;    // units/sec of vertical move under input
 const FIGHT_HOVER_RECENTER = 1.6; // units/sec drift back to the baseline when idle
+
+// British Warship chase: same "held arena, but up/down still does something"
+// shape as Diable's hover above, just along the flow axis (fore/aft toward
+// or away from the gunboat) instead of vertical — reported as the chase
+// being pure left/right, with Up/Down completely dead the whole hold
+// (game.js clamps flowDistance to getChaseHoldFlowDistance() every frame,
+// discarding whatever effectiveSpeed would otherwise have done). This is a
+// virtual offset only, subtracted from the real (pinned) flowDistance when
+// calling blockade.update() — see that call site's own comment on why
+// subtracting (not adding) is what actually closes the gap, and why draw()
+// deliberately does NOT get the same shift. The real world/terrain never
+// advances, so the screen stays exactly as static as it already was; only
+// the ship and its cannon shots shift toward or away from the canoe.
+// No nonzero baseline the way Diable's BOSS_HOVER_HEIGHT is — the natural
+// rest position here is just "wherever the chase started," i.e. zero — but
+// deliberately NOT a symmetric range either. Closing in (CHASE_HOLD_Z_MAX)
+// is capped well under CHASE_ANCHOR_LEAD (blockade.js, =3, the orbit's own
+// minimum lead) so this offset can never push the gunboat's real hit-test
+// position level with or behind the canoe: blockade.js's own CHASE_ORBIT_
+// PERIOD comment already documents "never behind" as a deliberate fix (an
+// autonomous swing behind read as unreadable chaos), and weapons.js's
+// bullets are forward-only regardless — a max any higher broke exactly
+// this, caught by the smoke test's continuous-fire scenario (which holds Up
+// the whole fight) timing out instead of ever sinking the ship. Opening the
+// range (CHASE_HOLD_Z_MIN) has no such ceiling to respect, so it gets the
+// larger, more lateral-movement-sized number.
+const CHASE_HOLD_Z_MIN = -6;   // opened range, farther from the gunboat
+const CHASE_HOLD_Z_MAX = 2;    // closed range — capped, see above
+const CHASE_HOLD_Z_SPEED = 5;  // units/sec of fore/aft move under input — matches FIGHT_HOVER_SPEED
+const CHASE_HOLD_Z_RECENTER = 1.6; // units/sec drift back to centre when idle
+
 // Flying the canoe straight into Diable's own body (not his fire) — costs
 // furs instead of hull health, the first hazard in the game that docks the
 // score rather than health. A real deterrent against ramming through him
@@ -333,6 +364,10 @@ export class Game {
     // Canoe altitude while the Diable fight holds the river locked — driven
     // by up/down for a vertical dodge, eased back to BOSS_HOVER_HEIGHT idle.
     this._bossHoverAlt = BOSS_HOVER_HEIGHT;
+    // Fore/aft offset while the British Warship chase holds flowDistance —
+    // see CHASE_HOLD_Z_* above. Zero is the rest position (unlike
+    // _bossHoverAlt's nonzero baseline).
+    this._chaseHoldZ = 0;
     this.weapons = createWeapons();
 
     // Set up weapon firing callback
@@ -453,6 +488,7 @@ export class Game {
     this.diable.reset();
     this.diablePct = null;
     this._bossHoverAlt = BOSS_HOVER_HEIGHT;
+    this._chaseHoldZ = 0;
     this.weapons.reset();
     // Respawning at the Diable checkpoint means the pistol is a given — you
     // can't fight him bare-handed, and ?start=diable / a capsize mid-fight
@@ -1186,6 +1222,22 @@ export class Game {
       this.chasseGalerie.setHeldAlt(this._bossHoverAlt);
     }
 
+    // British Warship chase: the pursuit holds flowDistance (see the clamp
+    // above), but up/down still move the canoe fore/aft within that
+    // standoff — press up to close on the gunboat (easier shots, cannon
+    // fire tightens up too), pull back on down to open range. Recenters to
+    // 0 when neither is held, same idle behaviour as Diable's hover.
+    if (this.blockade.isChaseHolding()) {
+      if (keys.up) this._chaseHoldZ += CHASE_HOLD_Z_SPEED * dt;
+      else if (keys.down) this._chaseHoldZ -= CHASE_HOLD_Z_SPEED * dt;
+      else {
+        this._chaseHoldZ -= Math.sign(this._chaseHoldZ) * Math.min(Math.abs(this._chaseHoldZ), CHASE_HOLD_Z_RECENTER * dt);
+      }
+      this._chaseHoldZ = clamp(this._chaseHoldZ, CHASE_HOLD_Z_MIN, CHASE_HOLD_Z_MAX);
+    } else {
+      this._chaseHoldZ = 0; // always centred outside the hold, so a fresh chase starts clean
+    }
+
     // Chasse-galerie: tick the flight here — before the dock / braid-island /
     // obstacle checks below — so those all see this frame's airborne state
     // and nothing on the water can touch the canoe the instant it lifts off.
@@ -1390,8 +1442,23 @@ export class Game {
       // have the pistol by this point in the run (see blockade.js's own
       // module comment). hitBullets are removed from the pool below, same
       // contract as diable.update()'s res.hitBullets.
+      // this._chaseHoldZ (0 outside the chase hold) is the fore/aft offset
+      // from CHASE_HOLD_Z_* above. Subtracted, not added: blockade.js pins
+      // the gunboat CHASE_ANCHOR_LEAD..+RADIUS_Z units *ahead* of whatever
+      // playerFlowDistance it's given, so shrinking that argument is what
+      // actually closes the gap to the ship — passing this.flowDistance
+      // unchanged (screen stays static; this._chaseHoldZ never touches the
+      // real world) would leave the gap untouched, since the ship's own
+      // position is defined purely relative to this same argument. The
+      // real weapons.js pistol bullets never see this shift (they live in
+      // real flowDistance, spawned before the chase started), which is
+      // exactly what makes it land right: draw() below is passed the real,
+      // unshifted this.flowDistance, so the ship/hazards render at
+      // whatever this virtual distance implies relative to the *real*
+      // canoe position — the same relationship a live bullet is actually
+      // flying through.
       const blockade = this.blockade.update(
-        dt, this.flowDistance, this.canoeWorldX, effectiveSpeed,
+        dt, this.flowDistance - this._chaseHoldZ, this.canoeWorldX, effectiveSpeed,
         (entry) => this.handleHit(entry), this.weapons.getBullets(),
       );
       for (const ref of blockade.hitBullets) this.weapons.removeBullet(ref);
