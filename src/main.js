@@ -535,17 +535,9 @@ setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
 // transition (0.8s) has actually finished.
 setTimeout(() => ui.titleScreen.classList.add('hidden'), 4500 + 900);
 
-// TEMPORARY diagnostic — a ?start= cheat has repeatedly not shown its
-// target's own content in testing despite the computed position checking
-// out from source; this makes the actual runtime values inspectable
-// (console + window.__debugGame) instead of guessing blind. Remove once
-// that's root-caused.
-console.log('[START DEBUG]', { raw: new URLSearchParams(window.location.search).get('start'), startFlowDistance, startSegment });
-
 let game = null;
 try {
   game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance, startSegment });
-  window.__debugGame = game;
   // ?start=diable is a checkpoint, not just a spawn point — hand over the
   // pistol and mark it so a capsize respawns at the fight.
   if (startedAtDiable) game.armDiableCheckpoint();

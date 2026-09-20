@@ -8,6 +8,7 @@ import {
   createCabinSprite, createWalkerSprite, createCanoeSprite, createPineTreeSprite, createRepairShopSprite, createTraderSprite,
   createStoneBuildingSprite, createChurchSprite, createRampartSprite, createGunShopSprite, createGunsmithSprite,
   createSulpicianTowersSprite, createMontRoyalSprite, createWindmillSprite, createMusketShopSprite, createMusketMasterSprite,
+  createRuinedFortSprite,
 } from './sprites.js';
 import { villageLayout } from './villages.js';
 import { hashRange } from '../shared/hash.js';
@@ -321,6 +322,38 @@ const TADOUSSAC_PATH = { x: 25, y: 116, w: 285, h: 12 };
 // puts you on a real, walkable line straight up to the church door, the
 // most direct route a landing party would actually take.
 const TADOUSSAC_CHAPEL_SPUR = { x: 159, y: 96, w: 12, h: DOCK_TOP - 96 };
+
+// Kingston's on-foot layout — mapped onto this fixed screen the same way
+// Trois-Rivières' own is (buildingsForTroisRivieres' comment): no walls or
+// scrolling world, just a denser two-row spread than the plain procedural
+// villages get, matching the "bigger built-up city" the river view
+// (world/villages.js's KINGSTON_BANDS) already gives it — 14 buildings,
+// same count as Québec City's own on-foot layout. St. George's (see
+// KINGSTON_CHURCH's own comment in villages.js) set back and central,
+// same convention every other hand-authored town's church uses; Fort
+// Frontenac's ruins (createRuinedFortSprite — unused anywhere else in the
+// game, a good fit for a fur-trade post that had already fallen out of
+// use by the 1790s, unlike the river view's still-standing KINGSTON_FORT
+// corner) standing apart at the town's own western edge, same "small
+// cluster apart from the main spread" treatment the river view gives it.
+const KINGSTON_ONFOOT_BUILDINGS = [
+  // Upper Kingston, back row — inland from the harbour.
+  { kind: 'stone', x: 40, y: 58, variant: 1, mirror: false },
+  { kind: 'stone', x: 90, y: 54, variant: 2, mirror: true },
+  { kind: 'stone', x: 140, y: 60, variant: 0, mirror: false },
+  { kind: 'stone', x: 195, y: 56, variant: 1, mirror: true },
+  { kind: 'stone', x: 240, y: 60, variant: 2, mirror: false },
+  { kind: 'stone', x: 285, y: 54, variant: 0, mirror: true },
+  { kind: 'church', x: 165, y: 98, mirror: false },
+  // The town proper, front row — closer to the harbour.
+  { kind: 'stone', x: 45, y: 140, variant: 2, mirror: true },
+  { kind: 'stone', x: 95, y: 146, variant: 0, mirror: false },
+  { kind: 'stone', x: 140, y: 142, variant: 1, mirror: true },
+  { kind: 'stone', x: 195, y: 144, variant: 2, mirror: false },
+  { kind: 'stone', x: 245, y: 140, variant: 0, mirror: true },
+  { kind: 'stone', x: 290, y: 146, variant: 1, mirror: false },
+  { kind: 'ruinedfort', x: 25, y: 106, mirror: false },
+];
 
 // Montréal's on-foot layout — rebuilt from an actual period source: Thomas
 // Jefferys' 1738 "Plan of the Town and Fortifications of Montreal or Ville
@@ -787,6 +820,18 @@ function buildingsForTadoussac() {
   }));
 }
 
+function buildingsForKingston() {
+  return KINGSTON_ONFOOT_BUILDINGS.map((b) => ({
+    kind: b.kind,
+    variant: b.variant ?? 0,
+    mirror: b.mirror,
+    anchorX: b.x,
+    anchorY: b.y,
+    footHalfW: b.kind === 'church' ? 12 : b.kind === 'ruinedfort' ? 20 : 13,
+    footHeight: b.kind === 'church' ? 26 : b.kind === 'ruinedfort' ? 18 : 24,
+  }));
+}
+
 function buildingsForMontreal() {
   return MONTREAL_ONFOOT_BUILDINGS.map((b) => ({
     kind: b.kind,
@@ -969,6 +1014,7 @@ const cabinSprites = [0, 1, 2].map(createCabinSprite);
 const stoneSprites = [0, 1, 2].map(createStoneBuildingSprite);
 const churchSprite = createChurchSprite();
 const rampartSprite = createRampartSprite();
+const ruinedFortSprite = createRuinedFortSprite();
 const seminarySprite = createSulpicianTowersSprite();
 const montRoyalSprite = createMontRoyalSprite();
 const montrealWindmillSprite = createWindmillSprite();
@@ -994,6 +1040,7 @@ function buildingSprite(b) {
   if (b.kind === 'church') return churchSprite;
   if (b.kind === 'seminary') return seminarySprite;
   if (b.kind === 'windmill') return montrealWindmillSprite;
+  if (b.kind === 'ruinedfort') return ruinedFortSprite;
   if (b.kind === 'stone') return stoneSprites[b.variant % stoneSprites.length];
   return cabinSprites[b.variant % cabinSprites.length];
 }
@@ -1336,6 +1383,7 @@ export function createVillageScene() {
   let isTroisRivieres = false;
   let isMontreal = false;
   let isTadoussac = false;
+  let isKingston = false;
   let wasNearTrader = false;
   let traderPos = traderPosFor(repairShop);
   let reboardZone = { x0: dockX0(worldWidth), x1: dockX1(worldWidth), y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
@@ -1362,6 +1410,7 @@ export function createVillageScene() {
       isTroisRivieres = village && village.name === 'Trois-Rivieres';
       isMontreal = village && village.name === 'Montreal';
       isTadoussac = village && village.name === 'Tadoussac';
+      isKingston = village && village.name === 'Kingston';
       const isGatineau = village && village.name === 'Gatineau';
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : isQuebecCity ? QUEBEC_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
@@ -1381,6 +1430,8 @@ export function createVillageScene() {
         ? [...buildingsForMontreal(), repairShop]
         : isTadoussac
         ? [...buildingsForTadoussac(), repairShop]
+        : isKingston
+        ? [...buildingsForKingston(), repairShop]
         : [...buildingsFor(seed), repairShop];
       // Gatineau's own musket shop is layered on top of whichever branch
       // above ran (the plain procedural one, same as every other ordinary
