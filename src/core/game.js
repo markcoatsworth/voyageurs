@@ -11,8 +11,8 @@ import {
   createBlockade,
   SHIP_FLOW_DISTANCE as BLOCKADE_SHIP_FLOW_DISTANCE,
   APPROACH_RANGE as BLOCKADE_APPROACH_RANGE,
-  CHASE_DISTANCE as BLOCKADE_CHASE_DISTANCE,
 } from '../bossfights/blockade.js';
+import { createBritishWarship, TRIGGER_DISTANCE as WARSHIP_FLOW_DISTANCE } from '../bossfights/britishWarship.js';
 import { createChasseGalerie, lightningFlash, BOSS_HOVER_HEIGHT } from '../bossfights/chasseGalerie.js';
 import { createDiable, DIABLE_FLOW_DISTANCE } from '../bossfights/diable.js';
 import { createLoupGarou } from '../bossfights/loupGarou.js';
@@ -96,7 +96,7 @@ const STEER_DAMPING = 6;
 const FIGHT_LATERAL_SPEED = isTouchPrimary() ? 28 : 15;
 // Same idea, same reason, for the British Warship's held chase — reported
 // as "the boss is too much faster than me." The gunboat's own lateral orbit
-// (blockade.js's CHASE_ORBIT_RADIUS_X/PERIOD) peaks at radius*(2π/period) ≈
+// (britishWarship.js's CHASE_ORBIT_RADIUS_X/PERIOD) peaks at radius*(2π/period) ≈
 // 2.1 units/sec; the ramped STEER_ACCEL/STEER_DAMPING physics below always
 // lag a beat behind a target that's continuously reversing direction, same
 // failure as Diable's fight before FIGHT_LATERAL_SPEED existed. Set well
@@ -202,19 +202,21 @@ const FIGHT_HOVER_RECENTER = 1.6; // units/sec drift back to the baseline when i
 // (game.js clamps flowDistance to getChaseHoldFlowDistance() every frame,
 // discarding whatever effectiveSpeed would otherwise have done). This is a
 // virtual offset only, subtracted from the real (pinned) flowDistance when
-// calling blockade.update() — see that call site's own comment on why
-// subtracting (not adding) is what actually closes the gap, and why draw()
-// deliberately does NOT get the same shift. The real world/terrain never
-// advances, so the screen stays exactly as static as it already was; only
-// the ship and its cannon shots shift toward or away from the canoe.
+// calling britishWarship.update() — see that call site's own comment on
+// why subtracting (not adding) is what actually closes the gap. The canoe
+// sprite's own screen position gets the same shift (see canoeScreenY in
+// draw()) so it reads as your own movement; the real world/terrain never
+// advances, so the screen stays exactly as static as it already was apart
+// from that.
 // No nonzero baseline the way Diable's BOSS_HOVER_HEIGHT is — the natural
-// rest position here is just "wherever the chase started," i.e. zero — but
+// rest position here is just "wherever the hold started," i.e. zero — but
 // deliberately NOT a symmetric range either. Closing in (CHASE_HOLD_Z_MAX)
-// is capped well under CHASE_ANCHOR_LEAD (blockade.js, =3, the orbit's own
-// minimum lead) so this offset can never push the gunboat's real hit-test
-// position level with or behind the canoe: blockade.js's own CHASE_ORBIT_
-// PERIOD comment already documents "never behind" as a deliberate fix (an
-// autonomous swing behind read as unreadable chaos), and weapons.js's
+// is capped well under CHASE_ANCHOR_LEAD (britishWarship.js, =3, the
+// orbit's own minimum lead) so this offset can never push the gunboat's
+// real hit-test position level with or behind the canoe: britishWarship.js's
+// own CHASE_ORBIT_PERIOD comment already documents "never behind" as a
+// deliberate fix (an autonomous swing behind read as unreadable chaos), and
+// weapons.js's
 // bullets are forward-only regardless — a max any higher broke exactly
 // this, caught by the smoke test's continuous-fire scenario (which holds Up
 // the whole fight) timing out instead of ever sinking the ship. Opening the
@@ -364,7 +366,8 @@ export class Game {
     this.canoeSprites = createCanoeSprites();
     this.villageScene = createVillageScene();
     this.blockade = createBlockade();
-    this.blockadePct = null; // null hides the HUD bar; set by update() while the fight is active
+    this.britishWarship = createBritishWarship();
+    this.warshipPct = null; // null hides the HUD bar; set by update() while the fight is active
     this.chasseGalerie = createChasseGalerie();
     this.diable = createDiable();
     this.diablePct = null; // null hides the HUD bar; his HP% while the fight runs
@@ -374,11 +377,14 @@ export class Game {
     // respawns just before the fight with the pistol, not all the way back
     // at Montréal — see start() and update()'s consumeJustAppeared branch.
     this._diableCheckpoint = false;
-    // True from the moment the frigate is spotted (Rule Britannia cued) until
-    // the whole blockade encounter is over — approach *and* pursuit. Any way
-    // that ends (thread the gap, escape the chase, or just retreat back out
-    // of range) drops the boss track back to the shuffle exactly once.
+    // True from the moment the frigate is spotted (Rule Britannia cued)
+    // until the British Blockade approach is over (threaded the gap, or
+    // just retreated back out of range) — drops the boss track back to
+    // the shuffle exactly once. Separate from the Warship's own flag below
+    // now that the two are independent encounters, not one continuous fight.
     this._bossTrackCued = false;
+    // Same idea, for the British Warship fight further downstream.
+    this._warshipTrackCued = false;
     // Canoe altitude while the Diable fight holds the river locked — driven
     // by up/down for a vertical dodge, eased back to BOSS_HOVER_HEIGHT idle.
     this._bossHoverAlt = BOSS_HOVER_HEIGHT;
@@ -499,7 +505,8 @@ export class Game {
     this.reset();
     this.obstacles.reset();
     this.blockade.reset();
-    this.blockadePct = null;
+    this.britishWarship.reset();
+    this.warshipPct = null;
     this.loupGarou.reset();
     this.wendigo.reset();
     this.chasseGalerie.reset();
@@ -637,7 +644,8 @@ export class Game {
     this.diable.reset();
     this.diablePct = null;
     this.blockade.reset(); // the blockade lives on this leg now — start it fresh
-    this.blockadePct = null;
+    this.britishWarship.reset();
+    this.warshipPct = null;
     this.chasseGalerie.reset();
     this._chasseGalerieBannerShown = true; // no flight on the Rideau
     const start = SEGMENT_SHAPE_OFFSET.rideau + 0.5;
@@ -992,9 +1000,13 @@ export class Game {
     // about lawrenceWest, not the calm Rideau denouement rideau is meant
     // to be) — silencing it here fixes the actual reported bug at its
     // second, less obvious cause, rather than only its first.
+    // The British Warship fight (bossfights/britishWarship.js) needs no
+    // equivalent silencing — it's a point-triggered held arena now, not an
+    // approach run-up, so there's no dodge-and-thread stretch for ambient
+    // whitewater to interfere with the way there was here.
     const nearBlockade = this.segment === 'rideau'
       && this.flowDistance > BLOCKADE_SHIP_FLOW_DISTANCE - BLOCKADE_APPROACH_RANGE
-      && this.flowDistance < BLOCKADE_SHIP_FLOW_DISTANCE + BLOCKADE_CHASE_DISTANCE;
+      && this.flowDistance < BLOCKADE_SHIP_FLOW_DISTANCE + 50;
     const rapids = nearBlockade ? 0 : rapidsStrength(this.flowDistance);
     const rapidsDirection = this.segment === 'lawrenceWest' ? -1 : 1;
 
@@ -1052,14 +1064,14 @@ export class Game {
         this.speed = -8 * speedScale;
         this.handleHit({ type: 'shiphull' });
       }
-      // Pursuit's own held arena, same pattern as Diable's below — once the
-      // frigate is cleared, forward progress is clamped at the point the
-      // chase began until it resolves (sunk or CHASE_HOLD_TIME survived —
-      // see blockade.js's own opening comment for why a plain "paddle past
-      // it" resolution couldn't be stretched past about a minute no matter
-      // how the fight itself was tuned).
-      if (this.blockade.isChaseHolding()) {
-        proposedFlowDistance = this.blockade.getChaseHoldFlowDistance();
+      // The British Warship's own held arena, same pattern as Diable's
+      // below — once triggered, forward progress is clamped at the point
+      // it began until it resolves (sunk or CHASE_HOLD_TIME survived — see
+      // britishWarship.js's own opening comment for why a plain "paddle
+      // past it" resolution couldn't be stretched past about a minute no
+      // matter how the fight itself was tuned).
+      if (this.britishWarship.isChaseHolding()) {
+        proposedFlowDistance = this.britishWarship.getChaseHoldFlowDistance();
       }
     }
 
@@ -1114,7 +1126,7 @@ export class Game {
     // the canoe to a dead stop, same as the up/down dodge.
     if (this.diable.isHolding()) {
       this.lateralVX = steerInput * FIGHT_LATERAL_SPEED;
-    } else if (this.blockade.isChaseHolding()) {
+    } else if (this.britishWarship.isChaseHolding()) {
       this.lateralVX = steerInput * CHASE_LATERAL_SPEED;
     } else {
       // Fighting the current: steering authority drops the harder the
@@ -1247,7 +1259,7 @@ export class Game {
     // standoff — press up to close on the gunboat (easier shots, cannon
     // fire tightens up too), pull back on down to open range. Recenters to
     // 0 when neither is held, same idle behaviour as Diable's hover.
-    if (this.blockade.isChaseHolding()) {
+    if (this.britishWarship.isChaseHolding()) {
       if (keys.up) this._chaseHoldZ += CHASE_HOLD_Z_SPEED * dt;
       else if (keys.down) this._chaseHoldZ -= CHASE_HOLD_Z_SPEED * dt;
       else {
@@ -1453,51 +1465,31 @@ export class Game {
       }
     }
 
-    // Only meaningful on the Rideau — SHIP_FLOW_DISTANCE is a number on that
-    // segment's own line (see bossfights/blockade.js), and could coincidentally
-    // fall in range of an unrelated flowDistance on another segment otherwise.
+    // Only meaningful on the Rideau — SHIP_FLOW_DISTANCE/TRIGGER_DISTANCE
+    // are numbers on that segment's own line (see bossfights/blockade.js
+    // and bossfights/britishWarship.js), and could coincidentally fall in
+    // range of an unrelated flowDistance on another segment otherwise.
     if (this.segment === 'rideau') {
-      // Pistol shots feed in the same way Diable's do (updateDiable above) —
-      // the hull can be shot at now that the player is guaranteed to already
-      // have the pistol by this point in the run (see blockade.js's own
-      // module comment). hitBullets are removed from the pool below, same
+      // The British Blockade — the frigate approach. Pistol shots feed in
+      // the same way Diable's do (updateDiable above) — the hull can be
+      // shot at now that the player is guaranteed to already have the
+      // pistol by this point in the run (see blockade.js's own module
+      // comment). hitBullets are removed from the pool below, same
       // contract as diable.update()'s res.hitBullets.
-      // this._chaseHoldZ (0 outside the chase hold) is the fore/aft offset
-      // from CHASE_HOLD_Z_* above. Subtracted, not added: blockade.js pins
-      // the gunboat CHASE_ANCHOR_LEAD..+RADIUS_Z units *ahead* of whatever
-      // playerFlowDistance it's given, so shrinking that argument is what
-      // actually closes the gap to the ship — passing this.flowDistance
-      // unchanged (screen stays static; this._chaseHoldZ never touches the
-      // real world) would leave the gap untouched, since the ship's own
-      // position is defined purely relative to this same argument. The
-      // real weapons.js pistol bullets never see this shift (they live in
-      // real flowDistance, spawned before the chase started), which is
-      // exactly what makes it land right: draw() below is passed the real,
-      // unshifted this.flowDistance, so the ship/hazards render at
-      // whatever this virtual distance implies relative to the *real*
-      // canoe position — the same relationship a live bullet is actually
-      // flying through.
       const blockade = this.blockade.update(
-        dt, this.flowDistance - this._chaseHoldZ, this.canoeWorldX, effectiveSpeed,
+        dt, this.flowDistance, this.canoeWorldX, effectiveSpeed,
         (entry) => this.handleHit(entry), this.weapons.getBullets(),
       );
       for (const ref of blockade.hitBullets) this.weapons.removeBullet(ref);
-      // Reported: a bar showing during the approach ("British Blockade")
-      // itself, even though that leg is pure dodge-and-thread-the-gap —
-      // there's no health, hull, or hold-time concept to show yet, just
-      // whether you found the gap. The bar now only ever appears once the
-      // chase ("British Warship") actually starts, where progressPct is a
-      // real hull-HP readout (see that field's own comment in blockade.js).
-      this.blockadePct = (blockade.active && blockade.isChase) ? blockade.progressPct : null;
       this.blockadeCrossCurrent = blockade.crossCurrent || 0;
       // One boom per impact, hit or miss — a volley landing several shots
       // at once fires this the same number of times in the same frame.
       for (let i = 0; i < blockade.boomCount; i++) playCannonBoom();
       if (this.blockade.consumeJustSpotted()) {
         // The big title card (#boss-banner), not the small milestone one —
-        // the last real fight before the finish earns more fanfare. Still
-        // deliberately doesn't say which side is clear; finding the gap is
-        // the point, not something to hand the player in a banner.
+        // this fight earns more fanfare. Still deliberately doesn't say
+        // which side is clear; finding the gap is the point, not something
+        // to hand the player in a banner.
         this.showBossBanner('BRITISH BLOCKADE');
         this.music?.start(); // Ensure music system is initialized
         this.music?.playBossTrack();
@@ -1507,57 +1499,81 @@ export class Game {
         this.showBanner('GUNS SILENCED — find the gap!');
       }
       if (this.blockade.consumeJustCleared()) {
-        // Past the frigate itself, into the chase — cut from Rule Britannia
-        // to the Pursuit's own cue (music.js's PURSUIT_TRACK) rather than
-        // either blaring the frigate's track through the chase too or
-        // dropping to silence/the shuffle. The chase is its own fight now,
-        // not a footnote of the approach.
-        this.music?.playPursuitTrack();
+        // Past the frigate — back to the regular shuffle. The British
+        // Warship, now a separate encounter much further downstream (see
+        // bossfights/britishWarship.js), gets its own cue when it actually
+        // starts, not this one carrying through the ordinary paddling
+        // between the two fights.
+        this.music?.endBossTrack();
       }
-      // Catch-all: the instant the encounter is no longer active at all —
-      // approach abandoned, chase escaped, whatever — make sure the boss
+      // Catch-all: the instant the approach is no longer active at all —
+      // cleared, or abandoned back out of range — make sure the boss
       // track isn't still going. endBossTrack() is a no-op if the shuffle's
       // already back, so the _bossTrackCued flag keeps this to one real call.
       if (this._bossTrackCued && !blockade.active) {
         this.music?.endBossTrack();
         this._bossTrackCued = false;
       }
-      if (this.blockade.consumeJustStartedChase()) {
-        // The big title card (#boss-banner), not the small milestone one —
-        // same treatment as BRITISH BLOCKADE above, not a lesser callout.
-        // Reported as still reading "BRITISH BLOCKADE" for a ?start=
-        // british-warship run: that cheat drops in past the frigate, so
-        // consumeJustSpotted() and consumeJustStartedChase() both fire on
-        // the very same frame — showBossBanner() below simply overwrites
-        // whatever showBossBanner('BRITISH BLOCKADE') just set (it clears
-        // and resets its own timeout on every call), so this one wins for
-        // that entry point, while a normal playthrough still sees both,
-        // one after the other, as the encounter actually progresses through
-        // its two phases.
+
+      // The British Warship — a standalone encounter much further
+      // downstream (bossfights/britishWarship.js), no longer chained to
+      // the blockade above. this._chaseHoldZ (0 outside its own hold) is
+      // the fore/aft offset from CHASE_HOLD_Z_* above. Subtracted, not
+      // added: britishWarship.js pins the gunboat CHASE_ANCHOR_LEAD..
+      // +RADIUS_Z units *ahead* of whatever playerFlowDistance it's given,
+      // so shrinking that argument is what actually closes the gap to the
+      // ship — passing this.flowDistance unchanged (screen stays static;
+      // this._chaseHoldZ never touches the real world) would leave the gap
+      // untouched, since the ship's own position is defined purely
+      // relative to this same argument. The real weapons.js pistol bullets
+      // never see this shift (they live in real flowDistance, spawned
+      // before the hold started), which is exactly what makes it land
+      // right: draw() gets the same shifted reference (see that call
+      // site's own comment), so the ship/hazards render at whatever this
+      // virtual distance implies relative to the *real* canoe position —
+      // the same relationship a live bullet is actually flying through.
+      const warship = this.britishWarship.update(
+        dt, this.flowDistance - this._chaseHoldZ, this.canoeWorldX, effectiveSpeed,
+        (entry) => this.handleHit(entry), this.weapons.getBullets(),
+      );
+      for (const ref of warship.hitBullets) this.weapons.removeBullet(ref);
+      // Only up once the fight is actually live — a real hull-HP readout
+      // (see that field's own comment in britishWarship.js), full when it
+      // starts, draining toward 0 as it sinks.
+      this.warshipPct = warship.active ? warship.progressPct : null;
+      for (let i = 0; i < warship.boomCount; i++) playCannonBoom();
+      if (this.britishWarship.consumeJustStartedChase()) {
+        // The big title card, same treatment as BRITISH BLOCKADE above —
+        // this fight is triggered instantly on crossing TRIGGER_DISTANCE,
+        // so the banner and the held arena both start on the same frame.
         this.showBossBanner('BRITISH WARSHIP');
-        console.log('[GAME] Chase phase started. Canoe visible:', this.canoeVisible, 'Position:', this.flowDistance);
-        // Music already cut over to PURSUIT_TRACK above (consumeJustCleared
-        // fires the same frame, processed first) — nothing to start here.
+        this.music?.start(); // safe even if ?start=british-warship drops in before a gesture
+        this.music?.playPursuitTrack();
+        this._warshipTrackCued = true;
+        console.log('[GAME] Warship hold started. Canoe visible:', this.canoeVisible, 'Position:', this.flowDistance);
       }
-      if (this.blockade.consumeJustSunk()) {
-        console.log('[GAME] Chase ship sunk, ending boss track');
+      if (this.britishWarship.consumeJustSunk()) {
+        console.log('[GAME] Warship sunk, ending boss track');
         playCannonBoom(); // an extra boom on top of the hit sparks — the kill shot should land harder than a regular one
         this.music?.endBossTrack();
         const nextVillage = VILLAGES.find(v => v.segment === this.segment && v.flowDistance > this.flowDistance);
         const villageName = nextVillage ? nextVillage.name : 'Safe Waters';
         this.showBanner(`SHE'S GOING DOWN! — ${villageName} Ahead`);
       }
-      if (this.blockade.consumeJustEscaped()) {
-        console.log('[GAME] Blockade escaped, ending boss track');
+      if (this.britishWarship.consumeJustEscaped()) {
+        console.log('[GAME] Warship escaped, ending boss track');
         this.music?.endBossTrack();
-        // Find the next village ahead on the current segment
         const nextVillage = VILLAGES.find(v => v.segment === this.segment && v.flowDistance > this.flowDistance);
         const villageName = nextVillage ? nextVillage.name : 'Safe Waters';
         this.showBanner(`${villageName} Ahead — Safe Waters`);
       }
+      if (this._warshipTrackCued && !warship.active) {
+        this.music?.endBossTrack();
+        this._warshipTrackCued = false;
+      }
     } else {
-      this.blockadePct = null;
       this.blockadeCrossCurrent = 0;
+      this.warshipPct = null;
     }
 
     this.render();
@@ -1704,15 +1720,21 @@ export class Game {
       ctx.restore();
     }
 
-    // Same segment guards as the update() calls above. flowDistance -
-    // _chaseHoldZ (0 outside the chase hold) matches the shifted argument
-    // update() already passes blockade.update() — without it here too, the
-    // ship (and its hazards) would render against the OLD fixed reference
-    // while the canoe sprite (see canoeScreenY above) now visibly moves,
-    // decoupling the two: the ship would appear to jump/drift independently
-    // of the gap actually closing rather than the canoe visibly approaching
-    // it.
-    if (this.segment === 'rideau') this.blockade.draw(ctx, this.flowDistance - this._chaseHoldZ, cameraWorldX, this.time);
+    // Same segment guards as the update() calls above. The blockade (the
+    // frigate approach) never sees the chase-hold shift — it's a separate,
+    // temporally non-overlapping fight now, and _chaseHoldZ is always 0
+    // outside the Warship's own hold anyway. The Warship's own draw() does
+    // get flowDistance - _chaseHoldZ, matching the shifted argument
+    // update() already passes britishWarship.update() — without it here
+    // too, the ship (and its hazards) would render against the OLD fixed
+    // reference while the canoe sprite (see canoeScreenY above) now
+    // visibly moves, decoupling the two: the ship would appear to
+    // jump/drift independently of the gap actually closing rather than the
+    // canoe visibly approaching it.
+    if (this.segment === 'rideau') {
+      this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
+      this.britishWarship.draw(ctx, this.flowDistance - this._chaseHoldZ, cameraWorldX);
+    }
     if (this.segment === 'lawrenceWest') {
       // The moon for the Loup-garou night — hung high and mostly off the top
       // of the frame (the far distance up-river reads as the horizon/sky), so
@@ -1794,8 +1816,8 @@ export class Game {
       // Bobbing grows in as the canoe leaves the water
       const bob = Math.sin(this.time * 2) * 3 * lift;
       // British Warship chase: reported as "I still can't move up or down" —
-      // the previous fix (blockade.js's isChaseHolding()) moved the *ship*
-      // in response to Up/Down, which is real (verified separately) but
+      // the previous fix (britishWarship.js's isChaseHolding()) moved the
+      // *ship* in response to Up/Down, which is real (verified separately) but
       // never reads as "my own movement," the same way left/right already
       // does by moving the canoe itself. This term does that instead — same
       // sign convention as altitude above (subtracting moves the canoe up-
@@ -1960,16 +1982,15 @@ export class Game {
       this.ui.hudDiable?.classList.add('hidden');
     }
 
-    // The Warship's own health bar — the approach ("British Blockade") is
-    // pure dodge-and-thread-the-gap with no health/hull/hold-time concept
-    // to show, so blockadePct (set above) stays null through the whole
-    // approach and this only ever appears once the chase actually starts,
-    // always labeled for that phase. progressPct is the chase ship's own
-    // hull HP (blockade.js's own comment on that field) — full when the
-    // chase starts, draining as it's damaged, empty exactly as it sinks.
-    if (this.blockadePct != null) {
+    // The British Warship's own health bar — the British Blockade (the
+    // frigate approach, a separate encounter now) shows no bar at all;
+    // this only ever appears once the Warship fight actually starts.
+    // progressPct is the ship's own hull HP (britishWarship.js's own
+    // comment on that field) — full when it starts, draining as it's
+    // damaged, empty exactly as it sinks.
+    if (this.warshipPct != null) {
       this.ui.hudBlockade?.classList.remove('hidden');
-      if (this.ui.hudBlockadeFill) this.ui.hudBlockadeFill.style.width = `${clamp(this.blockadePct, 0, 100)}%`;
+      if (this.ui.hudBlockadeFill) this.ui.hudBlockadeFill.style.width = `${clamp(this.warshipPct, 0, 100)}%`;
       if (this.ui.hudBlockadeLabel) this.ui.hudBlockadeLabel.textContent = 'BRITISH WARSHIP';
     } else {
       this.ui.hudBlockade?.classList.add('hidden');

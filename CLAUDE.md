@@ -86,11 +86,22 @@ src/
     blockade.js        "Château Gauntlet"/"the River Styx" (the latter a small fun detail kept in
                        the comments only — the player-facing banner just says "BRITISH BLOCKADE",
                        shown big via #boss-banner, not the small milestone one): Royal Navy frigate
-                       holding the channel, dodge-only, survive & pass. RIDEAU segment
-                       (SHIP_FLOW_DISTANCE = Kingston − 700), the last fight before the finish —
-                       already the closest-to-Kingston spot the fight's ~350-unit footprint can fit
-                       without overlapping a village dock; see the module comment before moving it
-                       further in. Guarded by `segment === 'rideau'`.
+                       holding the channel, dodge-only, survive & pass — no health/hull/hold-time
+                       readout, just find the gap. RIDEAU segment (SHIP_FLOW_DISTANCE = Kingston −
+                       700). Used to chain straight into the Warship chase below the instant the gap
+                       cleared; now ends clean, ordinary paddling after. Guarded by `segment ===
+                       'rideau'`.
+    britishWarship.js  The British Warship — standalone held-arena chase, split out of blockade.js
+                       (used to be its second phase). TRIGGER_DISTANCE = Kingston − 85, at the real-
+                       world spot Kingston Mills held before it was removed as a village (route.js).
+                       Held the instant it triggers (game.js clamps flowDistance while
+                       isChaseHolding()); resolves on CHASE_HOLD_TIME (210s) survived or the orbiting
+                       gunboat's hull shot down — never on distance covered, since that always
+                       resolved in under a minute regardless of tuning (see the module's own
+                       comment). Up/Down move a virtual `_chaseHoldZ` offset (game.js) that closes or
+                       opens range without touching real flowDistance — shifts the canoe's own
+                       on-screen position, not the ship's, so it reads as your own movement. Guarded
+                       by `segment === 'rideau'`.
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
                        TRIGGER_DISTANCE, FLIGHT_END.
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging
@@ -125,9 +136,13 @@ src/
   title varies by killer: Devil / beast / plain capsize.
 - **Boss fights, in route order**: Wendigo (lower fjord, before Tadoussac),
   Loup-garou (before Québec City, lawrenceWest), Chasse-galerie steeples + Le
-  Diable (past Montréal, lawrenceWest), British blockade (before Kingston,
-  rideau). Each is `segment ===`-gated and distance-triggered off
-  MOUTH_DISTANCE or a village's flowDistance.
+  Diable (past Montréal, lawrenceWest), British Blockade (rideau, the frigate
+  gauntlet), British Warship (rideau, further downstream near where Kingston
+  Mills sat — the last fight before Kingston). The Blockade and Warship used
+  to be one continuous two-phase encounter; they're separate fights now, with
+  ordinary paddling (Newboro, Jones Falls) between them. Each is
+  `segment ===`-gated and distance-triggered off MOUTH_DISTANCE or a
+  village's flowDistance.
 - **`?start=<name>`** (main.js): dev cheat, one-shot (stripped from URL after
   use). Real village names (accent/hyphen-insensitive, incl. `kingston`) plus
   keywords `wendigo`, `loup-garou`, `british-blockade`, `british-warship`,

@@ -53,10 +53,10 @@ it's not the same running order every session:
   shuffle. Picked for the title alone ("Reel of Terror") once that fight
   needed its own cue.
 - "La Mer de la Folie," performed by Les Chevaliers — reserved for the
-  Pursuit chase phase of the British Blockade fight (cuts in once the
-  frigate itself is cleared, replacing "Rule, Britannia!" for the gunboat
-  chase that follows). Supplied directly like "Reel du Paradis et Enfer" above, not sourced
-  from an archive — performer not documented.
+  British Warship fight, a standalone encounter further downstream from
+  the British Blockade (the frigate gauntlet) — cuts in the instant it
+  triggers, replacing whatever's playing. Supplied directly like "Reel du
+  Paradis et Enfer" above, not sourced from an archive.
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
@@ -131,17 +131,19 @@ Lake Ontario. No real river runs Ottawa to Kingston — this segment is
 invented (see `src/world/river/route.js`): the channel swells into open
 lake reaches, where a Royal Navy frigate holds the water on the stretch a
 voyageur's nickname might call **the River Styx** (the **British
-blockade** — run the gauntlet, thread the gap, outrun the pursuit; it's the
-last real fight, so crossing it really is what stands between you and the
-far shore), then narrows through the Cataraqui and flares wide into
-Kingston harbour.
+Blockade** — run the gauntlet, thread the gap), then, much further
+downstream, a second Royal Navy ship — the **British Warship** — holds you
+in a real gun battle near where Kingston Mills once stood, the last real
+fight, before the channel narrows through the Cataraqui and flares wide
+into Kingston harbour.
 Reaching Kingston — by its wharf or just by crossing into it — **wins the
 run** ("Journey's End"), the game's only actual ending.
 
 `?start=wendigo` drops you on the lower fjord just before the famine-spirit;
 `?start=loup-garou` drops you on the Beaupré shore just before the beast;
 `?start=rideau` at the head of the final leg; `?start=british-blockade` at
-the frigate; `?start=kingston` a short paddle from the finish.
+the frigate; `?start=british-warship` at the gunboat further downstream;
+`?start=kingston` a short paddle from the finish.
 
 ## History
 

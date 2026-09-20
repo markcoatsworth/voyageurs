@@ -1,38 +1,20 @@
-// The Château Gauntlet — a scripted, one-time encounter on the wide Rideau
-// Lake reaches, the last real fight before Kingston: a Royal Navy frigate
-// holding a lane in the channel, firing on the canoe as it closes the
-// distance. Steering to dodge and close the distance is still the whole
-// fight — the hull itself is never destroyed, so finding and threading the
-// gap is still mandatory — but by the time this encounter comes up the
-// player already has the pistol (guaranteed past Montréal, well before
-// Gatineau/the Rideau), so it now shoots back: see the hull hit-test below.
-// Landing hits on the hull suppresses its broadside, a real dogfight on top
-// of the dodging, not a substitute for it. The chase-phase gunboat IS
-// shootable too (see CHASE_HULL_HP below) — it wasn't originally, back when
-// it only ever sat behind the canoe and weapons.js's forward-only bullets
-// could never reach it, but once the chase became an orbit that swings the
-// ship out ahead (see CHASE_ORBIT_* below), landing shots on it became
-// possible, and it now sinks outright as a real alternative to just
-// outrunning it — "a fight where I shoot with guns, instead of just dodge
-// and evade."
+// The Château Gauntlet — the British Blockade, a scripted, one-time
+// encounter on the wide Rideau Lake reaches: a Royal Navy frigate holding
+// a lane in the channel, firing on the canoe as it closes the distance.
+// Steering to dodge and close the distance is the whole fight — the hull
+// itself is never destroyed, so finding and threading the gap is
+// mandatory — but by the time this encounter comes up the player already
+// has the pistol (guaranteed past Montréal, well before Gatineau/the
+// Rideau), so it now shoots back: see the hull hit-test below. Landing
+// hits on the hull suppresses its broadside, a real dogfight on top of the
+// dodging, not a substitute for it.
 //
-// The chase phase (post-frigate) is a HELD encounter, same pattern as
-// bossfights/diable.js's arena: game.js clamps flowDistance at
-// getChaseHoldFlowDistance() while isChaseHolding() is true, so it resolves
-// on CHASE_HOLD_TIME survived or the hull sunk, never on distance covered.
-// It didn't start that way — the chase used to just end once you'd made
-// CHASE_DISTANCE units of headway past the frigate, the same "outrun it"
-// shape as the approach's own gap-finding. Reported through several rounds
-// as "impossible," then "still too difficult," and finally "stretch this to
-// 3-4 minutes" — that last one is what broke the distance model for good:
-// Newboro's dock sits only ~155 units past the frigate (see
-// SHIP_D_OFFSET's own comment below), capping CHASE_DISTANCE at 150, and
-// the Rideau's own ambient current alone covers that in about a minute with
-// zero input at all. No combination of damage/speed/HP tuning can stretch a
-// distance-gated fight past what the current carries you through in ~60s —
-// only actually holding position, the way Diable's arena already does,
-// can. CHASE_DISTANCE is kept (see its own comment) for the unrelated span
-// it still legitimately describes, not as the win condition any more.
+// Used to chain straight into a second phase (a gunboat chase) the instant
+// the gap was cleared — split out into its own standalone encounter,
+// bossfights/britishWarship.js, triggered much further downstream. The two
+// used to run back-to-back as one continuous fight with no breathing room
+// between them; now there's a real stretch of ordinary paddling (Newboro,
+// Jones Falls) between clearing this frigate and meeting the Warship.
 //
 // It used to sit just past Québec City; it was moved onto the run into
 // Kingston (a British naval station in this era — the frigate fits the
@@ -46,24 +28,17 @@
 // kept here in the comments rather than shown to the player (game.js's
 // banner just says "BRITISH BLOCKADE" — see its own big #boss-banner
 // treatment). Nothing in the code keys off the name.
-// SHIP_D_OFFSET/SHIP_FLOW_DISTANCE below are unchanged: the fight's
-// APPROACH_RANGE + CHASE_DISTANCE (~350 units of clear water, no dock
-// inside it) genuinely don't fit any gap closer to Kingston than this one
-// — both remaining gaps (Newboro-Jones Falls, Jones Falls-Kingston Mills)
-// are too short — so this is already the closest-to-Kingston spot the fight
-// can hold. Fitting, if accidental: cross this water and Kingston, the far
-// shore, is what's left.
 import { centerX, widthAt } from '../world/river/path.js';
 import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../shared/config.js';
 import { VILLAGES } from '../world/villages.js';
 
 const KINGSTON = VILLAGES.find((v) => v.name === 'Kingston');
 // How far before Kingston the frigate sits. Tuned so the gauntlet
-// (APPROACH_RANGE of cannon fire) and the chase (CHASE_DISTANCE) both fall
-// in the open Rideau Lake water *between* two riverbank towns — a village
-// dock landing inside the approach corridor would let the player walk
-// ashore mid-fight — with a real stretch of clear channel left before the
-// harbour narrows toward the arrival.
+// (APPROACH_RANGE of cannon fire) falls in the open Rideau Lake water
+// *between* two riverbank towns — a village dock landing inside the
+// approach corridor would let the player walk ashore mid-fight — with a
+// real stretch of clear channel left before the harbour narrows toward the
+// arrival.
 const SHIP_D_OFFSET = 700;
 export const SHIP_FLOW_DISTANCE = KINGSTON.flowDistance - SHIP_D_OFFSET;
 
@@ -79,11 +54,11 @@ export const SHIP_FLOW_DISTANCE = KINGSTON.flowDistance - SHIP_D_OFFSET;
 // seconds at cruising speed to close a ~40-unit channel, with real margin
 // left over for reacting to cannon fire along the way rather than needing
 // to commit blind at frame one.
-// Exported alongside CHASE_DISTANCE below so game.js can silence the
-// periodic rapids pattern (river/path.js's rapidsStrength) across this same
-// "clear water" span — see that call site's own comment for why a fixed
-// naval encounter fighting unrelated ambient whitewater turned out to be a
-// real bug, not a difficulty feature.
+// Exported so game.js can silence the periodic rapids pattern (river/
+// path.js's rapidsStrength) across this same "clear water" span — see that
+// call site's own comment for why a fixed naval encounter fighting
+// unrelated ambient whitewater turned out to be a real bug, not a
+// difficulty feature.
 export const APPROACH_RANGE = 190;
 // A single commitment, decided (and telegraphed) the moment the ship is
 // first spotted, not a late swing partway through — the same steering-speed
@@ -160,140 +135,6 @@ const BULLET_DAMAGE_TO_HULL = 8; // 15 solid hits silences the guns
 const HULL_HIT_D_TOLERANCE = 1.5;
 const SPARK_LIFETIME = 0.35;
 
-// Reported as "impossible," then "still too difficult" through two rounds
-// of tone-down — landing shots on a moving target while also dodging its
-// return fire, at anything close to the approach frigate's own
-// CANNON_DAMAGE/fire rate, left no margin for the learning curve of
-// tracking a swinging ship. Cut hard this pass, not incrementally: a third
-// of the original 12-damage broadside, and — see CHASE_VOLLEY_INTERVAL
-// below — well under half the original fire rate.
-const CHASE_CANNON_DAMAGE = 4;
-// No longer the chase's win condition (see the module's own opening
-// comment on why a distance-gated chase couldn't be stretched past ~60s) —
-// kept for the two things it still legitimately describes: the real ceiling
-// on how much "clear water" this whole encounter can occupy before
-// Newboro's own dock (~155 units past SHIP_FLOW_DISTANCE — going much past
-// 150 here would put the chase on top of it), and the span game.js silences
-// ambient rapids across / auto-resolves a downstream ?start= cheat past.
-export const CHASE_DISTANCE = 150;
-const CHASE_VOLLEY_INTERVAL = 3.2; // was 2.2, then 1.6, then 1.3 — under half the original rate now
-// The chase's real win condition now: survive this long, held in place (see
-// the module's own opening comment), and it's called off — same idea as
-// simply outrunning it used to be, just time-gated instead of
-// distance-gated so it can't be resolved in under a minute by construction.
-// 210s (3.5min) — the middle of the requested 3-4 minute range. Sinking the
-// ship (CHASE_HULL_HP below) still ends it immediately for a player who'd
-// rather fight than wait it out — a skill-based shortcut, not a
-// replacement for this floor.
-const CHASE_HOLD_TIME = 210;
-
-// Circling pursuit: reported as "floats next to me instead of engaging" —
-// the old chase just held a straight trailing distance directly behind on
-// the river centerline, with CHASE_VOLLEY_INTERVAL above never actually
-// read anywhere, so nothing fired. Worse, it was structurally invisible:
-// CANOE_SCREEN_Y sits only 55px above the bottom of a 220px canvas (a
-// deliberate choice so most of the canvas shows what's ahead), which is
-// worldToScreen's flat, no-perspective scale means only ~3.4 world units
-// of "behind the canoe" ever render at all — the old fixed 4-unit trailing
-// gap was screen y = CANOE_SCREEN_Y + 4*16 = 229, already past
-// CANVAS_HEIGHT. There's roughly 10 units of room *ahead* by the same
-// math, though. Since the escape/win check (madeGood, below) is entirely
-// about the player's own flowDistance against the frigate's fixed line —
-// this ship's position never factors in — there's nothing stopping it
-// from swinging out ahead as part of circling the canoe, and that's
-// exactly what actually keeps it on screen: it now orbits from a few units
-// behind to well out in front, so "chasing from behind" becomes a real
-// naval pass, cutting across the bow to bring its guns to bear, rather
-// than a boat that's mathematically present but never actually visible.
-// Reported again once the ship *was* reliably visible: "too chaotic... a
-// random mess that screams all over the interface" — not "I can't see it"
-// any more but "I can't track or aim at it." Root cause was the full circle
-// itself: half of every lap swung the ship into the "behind" half of the
-// orbit (down toward CHASE_ANCHOR_LEAD - RADIUS_Z, i.e. as close as 2 units
-// behind — see the still-accurate history above on how little screen room
-// that leaves), so twice a lap it shrank toward the bottom edge and swelled
-// back out, on top of cutting side to side the whole time — a target that's
-// simultaneously changing range, side, and size doesn't read as "a ship to
-// shoot," it reads as noise. Fixed by keeping the forward offset one-signed:
-// orbitForward in update() below now runs 0..RADIUS_Z (a bob, not a swing),
-// so the ship only ever moves *further* ahead of CHASE_ANCHOR_LEAD and back,
-// never behind — always on screen, always closing/receding in one
-// predictable rhythm. Slowed down too (3.4s -> the current value) so that
-// rhythm reads as a pattern instead of a blur, and the lateral throw trimmed
-// a little (6.5 -> 5.5) so it swings less often into CHASE_BANK_MARGIN's
-// hard clamp — a smooth sine hitting a clamp reads as a snap, not motion,
-// and was adding its own jerk on top of the orbit's.
-// Slowed and tightened again — reported as "slow down the speed of that
-// boat" even after the first slowdown (3.4s -> 5.2s) and trim (6.5 -> 5.5)
-// above. Nearly double the period again, and both radii trimmed further —
-// a gentle, easy-to-predict bob rather than a boat that's constantly on
-// the move.
-const CHASE_ORBIT_PERIOD = 9; // was 5.2, then 3.4
-const CHASE_ORBIT_RADIUS_X = 3; // was 5.5, then 4
-const CHASE_ORBIT_RADIUS_Z = 4; // was 5
-// Where the orbit's forward bob starts from, relative to the player — the
-// ship's actual lead now ranges CHASE_ANCHOR_LEAD..CHASE_ANCHOR_LEAD+RADIUS_Z
-// (3 to 8 units ahead), always in front, never behind.
-const CHASE_ANCHOR_LEAD = 3;
-// The ship's position is computed directly from the player's own current
-// flowDistance every frame (see update()) rather than tracked through a
-// persistent, independently-accumulating "chase speed" — a first version
-// tried that (a fixed CHASE_SHIP_SPEED racing the player's own speed,
-// then later a smoothed/exponential version of the same idea), and both
-// have the same failure mode: how fast the ship reaches a well-composed
-// on-screen position ends up depending on the *difference* between its
-// speed and the player's, which is small (or, for a smoothed tracker
-// chasing a steadily-moving target, a fixed non-zero lag) precisely when
-// the player is paddling hard the whole fight — reproducing "floats next
-// to me" for the entire chase regardless of the orbit math being correct
-// in isolation (found by tracing an actual run frame-by-frame: the ship
-// was still 4-11 units off its intended position many seconds in, not
-// converging). Deriving position directly from the player's *current*
-// flowDistance has no such lag by construction — only CHASE_INTRO_TIME
-// below, a fixed real-time easing for the opening beat, is time-based.
-const CHASE_INTRO_TIME = 1.1; // seconds the "closing in" opening beat takes
-const CHASE_INTRO_EXTRA_GAP = 10; // how much further behind it starts, easing to 0
-const CHASE_BANK_MARGIN = 3; // keep the hull's own half-width clear of the bank while orbiting
-const MUZZLE_FLASH_LIFETIME = 0.3;
-
-// The chase ship's own hull dimensions — module-level (not local to
-// drawChaseShip) so update()'s hit-test below and the drawing use exactly
-// the same hull, not two independently-guessed sizes. Reported as "too
-// big" alongside the wide/janky proportions fixed earlier; shrunk further
-// here on top of that fix, keeping the same ~2.3:1 length:beam ratio.
-const CHASE_SHIP_BEAM = 2.2;
-const CHASE_SHIP_LENGTH_HALF = 2.5;
-
-// Shootable: the orbit above already swings the ship out ahead of the
-// canoe (see its own comment on why), which is exactly what makes it
-// reachable by weapons.js's forward-only bullets — this used to be
-// impossible when the ship only ever sat behind. Landing enough hits
-// sinks it outright, ending the chase instantly as an alternative to
-// simply outrunning it (madeGood/CHASE_DISTANCE below still works too —
-// this is an additional way to win the encounter, not a replacement).
-// Same per-hit damage as the approach frigate's own hull (BULLET_DAMAGE_
-// TO_HULL) for consistency. Went through three passes before this one: 64,
-// then 40, both from before the held-arena redesign (see the module's own
-// opening comment) — solving the wrong problem back then, since the old
-// distance-gated escape capped the whole encounter under a minute
-// regardless of this number. Then 200, right after the redesign — reported
-// as "way too easy... went down in just a handful of shots," which tracks:
-// a scripted continuous-fire test bot (same aim strategy as this file's own
-// smoke-test scenario, just left running instead of stopping at first
-// resolution) sank 200 HP in under 5 seconds. Recalibrated against that same
-// bot rather than guessed again — it took ~180s at 3000, ~203s at 3400,
-// landing this value just under CHASE_HOLD_TIME (210s) below: even a
-// best-case, never-misses run doesn't meaningfully undercut the survive-it
-// floor any more, and a real human — slower and less consistent than a
-// scripted bot — lands squarely in the requested 3-4 minutes either way.
-const CHASE_HULL_HP = 3400;
-// Wider than HULL_HIT_D_TOLERANCE (the stationary frigate's own, smaller
-// tolerance) because the target itself is moving every frame here, not
-// just the bullet crossing a fixed band. Loosened further (2.2 -> 3) in the
-// same pass as CHASE_HULL_HP — a near-miss on a swinging target should
-// still land.
-const CHASE_HULL_D_TOLERANCE = 3;
-
 export function createBlockade() {
   // null until the encounter first activates — decided once, right then
   // (see the module comment on why a late swing isn't fair here), not
@@ -312,28 +153,6 @@ export function createBlockade() {
   let justGunsSilenced = false;
   let sparks = [];
 
-  // Chase phase: after clearing the gap, a battleship pursues
-  let chasePhase = false;
-  let chaseIntroT = 0; // seconds since the chase started, for the opening "closing in" ease
-  let chaseOrbitAngle = 0;
-  let chaseShipD = 0; // the ship's actual, orbit-adjusted flowDistance this frame — what draw() and firing both use
-  let chaseShipWorldX = 0; // ditto, lateral position
-  let chaseEscaped = false;
-  let justStartedChase = false;
-  // Held-arena state (see the module's own opening comment on why the chase
-  // is time-gated, not distance-gated). chaseHoldFlowDistance is captured
-  // once, the instant the chase starts — game.js clamps flowDistance there
-  // every frame isChaseHolding() is true, same pattern as diable.js's own
-  // held arena.
-  let chaseHoldFlowDistance = 0;
-  let chaseHoldT = 0;
-  let muzzleFlashes = [];
-  // Shootable hull: separate pool from the approach frigate's hullHP above
-  // (a different ship, a different fight) — see CHASE_HULL_HP's own comment.
-  let chaseHullHP = CHASE_HULL_HP;
-  let chaseSunk = false;
-  let justSunk = false;
-
   function reset() {
     gapSide = null;
     resolved = false;
@@ -345,19 +164,6 @@ export function createBlockade() {
     gunsSilenced = false;
     justGunsSilenced = false;
     sparks = [];
-    chasePhase = false;
-    chaseIntroT = 0;
-    chaseOrbitAngle = 0;
-    chaseShipD = 0;
-    chaseShipWorldX = 0;
-    chaseEscaped = false;
-    justStartedChase = false;
-    muzzleFlashes = [];
-    chaseHullHP = CHASE_HULL_HP;
-    chaseSunk = false;
-    justSunk = false;
-    chaseHoldFlowDistance = 0;
-    chaseHoldT = 0;
   }
 
   return {
@@ -374,27 +180,14 @@ export function createBlockade() {
       const { gapLo, gapHi } = gapBounds(gapSide);
       return worldX < gapLo || worldX > gapHi;
     },
-    // Held arena, same contract as diable.js's isHolding(): true while the
-    // chase is live and unresolved, so game.js clamps flowDistance at
-    // getChaseHoldFlowDistance() every frame this holds — see the module's
-    // own opening comment on why the chase needs this at all.
-    isChaseHolding() {
-      return chasePhase;
-    },
-    // True only during the live approach — spotted, not yet cleared into
-    // the chase. A non-consuming, repeatable status check (unlike
-    // consumeJustSpotted()/consumeJustCleared() below, already drained
-    // every frame by game.js's own update() for its banner logic, so a
-    // second reader like the smoke test can't also use them without racing
-    // that internal consumption) for anything that needs to know "is the
-    // gauntlet currently live" — game.js no longer has its own always-set
-    // flag for this now that blockadePct stays null through the whole
-    // approach (see that assignment's own comment).
+    // True only during the live approach — spotted, not yet cleared. A
+    // non-consuming, repeatable status check (unlike consumeJustSpotted()/
+    // consumeJustCleared() below, already drained every frame by game.js's
+    // own update() for its banner logic, so a second reader like the smoke
+    // test can't also use them without racing that internal consumption)
+    // for anything that needs to know "is the gauntlet currently live."
     isApproachEngaged() {
       return gapSide !== null && !resolved;
-    },
-    getChaseHoldFlowDistance() {
-      return chaseHoldFlowDistance;
     },
     // Consumed once by game.js so each event fires exactly one banner, not
     // one every frame the condition happens to still be true.
@@ -413,54 +206,34 @@ export function createBlockade() {
       justGunsSilenced = false;
       return v;
     },
-    consumeJustStartedChase() {
-      const v = justStartedChase;
-      justStartedChase = false;
-      return v;
-    },
-    consumeJustEscaped() {
-      const v = chaseEscaped && !chasePhase; // only true for one frame
-      if (v) chaseEscaped = false;
-      return v;
-    },
-    consumeJustSunk() {
-      const v = justSunk;
-      justSunk = false;
-      return v;
-    },
-    // Same convention as diable.js's debugCentreX() — test/autopilot support
-    // for aiming at a moving target, not used by game.js's own rendering.
-    debugChaseShipPosition() {
-      return { worldX: chaseShipWorldX, flowDistance: chaseShipD };
-    },
     // No gapSide() accessor on purpose — which side is clear is deliberately
     // never surfaced to game.js; finding it is the point of the fight, not
     // something to hand the player in a banner.
 
     // onHit(entry) is only ever called with { type: 'cannon' } or
     // { type: 'shiphull' } — game.js's handleHit() gives each its own
-    // damage amount, same pattern as every other hazard type. effectiveSpeed
-    // is needed to lead each shot's target ahead of the canoe's current
-    // position (see the spawn site's own comment) — without it, every shot
-    // whiffs by construction, not because it was dodged. `bullets` is the
-    // player's live pistol shots (weapons.js's getBullets(), world-space
-    // {worldX, flowDistance}) — checked against the hull below. Returns
-    // hitBullets: [ref] (shots that struck the hull this frame) alongside
-    // the usual fields, same contract as bossfights/diable.js's update(),
-    // for game.js to remove from the weapon pool.
+    // damage amount. effectiveSpeed is needed to lead each shot's target
+    // ahead of the canoe's current position (see the spawn site's own
+    // comment) — without it, every shot whiffs by construction, not
+    // because it was dodged. `bullets` is the player's live pistol shots
+    // (weapons.js's getBullets(), world-space {worldX, flowDistance}) —
+    // checked against the hull below. Returns hitBullets: [ref] (shots
+    // that struck the hull this frame) alongside the usual fields, same
+    // contract as bossfights/diable.js's update(), for game.js to remove
+    // from the weapon pool.
     update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit, bullets = []) {
       const hitBullets = [];
       const distToShip = SHIP_FLOW_DISTANCE - playerFlowDistance;
 
-      // If the player starts well past the entire blockade+chase range (e.g.
-      // ?start=kingston), auto-resolve it as if they'd already escaped cleanly
-      // — stops the chase phase activating from a downstream spawn.
-      const wellPastBlockade = playerFlowDistance > SHIP_FLOW_DISTANCE + CHASE_DISTANCE + 50;
+      // If the player starts well past the whole approach (e.g. a ?start=
+      // cheat further downstream), auto-resolve it as if they'd already
+      // cleared it — stops the hull-blocking wall activating from a
+      // downstream spawn.
+      const wellPastBlockade = playerFlowDistance > SHIP_FLOW_DISTANCE + CLEAR_MARGIN + 50;
       if (wellPastBlockade && !resolved) {
         resolved = true;
-        chasePhase = false;
-        // Silent cleanup — no "escaped!" banner for a fight that never
-        // happened (you started downstream of it, e.g. ?start=diable).
+        // Silent cleanup — no "cleared!" banner for a fight that never
+        // happened (you started downstream of it).
         console.log('[BLOCKADE] Auto-resolved (started past blockade)');
       }
 
@@ -480,20 +253,9 @@ export function createBlockade() {
         if (distToShip <= -CLEAR_MARGIN) {
           resolved = true;
           justCleared = true;
-          // Start the chase phase
-          chasePhase = true;
-          chaseIntroT = 0; // opening "closing in" ease starts now — see CHASE_INTRO_*
-          chaseOrbitAngle = 0;
-          justStartedChase = true;
-          // Held arena starts here — game.js clamps flowDistance at this
-          // exact point (wherever the player happened to clear the frigate)
-          // for the rest of the chase. See the module's own opening comment.
-          chaseHoldFlowDistance = playerFlowDistance;
-          chaseHoldT = 0;
-          volleyTimer = CHASE_VOLLEY_INTERVAL;
-          // Clear ALL cannonballs - no cannon fire after passing the frigate
+          // Clear ALL cannonballs - no cannon fire once past the frigate
           hazards = [];
-          console.log('[BLOCKADE] Chase started. Player:', playerFlowDistance);
+          console.log('[BLOCKADE] Cleared. Player:', playerFlowDistance);
         }
 
         // Dogfight: pistol shots that land on the hull (not through the
@@ -530,7 +292,7 @@ export function createBlockade() {
               // centre/right of where the canoe was when it fired, instead
               // of sometimes clumping together and leaving an easy gap by
               // pure chance.
-  const lane = shots > 1 ? (i / (shots - 1)) * 2 - 1 : 0;
+              const lane = shots > 1 ? (i / (shots - 1)) * 2 - 1 : 0;
               const jitter = (Math.random() * 2 - 1) * (spread / shots) * 0.4;
               hazards.push({
                 // Led ahead by how far the canoe will travel during the
@@ -572,10 +334,7 @@ export function createBlockade() {
         if (hot && !h.hit) {
           if (Math.abs(playerFlowDistance - h.d) < SPLASH_D_TOLERANCE && Math.abs(playerWorldX - h.x) < SPLASH_HIT_RADIUS) {
             h.hit = true;
-            // Chase-phase shots (tagged with fromX/fromD, see their spawn
-            // site below) hit for less than the approach frigate's own
-            // broadside — see CHASE_CANNON_DAMAGE's own comment.
-            onHit({ type: 'cannon', damage: h.fromX != null ? CHASE_CANNON_DAMAGE : undefined });
+            onHit({ type: 'cannon' });
           }
         }
       }
@@ -585,117 +344,6 @@ export function createBlockade() {
       // unconditional way as hazards above.
       for (const s of sparks) s.t += dt;
       sparks = sparks.filter((s) => s.t < SPARK_LIFETIME);
-
-      // Chase phase: gunboat pursuing, orbiting and firing
-      if (chasePhase) {
-        // Position is a direct function of the player's *current*
-        // flowDistance plus the orbit offset — not a tracked/accumulated
-        // value — so there's no convergence to wait on and no dependence
-        // on the player's own speed (see CHASE_INTRO_* comment above for
-        // why that matters). Only the opening beat eases in over fixed
-        // real time, via chaseIntroT, independent of anything else.
-        chaseIntroT = Math.min(chaseIntroT + dt, CHASE_INTRO_TIME);
-        const introFrac = 1 - chaseIntroT / CHASE_INTRO_TIME; // 1 -> 0 over CHASE_INTRO_TIME
-        const introExtraGap = introFrac * CHASE_INTRO_EXTRA_GAP;
-
-        chaseOrbitAngle += dt * (2 * Math.PI / CHASE_ORBIT_PERIOD);
-        const orbitLateral = Math.sin(chaseOrbitAngle) * CHASE_ORBIT_RADIUS_X;
-        // 0..RADIUS_Z, never negative — see CHASE_ORBIT_PERIOD's own comment
-        // on why the ship no longer swings behind the canoe at all.
-        const orbitForward = (1 - Math.cos(chaseOrbitAngle)) * 0.5 * CHASE_ORBIT_RADIUS_Z;
-        chaseShipD = playerFlowDistance + CHASE_ANCHOR_LEAD + orbitForward - introExtraGap;
-        const half = widthAt(chaseShipD) / 2 - CHASE_BANK_MARGIN;
-        const c = centerX(chaseShipD);
-        chaseShipWorldX = clamp(playerWorldX + orbitLateral, c - half, c + half);
-
-        // Shootable: the orbit swings this ship out ahead of the canoe (see
-        // CHASE_HULL_HP's own comment on why that's what makes it reachable
-        // at all), so a bullet's flowDistance can land near chaseShipD just
-        // like the approach hull's own hit-test lands near its fixed
-        // SHIP_FLOW_DISTANCE — the target just moves every frame here.
-        // Chasing this against `bullets` even while sinking is harmless
-        // (chaseHullHP is already clamped to 0 by then) so no extra guard
-        // is needed to stop hits piling up past zero. Lateral tolerance
-        // (the "+ 1.6" below, was "+ 1") widened in the same "impossible"
-        // tone-down pass as CHASE_HULL_HP/CHASE_HULL_D_TOLERANCE — a shot
-        // that's close but not dead-center on a swinging target should
-        // still connect.
-        for (const b of bullets) {
-          if (Math.abs(b.flowDistance - chaseShipD) < CHASE_HULL_D_TOLERANCE
-            && Math.abs(b.worldX - chaseShipWorldX) < CHASE_SHIP_BEAM / 2 + 1.6) {
-            hitBullets.push(b);
-            if (chaseHullHP > 0) {
-              chaseHullHP -= BULLET_DAMAGE_TO_HULL;
-              sparks.push({ x: b.worldX, d: chaseShipD, t: 0 });
-              if (chaseHullHP <= 0) {
-                chaseHullHP = 0;
-                // A small burst on top of the usual single spark — the kill
-                // shot should read as more than just another hit.
-                for (let i = 0; i < 5; i++) {
-                  sparks.push({ x: chaseShipWorldX + (Math.random() * 2 - 1) * CHASE_SHIP_BEAM, d: chaseShipD, t: -i * 0.05 });
-                }
-              }
-            }
-          }
-        }
-
-        if (chaseHullHP <= 0) {
-          chasePhase = false;
-          chaseSunk = true;
-          justSunk = true;
-          // A shot already in flight from a volley fired moments earlier
-          // shouldn't still land after the ship that fired it is gone.
-          hazards = [];
-          console.log('[CHASE] Sunk!');
-        } else {
-          // Bow cannon: a real volley, aimed the same led-target way the
-          // approach-phase broadside is (see that spawn site's own comment
-          // on why leading is mandatory, not optional) — tagged with the
-          // ship's current position so drawHazard can render the shot as
-          // actually coming from the hull, not materializing out of
-          // nowhere.
-          volleyTimer -= dt;
-          if (volleyTimer <= 0) {
-            volleyTimer = CHASE_VOLLEY_INTERVAL;
-            muzzleFlashes.push({ x: chaseShipWorldX, d: chaseShipD, t: 0 });
-            hazards.push({
-              d: playerFlowDistance + effectiveSpeed * SPLASH_WARN_TIME + (Math.random() * 2 - 1) * 1.2,
-              x: playerWorldX + (Math.random() * 2 - 1) * 3.5,
-              t: 0,
-              hit: false,
-              boomed: false,
-              fromX: chaseShipWorldX,
-              fromD: chaseShipD,
-            });
-          }
-
-          // Time survived, held in place, not distance made good — see the
-          // module's own opening comment on why. Sinking the ship above is
-          // a separate, immediate way to end the chase; this is the floor
-          // everyone gets to regardless of how the gunnery goes.
-          chaseHoldT += dt;
-          if (chaseHoldT >= CHASE_HOLD_TIME) {
-            chasePhase = false;
-            chaseEscaped = true;
-            console.log('[CHASE] Escaped!');
-          }
-        }
-
-        for (const f of muzzleFlashes) f.t += dt;
-        muzzleFlashes = muzzleFlashes.filter((f) => f.t < MUZZLE_FLASH_LIFETIME);
-
-        // Reported as "a health bar that starts right next to 0" — it used
-        // to be chaseHoldT/CHASE_HOLD_TIME (time survived, so it always
-        // opened near-empty and only read as a real "how close am I"
-        // signal in the final stretch). Exposing the ship's own hull HP
-        // instead gives an actual health bar: full when the chase starts,
-        // draining toward 0 exactly as it sinks — the CHASE_HOLD_TIME
-        // survival clock is still the floor everyone gets regardless of
-        // gunnery (see that constant's own comment), it just isn't what
-        // this bar shows any more.
-        const chaseHullPct = clamp((chaseHullHP / CHASE_HULL_HP) * 100, 0, 100);
-        return { active: true, progressPct: chaseHullPct, boomCount, crossCurrent: 0, gapSide: null, isChase: true, chaseShipDistance: chaseShipD, hitBullets };
-      }
 
       if (!engaged) return { active: false, progressPct: 0, boomCount, crossCurrent: 0, gapSide: null, hitBullets };
       const progressPct = distToShip <= 0 ? 100 : (1 - clamp(distToShip / APPROACH_RANGE, 0, 1)) * 100;
@@ -714,68 +362,34 @@ export function createBlockade() {
       const z0 = worldDistance - SHIP_FLOW_DISTANCE;
       const distToShip = SHIP_FLOW_DISTANCE - worldDistance;
 
-      // Only draw blockade elements when not in chase phase
-      if (!chasePhase) {
-        // Cross-current flow visualization: animated streaks showing water movement
-        if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
-          const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
-          drawCurrentFlow(ctx, time, gapSide, progress);
-        }
-
-        // gapSide is null until the encounter first activates (update()'s own
-        // gating, at APPROACH_RANGE+5) — practically always well before the
-        // ship comes within visible render range anyway, but this guards the
-        // rare case (e.g. a ?start= cheat dropped right on top of it) where
-        // it wouldn't be.
-        if (gapSide !== null && Math.abs(z0) < VISIBLE_Z_RANGE) drawShip(ctx, cameraWorldX, z0, gapSide);
-
-        // Fog of war: thicker when farther from ship, reveals as you approach
-        if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
-          drawFog(ctx, distToShip);
-        }
+      // Cross-current flow visualization: animated streaks showing water movement
+      if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
+        const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
+        drawCurrentFlow(ctx, time, gapSide, progress);
       }
 
-      // Hazards (cannon shots) - draw in both phases. Chase-phase hazards
-      // carry fromX/fromD (the firing ship's position at spawn) so they
-      // render as a tracer shot from the hull, not a shell materializing
-      // out of nowhere — see drawHazard's own branch on that.
+      // gapSide is null until the encounter first activates (update()'s own
+      // gating, at APPROACH_RANGE+5) — practically always well before the
+      // ship comes within visible render range anyway, but this guards the
+      // rare case (e.g. a ?start= cheat dropped right on top of it) where
+      // it wouldn't be.
+      if (gapSide !== null && Math.abs(z0) < VISIBLE_Z_RANGE) drawShip(ctx, cameraWorldX, z0, gapSide);
+
+      // Fog of war: thicker when farther from ship, reveals as you approach
+      if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
+        drawFog(ctx, distToShip);
+      }
+
+      // Hazards (cannon shots)
       for (const h of hazards) {
         const z = worldDistance - h.d;
-        const zFrom = h.fromD != null ? worldDistance - h.fromD : null;
-        if (Math.abs(z) < VISIBLE_Z_RANGE || (zFrom != null && Math.abs(zFrom) < VISIBLE_Z_RANGE)) {
-          drawHazard(ctx, h, z, cameraWorldX, zFrom);
-        }
+        if (Math.abs(z) < VISIBLE_Z_RANGE) drawHazard(ctx, h, z, cameraWorldX);
       }
 
       // Hull hit sparks - a landed pistol shot
       for (const s of sparks) {
         const z = worldDistance - s.d;
         if (Math.abs(z) < VISIBLE_Z_RANGE) drawSpark(ctx, s, z, cameraWorldX);
-      }
-
-      // Chase ship: pursuing gunboat, orbiting the canoe (only during chase).
-      // Uses chaseShipD/chaseShipWorldX (the orbit-adjusted position update()
-      // computed this frame), not the old fixed centerline position.
-      if (chasePhase) {
-        const chaseZ = worldDistance - chaseShipD;
-        if (Math.abs(chaseZ) < VISIBLE_Z_RANGE) {
-          try {
-            ctx.save();
-            drawChaseShip(ctx, cameraWorldX, chaseZ, chaseShipWorldX);
-            ctx.restore();
-          } catch (e) {
-            console.error('[CHASE] Error drawing chase ship:', e);
-            ctx.restore(); // try to restore even if there was an error
-          }
-        }
-
-        // Muzzle flash: a bright burst at the gunport the instant a volley
-        // fires, so the shot visibly comes from the ship, not just from a
-        // hazard appearing near the player a moment later.
-        for (const f of muzzleFlashes) {
-          const fz = worldDistance - f.d;
-          if (Math.abs(fz) < VISIBLE_Z_RANGE) drawMuzzleFlash(ctx, f, fz, cameraWorldX);
-        }
       }
     },
   };
@@ -869,220 +483,6 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
   ctx.fillRect(flagX, flagY + 2, 8, 1); // horizontal
 }
 
-function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
-  // Royal Navy gunboat - clear ship silhouette with pointed bow.
-  // Deliberately a smaller hull than the blockade frigate (SHIP_DEPTH_Z=3.4)
-  // — a nimble single-chase cutter, not another ship-of-the-line.
-  // worldToScreen has no perspective falloff (flat PIXELS_PER_UNIT scale),
-  // so these world units are screen pixels directly. shipWorldX is the
-  // orbit-adjusted position update() computed this frame (see CHASE_ORBIT_*
-  // above), not the river centerline.
-  //
-  // BEAM (across) vs LENGTH_HALF (along direction of travel): a first pass
-  // used a 5-unit beam against only a 3-unit (1.5 each way) length, i.e. a
-  // hull *wider than it is long* — backwards for any boat, and exactly what
-  // read as "too wide, doesn't look like a real boat." A real ship's length
-  // is a multiple of its beam, never the other way around. Every dimension
-  // below is deliberately built off BEAM (width axis, left/right.x) or
-  // LENGTH_PX (length axis, top/bottom.y) separately — a few of the old
-  // sail/yard measurements mistakenly scaled off the *length* axis, which
-  // is harmless when both axes happen to be similar (the old, wrong
-  // proportions) but blows up into oversized sails the instant the length
-  // axis actually gets longer than the beam, as it must for the hull shape
-  // itself to be fixed. Module-level (CHASE_SHIP_BEAM/CHASE_SHIP_LENGTH_HALF
-  // above) so update()'s hit-test uses this exact same hull, not a second,
-  // independently-guessed size.
-  const BEAM = CHASE_SHIP_BEAM;
-  const LENGTH_HALF = CHASE_SHIP_LENGTH_HALF;
-  const left = worldToScreen(shipWorldX - BEAM / 2, z0 - LENGTH_HALF, cameraWorldX);
-  const right = worldToScreen(shipWorldX + BEAM / 2, z0 + LENGTH_HALF, cameraWorldX);
-  const top = Math.min(left.y, right.y);
-  const bottom = Math.max(left.y, right.y);
-  const lenPx = bottom - top; // along the hull's length (bow-to-stern axis)
-  const beamPx = right.x - left.x; // across the hull's beam (side-to-side axis)
-  const shipCenterX = (left.x + right.x) / 2;
-
-  // Wake: two curved, fading foam streaks trailing from the stern, drawn
-  // first so the hull covers their near end — the cheapest cue that this
-  // thing is actually underway and fast, not sitting still. A pair of
-  // straight uniform lines read as thin spindly legs stuck on the bottom
-  // of the hull rather than water — curving them outward (a real wake
-  // widens as it falls behind) and fading them out with alpha instead of
-  // a flat stroke reads as spreading foam instead.
-  for (const side of [-1, 1]) {
-    ctx.beginPath();
-    ctx.moveTo(shipCenterX + side * beamPx * 0.18, bottom - 2);
-    ctx.quadraticCurveTo(
-      shipCenterX + side * beamPx * 0.35, bottom + lenPx * 0.18,
-      shipCenterX + side * beamPx * 0.7, bottom + lenPx * 0.32,
-    );
-    ctx.strokeStyle = 'rgba(220, 235, 240, 0.4)';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-  }
-
-  // HULL SHAPE - pointed bow, flat-ish transom stern. The taper is entirely
-  // in beamPx-relative fractions so the outline scales correctly regardless
-  // of hull size, and — critically — the gunport stripe below is placed
-  // well clear of the taper zones at both ends so it can never overflow
-  // past the hull's actual (narrower, at that height) silhouette the way a
-  // flat full-beam rectangle did when it was placed too close to the stern
-  // taper: it showed ochre color sticking out past the hull outline there.
-  ctx.fillStyle = '#3a2716';
-  ctx.strokeStyle = '#0d0805';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(shipCenterX, top - beamPx * 0.3); // pointed bow
-  ctx.lineTo(right.x, top + lenPx * 0.22); // full beam reached
-  ctx.lineTo(right.x - beamPx * 0.06, bottom - lenPx * 0.08); // start narrowing to the transom
-  ctx.lineTo(shipCenterX + beamPx * 0.42, bottom); // stern corner — a flat transom, not a second point
-  ctx.lineTo(shipCenterX - beamPx * 0.42, bottom); // stern corner
-  ctx.lineTo(left.x + beamPx * 0.06, bottom - lenPx * 0.08);
-  ctx.lineTo(left.x, top + lenPx * 0.22);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // "Nelson chequer" — an ochre stripe with black gunport squares along
-  // each side, the single detail that reads unmistakably as "old warship"
-  // rather than an unrecognizable brown hull (the same cue the stationary
-  // frigate's own drawShip already relies on). Kept to the hull's known
-  // full-beam midsection (between the bow and stern taper zones above, with
-  // real margin) so it never overflows the outline.
-  const stripeY = top + lenPx * 0.5;
-  const stripeH = lenPx * 0.12;
-  ctx.fillStyle = '#b98a3e';
-  ctx.fillRect(left.x + beamPx * 0.06, stripeY, beamPx * 0.88, stripeH);
-  const portSize = Math.max(2.5, stripeH * 0.6);
-  const portCount = 3;
-  for (let i = 0; i < portCount; i++) {
-    const px = left.x + beamPx * 0.2 + (i / (portCount - 1)) * beamPx * 0.6;
-    ctx.fillStyle = '#0c0805';
-    ctx.fillRect(px - portSize / 2, stripeY + stripeH / 2 - portSize / 2, portSize, portSize);
-  }
-
-  // Deck - lighter wood showing ship interior, inset from the hull outline
-  // by beamPx-relative margins (an absolute pixel inset looked fine at the
-  // old ~80px beam but oversized now that beamPx is a genuinely ship-sized
-  // ~48px).
-  ctx.fillStyle = '#4a3520';
-  ctx.beginPath();
-  ctx.moveTo(shipCenterX, top - beamPx * 0.1);
-  ctx.lineTo(right.x - beamPx * 0.15, top + lenPx * 0.26);
-  ctx.lineTo(right.x - beamPx * 0.2, bottom - lenPx * 0.16);
-  ctx.lineTo(shipCenterX + beamPx * 0.2, bottom - lenPx * 0.03);
-  ctx.lineTo(shipCenterX - beamPx * 0.2, bottom - lenPx * 0.03);
-  ctx.lineTo(left.x + beamPx * 0.2, bottom - lenPx * 0.16);
-  ctx.lineTo(left.x + beamPx * 0.15, top + lenPx * 0.26);
-  ctx.closePath();
-  ctx.fill();
-
-  // Three masts - clear vertical elements, positioned along the hull's
-  // length (lenPx) but sized across (yard/sail width) off beamPx — mixing
-  // those up is exactly what made an earlier pass balloon the sails the
-  // moment the hull was actually made longer than it was wide (see the
-  // function's own opening comment). A real yard does run a bit past the
-  // hull's own beam, so these intentionally overhang beamPx slightly rather
-  // than staying inside it.
-  const mastPositions = [
-    shipCenterX,
-    shipCenterX - beamPx * 0.55,
-    shipCenterX + beamPx * 0.55,
-  ];
-
-  // Reported as "the sail is in front of the boat instead of on top of it" —
-  // accurate: every offset below used to be *negative* (top - lenPx*…),
-  // i.e. entirely above/ahead of `top`, the bow's own screen position (see
-  // the hull-shape comment above confirming `top` is the bow). With nothing
-  // but a thin 3px mast line connecting them, the sails read as a separate
-  // shape floating ahead of the hull rather than something mounted on it.
-  // Shifted onto positive offsets from `top` so the sail block now overlaps
-  // the hull's own forward deck — drawn after the deck (above, in source
-  // order) so it correctly layers on top of it, not the open water ahead of
-  // the bow.
-  for (const mx of mastPositions) {
-    // Mast pole — short now; it only needs to peek above the sail, not
-    // carry the whole height cue the old, much taller line did.
-    ctx.strokeStyle = '#2a1a10';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(mx, top + lenPx * 0.32);
-    ctx.lineTo(mx, top - lenPx * 0.08);
-    ctx.stroke();
-
-    // Horizontal sail yard
-    ctx.strokeStyle = '#2a1a10';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(mx - beamPx * 0.9, top + lenPx * 0.02);
-    ctx.lineTo(mx + beamPx * 0.9, top + lenPx * 0.02);
-    ctx.stroke();
-
-    // Sail
-    ctx.fillStyle = '#e8e0d0';
-    ctx.fillRect(mx - beamPx * 0.8, top - lenPx * 0.02, beamPx * 1.6, lenPx * 0.17);
-
-    // Sail shading
-    ctx.fillStyle = '#d0c8b8';
-    ctx.fillRect(mx - beamPx * 0.8, top + lenPx * 0.12, beamPx * 1.6, lenPx * 0.04);
-  }
-
-  // Bow details - make the front clear
-  ctx.fillStyle = '#0a0805';
-  // Bowsprit (front pole)
-  ctx.fillRect(shipCenterX - beamPx * 0.05, top - beamPx * 0.45, beamPx * 0.1, beamPx * 0.3);
-
-  // Union Jack flag at bow — made deliberately bigger and more prominent
-  // than a strict scale-model would call for (flagW/H below are roughly
-  // double the old fixed 12x8), the clearest single "this is the British
-  // pursuit ship" cue on a hull that's otherwise shrunk down. Every stripe
-  // below is a flagW/flagH-relative fraction rather than an absolute pixel
-  // count, so it keeps its correct proportions if this size ever changes
-  // again rather than needing every sub-element retuned by hand.
-  const flagW = 22;
-  const flagH = 14;
-  const flagX = shipCenterX - flagW / 2;
-  const flagY = top - lenPx * 0.49;
-
-  // Flag pole
-  ctx.fillStyle = '#2a1a10';
-  ctx.fillRect(shipCenterX - 1, top - lenPx * 0.49, 2, lenPx * 0.17);
-
-  // Union Jack
-  ctx.fillStyle = '#012169';
-  ctx.fillRect(flagX, flagY, flagW, flagH);
-
-  // White diagonals
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = flagW * 0.2;
-  ctx.beginPath();
-  ctx.moveTo(flagX, flagY);
-  ctx.lineTo(flagX + flagW, flagY + flagH);
-  ctx.moveTo(flagX + flagW, flagY);
-  ctx.lineTo(flagX, flagY + flagH);
-  ctx.stroke();
-
-  // Red diagonals
-  ctx.strokeStyle = '#C8102E';
-  ctx.lineWidth = flagW * 0.12;
-  ctx.beginPath();
-  ctx.moveTo(flagX, flagY);
-  ctx.lineTo(flagX + flagW, flagY + flagH);
-  ctx.moveTo(flagX + flagW, flagY);
-  ctx.lineTo(flagX, flagY + flagH);
-  ctx.stroke();
-
-  // White cross
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(flagX + flagW / 2 - flagW * 0.125, flagY, flagW * 0.25, flagH);
-  ctx.fillRect(flagX, flagY + flagH / 2 - flagH * 0.125, flagW, flagH * 0.25);
-
-  // Red cross
-  ctx.fillStyle = '#C8102E';
-  ctx.fillRect(flagX + flagW / 2 - flagW * 0.0625, flagY, flagW * 0.125, flagH);
-  ctx.fillRect(flagX, flagY + flagH / 2 - flagH * 0.0625, flagW, flagH * 0.125);
-}
-
 // A landed pistol shot on the hull: a quick bright burst that fades over
 // SPARK_LIFETIME, no lingering mark — reads as gunfire striking wood, not a
 // persistent hole (there's no scarring the hull sprite for real).
@@ -1111,58 +511,10 @@ function drawSpark(ctx, s, z, cameraWorldX) {
   ctx.restore();
 }
 
-// The instant a chase-phase volley fires: a bright burst plus a puff of
-// smoke at the gunport, so the shot visibly originates from the ship
-// itself rather than the hazard just appearing near the player a moment
-// later — the thing actually missing from the report that the chase
-// "wasn't engaging in combat."
-function drawMuzzleFlash(ctx, f, z, cameraWorldX) {
-  const p = worldToScreen(f.x, z, cameraWorldX);
-  const k = clamp(1 - f.t / MUZZLE_FLASH_LIFETIME, 0, 1);
-  ctx.save();
-  ctx.globalAlpha = k;
-  ctx.fillStyle = '#fff2b0';
-  ctx.shadowColor = '#ffb347';
-  ctx.shadowBlur = 10;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, 5 + (1 - k) * 4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = `rgba(120, 120, 115, ${k * 0.5})`;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y - 4, 4 + (1 - k) * 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawHazard(ctx, h, z, cameraWorldX, zFrom = null) {
+function drawHazard(ctx, h, z, cameraWorldX) {
   const p = worldToScreen(h.x, z, cameraWorldX);
   const warnProgress = clamp(h.t / SPLASH_WARN_TIME, 0, 1);
   const hot = h.t >= SPLASH_WARN_TIME && h.t < SPLASH_WARN_TIME + SPLASH_HOT_TIME;
-
-  // Chase-phase shots: a tracer arcing from the ship's own position at
-  // spawn to the impact point, in place of the approach-phase's falling
-  // cannonball (which reads as "lobbed from off-screen" — right for a
-  // broadside from a stationary hull off to one side, wrong for a ship
-  // visibly maneuvering right there in frame). Drawn across the whole
-  // warning window so its motion itself is part of the telegraph.
-  if (h.fromX != null && zFrom != null && !hot && h.t < SPLASH_WARN_TIME) {
-    const from = worldToScreen(h.fromX, zFrom, cameraWorldX);
-    const k = clamp(h.t / SPLASH_WARN_TIME, 0, 1);
-    const bx = from.x + (p.x - from.x) * k;
-    const by = from.y + (p.y - from.y) * k;
-    ctx.save();
-    ctx.strokeStyle = `rgba(255, 210, 120, ${0.25 + k * 0.25})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(bx, by);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(40, 34, 26, 0.9)';
-    ctx.beginPath();
-    ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
   const fading = h.t >= SPLASH_WARN_TIME + SPLASH_HOT_TIME;
 
   if (hot) {
@@ -1221,24 +573,18 @@ function drawHazard(ctx, h, z, cameraWorldX, zFrom = null) {
     // The actual moving threat — a cannonball visibly falling toward the
     // target, meeting it exactly at impact. The ring/shadow/pulse above
     // mark *where*; this is the *something's coming*, which a purely
-    // static telegraph never conveyed. Skipped for chase-phase shots
-    // (h.fromX set) — the tracer drawn above already shows the shot
-    // approaching from the ship's actual position; a second, unrelated ball
-    // falling straight down from the sky on top of it would just confuse
-    // the two into looking like separate threats.
-    if (h.fromX == null) {
-      const fallPx = 60 * (1 - warnProgress);
-      const ballY = p.y - fallPx;
-      const ballR = 2 + warnProgress * 2;
-      ctx.fillStyle = 'rgba(28, 24, 18, 0.9)';
-      ctx.beginPath();
-      ctx.arc(p.x, ballY, ballR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(95, 85, 68, 0.6)';
-      ctx.beginPath();
-      ctx.arc(p.x - ballR * 0.3, ballY - ballR * 0.3, ballR * 0.4, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // static telegraph never conveyed.
+    const fallPx = 60 * (1 - warnProgress);
+    const ballY = p.y - fallPx;
+    const ballR = 2 + warnProgress * 2;
+    ctx.fillStyle = 'rgba(28, 24, 18, 0.9)';
+    ctx.beginPath();
+    ctx.arc(p.x, ballY, ballR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(95, 85, 68, 0.6)';
+    ctx.beginPath();
+    ctx.arc(p.x - ballR * 0.3, ballY - ballR * 0.3, ballR * 0.4, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 

@@ -59,6 +59,7 @@ const { VILLAGES } = await import('../src/world/river/route.js');
 const { getDockHit } = await import('../src/world/villages.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
+const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
 const { DIABLE_FLOW_DISTANCE, HP_MAX: DIABLE_HP_MAX } = await import('../src/bossfights/diable.js');
 const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
@@ -260,9 +261,9 @@ await step('loup-garou: the demon-wolf strikes, then Québec City checks it', ()
   if (elsewhere.game.loupGarou.isActive()) throw new Error('the loup-garou activated on the fjord');
 });
 
-// --- scenario 4: the blockade boss fight (now on the Rideau, before Kingston) --
+// --- scenario 4: the British Blockade (frigate approach only, on the Rideau) --
 
-await step('blockade: approach -> pursuit -> escape -> on to Kingston', () => {
+await step('blockade: approach -> cleared -> ordinary paddling continues', () => {
   if (SHIP_FLOW_DISTANCE < SEGMENT_SHAPE_OFFSET.rideau
     || SHIP_FLOW_DISTANCE > SEGMENT_SHAPE_OFFSET.rideau + 1700) {
     throw new Error(`blockade ship @ ${SHIP_FLOW_DISTANCE | 0} isn't on the Rideau leg any more`);
@@ -274,41 +275,71 @@ await step('blockade: approach -> pursuit -> escape -> on to Kingston', () => {
   for (let i = 0; i < 5000 && !sawFight; i++) {
     approach.input.state.up = true;
     approach.game.update(1 / 30);
-    // Not blockadePct — the bar (and blockadePct) no longer shows during the
-    // approach at all (reported as "a health bar during a pure dodge-and-
-    // thread-the-gap leg" — see game.js's own comment on that assignment).
     if (approach.game.blockade.isApproachEngaged()) sawFight = true;
     if (approach.game.state === 'gameover') approach.game.start();
   }
   if (!sawFight) throw new Error('blockade never activated across the whole approach');
 
-  // Part 2 — the pursuit MUST resolve (the bug: a boat slower than the chase
-  // ship never "got ahead", so the chase and its Rule Britannia ran
-  // forever). Drop the canoe already through the frigate's hull depth and
-  // lined up in the gap, so this exercises the chase, not the gauntlet. The
-  // chase is a held arena now (blockade.js's own opening comment) — no
-  // amount of paddling ends it early, only CHASE_HOLD_TIME surviving it (or
-  // sinking the ship, not exercised by this no-combat scenario) does, so
-  // the budget below has to clear that floor, not just a travel distance.
+  // Part 2 — threading the gap clears it, and it stays cleared. No more
+  // automatic chase chained onto it — see britishWarship.js's own module
+  // comment on why that fight was split into its own, much further
+  // downstream encounter, no longer this scenario's concern.
   const g = newGame('rideau', SHIP_FLOW_DISTANCE + 2);
   g.game.lateralOffset = widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // gap centre
-  let clearedFrigate = false;
+  let cleared = false;
+  for (let i = 0; i < 500 && !cleared; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    if (!g.game.blockade.isApproachEngaged()) cleared = true;
+    if (g.game.state === 'gameover') throw new Error('died in the approach with a clear lane — blockade too harsh');
+  }
+  if (!cleared) throw new Error('the approach never resolved — threading the gap should have cleared it');
+
+  // Part 3 — well clear of the frigate, ordinary paddling resumes: no held
+  // arena, no clamp, flowDistance keeps advancing normally right up until
+  // the British Warship's own trigger, still a long way downstream and
+  // covered by its own scenarios below.
+  const before = g.game.flowDistance;
+  for (let i = 0; i < 150; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+  }
+  if (g.game.flowDistance <= before + 10) {
+    throw new Error(`flowDistance barely advanced after clearing (${before | 0} -> ${g.game.flowDistance | 0}) — something's still holding it`);
+  }
+  notes.push('  note blockade: cleared the frigate cleanly, ordinary paddling resumed');
+});
+
+// --- scenario 4a: the British Warship — a standalone held encounter --------
+
+await step('britishWarship: triggers near the old Kingston Mills spot, held until resolved', () => {
+  if (WARSHIP_FLOW_DISTANCE <= SHIP_FLOW_DISTANCE) {
+    throw new Error(`British Warship @ ${WARSHIP_FLOW_DISTANCE | 0} isn't downstream of the frigate @ ${SHIP_FLOW_DISTANCE | 0} any more`);
+  }
+  // The fight is a held arena the instant it triggers (britishWarship.js's
+  // own module comment) — no amount of paddling ends it early, only
+  // CHASE_HOLD_TIME surviving it (or sinking the ship, not exercised by
+  // this no-combat scenario) does, so the budget below has to clear that
+  // floor, not just a travel distance.
+  const g = newGame('rideau', WARSHIP_FLOW_DISTANCE + 2);
+  let started = false;
   let escaped = false;
   for (let i = 0; i < 7000 && !escaped; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     g.game.update(1 / 30);
-    if (g.game.blockade.isChaseHolding()) clearedFrigate = true;
-    if (clearedFrigate && g.game.blockadePct === null) escaped = true;
-    if (g.game.state === 'gameover') throw new Error('died in the chase with a clear lane — blockade too harsh');
+    if (g.game.britishWarship.isChaseHolding()) started = true;
+    if (started && g.game.warshipPct === null) escaped = true;
+    if (g.game.state === 'gameover') throw new Error('died in the Warship hold with no combat — too harsh');
   }
-  if (!clearedFrigate) throw new Error('never got past the frigate through an open gap');
-  if (!escaped) throw new Error('the pursuit never resolved — chase (and its music) would run forever');
+  if (!started) throw new Error('the British Warship never triggered approaching its own flowDistance');
+  if (!escaped) throw new Error('the Warship fight never resolved — it (and its music) would run forever');
 
-  // Part 3 — past the blockade, the Rideau carries you the rest of the way
-  // to the Kingston finish (the blockade is the last fight, not a dead end).
+  // Past the Warship, the short remaining stretch to Kingston still works.
   let won = false;
-  for (let i = 0; i < 12000 && !won; i++) {
+  for (let i = 0; i < 3000 && !won; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
@@ -317,30 +348,26 @@ await step('blockade: approach -> pursuit -> escape -> on to Kingston', () => {
     g.game.update(1 / 30);
     if (g.game.state === 'won') won = true;
   }
-  if (!won) throw new Error('escaped the blockade but never reached Kingston — the run home is broken');
-  notes.push('  note blockade ran on the Rideau; chase resolved, then reached the Kingston finish');
+  if (!won) throw new Error('escaped the Warship but never reached Kingston — the run home is broken');
+  notes.push('  note britishWarship ran on its own, held until it resolved, then reached the Kingston finish');
 });
 
-// --- scenario 4a: the chase ship is now shootable, and sinkable ------------
+// --- scenario 4b: the British Warship's hull is shootable, and sinkable ----
 
-await step('blockade: shooting the chase ship sinks it', () => {
-  // Same drop-through-the-gap setup as the escape scenario above, straight
-  // into the chase phase — this scenario is about the gunfight, not
-  // re-proving the approach dodge.
-  const g = newGame('rideau', SHIP_FLOW_DISTANCE + 2);
-  g.game.lateralOffset = widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5;
+await step('britishWarship: shooting it sinks it', () => {
+  const g = newGame('rideau', WARSHIP_FLOW_DISTANCE + 2);
   let inChase = false;
   for (let i = 0; i < 500 && !inChase; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     g.game.update(1 / 30);
-    if (g.game.blockade.isChaseHolding()) inChase = true;
+    if (g.game.britishWarship.isChaseHolding()) inChase = true;
   }
-  if (!inChase) throw new Error('never entered the chase phase to test the gunfight');
+  if (!inChase) throw new Error('never entered the held arena to test the gunfight');
 
-  // Steer to line up under the chase ship and fire. The ship spends most of
-  // its orbit ahead of the canoe (see blockade.js's CHASE_ORBIT_* comment on
-  // why) — that's what makes it reachable by weapons.js's forward-only
+  // Steer to line up under the ship and fire. The ship spends most of its
+  // orbit ahead of the canoe (see britishWarship.js's CHASE_ORBIT_* comment
+  // on why) — that's what makes it reachable by weapons.js's forward-only
   // bullets at all — so lining up laterally and firing whenever the ship
   // isn't too far behind is a real, if simple, aim strategy, not a script
   // that only works because it knows the ship's exact position out of band
@@ -354,31 +381,31 @@ await step('blockade: shooting the chase ship sinks it', () => {
   let resolved = false;
   let sunk = false;
   let frames = 0;
-  for (; frames < 6600 && !resolved && g.game.blockadePct !== null; frames++) {
+  for (; frames < 6600 && !resolved && g.game.warshipPct !== null; frames++) {
     g.input.state.up = true;
     g.game.health = 100;
-    const pos = g.game.blockade.debugChaseShipPosition();
+    const pos = g.game.britishWarship.debugChaseShipPosition();
     const err = g.game.canoeWorldX - pos.worldX;
     g.input.state.left = err > 0.3;
     g.input.state.right = err < -0.3;
     if (Math.abs(err) < 1.5 && pos.flowDistance > g.game.flowDistance - 2) g.input.onWeaponFire?.('pistol');
     g.game.update(1 / 30);
-    // game.js's own update() already consumes blockade.consumeJustSunk()
+    // game.js's own update() already consumes britishWarship.consumeJustSunk()
     // internally (to fire its own banner/SFX), so it always reads false by
     // the time this loop gets a turn — the banner text it leaves behind is
     // the only signal left to tell a sinking from a timeout from out here.
     if (g.game.ui.milestoneBanner.textContent.includes('GOING DOWN')) sunk = true;
-    if (g.game.state === 'gameover') throw new Error('died trying to shoot down the chase ship');
-    if (g.game.blockadePct === null) resolved = true;
+    if (g.game.state === 'gameover') throw new Error('died trying to shoot down the Warship');
+    if (g.game.warshipPct === null) resolved = true;
   }
-  if (!resolved) throw new Error('the chase never resolved (sunk or escaped) within budget');
+  if (!resolved) throw new Error('the Warship fight never resolved (sunk or escaped) within budget');
   if (!sunk) throw new Error('resolved via the CHASE_HOLD_TIME timeout instead of sinking — the gunfight itself was never exercised');
-  notes.push(`  note blockade: sank the chase ship after ${(frames / 30).toFixed(1)}s of gunnery`);
+  notes.push(`  note britishWarship: sank it after ${(frames / 30).toFixed(1)}s of gunnery`);
 });
 
-// --- scenario 4a-2: the chase ship's fore/aft hold never renders off-screen -
+// --- scenario 4c: the ship's fore/aft hold never renders off-screen --------
 
-await step('blockade: British Warship Up/Down keeps the ship on screen', () => {
+await step('britishWarship: Up/Down keeps the ship on screen', () => {
   // Reported as "Up/Down don't do anything" — the ship WAS moving (verified
   // separately), but worldToScreen has no perspective falloff (z maps
   // straight to screen Y), and CHASE_HOLD_Z_MIN used to be large enough
@@ -389,13 +416,12 @@ await step('blockade: British Warship Up/Down keeps the ship on screen', () => {
   // combined with the hold offset at least once, and checks the resulting
   // screen Y (same z = worldDistance - chaseShipD math draw() itself uses,
   // via debugChaseShipPosition()) never leaves [0, CANVAS_HEIGHT].
-  const g = newGame('rideau', SHIP_FLOW_DISTANCE + 2);
-  g.game.lateralOffset = widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5;
-  for (let i = 0; i < 500 && !g.game.blockade.isChaseHolding(); i++) {
+  const g = newGame('rideau', WARSHIP_FLOW_DISTANCE + 2);
+  for (let i = 0; i < 500 && !g.game.britishWarship.isChaseHolding(); i++) {
     g.input.state.up = true;
     g.game.update(1 / 30);
   }
-  if (!g.game.blockade.isChaseHolding()) throw new Error('never entered the chase to test the fore/aft hold');
+  if (!g.game.britishWarship.isChaseHolding()) throw new Error('never entered the hold to test the fore/aft hold');
 
   for (const [label, dir] of [['down (opening)', 'down'], ['up (closing)', 'up']]) {
     let minY = Infinity, maxY = -Infinity;
@@ -403,13 +429,13 @@ await step('blockade: British Warship Up/Down keeps the ship on screen', () => {
       g.input.state.up = dir === 'up';
       g.input.state.down = dir === 'down';
       g.game.update(1 / 30);
-      // Skip the ~1.1s "closing in" opening beat (blockade.js's
+      // Skip the ~1.1s "closing in" opening beat (britishWarship.js's
       // CHASE_INTRO_TIME) — that intentionally starts the ship further
       // behind/out of range and eases it in, a separate, known, brief
       // quirk of its own (also capable of a momentary off-screen render),
       // not the steady-state hold this scenario is checking.
       if (i < 40) continue;
-      const pos = g.game.blockade.debugChaseShipPosition();
+      const pos = g.game.britishWarship.debugChaseShipPosition();
       const z = g.game.flowDistance - pos.flowDistance;
       const y = CANOE_SCREEN_Y + z * PIXELS_PER_UNIT;
       minY = Math.min(minY, y);
@@ -785,9 +811,10 @@ await step('rideau: paddle the whole leg and reach Kingston -> won', () => {
   const gapX = centerX(SHIP_FLOW_DISTANCE) + widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // right-side lane
   for (let i = 0; i < 12000 && !won; i++) {
     g.input.state.up = true;
-    // Not blockadePct — it no longer covers the approach (see the other
-    // fix's own comment above); isApproachEngaged() is the non-consuming
-    // status check that still does.
+    // blockade.js no longer exposes a progress field at all (no health/
+    // hull/hold-time concept during a pure dodge-and-thread-the-gap leg);
+    // isApproachEngaged() is the non-consuming status check for "is the
+    // gauntlet currently live."
     const threading = g.game.blockade.isApproachEngaged() && g.game.flowDistance < SHIP_FLOW_DISTANCE + 6;
     const wantX = threading ? gapX : centerX(g.game.flowDistance);
     const err = g.game.canoeWorldX - wantX;

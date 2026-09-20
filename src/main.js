@@ -9,6 +9,7 @@ import { Game } from './core/game.js';
 import { VILLAGES } from './world/river/route.js';
 import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
 import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
+import { TRIGGER_DISTANCE as WARSHIP_FLOW_DISTANCE } from './bossfights/britishWarship.js';
 import { TRIGGER_DISTANCE as CHASSE_GALERIE_FLOW_DISTANCE } from './bossfights/chasseGalerie.js';
 import { DIABLE_FLOW_DISTANCE } from './bossfights/diable.js';
 import { TRIGGER_DISTANCE as LOUP_GAROU_FLOW_DISTANCE } from './bossfights/loupGarou.js';
@@ -83,16 +84,19 @@ function normalizeStartName(s) {
 // before the beast is spotted (bossfights/loupGarou.js) — the last encounter
 // before Québec City.
 //
-// "british-warship" drops the canoe just past the frigate's own line
-// (SHIP_FLOW_DISTANCE + 10 — comfortably past blockade.js's own CLEAR_MARGIN
-// crossing threshold, so update()'s "just cleared the gap" branch fires on
-// the very first frame) — straight into the chase phase against the
-// shootable gunboat, skipping the gap-threading approach entirely. Testing
-// the chase/dogfight on its own doesn't need to re-run the frigate every
-// time. Named to match "british-blockade" above (and the in-game banner,
-// "BRITISH WARSHIP") — it was "pursuit" at first, then "british-pursuit"
-// once that was found to silently match nothing (every keyword here is
-// matched verbatim), renamed again alongside the banner/HUD text.
+// "british-warship" drops the canoe just past the Warship's own trigger
+// (bossfights/britishWarship.js's TRIGGER_DISTANCE + 10) — straight into
+// the held arena against the shootable gunboat. Used to sit right after
+// the frigate's own gap (skipping straight from clearing it into the
+// chase, back when the two were one continuous encounter); now that the
+// Warship is a standalone fight much further downstream (near where
+// Kingston Mills once sat — see route.js's own comment on its removal),
+// this cheat jumps straight there instead of requiring the long paddle
+// past Newboro and Jones Falls first. Named to match "british-blockade"
+// above (and the in-game banner, "BRITISH WARSHIP") — it was "pursuit" at
+// first, then "british-pursuit" once that was found to silently match
+// nothing (every keyword here is matched verbatim), renamed again
+// alongside the banner/HUD text.
 //
 // "rideau" drops the canoe at the head of the made-up Ottawa-to-Kingston leg
 // (world/river/route.js) — past Le Diable, the storm gone, on the calm wide
@@ -113,7 +117,7 @@ const START_KEYWORDS = {
   [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FLOW_DISTANCE - 24, segment: 'fjord' },
   [normalizeStartName('loup-garou')]: { flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
-  [normalizeStartName('british-warship')]: { flowDistance: SHIP_FLOW_DISTANCE + 10, segment: 'rideau' },
+  [normalizeStartName('british-warship')]: { flowDistance: WARSHIP_FLOW_DISTANCE + 10, segment: 'rideau' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
