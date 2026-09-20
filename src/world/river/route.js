@@ -72,7 +72,6 @@
 //   Smiths Falls          44°54′N   76°01′W       https://en.wikipedia.org/wiki/Smiths_Falls
 //   Newboro               44°39′N   76°19′W       https://en.wikipedia.org/wiki/Newboro
 //   Jones Falls           44°33′N   76°14′W       https://en.wikipedia.org/wiki/Jones_Falls,_Ontario
-//   Kingston Mills        44°18′N   76°27′W       https://en.wikipedia.org/wiki/Kingston_Mills
 //   Kingston              44°14′N   76°29′W       https://en.wikipedia.org/wiki/Kingston,_Ontario
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './path.js';
 
@@ -265,8 +264,8 @@ const LAWRENCE_WEST_WAYPOINTS = [
 // left on makeSegment()'s alternating default rather than pinned to real
 // geography — there isn't a reliable "real bank" to pin most of these to in
 // the first place: Manotick sits on Long Island, split by both branches of
-// the Rideau; Newboro/Jones Falls/Kingston Mills are lake reaches and lock
-// stations, not two-bank river towns. Layered onto a genuinely invented
+// the Rideau; Newboro/Jones Falls are lake reaches and lock stations, not
+// two-bank river towns. Layered onto a genuinely invented
 // channel (no continuous river actually runs Gatineau to Kingston), forcing
 // a "correct" side per town would be presenting a guess as researched fact.
 // Kingston is the one exception — its own real shore (north, on Lake
@@ -288,8 +287,6 @@ const RIDEAU_WAYPOINTS = [
   // genuinely wide compared to the canal towns on either side of them.
   { name: 'Newboro', lat: 44.6470, lon: -76.3100, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, riverWidthKm: 2 },
   { name: 'Jones Falls', lat: 44.5450, lon: -76.2380, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, riverWidthKm: 1.5 },
-  // The Cataraqui River narrows again before Kingston.
-  { name: 'Kingston Mills', lat: 44.3010, lon: -76.4570, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, riverWidthKm: 0.3 },
   // Journey's end — Fort Frontenac / Cataraqui, the gateway to the Great
   // Lakes. game.js declares the run won on reaching it. Kingston's harbour
   // opens right onto Lake Ontario, hence the wide figure here.
