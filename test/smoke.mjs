@@ -1258,6 +1258,57 @@ await step('music: a boss track survives start() firing again right after it', a
   }
 });
 
+await step('music: a special track that fails to autoplay recovers on the next real gesture', async () => {
+  // Reported for Kingston's own arrival track: "the music didn't kick in,"
+  // total silence for the rest of the run. Root cause — a ?start= cheat (or
+  // just being deep enough into an approach already) can land the canoe
+  // already inside a trigger's own distance window before the player's very
+  // first real gesture, so playSpecial()'s play() attempt gets rejected by
+  // the browser's autoplay policy; its own single internal retry (400ms
+  // later) can land before a gesture too, and used to just give up for
+  // good, leaving `special` stuck true — which made start()'s own guard
+  // silently swallow every later gesture as well. dom-shim.mjs's own Audio
+  // stub always resolves play(), so no test could ever have caught this —
+  // this one swaps in a stub that rejects the first two attempts (the
+  // initial one plus the one internal retry) before succeeding, the same
+  // shape a real blocked-autoplay-then-a-late-gesture sequence has.
+  const mod = await import('../src/audio/music.js');
+  const realAudio = globalThis.Audio;
+  let playCalls = 0;
+  globalThis.Audio = function () {
+    const listeners = {};
+    return {
+      play: () => {
+        playCalls++;
+        return playCalls <= 2
+          ? Promise.reject({ name: 'NotAllowedError', message: 'play() failed because the user didn\'t interact with the document first' })
+          : Promise.resolve();
+      },
+      pause() {},
+      load() { queueMicrotask(() => (listeners.canplay || []).forEach((fn) => fn())); },
+      addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
+      removeEventListener(type, fn) { listeners[type] = (listeners[type] || []).filter((f) => f !== fn); },
+      canPlayType: () => '',
+      volume: 1,
+      currentTime: 0,
+      loop: false,
+    };
+  };
+  try {
+    const music = mod.createMusic();
+    music.playWendigoTrack(); // any special track exercises the same path
+    await new Promise((r) => setTimeout(r, 450)); // past the one internal 400ms retry, which also fails
+    if (music.nowPlaying != null) throw new Error('test setup bug: expected both attempts to have failed by now');
+    music.start(); // the player's next real gesture (main.js's permanent listeners)
+    await new Promise((r) => setTimeout(r, 20));
+    if (music.nowPlaying == null) {
+      throw new Error('a real gesture after a failed autoplay attempt never recovered playback — stuck silent');
+    }
+  } finally {
+    globalThis.Audio = realAudio;
+  }
+});
+
 // --- report ------------------------------------------------------------------
 
 restoreConsole();

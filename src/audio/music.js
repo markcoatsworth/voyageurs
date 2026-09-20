@@ -274,6 +274,28 @@ export function createMusic({ onTrack } = {}) {
   // the track does).
   let special = false;
 
+  // The still-unresolved play() attempt for whichever special track is
+  // currently committing, or null once it's actually confirmed playing (or
+  // superseded). Real bug this fixes: a ?start= cheat can land the canoe
+  // already inside a trigger's own distance window (Kingston's own
+  // approach banner among them) before the very first real user gesture —
+  // so playSpecial()'s own play() attempt gets rejected by the browser's
+  // autoplay policy, its one internal setTimeout retry (400ms later) often
+  // lands before a gesture too, and it then gives up for good. For every
+  // *other* boss track that self-heals: the fight eventually resolves,
+  // endBossTrack() forces special back to false and restarts the shuffle
+  // regardless. Kingston's own arrival track (KINGSTON_TRACK) deliberately
+  // has no such resolution — nothing ever calls endBossTrack() for it (see
+  // its own comment) — so a failed attempt left `special` stuck true
+  // forever, which made start()'s own `if (started || special) return;`
+  // guard silently swallow every later gesture too: not just the arrival
+  // track failing, but total silence for the rest of the run. Reported
+  // exactly that way. Retrying this on every one of main.js's permanent
+  // gesture listeners (the same ones that already retry the ordinary
+  // start() path until one works) closes it the same way, instead of
+  // giving up after one fixed-delay attempt.
+  let pendingSpecialAttempt = null;
+
   // Tried routing this through a MediaElementAudioSourceNode + AudioContext
   // (to sidestep the phone's silent switch, which <audio> elements respect
   // but Web Audio-generated sound doesn't) — reverted. That API has a long,
@@ -387,6 +409,7 @@ export function createMusic({ onTrack } = {}) {
       // listener.
       attachEndedHandler(requestedGeneration, () => {
         special = false;
+        pendingSpecialAttempt = null;
         playCurrent();
       });
 
@@ -396,6 +419,7 @@ export function createMusic({ onTrack } = {}) {
         audio.play().then(
           () => {
             started = true;
+            pendingSpecialAttempt = null;
             debug(`playing special track ${track.title}`);
             if (generation === requestedGeneration) emitTrack(track);
           },
@@ -406,9 +430,17 @@ export function createMusic({ onTrack } = {}) {
               retried = true;
               setTimeout(attempt, 400);
             }
+            // pendingSpecialAttempt stays set (see its own comment) — even
+            // once the scheduled retry above is also exhausted, a later
+            // real gesture through start() gets another shot at this exact
+            // attempt, not just the one fixed-delay retry.
           }
         );
       };
+      // See pendingSpecialAttempt's own comment — cleared on success above,
+      // overwritten by whichever playSpecial() commits next, otherwise left
+      // for start() to retry on the player's next real gesture.
+      pendingSpecialAttempt = attempt;
       let ready = false;
       const onReady = () => {
         if (ready) return;
@@ -491,10 +523,20 @@ export function createMusic({ onTrack } = {}) {
     // Folie" started right, then a random track took over almost
     // immediately. `special` (set synchronously the instant playSpecial()
     // is called, well before any of this async settling) is the correct
-    // signal for "something has already been commanded, don't re-bootstrap"
-    // — playSpecial()'s own attempt() has its own independent retry-on-
-    // failure logic, so this doesn't need start() to cover that case too.
+    // signal for "something has already been commanded, don't re-bootstrap".
+    //
+    // pendingSpecialAttempt's own comment covers the other half: if that
+    // command's own play() attempt is still unresolved (or has already
+    // failed and exhausted its one internal retry — a real, reported case
+    // for Kingston's own arrival track, see that comment), retry *it*
+    // instead of falling through to the ordinary shuffle bootstrap below —
+    // this is what actually recovers a special track a browser initially
+    // refused to autoplay, on the player's next real gesture.
     start() {
+      if (pendingSpecialAttempt) {
+        pendingSpecialAttempt();
+        return;
+      }
       if (started || special) return;
       debug('start() called');
       playCurrent();
@@ -585,6 +627,7 @@ export function createMusic({ onTrack } = {}) {
       if (!special) return; // shuffle's already back — nothing to cut short
       debug('endBossTrack — dropping the boss track back into the shuffle');
       special = false;
+      pendingSpecialAttempt = null;
       generation++;
       playCurrent();
     },
