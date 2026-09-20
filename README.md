@@ -52,10 +52,10 @@ it's not the same running order every session:
   Loup-garou encounter (just before Québec City), not in the regular
   shuffle. Picked for the title alone ("Reel of Terror") once that fight
   needed its own cue.
-- "La Mer de la Folie" — reserved for the Pursuit chase phase of the
-  British Blockade fight (cuts in once the frigate itself is cleared,
-  replacing "Rule, Britannia!" for the gunboat chase that follows).
-  Supplied directly like "Reel du Paradis et Enfer" above, not sourced
+- "La Mer de la Folie," performed by Les Chevaliers — reserved for the
+  Pursuit chase phase of the British Blockade fight (cuts in once the
+  frigate itself is cleared, replacing "Rule, Britannia!" for the gunboat
+  chase that follows). Supplied directly like "Reel du Paradis et Enfer" above, not sourced
   from an archive — performer not documented.
 
 **Rights note:** none of these recordings are confirmed public domain.

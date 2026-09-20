@@ -97,7 +97,14 @@ const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel
 // directly like DIABLE_TRACK, not sourced from an archive — see README.md's
 // Music section for the same rights caveat every other directly-supplied
 // track here carries.
-const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de la Folie', artist: 'Unknown' };
+// volume overrides DEFAULT_VOLUME — reported as too quiet during the chase
+// (cannon fire/SFX competing with it) even at the normalized -21 LUFS every
+// other track sits at. Same fix, same ceiling, as DIABLE_TRACK's own volume
+// override right above: 1.0 is as loud as audio.volume goes. If it's still
+// not enough at this setting, the fix has to move from this knob to the
+// file itself (re-normalize the source to a louder integrated target) —
+// see that constant's own comment.
+const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de la Folie', artist: 'Les Chevaliers', volume: 1.0 };
 
 const DEFAULT_VOLUME = 0.35;
 
