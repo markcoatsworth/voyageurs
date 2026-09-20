@@ -1399,7 +1399,7 @@ export class Game {
       // itself, even though that leg is pure dodge-and-thread-the-gap —
       // there's no health, hull, or hold-time concept to show yet, just
       // whether you found the gap. The bar now only ever appears once the
-      // chase ("British Pursuit") actually starts, where progressPct is a
+      // chase ("British Warship") actually starts, where progressPct is a
       // real hull-HP readout (see that field's own comment in blockade.js).
       this.blockadePct = (blockade.active && blockade.isChase) ? blockade.progressPct : null;
       this.blockadeCrossCurrent = blockade.crossCurrent || 0;
@@ -1436,7 +1436,7 @@ export class Game {
         this._bossTrackCued = false;
       }
       if (this.blockade.consumeJustStartedChase()) {
-        this.showBanner('BRITISH PURSUIT');
+        this.showBanner('BRITISH WARSHIP');
         console.log('[GAME] Chase phase started. Canoe visible:', this.canoeVisible, 'Position:', this.flowDistance);
         // Music already cut over to PURSUIT_TRACK above (consumeJustCleared
         // fires the same frame, processed first) — nothing to start here.
@@ -1841,7 +1841,7 @@ export class Game {
       this.ui.hudDiable?.classList.add('hidden');
     }
 
-    // The Pursuit's own health bar — the approach ("British Blockade") is
+    // The Warship's own health bar — the approach ("British Blockade") is
     // pure dodge-and-thread-the-gap with no health/hull/hold-time concept
     // to show, so blockadePct (set above) stays null through the whole
     // approach and this only ever appears once the chase actually starts,
@@ -1851,7 +1851,7 @@ export class Game {
     if (this.blockadePct != null) {
       this.ui.hudBlockade?.classList.remove('hidden');
       if (this.ui.hudBlockadeFill) this.ui.hudBlockadeFill.style.width = `${clamp(this.blockadePct, 0, 100)}%`;
-      if (this.ui.hudBlockadeLabel) this.ui.hudBlockadeLabel.textContent = 'BRITISH PURSUIT';
+      if (this.ui.hudBlockadeLabel) this.ui.hudBlockadeLabel.textContent = 'BRITISH WARSHIP';
     } else {
       this.ui.hudBlockade?.classList.add('hidden');
     }

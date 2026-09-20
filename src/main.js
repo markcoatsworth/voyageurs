@@ -83,15 +83,16 @@ function normalizeStartName(s) {
 // before the beast is spotted (bossfights/loupGarou.js) — the last encounter
 // before Québec City.
 //
-// "british-pursuit" drops the canoe just past the frigate's own line
+// "british-warship" drops the canoe just past the frigate's own line
 // (SHIP_FLOW_DISTANCE + 10 — comfortably past blockade.js's own CLEAR_MARGIN
 // crossing threshold, so update()'s "just cleared the gap" branch fires on
 // the very first frame) — straight into the chase phase against the
 // shootable gunboat, skipping the gap-threading approach entirely. Testing
 // the chase/dogfight on its own doesn't need to re-run the frigate every
 // time. Named to match "british-blockade" above (and the in-game banner,
-// "BRITISH PURSUIT") — it was just "pursuit" at first, which silently
-// doesn't match anything since every keyword here is matched verbatim.
+// "BRITISH WARSHIP") — it was "pursuit" at first, then "british-pursuit"
+// once that was found to silently match nothing (every keyword here is
+// matched verbatim), renamed again alongside the banner/HUD text.
 //
 // "rideau" drops the canoe at the head of the made-up Ottawa-to-Kingston leg
 // (world/river/route.js) — past Le Diable, the storm gone, on the calm wide
@@ -112,7 +113,7 @@ const START_KEYWORDS = {
   [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FLOW_DISTANCE - 24, segment: 'fjord' },
   [normalizeStartName('loup-garou')]: { flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
-  [normalizeStartName('british-pursuit')]: { flowDistance: SHIP_FLOW_DISTANCE + 10, segment: 'rideau' },
+  [normalizeStartName('british-warship')]: { flowDistance: SHIP_FLOW_DISTANCE + 10, segment: 'rideau' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
