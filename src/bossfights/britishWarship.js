@@ -4,10 +4,14 @@
 // to be a second phase chained directly onto the blockade — the chase
 // started the instant you cleared the frigate's gap, with no breathing
 // room between the two fights, effectively one long encounter wearing two
-// names. Split out into its own trigger, much further downstream, at the
-// real-world position Kingston Mills once held on this route before it was
-// removed as a village (see route.js's own comment on that) — a natural,
-// already-researched waypoint to reuse rather than an arbitrary new number.
+// names. Split out into its own trigger downstream, originally pinned to
+// the real-world position Kingston Mills once held on this route before it
+// was removed as a village (see route.js's own comment on that) — but that
+// landed the fight crowded right up against Kingston's own dock (only ~95
+// units clear). Moved again, deliberately off that real anchor this time,
+// to TRIGGER_DISTANCE's own fraction-of-the-Jones-Falls-to-Kingston-span
+// placement below — a real structural change, not a tuning nudge, putting
+// the fight in the middle of the run-in instead of at the very end of it.
 //
 // It's a HELD encounter, same pattern as bossfights/diable.js's arena:
 // game.js clamps flowDistance at getChaseHoldFlowDistance() while
@@ -36,19 +40,21 @@ import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../
 import { VILLAGES } from '../world/villages.js';
 
 const KINGSTON = VILLAGES.find((v) => v.name === 'Kingston');
-// Kingston Mills sat at 44.3010N, 76.4570W (see route.js's own removal
-// comment) — roughly 85 units upstream of Kingston on this route's
-// cumulative-distance model, measured before it was removed from the
-// waypoint list. Nudged a bit further upstream than that real position
-// (85 -> 95) to open up more clearance before Kingston's own dock: the
-// "well past the trigger" auto-resolve below (used by ?start=kingston,
-// main.js) needs room after it to actually read as an approach to the
-// dock rather than dropping the player right on top of it. Comfortably
-// clear of both neighbours either way: ~330 units past Jones Falls
-// upstream, and the held arena itself never needs runway (flowDistance
-// freezes the instant it triggers).
-const WARSHIP_D_OFFSET = 95;
-export const TRIGGER_DISTANCE = KINGSTON.flowDistance - WARSHIP_D_OFFSET;
+const JONES_FALLS = VILLAGES.find((v) => v.name === 'Jones Falls');
+// ~1/3 of the way from Jones Falls to Kingston (the last open stretch of
+// the Rideau — Newboro and Jones Falls are the only two real waypoints
+// between Gatineau and Kingston with nothing else in between) — explicitly
+// requested as "a major structural change," moving the fight off its old
+// fixed offset-before-Kingston (WARSHIP_D_OFFSET, ~95 units short of the
+// dock — see git history) into the middle of the run-in instead. Leaves
+// real room on both sides: ~137 units of ordinary paddling past Jones
+// Falls before it triggers, ~275 more from there to Kingston's own dock —
+// comfortably clear of Jones Falls' own dock behind it, and of the "well
+// past the trigger" auto-resolve margin (+50) ?start=kingston needs ahead
+// of it (main.js's own KINGSTON_FLOW_DISTANCE - 26 lands ~229 units past
+// that margin regardless of exactly where this trigger sits).
+const WARSHIP_FRACTION = 1 / 3;
+export const TRIGGER_DISTANCE = JONES_FALLS.flowDistance + (KINGSTON.flowDistance - JONES_FALLS.flowDistance) * WARSHIP_FRACTION;
 
 const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;
 
@@ -141,7 +147,13 @@ const SPARK_LIFETIME = 0.35;
 // top of that fix, keeping the same ~2.3:1 length:beam ratio.
 const CHASE_SHIP_BEAM = 2.2;
 const CHASE_SHIP_LENGTH_HALF = 2.5;
-const BULLET_DAMAGE_TO_HULL = 8;
+// Split by weapon — reported as "can't see much difference in damage"
+// between the pistol and the musket (weapons.js's own fire-rate split,
+// same report). Musket fires roughly a third as often (weapons.js's
+// FIRE_COOLDOWN) for roughly 2.25x the damage per hit — a slower, heavier
+// gun, not just a reskinned pistol.
+export const PISTOL_DAMAGE_TO_HULL = 8;
+export const MUSKET_DAMAGE_TO_HULL = 18;
 
 // Went through several passes before this one: 64, then 40, both from
 // before the held-arena redesign — solving the wrong problem back then,
@@ -344,7 +356,7 @@ export function createBritishWarship() {
             && Math.abs(b.worldX - chaseShipWorldX) < CHASE_SHIP_BEAM / 2 + 1.6) {
             hitBullets.push(b);
             if (chaseHullHP > 0) {
-              chaseHullHP -= BULLET_DAMAGE_TO_HULL;
+              chaseHullHP -= b.type === 'musket' ? MUSKET_DAMAGE_TO_HULL : PISTOL_DAMAGE_TO_HULL;
               sparks.push({ x: b.worldX, d: chaseShipD, t: 0 });
               if (chaseHullHP <= 0) {
                 chaseHullHP = 0;

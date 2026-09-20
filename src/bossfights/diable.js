@@ -46,15 +46,16 @@ const APPROACH = 16;
 // than becoming the fight's default state throughout.
 const RAMP_GAMMA = 0.7;
 // A first pass doubled this (240 -> 480) and landed way short: a real
-// playtest cleared it in ~30s. At FIRE_COOLDOWN (weapons.js, 0.16s) and
-// BULLET_DAMAGE below, holding the trigger on a well-tracked target caps
+// playtest cleared it in ~30s. At the pistol's own FIRE_COOLDOWN
+// (weapons.js, 0.16s — the only gun reachable this early) and
+// PISTOL_DAMAGE below, holding the trigger on a well-tracked target caps
 // out around 25 dmg/sec -- so 480/25 ~= 19-30s once you're actually
 // landing most shots, which is exactly what happened. No HP number was
 // ever going to fix that on its own; the real ceiling is damage-per-
 // second, not the pool. Scaled from that real data point (30s at 480)
 // to a several-minutes target instead of guessing again -- ~8x, for
 // somewhere around 4 minutes of sustained, accurate fire. Still not more
-// dangerous: BULLET_DAMAGE/CONTACT_DAMAGE and the whole ramp shape below
+// dangerous: PISTOL_DAMAGE/CONTACT_DAMAGE and the whole ramp shape below
 // are untouched, so this is purely more hits required, nothing riskier
 // about landing or missing any one of them.
 // Recalibrated again: a request for "~3min for a skilled player, ~5min
@@ -73,7 +74,14 @@ const RAMP_GAMMA = 0.7;
 // value instead of a hardcoded ratio that goes stale the next time this
 // number moves (it already has, four times).
 export const HP_MAX = 2160;
-const BULLET_DAMAGE = 4;      // per pistol hit
+export const PISTOL_DAMAGE = 4;      // per pistol hit
+// The musket isn't actually reachable here in practice — it unlocks at
+// Gatineau, well past this fight — but the hit-detection loop below checks
+// bullet type generically now (weapons.js's own fire-rate/damage split,
+// reported as "can't see much difference"), so this exists for
+// consistency with britishWarship.js/blockade.js rather than assuming
+// pistol-only forever. ~2.2x PISTOL_DAMAGE, same ratio those two use.
+export const MUSKET_DAMAGE = 9;
 // A fireball that connects (game.js applies INVULN_TIME). Dropped to 25 for
 // a "tone it down" request, on the reasoning that death resets Diable's own
 // hp to full, so total time-to-clear is dominated by death frequency. That
@@ -268,11 +276,12 @@ export function createDiable() {
         const cx = centreX();
         const cy = centreY();
 
-        // --- incoming pistol fire ---
+        // --- incoming gunfire (pistol in practice — see MUSKET_DAMAGE's
+        // own comment on why musket is handled too, just unreachable) ---
         for (const b of bulletScreens) {
           if (Math.abs(b.x - cx) < BODY_HALF_W && Math.abs(b.y - cy) < BODY_HALF_H) {
             hitBullets.push(b.ref);
-            hp -= BULLET_DAMAGE;
+            hp -= b.ref.type === 'musket' ? MUSKET_DAMAGE : PISTOL_DAMAGE;
             // Only kick off a fresh blanch once the last one's spent, so a
             // fast stream of hits doesn't hold him permanently white.
             if (hitFlash <= 0) hitFlash = 0.08;

@@ -128,7 +128,13 @@ function gapBounds(gapSide) {
 // so this only comes alive in roughly the final third of the approach, real
 // close-quarters gunnery rather than pop-shots from first sighting.
 const SHIP_HULL_HP = 120;
-const BULLET_DAMAGE_TO_HULL = 8; // 15 solid hits silences the guns
+// Split by weapon — reported as "can't see much difference in damage"
+// between the pistol and the musket (weapons.js's own fire-rate split,
+// same report). 15 solid pistol hits silences the guns; the musket, fired
+// roughly a third as often for roughly 2.25x the damage, gets there in
+// fewer, heavier hits instead.
+export const PISTOL_DAMAGE_TO_HULL = 8;
+export const MUSKET_DAMAGE_TO_HULL = 18;
 // Extra world-units of slack on top of the hull's own depth (SHIP_DEPTH_Z)
 // so a bullet advancing in discrete dt-sized steps can't tunnel through the
 // band between two frames without ever landing inside it.
@@ -269,7 +275,7 @@ export function createBlockade() {
           for (const b of bullets) {
             if (Math.abs(b.flowDistance - SHIP_FLOW_DISTANCE) < half && b.worldX > hullLo && b.worldX < hullHi) {
               hitBullets.push(b);
-              hullHP -= BULLET_DAMAGE_TO_HULL;
+              hullHP -= b.type === 'musket' ? MUSKET_DAMAGE_TO_HULL : PISTOL_DAMAGE_TO_HULL;
               sparks.push({ x: b.worldX, d: SHIP_FLOW_DISTANCE, t: 0 });
               if (hullHP <= 0) {
                 hullHP = 0;

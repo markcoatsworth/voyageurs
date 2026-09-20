@@ -89,10 +89,10 @@ function normalizeStartName(s) {
 // the held arena against the shootable gunboat. Used to sit right after
 // the frigate's own gap (skipping straight from clearing it into the
 // chase, back when the two were one continuous encounter); now that the
-// Warship is a standalone fight much further downstream (near where
-// Kingston Mills once sat — see route.js's own comment on its removal),
-// this cheat jumps straight there instead of requiring the long paddle
-// past Newboro and Jones Falls first. Named to match "british-blockade"
+// Warship is a standalone fight further downstream (~1/3 of the way from
+// Jones Falls to Kingston — see that file's own comment on why it moved
+// there), this cheat jumps straight there instead of requiring the long
+// paddle past Newboro and Jones Falls first. Named to match "british-blockade"
 // above (and the in-game banner, "BRITISH WARSHIP") — it was "pursuit" at
 // first, then "british-pursuit" once that was found to silently match
 // nothing (every keyword here is matched verbatim), renamed again
@@ -126,12 +126,17 @@ function normalizeStartName(s) {
 //      (villageScene.js, untouched by any of the river-view work) before
 //      there was any real look at the approach — reported as landing
 //      "almost directly on the dock," and wanting to "watch the coastline."
-// -26 below leaves real runway (~19 units, past KINGSTON_DOCK_HIT_Z) to
-// paddle and actually see the approach before docking, while still landing
-// inside world/villages.js's KINGSTON_RENDER_GATE (the widened gate — see
-// its own comment on why the plain VISIBLE_Z_RANGE stopped being enough
-// once the town's spread grew past it) and comfortably past the Warship's
-// own auto-resolve threshold (+50 past TRIGGER_DISTANCE).
+//   4. -26 gave ~19 units of runway (a couple of seconds) — still reported
+//      as wanting "much further back," aiming for "a 5-6 second entrance."
+// Below: 1/3 of the way from the Warship's own trigger (britishWarship.js —
+// itself repositioned to sit 1/3 of the way from Jones Falls to Kingston,
+// same request) to Kingston's own dock — ~91 units out, which a straight
+// paddle covers in ~5.3s (checked by simulating it, not just computed).
+// Deliberately outside KINGSTON_RENDER_GATE now — the whole point this time
+// is watching the town scroll into view over those seconds, not having it
+// already on screen at spawn. Still comfortably past the Warship's own
+// auto-resolve threshold (+50 past TRIGGER_DISTANCE) — by design, since
+// TRIGGER_DISTANCE itself is what this is now measured from.
 //
 
 // "gatineau" is the one keyword below that isn't a flowDistance/segment
@@ -158,8 +163,11 @@ export const START_KEYWORDS = {
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
-  // See the module comment above (three rounds of tuning) on why -26.
-  [normalizeStartName('kingston')]: { flowDistance: KINGSTON_FLOW_DISTANCE - 26, segment: 'rideau' },
+  // See the module comment above (four rounds of tuning) on why this one.
+  [normalizeStartName('kingston')]: {
+    flowDistance: KINGSTON_FLOW_DISTANCE - (KINGSTON_FLOW_DISTANCE - WARSHIP_FLOW_DISTANCE) / 3,
+    segment: 'rideau',
+  },
 };
 function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');

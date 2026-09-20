@@ -15,14 +15,23 @@ export function createWeapons() {
   const BULLET_SPEED = 35; // world units per second
   const BULLET_LIFETIME = 2; // seconds (of game time — see `clock` below)
 
-  // Rate limit, in game-time seconds between shots. Held keys auto-repeat at
-  // the browser's rate (~30/s) and the touch button is one-per-tap, so
-  // without this the pistol's real fire rate swung wildly by input method
-  // and the Diable fight couldn't be tuned. `clock` is accumulated dt, not
-  // wall time, so it behaves identically in the headless smoke test.
-  const FIRE_COOLDOWN = 0.16;
+  // Rate limit, in game-time seconds between shots — per weapon, not one
+  // shared clock: reported as "the middle gun [musket] looks bigger... but
+  // it shoots at the same speed and I can't [see] much difference in
+  // damage — it should shoot slower and hit harder." A single shared
+  // cooldown also meant firing one gun reset the other's timer too, which
+  // doesn't make sense for two separate weapons carried at once. Held keys
+  // auto-repeat at the browser's rate (~30/s) and the touch button is
+  // one-per-tap, so without this the pistol's real fire rate swung wildly
+  // by input method and the Diable fight couldn't be tuned. `clock` is
+  // accumulated dt, not wall time, so it behaves identically in the
+  // headless smoke test. Per-hit damage lives with each fight (diable.js's
+  // PISTOL_DAMAGE/MUSKET_DAMAGE and britishWarship.js's/blockade.js's own
+  // *_DAMAGE_TO_HULL pairs), not here — this only governs how often each
+  // gun can fire.
+  const FIRE_COOLDOWN = { pistol: 0.16, musket: 0.45, blunderbuss: 0.16 };
   let clock = 0;
-  let lastFireAt = -999;
+  let lastFireAt = { pistol: -999, musket: -999, blunderbuss: -999 };
 
   return {
     unlock(weaponName) {
@@ -45,8 +54,8 @@ export function createWeapons() {
         console.log(`[WEAPONS] ${weaponName} not unlocked yet`);
         return false;
       }
-      if (clock - lastFireAt < FIRE_COOLDOWN) return false;
-      lastFireAt = clock;
+      if (clock - lastFireAt[weaponName] < FIRE_COOLDOWN[weaponName]) return false;
+      lastFireAt[weaponName] = clock;
 
       // Different weapons have different bullet patterns
       switch (weaponName) {
@@ -63,10 +72,12 @@ export function createWeapons() {
           break;
 
         case 'musket':
-          // The medium gun — a single heavier ball, same shared cooldown/
-          // speed as the pistol for now (see FIRE_COOLDOWN's own comment;
-          // it's one clock across all three weapons, not a per-weapon
-          // rate yet). Reads as its own gun in draw() below via `type`.
+          // The medium gun — a single heavier ball, fired slower than the
+          // pistol (FIRE_COOLDOWN's own per-weapon split above) and hitting
+          // harder wherever it lands (each fight's own *_DAMAGE pair) —
+          // same bullet travel speed, since that's the ball flying once
+          // it's left the barrel, not the weapon's own handling. Reads as
+          // its own gun in draw() below via `type`.
           bullets.push({
             worldX: canoeWorldX,
             flowDistance: canoeFlowDistance,
@@ -165,7 +176,7 @@ export function createWeapons() {
 
     reset() {
       bullets.length = 0;
-      lastFireAt = -999;
+      lastFireAt = { pistol: -999, musket: -999, blunderbuss: -999 };
       weapons.pistol = false;
       weapons.musket = false;
       weapons.blunderbuss = false;

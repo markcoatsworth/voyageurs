@@ -56,12 +56,14 @@ const { createMinimap } = await import('../src/world/minimap.js');
 const { createMusic } = await import('../src/audio/music.js');
 const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
-const { getDockHit, KINGSTON_RENDER_GATE, dockHitZ } = await import('../src/world/villages.js');
+const { getDockHit } = await import('../src/world/villages.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
-const { DIABLE_FLOW_DISTANCE, HP_MAX: DIABLE_HP_MAX } = await import('../src/bossfights/diable.js');
+const { DIABLE_FLOW_DISTANCE, HP_MAX: DIABLE_HP_MAX, PISTOL_DAMAGE: DIABLE_PISTOL_DAMAGE, MUSKET_DAMAGE: DIABLE_MUSKET_DAMAGE } = await import('../src/bossfights/diable.js');
+const { PISTOL_DAMAGE_TO_HULL: WARSHIP_PISTOL_DAMAGE, MUSKET_DAMAGE_TO_HULL: WARSHIP_MUSKET_DAMAGE } = await import('../src/bossfights/britishWarship.js');
+const { PISTOL_DAMAGE_TO_HULL: BLOCKADE_PISTOL_DAMAGE, MUSKET_DAMAGE_TO_HULL: BLOCKADE_MUSKET_DAMAGE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
 const { TRIGGER_DISTANCE: WENDIGO_TRIGGER, DELIVERANCE_DISTANCE: WENDIGO_DELIVERANCE } = await import('../src/bossfights/wendigo.js');
 
@@ -314,7 +316,7 @@ await step('blockade: approach -> cleared -> ordinary paddling continues', () =>
 
 // --- scenario 4a: the British Warship — a standalone held encounter --------
 
-await step('britishWarship: triggers near the old Kingston Mills spot, held until resolved', () => {
+await step('britishWarship: triggers ~1/3 of the way from Jones Falls to Kingston, held until resolved', () => {
   if (WARSHIP_FLOW_DISTANCE <= SHIP_FLOW_DISTANCE) {
     throw new Error(`British Warship @ ${WARSHIP_FLOW_DISTANCE | 0} isn't downstream of the frigate @ ${SHIP_FLOW_DISTANCE | 0} any more`);
   }
@@ -337,11 +339,11 @@ await step('britishWarship: triggers near the old Kingston Mills spot, held unti
   if (!started) throw new Error('the British Warship never triggered approaching its own flowDistance');
   if (!escaped) throw new Error('the Warship fight never resolved — it (and its music) would run forever');
 
-  // Past the Warship, the short remaining stretch to Kingston still works.
-  // Its dock is oversized (world/villages.js's KINGSTON_DOCK_REACH) and now
-  // walks the canoe ashore like any other village (enterVillage(), mode
-  // becomes 'village') rather than winning outright, so this has to leave
-  // again the same way any village visit would before the finish is
+  // Past the Warship, the remaining ~2/3 of the run to Kingston still
+  // works. Its dock is oversized (world/villages.js's KINGSTON_DOCK_REACH)
+  // and now walks the canoe ashore like any other village (enterVillage(),
+  // mode becomes 'village') rather than winning outright, so this has to
+  // leave again the same way any village visit would before the finish is
   // reachable.
   let won = false;
   for (let i = 0; i < 3000 && !won; i++) {
@@ -491,31 +493,48 @@ await step('kingston: running into the dock enters the town on foot', () => {
 
 // --- scenario 4e: ?start=kingston lands where the town actually renders ----
 
-await step('kingston: the ?start= cheat lands inside the render gate, with runway before the dock', async () => {
-  // Reported across two rounds:
-  //  1. "not showing up," no console errors — world/villages.js's
-  //     drawVillages() doesn't draw a village *at all* until the canoe is
-  //     within its render gate of its own flowDistance, and the cheat
-  //     landed 40 units short of Kingston, well outside it.
-  //  2. Moved inside the gate, then reported "almost directly on the
-  //     dock" — landing inside KINGSTON_DOCK_HIT_Z meant a couple of
-  //     seconds of paddling crossed straight into the dock (and its
-  //     on-foot scene) before there was any real look at the approach.
-  // Both checked here so a future retune can't reintroduce either one.
-  // Fresh import resolves from the module cache (the "main.js loads"
-  // scenario above already evaluated it once) rather than re-running it.
+await step('kingston: the ?start= cheat gives a real ~5-6 second entrance, not an instant drop-in', async () => {
+  // Reported across four rounds of tuning (main.js's own comment has the
+  // full history) — this round asked for something different from every
+  // earlier one: deliberately further back than the render gate this time,
+  // calibrated to an actual number ("a 5-6 second entrance"), not just
+  // "further." Positioned at 1/3 of the way from the Warship's own trigger
+  // to Kingston — checked structurally here (the fraction itself), not
+  // just the derived travel time, so this doesn't go brittle against some
+  // unrelated future speed tuning; the travel-time check below is a wider-
+  // tolerance sanity check on top; kept it precise because that's the same
+  // way britishWarship.js's own 1/3-of-the-way positioning got verified.
   const { START_KEYWORDS } = await import('../src/main.js');
+  const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
   const start = START_KEYWORDS['kingston'];
   if (!start) throw new Error('no "kingston" entry in START_KEYWORDS — a name/lookup drifted');
-  const gap = Math.abs(kingston.flowDistance - start.flowDistance);
-  if (gap >= KINGSTON_RENDER_GATE) {
-    throw new Error(`?start=kingston lands ${gap.toFixed(1)} units from Kingston's own flowDistance — outside KINGSTON_RENDER_GATE (${KINGSTON_RENDER_GATE.toFixed(1)}), so nothing renders on arrival`);
+
+  const expected = kingston.flowDistance - (kingston.flowDistance - WARSHIP_FLOW_DISTANCE) / 3;
+  if (Math.abs(start.flowDistance - expected) > 0.01) {
+    throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) isn't 1/3 of the way from the Warship's trigger to Kingston (expected ${expected.toFixed(1)})`);
   }
-  const hitZ = dockHitZ(kingston);
-  const runway = gap - hitZ;
-  if (runway < 10) {
-    throw new Error(`?start=kingston only leaves ${runway.toFixed(1)} units of paddling before the dock's own hit zone (±${hitZ.toFixed(1)}) — not enough runway to see the approach before docking`);
+  // Still has to clear the Warship's own "well past the trigger" auto-
+  // resolve threshold — landing inside its real held-fight zone would
+  // freeze the approach entirely, not just make it longer.
+  if (start.flowDistance <= WARSHIP_FLOW_DISTANCE + 50) {
+    throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) lands inside the Warship's held-fight zone (auto-resolve needs > ${(WARSHIP_FLOW_DISTANCE + 50).toFixed(1)})`);
+  }
+
+  const g = newGame('rideau', start.flowDistance);
+  let seconds = 0;
+  let arrived = false;
+  for (let i = 0; i < 1200 && !arrived; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    seconds += 1 / 30;
+    if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') arrived = true;
+    if (g.game.state === 'won') arrived = true;
+  }
+  if (!arrived) throw new Error('?start=kingston never reached Kingston within the test budget');
+  if (seconds < 4 || seconds > 8) {
+    throw new Error(`?start=kingston's entrance took ${seconds.toFixed(1)}s of straight paddling — expected roughly 5-6s (wide tolerance for acceleration/health-pin variance)`);
   }
 });
 
@@ -1009,10 +1028,10 @@ await step('kingston: the arrival track cuts in at the approach banner and survi
   // comment): it should still be playing under the victory card, not have
   // reverted to the ambient shuffle.
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
-  // -40 is past both the approach banner's own trigger (-70) and the
-  // British Warship's "well past the trigger" auto-resolve threshold
-  // (WARSHIP_FLOW_DISTANCE + 50, i.e. -45 from Kingston) — starting any
-  // further back lands inside the Warship's real held-fight zone, same as
+  // -40 is past the approach banner's own trigger (-70) and — since the
+  // Warship now triggers much further back (~1/3 of the way from Jones
+  // Falls to Kingston, britishWarship.js's own comment) — comfortably past
+  // its "well past the trigger" auto-resolve threshold too, same margin
   // ?start=kingston itself has to clear (see its own comment in main.js).
   const g = newGame('rideau', kingston.flowDistance - 40);
   g.game.update(1 / 30);
@@ -1306,6 +1325,41 @@ await step('music: a special track that fails to autoplay recovers on the next r
     }
   } finally {
     globalThis.Audio = realAudio;
+  }
+});
+
+await step('weapons: the musket fires slower and hits harder than the pistol', () => {
+  // Reported: "the middle gun [musket] looks bigger... but it shoots at
+  // the same speed and I can't [see] much difference in damage — it
+  // should shoot slower and hit harder." Two separate things to check —
+  // weapons.js's own per-weapon FIRE_COOLDOWN (rate) and each fight's own
+  // PISTOL_DAMAGE*/MUSKET_DAMAGE* pair (per-hit damage) — not just "the
+  // game doesn't crash," since the whole report was that these two guns
+  // felt identical despite different code paths.
+  function countShots(weaponName, seconds) {
+    const g = newGame('fjord', 0);
+    g.game.weapons.unlock(weaponName);
+    let count = 0;
+    for (let i = 0; i < Math.round(seconds * 30); i++) {
+      if (g.game.weapons.fire(weaponName, 0, 0)) count++;
+      g.game.weapons.update(1 / 30);
+    }
+    return count;
+  }
+  const pistolShots = countShots('pistol', 3);
+  const musketShots = countShots('musket', 3);
+  if (musketShots >= pistolShots) {
+    throw new Error(`musket (${musketShots} shots/3s) isn't firing slower than the pistol (${pistolShots} shots/3s)`);
+  }
+
+  for (const [fight, pistolDmg, musketDmg] of [
+    ['diable', DIABLE_PISTOL_DAMAGE, DIABLE_MUSKET_DAMAGE],
+    ['britishWarship', WARSHIP_PISTOL_DAMAGE, WARSHIP_MUSKET_DAMAGE],
+    ['blockade', BLOCKADE_PISTOL_DAMAGE, BLOCKADE_MUSKET_DAMAGE],
+  ]) {
+    if (!(musketDmg > pistolDmg)) {
+      throw new Error(`${fight}: musket damage (${musketDmg}) isn't higher than pistol damage (${pistolDmg})`);
+    }
   }
 });
 

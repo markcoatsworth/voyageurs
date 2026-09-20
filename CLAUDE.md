@@ -92,9 +92,11 @@ src/
                        cleared; now ends clean, ordinary paddling after. Guarded by `segment ===
                        'rideau'`.
     britishWarship.js  The British Warship — standalone held-arena chase, split out of blockade.js
-                       (used to be its second phase). TRIGGER_DISTANCE = Kingston − 85, at the real-
-                       world spot Kingston Mills held before it was removed as a village (route.js).
-                       Held the instant it triggers (game.js clamps flowDistance while
+                       (used to be its second phase). TRIGGER_DISTANCE sits ~1/3 of the way from
+                       Jones Falls to Kingston (WARSHIP_FRACTION) — moved off its original anchor,
+                       the real-world spot Kingston Mills held before it was removed as a village
+                       (route.js), once that landed the fight crowded right against Kingston's own
+                       dock. Held the instant it triggers (game.js clamps flowDistance while
                        isChaseHolding()); resolves on CHASE_HOLD_TIME (210s) survived or the orbiting
                        gunboat's hull shot down — never on distance covered, since that always
                        resolved in under a minute regardless of tuning (see the module's own
