@@ -381,6 +381,28 @@ const KINGSTON_ONFOOT_BUILDINGS = [
   { kind: 'ruinedfort', x: 25, y: 105, mirror: false },
 ];
 
+// North of the grid — the real survey (kingston-1700s.jpg) labels this
+// ground "Artillery Park," a military drill/ordnance yard, not a leisure
+// park in the modern sense (public parks as a concept are mostly a later
+// 19th-century thing — no real evidence one stood here at this game's own
+// setting). Asked directly whether a real park would've existed, with "if
+// not, make one up" as the fallback: kept the real name and the real
+// ground rather than inventing a new site, and reimagined it as the
+// walkable green space asked for — "somewhere to park and just listen to
+// the music" — with KINGSTON_CANNON_POS below as the one nod to what it
+// actually was, not a pretence that it was always a park. Main Street
+// (KINGSTON_MAIN_ROAD_V) continues north through it as KINGSTON_PARK_PATH,
+// same road, same width, just carried past where the grid itself ends.
+const KINGSTON_WORLD_TOP = -170;
+const KINGSTON_PARK_PATH = { x: KINGSTON_MAIN_ROAD_V.x, y: KINGSTON_WORLD_TOP, w: KINGSTON_MAIN_ROAD_V.w, h: KINGSTON_ROAD_H1.y - KINGSTON_WORLD_TOP };
+const KINGSTON_CANNON_POS = { x: 110, y: -90 };
+const KINGSTON_PARK_TREE_SPOTS = [
+  { x: 40, y: -150 }, { x: 90, y: -160 }, { x: 220, y: -155 }, { x: 270, y: -140 },
+  { x: 45, y: -90 }, { x: 260, y: -85 },
+  { x: 35, y: -30 }, { x: 280, y: -35 },
+  { x: 110, y: -140 }, { x: 200, y: -145 },
+];
+
 // Montréal's on-foot layout — rebuilt from an actual period source: Thomas
 // Jefferys' 1738 "Plan of the Town and Fortifications of Montreal or Ville
 // Marie in Canada" (dropped into the repo as montreal-1700s.jpg — not
@@ -1370,6 +1392,48 @@ function drawMarketWell(ctx, cx, cy) {
   ctx.restore();
 }
 
+// An old field gun on its carriage — the one nod to Artillery Park's real
+// name and real use (KINGSTON_WORLD_TOP's own comment) inside what's
+// otherwise an invented green space, so the ground reads as repurposed,
+// not as if a park had always stood there. Purely decorative, like the
+// market well above — not solid, never blocks the player.
+function drawCannon(ctx, cx, cy) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 4, 10, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // wheels
+  ctx.fillStyle = '#3a2a1a';
+  ctx.beginPath();
+  ctx.arc(cx - 6, cy, 4.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + 6, cy, 4.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#5c4530';
+  ctx.beginPath();
+  ctx.arc(cx - 6, cy, 2.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + 6, cy, 2.6, 0, Math.PI * 2);
+  ctx.fill();
+  // carriage
+  ctx.fillStyle = '#4a3420';
+  ctx.fillRect(cx - 7, cy - 6, 14, 5);
+  // barrel, angled toward the town/water — the direction a real emplaced
+  // gun here would have actually faced
+  ctx.save();
+  ctx.translate(cx, cy - 6);
+  ctx.rotate(-0.4);
+  ctx.fillStyle = '#2b2b2b';
+  ctx.fillRect(-2.2, -14, 4.4, 14);
+  ctx.fillStyle = '#454545';
+  ctx.fillRect(-2.2, -14, 1.6, 14);
+  ctx.restore();
+  ctx.restore();
+}
+
 // A wayside calvaire — a plain wooden roadside cross on a small stone
 // base, the kind that genuinely marked farm roads like Côte Sainte-
 // Catherine (MONTREAL_CALVAIRE's own comment) in Catholic New France,
@@ -1439,7 +1503,7 @@ export function createVillageScene() {
       isKingston = village && village.name === 'Kingston';
       const isGatineau = village && village.name === 'Gatineau';
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : isQuebecCity ? QUEBEC_WORLD_WIDTH : CANVAS_WIDTH;
-      worldTop = isMontreal ? MONTREAL_WORLD_TOP : 0;
+      worldTop = isMontreal ? MONTREAL_WORLD_TOP : isKingston ? KINGSTON_WORLD_TOP : 0;
       worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : 0;
       // worldRight tracks worldWidth (not always CANVAS_WIDTH) so Québec's
       // own wider world is actually walkable edge to edge — every other
@@ -1465,7 +1529,12 @@ export function createVillageScene() {
       // Montréal/Québec City/Trois-Rivières/Tadoussac get — it's one extra
       // fixed building, not a whole rebuilt town.
       if (isGatineau) buildings = [...buildings, musketShopFor(worldWidth)];
-      trees = treesClearOfBuildings(treesFor(seed, isMontreal ? MONTREAL_TREE_SPOTS : TREE_SPOTS), buildings);
+      const treeSpots = isMontreal
+        ? MONTREAL_TREE_SPOTS
+        : isKingston
+        ? [...TREE_SPOTS, ...KINGSTON_PARK_TREE_SPOTS]
+        : TREE_SPOTS;
+      trees = treesClearOfBuildings(treesFor(seed, treeSpots), buildings);
       traderPos = traderPosFor(repairShop);
       reboardZone = { x0: dockX0(worldWidth), x1: dockX1(worldWidth), y0: CANVAS_HEIGHT - 14, y1: CANVAS_HEIGHT };
       const gunShop = buildings.find((b) => b.isGunShop) || null;
@@ -1663,6 +1732,12 @@ export function createVillageScene() {
         drawBrickRoad(ctx, KINGSTON_CROSS_ROAD_E.x, KINGSTON_CROSS_ROAD_E.y, KINGSTON_CROSS_ROAD_E.w, KINGSTON_CROSS_ROAD_E.h);
         drawBrickRoad(ctx, KINGSTON_MARKET_SQUARE.x, KINGSTON_MARKET_SQUARE.y, KINGSTON_MARKET_SQUARE.w, KINGSTON_MARKET_SQUARE.h);
         drawMarketWell(ctx, KINGSTON_MARKET_WELL_CENTER.x, KINGSTON_MARKET_WELL_CENTER.y);
+        // Artillery Park, north of the grid (KINGSTON_WORLD_TOP's own
+        // comment) — packed earth, not brick, the same distinction Québec
+        // City's own Place d'Armes draws against its cobbled Place Royale:
+        // a quieter, less formal ground than the paved town streets.
+        drawDirtPath(ctx, KINGSTON_PARK_PATH.x, KINGSTON_PARK_PATH.y, KINGSTON_PARK_PATH.w, KINGSTON_PARK_PATH.h);
+        drawCannon(ctx, KINGSTON_CANNON_POS.x, KINGSTON_CANNON_POS.y);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe

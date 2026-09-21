@@ -49,7 +49,7 @@ async function step(name, fn) {
 // --- shared wiring, mirrors main.js -----------------------------------------
 
 const { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } = await import('../src/shared/config.js');
-const { Game } = await import('../src/core/game.js');
+const { Game, MIN_SPEED } = await import('../src/core/game.js');
 const { Input } = await import('../src/core/input.js');
 const { createObstacleField } = await import('../src/world/obstacles.js');
 const { createMinimap } = await import('../src/world/minimap.js');
@@ -551,6 +551,24 @@ await step('kingston: the ?start= cheat is 1/2 way from Jones Falls, past the Wa
     if (g.game.state === 'won') arrived = true;
   }
   if (!arrived) throw new Error('?start=kingston never reached Kingston within the test budget');
+});
+
+await step("kingston: MIN_SPEED (the ?start= cheat's own starting speed) is genuinely a slow, chill drift", () => {
+  // Reported: "my canoe is already screaming fast" jumping in via
+  // ?start=kingston — every ?start= cheat otherwise begins at this game's
+  // normal BASE_SPEED (the same speed a real playthrough carries into any
+  // segment), which read as already-accelerated for a cheat whose whole
+  // point is a slow approach. main.js's startedAtKingston now sets
+  // game.speed = MIN_SPEED directly on top of the ordinary construction
+  // (not tested through the actual URL path — see the other ?start=
+  // cheats' own tests for why: none of them are). What actually has to
+  // stay true for that fix to keep working is checked structurally here:
+  // MIN_SPEED well under a fresh, unmodified game's own real default
+  // speed, not hardcoded against BASE_SPEED's current value.
+  const defaultSpeed = newGame('rideau', 0).game.speed;
+  if (!(MIN_SPEED < defaultSpeed * 0.6)) {
+    throw new Error(`MIN_SPEED (${MIN_SPEED}) isn't meaningfully slower than the default start speed (${defaultSpeed}) — the ?start=kingston "slow, chill" override (main.js) wouldn't read as calm any more`);
+  }
 });
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---

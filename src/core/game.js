@@ -46,7 +46,7 @@ const DRIFT_DECEL_TOUCH_MULT = isTouchPrimary() ? 2.4 : 1;
 // stop fighting it. Deliberately well under BASE_SPEED so drifting forward
 // reads as an actual "chill" slow speed, not just a mild step down from
 // medium.
-const MIN_SPEED = 2.5 * speedScale;
+export const MIN_SPEED = 2.5 * speedScale;
 const MAX_SPEED = 16 * speedScale * FWD_MAX_SCALE;
 // Paddling against the current is harder than going with it — capped well
 // under MAX_SPEED's magnitude, so upstream is a real but slow slog, not a

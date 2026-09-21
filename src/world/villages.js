@@ -700,16 +700,28 @@ const GREETER_COATS = ['#9c3f34', '#3f6f8a', '#b98a3c', '#4f8a52', '#8a6f3a', '#
 // white top hat (real coat/hat colours everywhere else — GREETER_COATS'
 // palette, and #241d16's own dark hat below — so this reads as a
 // deliberately dressed-up figure, not just another wave of the same
-// generic greeter), scaled up, and standing further out toward the dock's
-// own outer/water end rather than the generic 0.32-of-the-way-out spot
-// (see drawOneVillage's own gWorldX comment) so he's the first thing
-// visible as the canoe actually reaches the dock.
+// generic greeter), scaled up, and standing close to the shore end of the
+// dock (see drawOneVillage's own greeterFraction comment) rather than out
+// on the pier over open water.
 const KINGSTON_GREETER_COAT = '#f2efe2';
 const KINGSTON_GREETER_HAT = '#f2efe2';
 function drawDockGreeter(ctx, feetX, feetY, time, seed, opts = {}) {
   const coat = opts.coat ?? GREETER_COATS[seed % GREETER_COATS.length];
   const hatColor = opts.hatColor ?? '#241d16';
   const scale = opts.scale ?? 1.7;
+  // Which way the waving arm/slack arm/shading (all asymmetric — see them
+  // below) point: +1 is the base pose as drawn (waving arm to the right).
+  // Real bug this fixes: every one of those was a fixed screen-space
+  // offset regardless of which bank the village sits on, so a village
+  // whose reachSign(v) points the *other* way (open water to the left of
+  // the shore, not the right) had its greeter waving away from the
+  // water — reported for Kingston as "on the wrong side... needs to be
+  // facing my boat." opts.facing (drawOneVillage passes reachSign(v)) just
+  // mirrors the whole figure about its own feet, the same
+  // translate/scale/translate trick used for mirrored buildings elsewhere
+  // in this file — everything the pose draws (legs, coat, arm, hat) flips
+  // together, not just the arm in isolation.
+  const facing = opts.facing ?? 1;
   const phase = (seed % 9) * 0.8;
   const wave = Math.sin(time * 7 + phase);            // -1..1, the arm swing
   const x = Math.round(feetX);
@@ -717,9 +729,11 @@ function drawDockGreeter(ctx, feetX, feetY, time, seed, opts = {}) {
 
   ctx.save();
   // Scale the whole figure up about its feet — the base shape below is drawn
-  // at ~14px tall, this brings it to a readable dock-hand size.
+  // at ~14px tall, this brings it to a readable dock-hand size. facing is
+  // folded into the same transform (a horizontal mirror is just a negative
+  // x-scale) rather than a second save/restore.
   ctx.translate(x, y);
-  ctx.scale(scale, scale);
+  ctx.scale(scale * facing, scale);
   ctx.translate(-x, -y);
   ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
   ctx.beginPath();
@@ -1010,19 +1024,37 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   // the canoe ties up at the outer end) and waves you in. Drawn last so the
   // buildings behind never paint over it; the dock sticks out toward the
   // viewer, so it reads as being in front of the whole village anyway.
-  // Kingston's own greeter stands much further out — 0.75 of the way to
-  // the dock's own outer/water end instead of the generic 0.32 — so he's
-  // the first thing you see arriving, not a figure back at the shore end
-  // you've already passed by the time the canoe actually reaches the dock
-  // (explicitly requested: "larger and more visible, closer to the edge
-  // when we hit the dock").
+  // Kingston's own greeter went to 0.75 of the way to the dock's own outer/
+  // water end first (asked to be "closer to the edge") — reported back as
+  // wanting the opposite: "at the front of the dock, closer to the
+  // riverbank," more likely to actually be seen. 0.15 puts him close in by
+  // the shore instead, past the generic 0.32 too — the first solid ground
+  // a real dock-hand would actually stand on, not out on the pier over the
+  // water where a passing canoe is more likely to miss him. facing:
+  // reachSign(v) points his waving arm toward the water on whichever bank
+  // this village is actually on — see drawDockGreeter's own comment on the
+  // "wrong side... needs to be facing my boat" bug this fixes.
+  //
+  // gWorldX (above) only ever moved him along the shore-to-water axis —
+  // reported separately as "on the wrong horizontal side of the dock,"
+  // meaning the *other* axis: the dock's own along-flow extent (z,
+  // dockWidthZ), where he'd always sat dead-centre (z0). Kingston's own
+  // greeterZBias below biases him toward the near edge instead — the part
+  // of the dock the approach actually reaches first (smaller flowDistance,
+  // which is *larger* z — see toScreen's own y = CANOE_SCREEN_Y + z*PPU,
+  // so this really is "the bottom of the dock" in on-screen terms, not
+  // just a d-offset that happens to read that way) — so he's visible the
+  // moment the dock itself comes into view, not only once the canoe has
+  // drawn level with the dock's own centre.
   {
-    const greeterFraction = isKingston ? 0.75 : 0.32;
+    const greeterFraction = isKingston ? 0.15 : 0.32;
     const gWorldX = edge + reachSign(v) * dockReach(v) * greeterFraction;
-    const g = toScreen(gWorldX, z0, cameraWorldX);
-    const greeterOpts = isKingston
-      ? { coat: KINGSTON_GREETER_COAT, hatColor: KINGSTON_GREETER_HAT, topHat: true, scale: 2.4 }
-      : undefined;
+    const greeterZBias = isKingston ? dockWidthZ(v) * 0.4 : 0;
+    const g = toScreen(gWorldX, z0 + greeterZBias, cameraWorldX);
+    const greeterOpts = {
+      facing: reachSign(v),
+      ...(isKingston ? { coat: KINGSTON_GREETER_COAT, hatColor: KINGSTON_GREETER_HAT, topHat: true, scale: 2.4 } : {}),
+    };
     drawDockGreeter(ctx, g.x, g.y, time, v.seed, greeterOpts);
   }
 }

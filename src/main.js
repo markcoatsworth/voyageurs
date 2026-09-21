@@ -5,7 +5,7 @@ import { createMusic } from './audio/music.js';
 import { createMinimap } from './world/minimap.js';
 import { createTouchControls, isTouchPrimary } from './core/touchControls.js';
 import { Input } from './core/input.js';
-import { Game } from './core/game.js';
+import { Game, MIN_SPEED } from './core/game.js';
 import { VILLAGES } from './world/river/route.js';
 import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
 import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
@@ -582,6 +582,15 @@ try {
     game.music?.start();
     game.music?.playKingstonTrack();
     game.kingstonAnnounced = true;
+    // Every ?start= cheat otherwise begins at the same BASE_SPEED a normal
+    // playthrough carries into any segment — reported here as "already
+    // screaming fast" for a cheat whose whole point is a slow, chill
+    // approach. MIN_SPEED is this game's own "actual chill slow speed, not
+    // just a mild step down from medium" (see its own comment, game.js) —
+    // holding Up still accelerates normally from there, same as a real
+    // approach, just starting from a calm drift instead of already at
+    // cruising speed.
+    game.speed = MIN_SPEED;
   }
 
   // Lets the index.html error handler word later crashes as "running the
