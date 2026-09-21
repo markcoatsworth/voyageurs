@@ -703,8 +703,11 @@ const GREETER_COATS = ['#9c3f34', '#3f6f8a', '#b98a3c', '#4f8a52', '#8a6f3a', '#
 // generic greeter), scaled up, and standing close to the shore end of the
 // dock (see drawOneVillage's own greeterFraction comment) rather than out
 // on the pier over open water.
-const KINGSTON_GREETER_COAT = '#f2efe2';
-const KINGSTON_GREETER_HAT = '#f2efe2';
+// Exported so villageScene.js's Artillery Park band scene can put this same
+// white-coat-and-top-hat figure — the dock greeter, recognizable on sight —
+// front and centre on the bandstand, not just a same-colour lookalike.
+export const KINGSTON_GREETER_COAT = '#f2efe2';
+export const KINGSTON_GREETER_HAT = '#f2efe2';
 function drawDockGreeter(ctx, feetX, feetY, time, seed, opts = {}) {
   const coat = opts.coat ?? GREETER_COATS[seed % GREETER_COATS.length];
   const hatColor = opts.hatColor ?? '#241d16';

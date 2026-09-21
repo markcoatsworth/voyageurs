@@ -643,6 +643,30 @@ await step('kingston: running into the dock enters the town on foot', () => {
   if (!won) throw new Error('casting off from Kingston after the dock never reached the win condition');
 });
 
+await step('kingston: walking up into Artillery Park (the band/crowd) never crashes', () => {
+  // The band/crowd (villageScene.js's KINGSTON_BANDSTAND_POS/
+  // KINGSTON_BAND_SPOTS/KINGSTON_CROWD_SPOTS) are purely cosmetic — no
+  // trigger, no state, nothing to assert on directly — so this is a
+  // liveness check, same spirit as this whole file's own opening comment:
+  // walk far enough north to pass through the whole crowd (WALK_SPEED=62,
+  // dock-to-bandstand is a few hundred px, so budget generously) and
+  // confirm update()/draw() survive it, including the extra
+  // ambientTime-driven sway/instrument motion on every figure.
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  const g = newGame('rideau', kingston.flowDistance - 20);
+  for (let i = 0; i < 200 && g.game.mode !== 'village'; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (g.game.mode !== 'village') throw new Error('never entered Kingston on foot');
+  for (let i = 0; i < 400; i++) {
+    g.input.state.up = true;
+    g.input.state.left = i % 90 < 30;
+    g.input.state.right = i % 90 >= 60;
+    g.game.update(1 / 30);
+  }
+});
+
 // --- scenario 4e: ?start=kingston lands where the town actually renders ----
 
 await step('kingston: the ?start= cheat lands exactly on the arrival-track trigger, past the Warship, and fires it on its own', async () => {

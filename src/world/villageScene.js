@@ -10,7 +10,7 @@ import {
   createSulpicianTowersSprite, createMontRoyalSprite, createWindmillSprite, createMusketShopSprite, createMusketMasterSprite,
   createRuinedFortSprite,
 } from './sprites.js';
-import { villageLayout } from './villages.js';
+import { villageLayout, KINGSTON_GREETER_COAT, KINGSTON_GREETER_HAT } from './villages.js';
 import { hashRange } from '../shared/hash.js';
 
 const WALK_SPEED = 62; // px/sec, in this scene's own fixed pixel space
@@ -393,14 +393,87 @@ const KINGSTON_ONFOOT_BUILDINGS = [
 // actually was, not a pretence that it was always a park. Main Street
 // (KINGSTON_MAIN_ROAD_V) continues north through it as KINGSTON_PARK_PATH,
 // same road, same width, just carried past where the grid itself ends.
-const KINGSTON_WORLD_TOP = -170;
+// -170 originally; pushed further north (now -260) once the bandstand below
+// needed real headroom — the camera's own north clamp (this file's
+// update(), camera.y = Math.max(worldTop, ...)) means nothing drawn above
+// worldTop can ever actually be seen, since the viewport's topmost visible
+// world-y is worldTop itself the moment the player gets anywhere near this
+// end of the park. The bandstand's canopy/pennant reach roughly
+// D/2 + roofRise + 10 above its own anchor (drawBandstand's own math, which
+// scales with W) — with KINGSTON_BANDSTAND_POS.y = -158 that's comfortably
+// under half of the 260px here even after the stage widened (48 -> 150,
+// its own comment) and its support posts were later removed (this
+// function's own comment) — more clearance than strictly needed at this
+// point, but nothing wrong with the extra grass; not worth re-tuning down
+// every time the stage's own numbers move.
+const KINGSTON_WORLD_TOP = -260;
 const KINGSTON_PARK_PATH = { x: KINGSTON_MAIN_ROAD_V.x, y: KINGSTON_WORLD_TOP, w: KINGSTON_MAIN_ROAD_V.w, h: KINGSTON_ROAD_H1.y - KINGSTON_WORLD_TOP };
 const KINGSTON_CANNON_POS = { x: 110, y: -90 };
+// Four of these originally sat inside where the bandstand's footprint is
+// now (x 85-235, roughly y -175..-140) — fine when the stage was only 48
+// wide, not once it widened to 150 (drawBandstand's own comment). Reported
+// back as "trees overlapping with the stage"; those four pushed out to
+// the sides, clear of the stage's own x-range either way, rather than
+// behind it (behind would sit inside the canopy's own footprint too, at
+// this stage's height — see KINGSTON_WORLD_TOP's own comment on how tall
+// that is).
 const KINGSTON_PARK_TREE_SPOTS = [
-  { x: 40, y: -150 }, { x: 90, y: -160 }, { x: 220, y: -155 }, { x: 270, y: -140 },
+  { x: 40, y: -150 }, { x: 55, y: -165 }, { x: 258, y: -160 }, { x: 270, y: -140 },
   { x: 45, y: -90 }, { x: 260, y: -85 },
   { x: 35, y: -30 }, { x: 280, y: -35 },
-  { x: 110, y: -140 }, { x: 200, y: -145 },
+  { x: 65, y: -135 }, { x: 255, y: -140 },
+];
+
+// A 5-piece band on a bandstand, with a crowd watching — asked for
+// explicitly for "the big open area north" (Artillery Park, above), purely
+// cosmetic ("nothing interactive"). The bandstand sits at the north end,
+// astride KINGSTON_PARK_PATH's own line (Main Street carried all the way up
+// through the park) — the path reads as leading straight to it, a natural
+// town-square arrangement, not an accident of matching x coordinates.
+const KINGSTON_BANDSTAND_POS = { x: 160, y: -158 };
+// Offsets from KINGSTON_BANDSTAND_POS, not absolute — five distinct
+// instruments (drawBandMember's own switch) rather than five copies of one
+// figure, spread across the now-much-wider stage (drawBandstand's own W —
+// widened, "a lot wider," so all five read as clearly separate performers
+// instead of a cramped cluster). The middle one, whiteHat: true, is the
+// dock greeter (villages.js's KINGSTON_GREETER_COAT/HAT, imported above) —
+// asked for explicitly as "the guy with the white hat... right in the
+// middle" — same recognizable figure, fronting the band now rather than
+// waving from the dock.
+const KINGSTON_BAND_SPOTS = [
+  { dx: -55, dy: 3, instrument: 'fiddle' },
+  { dx: -27, dy: -2, instrument: 'drum' },
+  { dx: 0, dy: 2, instrument: 'concertina', whiteHat: true },
+  { dx: 27, dy: -2, instrument: 'fife' },
+  { dx: 55, dy: 3, instrument: 'bass' },
+];
+// The audience — loose rows facing the stage, absolute world positions
+// (unlike the band spots above, since there's no single anchor these are
+// offset from). Left open around x=140-180 near the front rows, the same
+// line KINGSTON_PARK_PATH runs up — reads as a natural aisle up to the
+// stage rather than a crowd standing shoulder to shoulder across the path.
+// Checked against KINGSTON_PARK_TREE_SPOTS above for overlap.
+//
+// Front row used to sit only ~5px clear of the stage's own front edge
+// (KINGSTON_BANDSTAND_POS.y + D/2, drawBandstand) — reported back as
+// wanting them "further back" and "more spread out" once the crowd figures
+// themselves grew to CROWD_SCALE (drawCrowdFigure's own comment). Now a
+// real ~30px clear of the stage, rows ~28px apart (was ~16-18px, tight
+// enough that CROWD_SCALE-sized figures in adjacent rows nearly touched),
+// and each row's own points spread further apart too, not just the rows
+// as a whole.
+const KINGSTON_CROWD_SPOTS = [
+  { x: 70, y: -118 }, { x: 110, y: -115 }, { x: 143, y: -117 }, { x: 178, y: -117 }, { x: 210, y: -115 }, { x: 250, y: -118 },
+  { x: 55, y: -90 }, { x: 95, y: -87 }, { x: 132, y: -90 }, { x: 190, y: -89 }, { x: 228, y: -88 }, { x: 265, y: -91 },
+  { x: 40, y: -60 }, { x: 85, y: -56 }, { x: 148, y: -58 }, { x: 172, y: -58 }, { x: 215, y: -55 }, { x: 260, y: -60 },
+  // A fourth row, further back still — asked for explicitly ("more NPC
+  // audience members in the empty space between the city and the existing
+  // audience"): the back row above (-55..-60) left the whole stretch down
+  // to the road grid (KINGSTON_ROAD_H1.y = 68) open and empty. This doesn't
+  // fill all the way to the road — still leaves real clear ground before
+  // the streets start — just extends the crowd a further row south into
+  // what was empty lawn. Clear of the two roadside trees at (35,-30)/(280,-35).
+  { x: 50, y: -28 }, { x: 95, y: -22 }, { x: 140, y: -25 }, { x: 180, y: -25 }, { x: 225, y: -22 }, { x: 270, y: -28 },
 ];
 
 // Montréal's on-foot layout — rebuilt from an actual period source: Thomas
@@ -1457,9 +1530,258 @@ function drawCalvaire(ctx, cx, cy) {
   ctx.restore();
 }
 
+// The bandstand at KINGSTON_BANDSTAND_POS — a raised wooden deck, bunting
+// along the front edge, a peaked, two-tone canopy resting on it with a
+// small pennant on top (no support posts — see the canopy's own comment
+// below). Purely decorative, like the cannon/calvaire above — not solid,
+// never blocks the player. W is a lot wider than the first pass (48 -> 150,
+// "I want the stage to be a lot wider... I want to see 5 band members
+// playing on stage") — every other measurement below is derived from W
+// rather than hardcoded, so it scales with it instead of drifting out of
+// proportion (thin stretched bunting) the way a fixed bunting-count would.
+function drawBandstand(ctx, cx, cy) {
+  const W = 150, D = 22;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + D / 2 + 3, W / 2 + 3, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // riser — the deck's own height, shown as a dark band below its front edge
+  ctx.fillStyle = '#33261a';
+  ctx.fillRect(cx - W / 2, cy - D / 2 + 4, W, 9);
+
+  // bunting swags along the front edge — the one unmistakable "bandstand"
+  // cue at this scale, alternating triangles hung off the deck. Sized off
+  // W (roughly one every 11px) rather than a fixed count, so they stay a
+  // consistent size regardless of how wide the stage is.
+  const buntColors = ['#9c3f34', '#e8dcc4'];
+  const buntCount = Math.max(8, Math.round(W / 11));
+  for (let i = 0; i < buntCount; i++) {
+    const bw = W / buntCount;
+    const bx = cx - W / 2 + bw * (i + 0.5);
+    ctx.fillStyle = buntColors[i % 2];
+    ctx.beginPath();
+    ctx.moveTo(bx - bw / 2, cy + D / 2);
+    ctx.lineTo(bx + bw / 2, cy + D / 2);
+    ctx.lineTo(bx, cy + D / 2 + 5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // deck
+  ctx.fillStyle = '#8a6a44';
+  ctx.fillRect(cx - W / 2, cy - D / 2, W, D);
+  ctx.strokeStyle = 'rgba(0,0,0,0.16)';
+  ctx.lineWidth = 1;
+  const plankCount = Math.max(5, Math.round(W / 15));
+  for (let i = 1; i < plankCount; i++) {
+    const px = cx - W / 2 + (W / plankCount) * i;
+    ctx.beginPath();
+    ctx.moveTo(px, cy - D / 2);
+    ctx.lineTo(px, cy + D / 2);
+    ctx.stroke();
+  }
+
+  // canopy — a shallow peaked roof, split into a dark/lit half for a cheap
+  // sense of form (same trick as drawCannon's shaded barrel edge above).
+  // Rise scales with W too — a wide roof this shallow would otherwise look
+  // almost flat and stretched rather than genuinely peaked. Sits directly
+  // on the deck's own top edge — no support posts any more ("remove the
+  // pillars from the stage," requested explicitly after the wide-stage
+  // pass added several along the front/back edges).
+  const roofRise = 10 + W / 12;
+  const roofBaseY = cy - D / 2;
+  const roofPeakY = roofBaseY - roofRise;
+  ctx.fillStyle = '#7a2622';
+  ctx.beginPath();
+  ctx.moveTo(cx - W / 2 - 4, roofBaseY);
+  ctx.lineTo(cx, roofPeakY);
+  ctx.lineTo(cx, roofBaseY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#9c3f34';
+  ctx.beginPath();
+  ctx.moveTo(cx, roofBaseY);
+  ctx.lineTo(cx, roofPeakY);
+  ctx.lineTo(cx + W / 2 + 4, roofBaseY);
+  ctx.closePath();
+  ctx.fill();
+
+  // pennant on top
+  ctx.strokeStyle = '#2b2018';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(cx, roofPeakY);
+  ctx.lineTo(cx, roofPeakY - 10);
+  ctx.stroke();
+  ctx.fillStyle = '#9c3f34';
+  ctx.beginPath();
+  ctx.moveTo(cx, roofPeakY - 10);
+  ctx.lineTo(cx + 8, roofPeakY - 7);
+  ctx.lineTo(cx, roofPeakY - 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// One musician, front-facing (toward the crowd/camera) — same base
+// proportions as villages.js's drawDockGreeter but simpler (no facing
+// mirror needed; they never move off the stage), plus an instrument-
+// specific prop and a small time-driven "playing" motion so the band reads
+// as performing, not just standing there holding things.
+const BAND_COATS = ['#2f3a52', '#4a2f2f', '#2f4a3a', '#4a3f2f', '#3a2f4a'];
+// Same idea as CROWD_SCALE above, sized against createGunsmithSprite()
+// instead (16x26, effective height ~24px) — asked for explicitly ("the same
+// size sprites as the gunsmith") after the band read as too small next to
+// the now-CROWD_SCALE-sized audience. This figure's own undrawn height
+// (feet to top of hat brim, ~13.2px) times this lands right around 24px.
+const BAND_SCALE = 1.8;
+function drawBandMember(ctx, x, y, time, seed, instrument, whiteHat = false) {
+  // The middle band member is the dock greeter (KINGSTON_BAND_SPOTS' own
+  // comment) — same coat colour as villages.js draws him in, plus the
+  // crown block below that turns the plain brim into his top hat, same
+  // shape drawDockGreeter uses for opts.topHat.
+  const coat = whiteHat ? KINGSTON_GREETER_COAT : BAND_COATS[seed % BAND_COATS.length];
+  const phase = seed * 1.7;
+  const play = Math.sin(time * 6 + phase); // -1..1, generic "mid-note" motion
+  const bob = Math.sin(time * 2.2 + phase) * 0.3;
+  const fx = Math.round(x);
+  const fy = Math.round(y + bob);
+
+  ctx.save();
+  ctx.translate(fx, fy);
+  ctx.scale(BAND_SCALE, BAND_SCALE);
+  ctx.translate(-fx, -fy);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(fx, fy + 1, 3.4, 1.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#241f1a'; // legs
+  ctx.fillRect(fx - 1.8, fy - 3.6, 1.4, 3.6);
+  ctx.fillRect(fx + 0.4, fy - 3.6, 1.4, 3.6);
+
+  ctx.fillStyle = coat; // coat
+  ctx.fillRect(fx - 2.2, fy - 9.2, 4.4, 5.8);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(fx - 2.2, fy - 9.2, 1.1, 5.8);
+
+  ctx.fillStyle = '#e2b688'; // head
+  ctx.fillRect(fx - 1.5, fy - 12.4, 3, 3);
+  ctx.fillStyle = whiteHat ? KINGSTON_GREETER_HAT : '#241f1a'; // hat brim
+  ctx.fillRect(fx - 2, fy - 13.2, 4, 1.4);
+  if (whiteHat) { // top hat crown — same shape as drawDockGreeter's opts.topHat
+    ctx.fillRect(fx - 1.5, fy - 16.2, 3, 3);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.fillRect(fx - 1.5, fy - 16.2, 1.1, 3);
+  }
+
+  ctx.strokeStyle = coat;
+  ctx.lineWidth = 1.3;
+  ctx.lineCap = 'round';
+  if (instrument === 'fiddle') {
+    // bow arm sawing back and forth across the strings
+    const bx = fx + 2.6 + play * 1.6;
+    const by = fy - 8 - Math.abs(play) * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(fx + 1.6, fy - 7.6);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.strokeStyle = '#c9a45c';
+    ctx.beginPath();
+    ctx.moveTo(fx - 2.4, fy - 9.6);
+    ctx.lineTo(fx + 2.4, fy - 8.4);
+    ctx.stroke();
+  } else if (instrument === 'drum') {
+    ctx.fillStyle = '#c9a45c';
+    ctx.fillRect(fx - 2.2, fy - 6.6, 4.4, 2.8);
+    ctx.strokeStyle = '#241f1a';
+    ctx.lineWidth = 0.9;
+    const sx = fx + play * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(fx, fy - 7.4);
+    ctx.lineTo(sx, fy - 9.4);
+    ctx.stroke();
+  } else if (instrument === 'concertina') {
+    // the bellows stretching in and out
+    ctx.fillStyle = '#5c3a24';
+    const sq = 2 + Math.abs(play) * 0.8;
+    ctx.fillRect(fx - sq / 2, fy - 8.4, sq, 3.2);
+  } else if (instrument === 'fife') {
+    ctx.strokeStyle = '#c9a45c';
+    ctx.beginPath();
+    ctx.moveTo(fx - 0.4, fy - 11.6);
+    ctx.lineTo(fx + 3.4, fy - 10.6);
+    ctx.stroke();
+  } else {
+    // standing bass, a big rounded shape beside the figure — the one
+    // instrument not actually held, so no arm/prop motion for this one
+    ctx.fillStyle = '#5c3a24';
+    ctx.beginPath();
+    ctx.ellipse(fx + 3, fy - 6, 2.2, 5.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// One onlooker in the crowd, seen from behind (facing the stage, away from
+// the usual top-down viewpoint) — deliberately simpler than
+// drawBandMember: no face, no instrument, no arm, just a back/coat/head
+// silhouette with a slight idle sway, cheap enough to draw a couple dozen
+// of without it reading as identical figures copy-pasted (seed varies the
+// coat colour/phase, same idea as villages.js's GREETER_COATS).
+const CROWD_COATS = ['#5a4a3a', '#3a4a5a', '#4a5a3a', '#5a3a4a', '#3a3a3a', '#6a5a3a', '#3a5a5a'];
+// Scales the whole hand-drawn figure up about its own feet (same
+// translate/scale/translate trick villages.js's drawDockGreeter uses) to
+// roughly match createTraderSprite()'s own size (sprites.js, 14x22, drawn
+// with its bottom ~2px above its own anchor point — repairShopFor's "boat
+// repair guy") — asked for explicitly ("the same size sprites as the boat
+// repair guy") after the crowd's first pass read as noticeably smaller.
+// 1.7x: this figure's own undrawn height (feet to top of head, ~11.6px) times
+// this lands right around the trader sprite's ~20px effective height.
+const CROWD_SCALE = 1.7;
+function drawCrowdFigure(ctx, x, y, time, seed) {
+  const coat = CROWD_COATS[seed % CROWD_COATS.length];
+  const phase = seed * 2.3;
+  const bob = Math.sin(time * 1.6 + phase) * 0.25;
+  const fx = Math.round(x);
+  const fy = Math.round(y + bob);
+
+  ctx.save();
+  ctx.translate(fx, fy);
+  ctx.scale(CROWD_SCALE, CROWD_SCALE);
+  ctx.translate(-fx, -fy);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(fx, fy + 1, 3, 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#241f1a'; // legs
+  ctx.fillRect(fx - 1.6, fy - 3.2, 1.3, 3.2);
+  ctx.fillRect(fx + 0.3, fy - 3.2, 1.3, 3.2);
+
+  ctx.fillStyle = coat; // coat back
+  ctx.fillRect(fx - 2, fy - 8.6, 4, 5.4);
+
+  ctx.fillStyle = '#c9a06a'; // back of the head/neck
+  ctx.fillRect(fx - 1.4, fy - 11.6, 2.8, 3);
+
+  if (seed % 3 !== 0) { // not everyone wears a hat
+    ctx.fillStyle = '#1c1712';
+    ctx.fillRect(fx - 1.8, fy - 12.2, 3.6, 1.3);
+  }
+  ctx.restore();
+}
+
 export function createVillageScene() {
   let strideTimer = 0;
   let strideFrame = 0;
+  // A free-running clock (never reset, unlike strideTimer) purely for
+  // decorative idle motion — Kingston's band/crowd today, drawBandMember/
+  // drawCrowdFigure's own sway and "playing" motion. Harmless in every
+  // other village since nothing reads it there.
+  let ambientTime = 0;
   let facingLeft = false;
   let worldWidth = CANVAS_WIDTH;
   let worldTop = 0;
@@ -1569,6 +1891,7 @@ export function createVillageScene() {
     // they stand there, so game.js can treat each as a single action per
     // approach rather than repeating it every frame).
     update(dt, keys) {
+      ambientTime += dt;
       let dx = 0, dy = 0;
       if (keys.left) dx -= 1;
       if (keys.right) dx += 1;
@@ -1738,6 +2061,19 @@ export function createVillageScene() {
         // a quieter, less formal ground than the paved town streets.
         drawDirtPath(ctx, KINGSTON_PARK_PATH.x, KINGSTON_PARK_PATH.y, KINGSTON_PARK_PATH.w, KINGSTON_PARK_PATH.h);
         drawCannon(ctx, KINGSTON_CANNON_POS.x, KINGSTON_CANNON_POS.y);
+        // The bandstand itself, same fixed-before-everything pass as the
+        // cannon/market well above — deliberately NOT in the y-sorted
+        // drawOrder below with the band members/crowd/player. It used to be
+        // sorted by a single point near its own front edge, but the
+        // structure spans a much taller range (deck up through the roof)
+        // than any single y can represent, so the band members standing ON
+        // the deck (their own sort-y, up near the roof end of that range)
+        // kept losing the sort to the stage and rendering underneath it —
+        // reported as "I can't see the band on the stage." Drawing the
+        // whole structure first/always-behind, the same way the cannon
+        // already is, fixes that outright: nothing drawn afterwards (band,
+        // crowd, player) can ever be occluded by it.
+        drawBandstand(ctx, KINGSTON_BANDSTAND_POS.x, KINGSTON_BANDSTAND_POS.y);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe
@@ -1910,6 +2246,23 @@ export function createVillageScene() {
           y: WATER_TOP - 4,
           draw: (c) => c.drawImage(traderSprite, MONTREAL_FERRY_LANDING.x + MONTREAL_FERRY_LANDING.w + 6 - traderSprite.width / 2, WATER_TOP - 4 - traderSprite.height + 2),
         }] : []),
+        // The band and its crowd in Artillery Park — purely cosmetic
+        // ("nothing interactive"), sorted into this same pass so the player
+        // correctly walks in front of/behind them depending on position,
+        // same reasoning as every other entry here. The bandstand structure
+        // itself is NOT here any more — see its own drawBandstand() call
+        // above, in the fixed always-behind pass with the cannon/market
+        // well, and that call's own comment for why.
+        ...(isKingston ? [
+          ...KINGSTON_BAND_SPOTS.map((b, i) => ({
+            y: KINGSTON_BANDSTAND_POS.y + b.dy,
+            draw: (c) => drawBandMember(c, KINGSTON_BANDSTAND_POS.x + b.dx, KINGSTON_BANDSTAND_POS.y + b.dy, ambientTime, i, b.instrument, b.whiteHat),
+          })),
+          ...KINGSTON_CROWD_SPOTS.map((p, i) => ({
+            y: p.y,
+            draw: (c) => drawCrowdFigure(c, p.x, p.y, ambientTime, i),
+          })),
+        ] : []),
         {
           y: player.y,
           draw: (c) => {
