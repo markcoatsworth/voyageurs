@@ -9,13 +9,52 @@ import { Game, MIN_SPEED } from './core/game.js';
 import { VILLAGES } from './world/river/route.js';
 import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
 import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
-import { TRIGGER_DISTANCE as WARSHIP_FLOW_DISTANCE } from './bossfights/britishWarship.js';
+import { TRIGGER_DISTANCE as WARSHIP_FLOW_DISTANCE, FIRST_THUNDERCLAP_DISTANCE as WARSHIP_FIRST_THUNDERCLAP_DISTANCE } from './bossfights/britishWarship.js';
 import { TRIGGER_DISTANCE as CHASSE_GALERIE_FLOW_DISTANCE } from './bossfights/chasseGalerie.js';
 import { DIABLE_FLOW_DISTANCE } from './bossfights/diable.js';
 import { TRIGGER_DISTANCE as LOUP_GAROU_FLOW_DISTANCE } from './bossfights/loupGarou.js';
 import { TRIGGER_DISTANCE as WENDIGO_FLOW_DISTANCE } from './bossfights/wendigo.js';
 
 const app = document.getElementById('app');
+
+// Implicit checkpoint save — asked for explicitly as "not an explicit
+// [save system]... don't make it explicit on screen but make it work":
+// silently remembers the furthest of this game's own ?start= waypoints
+// (START_KEYWORDS further down, plus every real village dock) the player
+// has actually reached, and resumes there on a plain reload with no
+// ?start= of its own — no "continue" prompt, no save/load button, nothing
+// on screen. Closing the tab and coming back just picks up close to where
+// you left off. The actual checkpoint list/save-on-progress logic lives
+// further down (after START_KEYWORDS/VILLAGES are both in scope); these
+// three are just the raw storage read/write/clear, kept together and
+// wrapped in try/catch so private browsing, disabled storage, or a quota
+// error each just mean "no save," never a crash on startup.
+export const CHECKPOINT_KEY = 'voyageurs-checkpoint';
+export function loadCheckpoint() {
+  try {
+    const raw = window.localStorage.getItem(CHECKPOINT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.flowDistance !== 'number' || typeof parsed.segment !== 'string') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+export function saveCheckpointToStorage(segment, flowDistance) {
+  try {
+    window.localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ segment, flowDistance }));
+  } catch {
+    /* no save this time — nothing else to do about it */
+  }
+}
+export function clearCheckpointStorage() {
+  try {
+    window.localStorage.removeItem(CHECKPOINT_KEY);
+  } catch {
+    /* nothing to clean up if storage never worked in the first place */
+  }
+}
 
 // Dev/testing cheat: ?start=<village name> drops the canoe there instead of
 // the put-in — e.g. ?start=tadoussac, ?start=sept-iles, ?start=quebec-city.
@@ -84,19 +123,22 @@ function normalizeStartName(s) {
 // before the beast is spotted (bossfights/loupGarou.js) — the last encounter
 // before Québec City.
 //
-// "british-warship" drops the canoe just past the Warship's own trigger
-// (bossfights/britishWarship.js's TRIGGER_DISTANCE + 10) — straight into
-// the held arena against the shootable gunboat. Used to sit right after
-// the frigate's own gap (skipping straight from clearing it into the
-// chase, back when the two were one continuous encounter); now that the
-// Warship is a standalone fight further downstream (~1/3 of the way from
-// Jones Falls to Kingston — see that file's own comment on why it moved
-// there), this cheat jumps straight there instead of requiring the long
-// paddle past Newboro and Jones Falls first. Named to match "british-blockade"
-// above (and the in-game banner, "BRITISH WARSHIP") — it was "pursuit" at
-// first, then "british-pursuit" once that was found to silently match
-// nothing (every keyword here is matched verbatim), renamed again
-// alongside the banner/HUD text.
+// "british-warship" used to drop the canoe just past the Warship's own
+// trigger (TRIGGER_DISTANCE + 10) — straight into the held arena with no
+// runway at all. Moved to FIRST_THUNDERCLAP_DISTANCE instead once
+// britishWarship.js grew a pre-fight approach (the sky darkening, two
+// thunderclaps, a held silent "brooding" stretch, only then the ship) —
+// asked for explicitly as "give me 3 seconds of lead time," and
+// FIRST_THUNDERCLAP_DISTANCE is already the exact distance that constant is
+// built to guarantee (see its own comment: sized off the game's worst-case
+// speed, so the gap to TRIGGER_DISTANCE is always >=3s regardless of how
+// fast the cheat paddles off from here) — reusing it rather than picking a
+// fresh number keeps this cheat's own guarantee tied to the same one the
+// real approach already promises. Named to match "british-blockade" above
+// (and the in-game banner, "BRITISH WARSHIP") — it was "pursuit" at first,
+// then "british-pursuit" once that was found to
+// silently match nothing (every keyword here is matched verbatim), renamed
+// again alongside the banner/HUD text.
 //
 // "rideau" drops the canoe at the head of the made-up Ottawa-to-Kingston leg
 // (world/river/route.js) — past Le Diable, the storm gone, on the calm wide
@@ -168,7 +210,7 @@ export const START_KEYWORDS = {
   [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FLOW_DISTANCE - 24, segment: 'fjord' },
   [normalizeStartName('loup-garou')]: { flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
-  [normalizeStartName('british-warship')]: { flowDistance: WARSHIP_FLOW_DISTANCE + 10, segment: 'rideau' },
+  [normalizeStartName('british-warship')]: { flowDistance: WARSHIP_FIRST_THUNDERCLAP_DISTANCE, segment: 'rideau' },
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
@@ -178,9 +220,14 @@ export const START_KEYWORDS = {
     segment: 'rideau',
   },
 };
-function parseStartLocation() {
+export function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
-  if (!raw) return { flowDistance: 0, segment: 'fjord' };
+  // No explicit ?start= — this is where the implicit checkpoint (this
+  // file's own top comment) actually takes effect: resume there instead of
+  // the put-in if one's saved. An explicit ?start= still always wins, same
+  // as it always has, so a dev link never silently gets overridden by
+  // whatever the browser happens to remember.
+  if (!raw) return loadCheckpoint() ?? { flowDistance: 0, segment: 'fjord' };
   const wanted = normalizeStartName(raw);
   const keyword = START_KEYWORDS[wanted];
   if (keyword) return keyword;
@@ -194,6 +241,59 @@ function parseStartLocation() {
   return { flowDistance, segment: match.segment };
 }
 const { flowDistance: startFlowDistance, segment: startSegment } = parseStartLocation();
+
+// The checkpoint list itself — every position this file already treats as
+// a real waypoint: START_KEYWORDS' own boss-fight approaches plus every
+// real village dock (VILLAGES). Grouped and sorted per segment so
+// furthestCheckpointReached() below can find "the latest one at or before
+// here" with a plain scan, no search structure needed for a couple-dozen
+// entries. Rebuilt once at load, not per-check — none of this moves after
+// the module finishes evaluating.
+const CHECKPOINT_CANDIDATES_BY_SEGMENT = {};
+for (const kw of Object.values(START_KEYWORDS)) {
+  (CHECKPOINT_CANDIDATES_BY_SEGMENT[kw.segment] ??= []).push(kw.flowDistance);
+}
+for (const v of VILLAGES) {
+  (CHECKPOINT_CANDIDATES_BY_SEGMENT[v.segment] ??= []).push(v.flowDistance);
+}
+for (const list of Object.values(CHECKPOINT_CANDIDATES_BY_SEGMENT)) list.sort((a, b) => a - b);
+
+// The furthest checkpoint candidate at or before (segment, flowDistance),
+// or null if the segment has none behind the current position yet (e.g.
+// still short of Wendigo on a fresh fjord run). Candidates are sorted
+// ascending, so the last one still <= flowDistance is the answer.
+export function furthestCheckpointReached(segment, flowDistance) {
+  const list = CHECKPOINT_CANDIDATES_BY_SEGMENT[segment];
+  if (!list) return null;
+  let best = null;
+  for (const d of list) {
+    if (d <= flowDistance) best = d;
+    else break;
+  }
+  return best === null ? null : { segment, flowDistance: best };
+}
+
+// Whole-journey ordering across segments — a plain flowDistance comparison
+// only means anything *within* one segment (each has its own number-line
+// offset, world/river/path.js's SEGMENT_SHAPE_OFFSET), so "is a further
+// along than b" needs the segment's own place in the real route first.
+// lawrenceEast is real geography (the minimap) but not a live destination
+// any more (route.js's own module comment) — ranked with fjord since nothing
+// in normal play ever actually sits there.
+const SEGMENT_RANK = { fjord: 0, lawrenceEast: 0, lawrenceWest: 1, rideau: 2 };
+export function isFurtherAlong(a, b) {
+  if (!b) return true;
+  const ra = SEGMENT_RANK[a.segment] ?? 0;
+  const rb = SEGMENT_RANK[b.segment] ?? 0;
+  if (ra !== rb) return ra > rb;
+  return a.flowDistance > b.flowDistance;
+}
+
+// In-memory mirror of whatever's actually in storage, so each check below
+// is a cheap comparison instead of a JSON.parse of the storage read every
+// time. Loaded once, kept current as saves happen (savedCheckpoint below).
+let savedCheckpoint = loadCheckpoint();
+
 const startedAtDiable =
   normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('diable');
 // "?start=gatineau" — Gatineau's own on-foot dock, where the musket master
@@ -678,6 +778,14 @@ for (const evt of ['pointerup', 'pointercancel', 'pointerleave']) {
 
 let lastTime = performance.now();
 let loopBroken = false;
+// Throttle for the implicit checkpoint check (this file's own top
+// comment) — real progress doesn't need checking 60x a second, and a
+// couple-dozen-entry scan every frame is wasted work for no benefit. Tied
+// to accumulated dt, not wall time, so it naturally pauses along with
+// everything else while the tab is backgrounded (rAF itself throttles
+// then) rather than firing a burst of saves on return.
+const CHECKPOINT_CHECK_INTERVAL = 2;
+let checkpointCheckTimer = 0;
 function loop(now) {
   // rAF's timestamp can occasionally predate the performance.now() call
   // above (most noticeably on the very first frame), so clamp dt to
@@ -694,6 +802,26 @@ function loop(now) {
       // the error overlay.
       loopBroken = true;
       showFatalError(err, 'running the game');
+    }
+    checkpointCheckTimer += dt;
+    if (checkpointCheckTimer >= CHECKPOINT_CHECK_INTERVAL) {
+      checkpointCheckTimer = 0;
+      // Reaching Kingston is the end of the run — clear the save so a
+      // completed journey doesn't leave a returning player stuck reloading
+      // at the very end forever; "Play Again" already resets the visible
+      // game state, this just makes the implicit save agree with it.
+      if (game.state === 'won') {
+        if (savedCheckpoint) {
+          clearCheckpointStorage();
+          savedCheckpoint = null;
+        }
+      } else {
+        const reached = furthestCheckpointReached(game.segment, game.flowDistance);
+        if (reached && isFurtherAlong(reached, savedCheckpoint)) {
+          saveCheckpointToStorage(reached.segment, reached.flowDistance);
+          savedCheckpoint = reached;
+        }
+      }
     }
   }
   requestAnimationFrame(loop);

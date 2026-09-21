@@ -103,7 +103,19 @@ src/
                        comment). Up/Down move a virtual `_chaseHoldZ` offset (game.js) that closes or
                        opens range without touching real flowDistance — shifts the canoe's own
                        on-screen position, not the ship's, so it reads as your own movement. Guarded
-                       by `segment === 'rideau'`.
+                       by `segment === 'rideau'`. Pre-fight approach, layered on the instant trigger:
+                       the sky darkens (stormIntensityAt, same frostIntensityAt/nightIntensityAt
+                       shape — its own slate-grey squall palette, not the Devil's hellstorm or the
+                       Loup-garou's night) well before anything else changes, then two thunderclaps
+                       (audio/sfx.js's playThunderclap) mark the approach closing — the first
+                       (FIRST_THUNDERCLAP_DISTANCE) sized off a worst-case speed (MAX_SPEED +
+                       RAPIDS_BOOST, duplicated from game.js with a keep-in-sync comment — importing
+                       game.js directly would be circular) so it's always >=3s ahead of the trigger
+                       regardless of player speed, the second closer — then a held, silent, fully-dark
+                       "brooding" stretch with no ship on screen at all (draw() renders nothing pre-fight
+                       any more — an earlier fog+glimpse pass had the ship fading in as part of the
+                       buildup, reported back as backwards: the environment should change first, the
+                       ship should be the payoff) until it appears abruptly at TRIGGER_DISTANCE.
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
                        TRIGGER_DISTANCE, FLIGHT_END.
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging

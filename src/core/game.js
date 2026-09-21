@@ -4,7 +4,7 @@ import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEI
 import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
 import { createCanoeSprites } from '../world/canoe.js';
-import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek, playThunderclap } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import {
@@ -1552,6 +1552,12 @@ export class Game {
       // starts, draining toward 0 as it sinks.
       this.warshipPct = warship.active ? warship.progressPct : null;
       for (let i = 0; i < warship.boomCount; i++) playCannonBoom();
+      // The two thunderclaps — the first guaranteed at least 3s ahead of
+      // the fight's own trigger regardless of speed
+      // (FIRST_THUNDERCLAP_DISTANCE), the second closer, after which
+      // nothing else sounds until the fight itself kicks in. No banner:
+      // this is heard, not announced.
+      for (let i = 0; i < warship.thunderCount; i++) playThunderclap();
       if (this.britishWarship.consumeJustStartedChase()) {
         // The big title card, same treatment as BRITISH BLOCKADE above —
         // this fight is triggered instantly on crossing TRIGGER_DISTANCE,
@@ -1622,6 +1628,16 @@ export class Game {
     // pure function of position, plus an extra glare while it listens.
     const frost = this.segment === 'fjord'
       ? this.wendigo.frostIntensity(this.flowDistance) : 0;
+    // The weather closing in ahead of the British Warship — only ever
+    // non-zero on the Rideau, and only in the approach before
+    // TRIGGER_DISTANCE (see britishWarship.js's stormIntensityAt); it's
+    // back to 0 by the time the held arena itself starts, so the fight gets
+    // its own look from the hull/hazards/ship, not a lingering storm.
+    const warshipStorm = this.segment === 'rideau'
+      ? this.britishWarship.stormIntensity(this.flowDistance) : 0;
+    // A quick flicker right at each of the two thunderclaps (draw() below).
+    const warshipFlash = warshipStorm > 0
+      ? this.britishWarship.stormFlash(this.flowDistance) : 0;
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -1663,6 +1679,26 @@ export class Game {
       ctx.save();
       ctx.globalAlpha = storm;
       ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+
+    // Storm sky for the British Warship's approach — a rolling slate-grey
+    // squall, not the Devil's dead-violet/blood-red (storm above) or the
+    // Loup-garou's cold night-blue (night above): this one should read as
+    // real weather closing in over open water, not a supernatural wrongness.
+    // Faded in by warshipStorm well before anything else in the approach
+    // changes — asked for explicitly after the first pass got the order
+    // backwards (see britishWarship.js's own module comment): the weather
+    // has to be the first thing that visibly shifts, not the ship.
+    if (warshipStorm > 0) {
+      const g = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+      g.addColorStop(0, '#0c1013');
+      g.addColorStop(0.5, '#1a2126');
+      g.addColorStop(1, '#2c363c');
+      ctx.save();
+      ctx.globalAlpha = 0.82 * warshipStorm;
+      ctx.fillStyle = g;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
     }
@@ -1726,6 +1762,27 @@ export class Game {
       ctx.save();
       ctx.globalAlpha = 0.55 * night;
       ctx.fillStyle = '#03040a';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+
+    // British Warship storm: a final dark wash over the obstacles/water too
+    // (same idea as the Loup-garou night's own final wash above), so the
+    // whole scene reads as gone dark, not just the sky overhead — then a
+    // quick, bright, cold flash right at each thunderclap (warshipFlash),
+    // over the top of the dark, the way real lightning briefly cuts through
+    // an overcast sky rather than lifting it.
+    if (warshipStorm > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.5 * warshipStorm;
+      ctx.fillStyle = '#0c1013';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+    if (warshipFlash > 0) {
+      ctx.save();
+      ctx.globalAlpha = warshipFlash * 0.55;
+      ctx.fillStyle = '#dce8ee';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
     }

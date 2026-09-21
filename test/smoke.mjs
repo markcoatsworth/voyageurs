@@ -14,7 +14,7 @@
 // a bundler can't check.
 
 import './dom-shim.mjs';
-import { makeElement } from './dom-shim.mjs';
+import { makeElement, windowShim } from './dom-shim.mjs';
 
 const failures = [];
 const notes = [];
@@ -63,6 +63,10 @@ const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfig
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
 const { DIABLE_FLOW_DISTANCE, HP_MAX: DIABLE_HP_MAX, PISTOL_DAMAGE: DIABLE_PISTOL_DAMAGE, MUSKET_DAMAGE: DIABLE_MUSKET_DAMAGE } = await import('../src/bossfights/diable.js');
 const { PISTOL_DAMAGE_TO_HULL: WARSHIP_PISTOL_DAMAGE, MUSKET_DAMAGE_TO_HULL: WARSHIP_MUSKET_DAMAGE } = await import('../src/bossfights/britishWarship.js');
+const {
+  FIRST_THUNDERCLAP_DISTANCE: WARSHIP_FIRST_THUNDERCLAP_DISTANCE,
+  stormIntensityAt: warshipStormIntensityAt,
+} = await import('../src/bossfights/britishWarship.js');
 const { PISTOL_DAMAGE_TO_HULL: BLOCKADE_PISTOL_DAMAGE, MUSKET_DAMAGE_TO_HULL: BLOCKADE_MUSKET_DAMAGE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
 const { TRIGGER_DISTANCE: WENDIGO_TRIGGER, DELIVERANCE_DISTANCE: WENDIGO_DELIVERANCE } = await import('../src/bossfights/wendigo.js');
@@ -411,6 +415,113 @@ await step('britishWarship: shooting it sinks it', () => {
   if (!resolved) throw new Error('the Warship fight never resolved (sunk or escaped) within budget');
   if (!sunk) throw new Error('resolved via the CHASE_HOLD_TIME timeout instead of sinking — the gunfight itself was never exercised');
   notes.push(`  note britishWarship: sank it after ${(frames / 30).toFixed(1)}s of gunnery`);
+});
+
+// --- scenario 4b2: the pre-fight approach — storm, thunder, then brooding --
+
+await step('britishWarship: the weather darkens before any thunder, the first clap leads the fight by >=3s, then a silent dark brood', () => {
+  // The algebraic guarantee itself, requested explicitly (of the original
+  // single "distant sound cue," now the first of two thunderclaps): "give
+  // the distance sound cue at least 3 seconds of advance warning" —
+  // FIRST_THUNDERCLAP_DISTANCE is a *fixed* distance short of
+  // TRIGGER_DISTANCE, so the minimum possible lead time is that gap divided
+  // by the fastest anyone can possibly be closing it, not the gap divided by
+  // any particular test run's own speed. WORST_CASE_SPEED mirrors
+  // britishWarship.js's own module-level constant of the same name
+  // (MAX_SPEED=16 + RAPIDS_BOOST=7, both game.js's — see that constant's own
+  // comment on why it's duplicated here rather than imported).
+  const WORST_CASE_SPEED = 23;
+  const gap = WARSHIP_FLOW_DISTANCE - WARSHIP_FIRST_THUNDERCLAP_DISTANCE;
+  if (gap / WORST_CASE_SPEED < 3) {
+    throw new Error(`first-thunderclap gap (${gap.toFixed(1)} units) only guarantees ${(gap / WORST_CASE_SPEED).toFixed(2)}s at worst-case speed ${WORST_CASE_SPEED}u/s — short of the requested 3s`);
+  }
+
+  // stormIntensityAt is a pure function of position (same shape as
+  // wendigo.js's frostIntensityAt) — 0 well before the approach, then 0
+  // again at and past the trigger, where the held arena's own look takes
+  // over. Critically, it must already be nonzero *by* FIRST_THUNDERCLAP_DISTANCE
+  // — reported back once before as "the warship gets faded [in] but nothing
+  // else in the environment does... I want the opposite," so the weather
+  // darkening has to lead the thunder, not follow it.
+  if (warshipStormIntensityAt(WARSHIP_FIRST_THUNDERCLAP_DISTANCE - 200) !== 0) throw new Error('storm is already nonzero long before the approach');
+  if (warshipStormIntensityAt(WARSHIP_FIRST_THUNDERCLAP_DISTANCE) <= 0) throw new Error('the sky should already be darkening by the first thunderclap');
+  if (warshipStormIntensityAt(WARSHIP_FLOW_DISTANCE) !== 0) throw new Error('storm is still nonzero exactly at the trigger');
+  if (warshipStormIntensityAt(WARSHIP_FLOW_DISTANCE - 5) < 1) throw new Error('storm should be held at full darkness through the brooding stretch just short of the trigger');
+
+  // Now the lived version: paddle flat-out from before the approach zone
+  // through the trigger. game.js's own update() consumes
+  // britishWarship.update()'s thunderCount internally (to fire its own
+  // playThunderclap() calls), so this wraps the method the same way the
+  // wendigo/loup-garou scenarios wrap handleHit, to count real events from
+  // out here.
+  const g = newGame('rideau', WARSHIP_FIRST_THUNDERCLAP_DISTANCE - 60);
+  let simTime = 0;
+  let triggerTime = null;
+  let totalThunder = 0;
+  let firstThunderTime = null;
+  const origUpdate = g.game.britishWarship.update.bind(g.game.britishWarship);
+  g.game.britishWarship.update = (...args) => {
+    const res = origUpdate(...args);
+    if (res.thunderCount > 0) {
+      totalThunder += res.thunderCount;
+      if (firstThunderTime === null) firstThunderTime = simTime;
+    }
+    return res;
+  };
+  let sawStormBeforeFirstThunder = false;
+  for (let i = 0; i < 3000 && triggerTime === null; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    simTime += 1 / 30;
+    if (firstThunderTime === null && warshipStormIntensityAt(g.game.flowDistance) > 0) sawStormBeforeFirstThunder = true;
+    if (triggerTime === null && g.game.britishWarship.isChaseHolding()) triggerTime = simTime;
+  }
+  if (firstThunderTime === null) throw new Error('the first thunderclap never fired');
+  if (triggerTime === null) throw new Error('never reached the fight trigger');
+  if (totalThunder !== 2) throw new Error(`expected exactly 2 thunderclaps across the approach, got ${totalThunder}`);
+  if (!sawStormBeforeFirstThunder) throw new Error('the storm never showed any darkening before the first thunderclap — the sequence is backwards again');
+  const lead = triggerTime - firstThunderTime;
+  if (lead < 2.9) throw new Error(`only ${lead.toFixed(2)}s between the first thunderclap and the fight starting — short of the requested >=3s (small slack for the test's own 1/30 frame step)`);
+  if (warshipStormIntensityAt(g.game.flowDistance) !== 0) throw new Error('storm is still showing once the held arena has started');
+  notes.push(`  note britishWarship: weather darkened first, 2 thunderclaps, first clap led the fight by ${lead.toFixed(2)}s`);
+});
+
+// --- scenario 4b3: ?start=british-warship gives real lead time -------------
+
+await step('britishWarship: the ?start= cheat gives at least 3s of lead, not a hot drop into combat', async () => {
+  // Used to drop the canoe just past TRIGGER_DISTANCE (+10) — straight into
+  // the held arena with zero runway. Asked explicitly to "give me 3 seconds
+  // of lead time" once the pre-fight approach (weather darkening, two
+  // thunderclaps, a silent brooding stretch) existed to actually show off —
+  // repinned to FIRST_THUNDERCLAP_DISTANCE, which is already built to
+  // guarantee that exact gap (see its own comment in britishWarship.js)
+  // rather than picking a fresh, independently-tuned number.
+  const { START_KEYWORDS } = await import('../src/main.js');
+  // START_KEYWORDS is keyed by normalizeStartName() (main.js, not exported)
+  // — hyphens fold to spaces, so "british-warship" is stored as "british
+  // warship", same as every other hyphenated keyword here.
+  const start = START_KEYWORDS['british warship'];
+  if (!start) throw new Error('no "british-warship" entry in START_KEYWORDS — a name/lookup drifted');
+  if (start.segment !== 'rideau') throw new Error(`?start=british-warship lands on segment "${start.segment}", not rideau`);
+  if (Math.abs(start.flowDistance - WARSHIP_FIRST_THUNDERCLAP_DISTANCE) > 0.01) {
+    throw new Error(`?start=british-warship (${start.flowDistance.toFixed(1)}) isn't pinned to FIRST_THUNDERCLAP_DISTANCE (${WARSHIP_FIRST_THUNDERCLAP_DISTANCE.toFixed(1)}) any more`);
+  }
+
+  // Lived version: paddle flat-out from the cheat's own landing spot and
+  // confirm the fight doesn't actually trigger for a real 3s.
+  const g = newGame(start.segment, start.flowDistance);
+  let simTime = 0;
+  let triggerTime = null;
+  for (let i = 0; i < 500 && triggerTime === null; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    simTime += 1 / 30;
+    if (g.game.britishWarship.isChaseHolding()) triggerTime = simTime;
+  }
+  if (triggerTime === null) throw new Error('the fight never triggered after the cheat at all');
+  if (triggerTime < 2.9) throw new Error(`the fight triggered only ${triggerTime.toFixed(2)}s after ?start=british-warship — short of the requested 3s of lead`);
 });
 
 // --- scenario 4c: the ship's fore/aft hold never renders off-screen --------
@@ -1393,6 +1504,98 @@ await step('weapons: the musket fires slower and hits harder than the pistol', (
     if (!(musketDmg > pistolDmg)) {
       throw new Error(`${fight}: musket damage (${musketDmg}) isn't higher than pistol damage (${pistolDmg})`);
     }
+  }
+});
+
+// --- scenario 10: the implicit checkpoint save --------------------------
+
+await step('checkpoint: saves/loads through storage, and an explicit ?start= still wins', async () => {
+  // Asked for explicitly as "not an explicit [save system]... don't make
+  // it explicit on screen but make it work" — no continue prompt, no
+  // save/load button, just silently resuming near wherever a real
+  // playthrough last got to. Fresh import resolves from the module cache
+  // ("main.js loads" above already evaluated it once); parseStartLocation
+  // reads window.location.search/localStorage live at call time, not at
+  // import time, so re-calling the cached export is exactly as valid as a
+  // fresh import would be here — no cache-busting needed.
+  const mod = await import('../src/main.js');
+  windowShim.localStorage.clear();
+  windowShim.location.search = '';
+  try {
+    // No save yet — falls back to the put-in, same as always.
+    const fresh = mod.parseStartLocation();
+    if (fresh.flowDistance !== 0 || fresh.segment !== 'fjord') {
+      throw new Error(`expected the put-in with no save and no ?start=, got ${JSON.stringify(fresh)}`);
+    }
+
+    // Round-trips through the real (if in-memory) Storage the dom-shim
+    // provides, not just a JS object — same JSON.stringify/parse path a
+    // real browser reload takes.
+    mod.saveCheckpointToStorage('rideau', 95500);
+    const loaded = mod.loadCheckpoint();
+    if (!loaded || loaded.segment !== 'rideau' || loaded.flowDistance !== 95500) {
+      throw new Error(`checkpoint didn't round-trip through storage: ${JSON.stringify(loaded)}`);
+    }
+
+    // No ?start= this time — resumes at the saved checkpoint instead of
+    // the put-in.
+    const resumed = mod.parseStartLocation();
+    if (resumed.segment !== 'rideau' || resumed.flowDistance !== 95500) {
+      throw new Error(`didn't resume at the saved checkpoint: ${JSON.stringify(resumed)}`);
+    }
+
+    // An explicit ?start= still always wins over whatever's saved — a dev
+    // link (or a returning player deliberately jumping elsewhere) can't be
+    // silently overridden by browser storage.
+    windowShim.location.search = '?start=diable';
+    const explicit = mod.parseStartLocation();
+    if (explicit.segment === 'rideau' && explicit.flowDistance === 95500) {
+      throw new Error('an explicit ?start=diable was overridden by the saved rideau checkpoint');
+    }
+  } finally {
+    windowShim.location.search = '';
+    windowShim.localStorage.clear();
+  }
+});
+
+await step('checkpoint: furthestCheckpointReached finds the latest waypoint at or before a position', async () => {
+  const mod = await import('../src/main.js');
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  // Well short of even the first Rideau waypoint — nothing reached yet.
+  const none = mod.furthestCheckpointReached('rideau', SEGMENT_SHAPE_OFFSET.rideau + 1);
+  if (none !== null) throw new Error(`expected no checkpoint reached this early, got ${JSON.stringify(none)}`);
+  // Right at Kingston's own dock — Kingston itself should be "the latest
+  // one reached," not some earlier waypoint the scan stopped short of.
+  const atKingston = mod.furthestCheckpointReached('rideau', kingston.flowDistance);
+  if (!atKingston || atKingston.flowDistance !== kingston.flowDistance) {
+    throw new Error(`expected Kingston's own flowDistance as the latest checkpoint, got ${JSON.stringify(atKingston)}`);
+  }
+  // A segment with no checkpoints registered at all (shouldn't happen for
+  // any real segment, but the lookup itself should degrade to null, not
+  // throw, if it ever did).
+  const unknownSegment = mod.furthestCheckpointReached('not-a-real-segment', 0);
+  if (unknownSegment !== null) throw new Error(`expected null for an unregistered segment, got ${JSON.stringify(unknownSegment)}`);
+});
+
+await step('checkpoint: isFurtherAlong ranks whole-journey progress, not just raw flowDistance', async () => {
+  const mod = await import('../src/main.js');
+  // Later segment always outranks an earlier one, even with a *smaller*
+  // raw flowDistance number — each segment has its own number-line offset
+  // (world/river/path.js's SEGMENT_SHAPE_OFFSET), so comparing the raw
+  // numbers across segments directly would be meaningless.
+  if (!mod.isFurtherAlong({ segment: 'rideau', flowDistance: 0 }, { segment: 'lawrenceWest', flowDistance: 999999 })) {
+    throw new Error('rideau (any position) should outrank lawrenceWest regardless of raw flowDistance');
+  }
+  if (mod.isFurtherAlong({ segment: 'fjord', flowDistance: 999999 }, { segment: 'rideau', flowDistance: 0 })) {
+    throw new Error('fjord should never outrank rideau, no matter the raw flowDistance');
+  }
+  // Same segment — plain flowDistance comparison.
+  if (!mod.isFurtherAlong({ segment: 'rideau', flowDistance: 200 }, { segment: 'rideau', flowDistance: 100 })) {
+    throw new Error('a larger flowDistance in the same segment should count as further along');
+  }
+  // Nothing saved yet — anything at all counts as further along.
+  if (!mod.isFurtherAlong({ segment: 'fjord', flowDistance: 0 }, null)) {
+    throw new Error('any real position should outrank no saved checkpoint at all');
   }
 });
 

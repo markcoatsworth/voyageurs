@@ -293,6 +293,58 @@ export function playWendigoShriek() {
   noiseBurst(c, t0, 0.22, 3000);
 }
 
+// The British Warship (bossfights/britishWarship.js) approach: two distant
+// thunderclaps mark the weather closing in, well before the fight itself —
+// its own crisp playCannonBoom() cues don't start until the held arena
+// actually opens fire. Deliberately built as thunder, not gunfire: a short
+// bright crack (noiseBurst, reused from playCannonBoom's own crack) rolling
+// into a long, low rumble made of several staggered, independently-decaying
+// noise layers so it swells and fades unevenly, the way real thunder rolls
+// rather than cutting cleanly like a shot. The first call is guaranteed at
+// least 3s ahead of the fight's own trigger (FIRST_THUNDERCLAP_DISTANCE);
+// the second is just a closer, second warning before the held, silent
+// "brooding" stretch that follows it.
+export function playThunderclap() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  const jitter = 0.85 + Math.random() * 0.3; // no two claps sound identical
+
+  noiseBurst(c, t0, 0.12 * jitter, 3200);
+
+  const rumbleDur = 2.2 * jitter;
+  const bufferSize = Math.max(1, Math.floor(c.sampleRate * rumbleDur));
+  const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  for (const [delay, level, dur] of [[0.05, 0.4, rumbleDur], [0.35, 0.28, rumbleDur * 0.75], [0.75, 0.18, rumbleDur * 0.5]]) {
+    const noise = c.createBufferSource();
+    noise.buffer = buffer;
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(220, t0 + delay);
+    filter.frequency.exponentialRampToValueAtTime(45, t0 + delay + dur);
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.0001, t0 + delay);
+    gain.gain.exponentialRampToValueAtTime(level, t0 + delay + 0.15);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + dur);
+    noise.connect(filter).connect(gain).connect(c.destination);
+    noise.start(t0 + delay);
+    noise.stop(t0 + delay + dur + 0.05);
+  }
+
+  const sub = c.createOscillator();
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime(55, t0);
+  sub.frequency.exponentialRampToValueAtTime(28, t0 + 0.5);
+  const subGain = c.createGain();
+  subGain.gain.setValueAtTime(0.0001, t0);
+  subGain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.06);
+  subGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+  sub.connect(subGain).connect(c.destination);
+  sub.start(t0);
+  sub.stop(t0 + 0.65);
+}
+
 export function playDiableDefeat() {
   const c = getCtx();
   const t0 = c.currentTime;

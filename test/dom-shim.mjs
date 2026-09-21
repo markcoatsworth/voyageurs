@@ -148,6 +148,24 @@ function audioCtxShim() {
   );
 }
 
+// A real (if in-memory, non-persistent) Storage implementation, not a
+// no-op — code that round-trips a checkpoint through localStorage needs
+// getItem() to actually return what setItem() wrote, in the same node
+// process, the same way a real browser's Storage does across reloads of
+// the same origin. Exposed on windowShim (main.js reads window.localStorage,
+// matching every other browser global it touches) and shared by every test
+// in a run unless a test clears it — same lifetime a real tab's storage has
+// within one session.
+function makeLocalStorage() {
+  const data = new Map();
+  return {
+    getItem: (k) => (data.has(k) ? data.get(k) : null),
+    setItem: (k, v) => { data.set(k, String(v)); },
+    removeItem: (k) => { data.delete(k); },
+    clear: () => { data.clear(); },
+  };
+}
+
 const windowShim = {
   innerWidth: 1280,
   innerHeight: 800,
@@ -161,6 +179,7 @@ const windowShim = {
   getComputedStyle: () => ({ getPropertyValue: () => '' }),
   AudioContext: audioCtxShim,
   webkitAudioContext: audioCtxShim,
+  localStorage: makeLocalStorage(),
 };
 
 function install() {
@@ -202,4 +221,4 @@ function install() {
 
 install();
 
-export { makeElement, byId };
+export { makeElement, byId, windowShim };

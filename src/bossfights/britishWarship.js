@@ -61,6 +61,91 @@ const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
+function smoothstep(t) {
+  const x = clamp(t, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
+// Pre-fight approach, layered on top of the instant trigger above —
+// requested as "environmental effects before the music comes in and the
+// ship starts shooting." First pass (fog + the ship glimpsed hazily on the
+// horizon + a single distant cannon) got the order backwards: reported back
+// as "the warship gets faded [in] but nothing else in the environment
+// does... I want the opposite" — the ship was the only thing visibly
+// changing, when it should be the payoff, not part of the buildup. Redone
+// as weather, not fog: the sky darkens well before anything else, two
+// ominous thunderclaps mark the approach closing, then a held, silent,
+// fully-dark "brooding" stretch — and only then does the ship itself
+// appear, abruptly, at TRIGGER_DISTANCE (draw() no longer renders it at all
+// before that point — see the chasePhase guard there). None of this gates
+// or delays the fight itself — it still starts the instant TRIGGER_DISTANCE
+// is crossed, same as ever — it's atmospheric lead-in inside the room this
+// trigger's own placement already leaves (~137 units of ordinary paddling
+// past Jones Falls, per the module comment above).
+
+// The sky starts darkening this many units before TRIGGER_DISTANCE —
+// comfortably before SECOND_THUNDERCLAP_DISTANCE below, so "the weather
+// goes dark" reads as its own, first beat, not something that only shows up
+// alongside the thunder.
+const STORM_APPROACH_DISTANCE = 115;
+const STORM_START_DISTANCE = TRIGGER_DISTANCE - STORM_APPROACH_DISTANCE;
+
+// Worst-case speed a player can be moving at when crossing
+// FIRST_THUNDERCLAP_DISTANCE below — MAX_SPEED (game.js, 16 units/s on
+// desktop; touch is slower, never the worst case) plus rapids' own peak
+// boost (RAPIDS_BOOST, 7 units/s — rapidsStrength() in path.js is a pure
+// function of position with no segment exception, so a peak can coincide
+// with this approach even on the calm Rideau). Duplicated here rather than
+// imported from game.js — game.js already imports this module, so the
+// reverse import would be circular. Keep in sync by hand if either constant
+// in game.js changes.
+const WORST_CASE_SPEED = 16 + 7;
+// "At least 3 seconds of advance warning," regardless of player speed —
+// requested explicitly (of the original single "distant sound cue," now the
+// first of the two thunderclaps). A cue fired at a *fixed distance* short of
+// the trigger only guarantees a minimum lead time if that distance is sized
+// off the fastest anyone can possibly be closing it: lead/speed is smallest
+// exactly when speed is largest. 3.25s (not a bare 3) covers the update
+// loop's own one-frame dt clamp (main.js, capped at 1/20s) — the one frame
+// where flowDistance can overshoot this threshold before it's caught.
+const FIRST_THUNDERCLAP_LEAD = WORST_CASE_SPEED * 3.25;
+export const FIRST_THUNDERCLAP_DISTANCE = TRIGGER_DISTANCE - FIRST_THUNDERCLAP_LEAD;
+// The second, closer clap — after this one, nothing else sounds until the
+// fight itself kicks in. That gap (this many units of held, dark silence)
+// is the "few seconds of brooding" asked for; also where stormIntensityAt
+// below stops ramping and just holds at full darkness, so the darkest,
+// quietest moment is the one right before the fight, not partway through
+// the darkening.
+const SECOND_THUNDERCLAP_DISTANCE = TRIGGER_DISTANCE - 35;
+
+// Pure function of position, same shape as wendigo.js's frostIntensityAt:
+// 0 well before the approach, ramping smoothly up to full darkness by
+// SECOND_THUNDERCLAP_DISTANCE (held there through the brooding stretch),
+// then snapping back to 0 past TRIGGER_DISTANCE — the held arena gets its
+// own look from the hull/hazards/ship, not a lingering storm over the
+// gunnery.
+export function stormIntensityAt(flowDistance) {
+  if (flowDistance <= STORM_START_DISTANCE || flowDistance >= TRIGGER_DISTANCE) return 0;
+  if (flowDistance >= SECOND_THUNDERCLAP_DISTANCE) return 1;
+  return smoothstep((flowDistance - STORM_START_DISTANCE) / (SECOND_THUNDERCLAP_DISTANCE - STORM_START_DISTANCE));
+}
+
+// A quick, bright flicker right at each thunderclap — pure function of
+// position again (like the rest of this approach), decaying over a handful
+// of units rather than real time so it doesn't need its own clock. Two
+// independent windows, one per clap; draw() takes the max of the two.
+const CLAP_FLASH_WINDOW = 5;
+function clapFlashAt(flowDistance, clapDistance) {
+  const t = flowDistance - clapDistance;
+  if (t < 0 || t > CLAP_FLASH_WINDOW) return 0;
+  return 1 - t / CLAP_FLASH_WINDOW;
+}
+export function stormFlashAt(flowDistance) {
+  return Math.max(
+    clapFlashAt(flowDistance, FIRST_THUNDERCLAP_DISTANCE),
+    clapFlashAt(flowDistance, SECOND_THUNDERCLAP_DISTANCE),
+  );
+}
 
 // Reported as "impossible," then "still too difficult" through two rounds
 // of tone-down — landing shots on a moving target while also dodging its
@@ -202,10 +287,14 @@ export function createBritishWarship() {
   let chaseHullHP = CHASE_HULL_HP;
   let chaseSunk = false;
   let justSunk = false;
+  let clap1Fired = false; // latches once FIRST_THUNDERCLAP_DISTANCE is crossed — never resets on its own
+  let clap2Fired = false; // ditto, SECOND_THUNDERCLAP_DISTANCE
 
   function reset() {
     started = false;
     resolved = false;
+    clap1Fired = false;
+    clap2Fired = false;
     chasePhase = false;
     chaseIntroT = 0;
     chaseOrbitAngle = 0;
@@ -250,6 +339,16 @@ export function createBritishWarship() {
       justSunk = false;
       return v;
     },
+    // Same wrapper convention as wendigo.js's frostIntensity /
+    // loupGarou.js's nightIntensity — game.js's render() calls these rather
+    // than reaching for the module-level stormIntensityAt/stormFlashAt
+    // directly.
+    stormIntensity(flowDistance) {
+      return stormIntensityAt(flowDistance);
+    },
+    stormFlash(flowDistance) {
+      return stormFlashAt(flowDistance);
+    },
     // Same convention as diable.js's debugCentreX() — test/autopilot support
     // for aiming at a moving target, not used by game.js's own rendering.
     debugChaseShipPosition() {
@@ -277,6 +376,26 @@ export function createBritishWarship() {
         started = true;
         resolved = true;
         console.log('[WARSHIP] Auto-resolved (started past it)');
+      }
+
+      // The two thunderclaps (see FIRST_THUNDERCLAP_DISTANCE's own comment)
+      // — gated on !resolved, not !started: both distances always sit
+      // before TRIGGER_DISTANCE, so in the ordinary case these fire first
+      // and started/resolved are still both false. The wellPast branch
+      // above sets resolved before this runs, in the same tick — that's
+      // what keeps a cheat/checkpoint spawn well past the fight from ever
+      // hearing thunder for an encounter it already skipped. Counted rather
+      // than flagged (thunderCount below, same idiom as boomCount) so
+      // game.js can just loop playThunderclap() the same way it already
+      // loops playCannonBoom() for hazards.
+      let thunderCount = 0;
+      if (!clap1Fired && !resolved && playerFlowDistance >= FIRST_THUNDERCLAP_DISTANCE) {
+        clap1Fired = true;
+        thunderCount++;
+      }
+      if (!clap2Fired && !resolved && playerFlowDistance >= SECOND_THUNDERCLAP_DISTANCE) {
+        clap2Fired = true;
+        thunderCount++;
       }
 
       if (!started && !resolved && playerFlowDistance >= TRIGGER_DISTANCE) {
@@ -418,16 +537,22 @@ export function createBritishWarship() {
         // floor everyone gets regardless of gunnery; it just isn't what
         // this bar shows.
         const chaseHullPct = clamp((chaseHullHP / CHASE_HULL_HP) * 100, 0, 100);
-        return { active: true, progressPct: chaseHullPct, boomCount, chaseShipDistance: chaseShipD, hitBullets };
+        return { active: true, progressPct: chaseHullPct, boomCount, chaseShipDistance: chaseShipD, hitBullets, thunderCount };
       }
 
-      return { active: false, progressPct: 0, boomCount, hitBullets };
+      return { active: false, progressPct: 0, boomCount, hitBullets, thunderCount };
     },
 
     // Rendering doesn't care whether the encounter is currently "active" by
     // update()'s gating — it just draws whatever's within visible range,
     // same as villages.js's own drawVillages().
     draw(ctx, worldDistance, cameraWorldX) {
+      // Deliberately no ship rendering at all before chasePhase below — the
+      // whole point of the redone approach (see this file's own module
+      // comment) is that the ship is the payoff, not part of the buildup.
+      // It appears abruptly the instant the fight starts, not faded in
+      // ahead of time.
+
       // Hazards (cannon shots) — carry fromX/fromD (the firing ship's
       // position at spawn) so they render as a tracer shot from the hull,
       // not a shell materializing out of nowhere.
