@@ -682,11 +682,12 @@ button:hover {
    only once you've picked up a gun (game.js toggles .hidden). Z first, more
    slots lining up beside it as further guns unlock (row, not column —
    easier to glance across for which guns are live than to scan down a
-   stack). Same per-input-type treatment as the steer pad: a real tappable
-   button on touch, a light-up "how to play" keycap on desktop where the
-   keyboard's Z is the real control. left/top are set by main.js's resize()
-   so it stays level with the move controls opposite it; the values here are
-   the before-JS fallback. */
+   stack — overridden below on a small touch viewport specifically). Same
+   per-input-type treatment as the steer pad: a real tappable button on
+   touch, a light-up "how to play" keycap on desktop where the keyboard's Z
+   is the real control. left/top are set by main.js's resize() so it stays
+   level with the move controls opposite it; the values here are the
+   before-JS fallback. */
 #weapon-dpad {
   position: fixed;
   left: 20px;
@@ -695,6 +696,30 @@ button:hover {
   display: flex;
   flex-direction: row;
   gap: 10px;
+}
+
+/* On a small touch viewport specifically (a phone, not a tablet) the fire
+   buttons stack vertically instead of side by side. Reported directly:
+   "overlap between the Z X shooting buttons and the up-left-right-down
+   buttons on a mobile device" — on a narrow phone the canvas fills most of
+   the width, so main.js's resize() pushes the steer pad below it, right-
+   anchored, at the same time #weapon-dpad sits left-anchored in that same
+   row (positionWeaponPad() only ever adjusts its top, matching the steer
+   pad's own vertical centre, never its horizontal side) — two pads, each
+   ~150-260px wide depending on key size, easily add up to more than a
+   phone's own viewport width. Stacking narrows this pad to one button's
+   own width instead of two-plus-a-gap, which is what actually buys back
+   the horizontal room; no JS change needed since main.js already measures
+   the pad's real rendered size (getBoundingClientRect()) rather than
+   assuming its shape. A big touch viewport (tablet, touch laptop) has
+   plenty of room already and keeps the row layout the base rule above
+   sets — "not on a big screen with a big viewport," requested explicitly,
+   is exactly what the max-width condition here (not just hover/pointer)
+   is for. */
+@media (hover: none) and (pointer: coarse) and (max-width: 700px) {
+  #weapon-dpad {
+    flex-direction: column;
+  }
 }
 
 .weapon-key {
