@@ -680,6 +680,8 @@ await step('kingston: the ?start= cheat lands exactly on the arrival-track trigg
   // needed any more (removed from main.js).
   const { START_KEYWORDS } = await import('../src/main.js');
   const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
+  const { KINGSTON_PLAYLIST } = await import('../src/audio/music.js');
+  const kingstonTitles = KINGSTON_PLAYLIST.map((t) => t.title);
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
   const start = START_KEYWORDS['kingston'];
   if (!start) throw new Error('no "kingston" entry in START_KEYWORDS — a name/lookup drifted');
@@ -704,8 +706,8 @@ await step('kingston: the ?start= cheat lands exactly on the arrival-track trigg
   const g = newGame('rideau', start.flowDistance);
   g.game.update(1 / 30);
   await new Promise((r) => setTimeout(r, 20)); // let the fake play()/canplay promises resolve
-  if (g.game.music.nowPlaying?.title !== "Un Siècle d'Avance") {
-    throw new Error(`arrival track never cut in on its own — playing "${g.game.music.nowPlaying?.title}" instead`);
+  if (!kingstonTitles.includes(g.game.music.nowPlaying?.title)) {
+    throw new Error(`arrival playlist never cut in on its own — playing "${g.game.music.nowPlaying?.title}" instead`);
   }
 
   let arrived = false;
@@ -1218,14 +1220,16 @@ await step('rideau: reaching Kingston by its dock enters the town, then casting 
   if (!won) throw new Error('casting off from Kingston by its dock never reached the win condition');
 });
 
-await step('kingston: the arrival track cuts in at the approach banner and survives to the win screen', async () => {
-  // A static, deliberate needle-drop, not part of the shuffle — reported as
-  // "I want this to be a static song, not a random one, play every time."
-  // Cuts in at the same flowDistance as the "KINGSTON — Fort Frontenac
-  // ahead" banner (game.js), well before the dock, and — unlike every other
-  // boss track — nothing ever calls endBossTrack() for it (see win()'s own
-  // comment): it should still be playing under the victory card, not have
-  // reverted to the ambient shuffle.
+await step('kingston: the arrival playlist cuts in at the approach banner and survives to the win screen', async () => {
+  // "An isolated playlist exclusively for Kingston" — three tracks
+  // (KINGSTON_PLAYLIST, music.js), shuffled, never the ambient shuffle
+  // (PLAYLIST) itself. Cuts in at the same flowDistance as the "KINGSTON —
+  // Fort Frontenac ahead" banner (game.js), well before the dock, and —
+  // unlike every other boss track — nothing ever calls endBossTrack() for
+  // it (see win()'s own comment): it should still be one of these three
+  // playing under the victory card, not reverted to the ambient shuffle.
+  const { KINGSTON_PLAYLIST } = await import('../src/audio/music.js');
+  const kingstonTitles = KINGSTON_PLAYLIST.map((t) => t.title);
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
   // -40 is past the approach banner's own trigger (KINGSTON_APPROACH_LEAD,
   // game.js) and — since the Warship now triggers much further back (~1/3
@@ -1236,8 +1240,8 @@ await step('kingston: the arrival track cuts in at the approach banner and survi
   const g = newGame('rideau', kingston.flowDistance - 40);
   g.game.update(1 / 30);
   await new Promise((r) => setTimeout(r, 20)); // let the fake play()/canplay promises resolve
-  if (g.game.music.nowPlaying?.title !== "Un Siècle d'Avance") {
-    throw new Error(`arrival track never cut in — playing "${g.game.music.nowPlaying?.title}" instead`);
+  if (!kingstonTitles.includes(g.game.music.nowPlaying?.title)) {
+    throw new Error(`arrival playlist never cut in — playing "${g.game.music.nowPlaying?.title}" instead`);
   }
 
   let won = false;
@@ -1248,10 +1252,10 @@ await step('kingston: the arrival track cuts in at the approach banner and survi
     if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') g.game.leaveVillage();
     if (g.game.state === 'won') won = true;
   }
-  if (!won) throw new Error('never reached the win condition after the arrival track cut in');
+  if (!won) throw new Error('never reached the win condition after the arrival playlist cut in');
   await new Promise((r) => setTimeout(r, 20));
-  if (g.game.music.nowPlaying?.title !== "Un Siècle d'Avance") {
-    throw new Error(`arrival track didn't survive to the win screen — playing "${g.game.music.nowPlaying?.title}" instead`);
+  if (!kingstonTitles.includes(g.game.music.nowPlaying?.title)) {
+    throw new Error(`arrival playlist didn't survive to the win screen — playing "${g.game.music.nowPlaying?.title}" instead`);
   }
 });
 
@@ -1525,6 +1529,44 @@ await step('music: a special track that fails to autoplay recovers on the next r
     }
   } finally {
     globalThis.Audio = realAudio;
+  }
+});
+
+await step('music: the Kingston playlist cycles through all three tracks, never falling back to the ambient shuffle', async () => {
+  // "An isolated playlist exclusively for Kingston... I don't want the
+  // existing music to change when we get into Kingston" — requested
+  // explicitly. Simulates each track finishing on its own
+  // (debugAudioElement().dispatchEvent({type:'ended'}), same test-only hook
+  // used to fake a real playthrough elsewhere) enough times to cycle
+  // through the whole three-track set (KINGSTON_PLAYLIST) at least once,
+  // and confirms every track seen is one of those three — never a PLAYLIST
+  // (ambient shuffle) title leaking in, which is exactly what the old
+  // single-track version's default playSpecial() onEnded would have done.
+  const mod = await import('../src/audio/music.js');
+  const music = mod.createMusic();
+  const kingstonTitles = mod.KINGSTON_PLAYLIST.map((t) => t.title);
+  // "I don't want the existing music to change" — the two new tracks must
+  // never have been folded into the regular ambient shuffle itself.
+  const ambientTitles = mod.PLAYLIST.map((t) => t.title);
+  for (const t of kingstonTitles) {
+    if (ambientTitles.includes(t)) throw new Error(`"${t}" is in both the Kingston playlist and the ambient shuffle — should be exclusive to Kingston`);
+  }
+  music.start();
+  music.playKingstonTrack();
+  await new Promise((r) => setTimeout(r, 20));
+  const seenTitles = [];
+  for (let i = 0; i < 7; i++) {
+    if (music.nowPlaying) seenTitles.push(music.nowPlaying.title);
+    music.debugAudioElement().dispatchEvent({ type: 'ended' });
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  for (const title of seenTitles) {
+    if (!kingstonTitles.includes(title)) {
+      throw new Error(`Kingston playlist fell back to a non-Kingston track: "${title}" (seen: ${JSON.stringify(seenTitles)})`);
+    }
+  }
+  for (const t of kingstonTitles) {
+    if (!seenTitles.includes(t)) throw new Error(`"${t}" never came up across 7 transitions of a 3-track set (seen: ${JSON.stringify(seenTitles)})`);
   }
 });
 

@@ -209,6 +209,11 @@ function install() {
       removeEventListener(type, fn) {
         listeners[type] = (listeners[type] || []).filter((f) => f !== fn);
       },
+      // Not part of the real HTMLMediaElement API surface — a test-only
+      // hook so a test can simulate a track finishing on its own (e.g.
+      // music.js's Kingston playlist advancing from one track to the next)
+      // without a real timer or an actual audio file playing out.
+      dispatchEvent(evt) { (listeners[evt.type] || []).forEach((fn) => fn(evt)); },
       canPlayType: () => '',
       volume: 1,
       currentTime: 0,

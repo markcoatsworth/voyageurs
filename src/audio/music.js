@@ -13,7 +13,11 @@
 // These are early-20th-century Québécois and Acadian fiddle recordings,
 // mostly 78rpm transfers from the Internet Archive and Library and
 // Archives Canada; titles keep their original French.
-const PLAYLIST = [
+//
+// Exported for test/smoke.mjs — checking KINGSTON_PLAYLIST below never ends
+// up mixed in here needs the real list, not a hardcoded guess at its
+// contents.
+export const PLAYLIST = [
   { src: '/audio/grande-gigue-simple.mp3', title: 'Grande Gigue Simple', artist: 'Isidore Soucy' },
   { src: '/audio/reel-du-pendu.mp3', title: 'Reel du Pendu', artist: 'Isidore Soucy' },
   { src: '/audio/reel-des-laurentides.mp3', title: 'Reel des Laurentides', artist: 'Tommy Duchesne' },
@@ -105,17 +109,14 @@ const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel
 // file itself (re-normalize the source to a louder integrated target) —
 // see that constant's own comment.
 const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de la Folie', artist: 'Les Chevaliers', volume: 1.0 };
-// Kingston's own arrival cue — supplied directly like DIABLE_TRACK/
-// PURSUIT_TRACK above (same "Les Chevaliers" artist, same normalize-audio.mjs
-// treatment, same README.md rights caveat), reserved rather than left in the
-// shuffle: journey's end deserves a deliberate needle-drop, not whatever the
-// shuffle happens to already be playing. Cut in at the same flowDistance as
-// the "KINGSTON — Fort Frontenac ahead" banner (game.js) — well before the
+// Kingston's own arrival cues — supplied directly like DIABLE_TRACK/
+// PURSUIT_TRACK above (same normalize-audio.mjs treatment, same README.md
+// rights caveat), reserved rather than left in the shuffle: journey's end
+// deserves deliberate needle-drops, not whatever the shuffle happens to
+// already be playing. First cut in at the same flowDistance as the
+// "KINGSTON — Fort Frontenac ahead" banner (game.js) — well before the
 // dock, so it's already playing under the on-foot scene, the cast-off, and
-// the victory card. Unlike every other boss track, nothing ever calls
-// endBossTrack() for this one (see win()'s own comment in game.js) — arriving
-// at Kingston is the end of the run, not a fight that resolves back into the
-// ambient shuffle.
+// the victory card.
 // volume overrides DEFAULT_VOLUME — reported as too quiet at the shuffle's
 // own level, same as DIABLE_TRACK/PURSUIT_TRACK above (this file measures at
 // the same -21 LUFS as the rest of the catalog — it's not mis-normalized,
@@ -123,6 +124,26 @@ const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de 
 // same fix: 1.0 is as loud as audio.volume goes; if that's still not enough,
 // the fix has to move to the file itself (see those two tracks' own comments).
 const KINGSTON_TRACK = { src: '/audio/les-chevaliers-un-siecle-davance.mp3', title: "Un Siècle d'Avance", artist: 'Les Chevaliers', volume: 1.0 };
+// Two more, added for the Artillery Park bandstand scene (villageScene.js)
+// — "an isolated playlist exclusively for Kingston," explicitly not folded
+// into the ambient shuffle above (PLAYLIST) the way an ordinary new track
+// would be. Title/artist here are provisional (derived from the filenames
+// — no embedded tags, unlike the archive-sourced catalog above, which ships
+// with real ID3 data) — flag if these need correcting; every other title/
+// artist in this file is real researched attribution, not a guess.
+const KINGSTON_TRACK_2 = { src: '/audio/boutique-de-cadeaux.mp3', title: 'Boutique de Cadeaux', artist: 'Les Chevaliers', volume: 1.0 };
+const KINGSTON_TRACK_3 = { src: '/audio/le-caygeon-de-bob.mp3', title: 'Le Caygeon de Bob', artist: 'Les Chevaliers', volume: 1.0 };
+// Unlike every other boss track, nothing ever calls endBossTrack() for this
+// set (see win()'s own comment in game.js) — arriving at Kingston is the
+// end of the run, not a fight that resolves back into the ambient shuffle.
+// Instead, once the first one ends on its own, the next plays (see
+// playKingstonTrack() below) — a closed three-track loop of its own, never
+// handing back to PLAYLIST, for as long as the run goes on.
+// Exported for test/smoke.mjs — the arrival cue is shuffled among these
+// three now, not always KINGSTON_TRACK specifically, so a test checking
+// "did the arrival cue cut in" needs the real set to check membership
+// against rather than one hardcoded title.
+export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3];
 
 // Reported as quiet on the whole, relative to other applications running
 // at the same time — not a single track's own mix, the shuffle's own
@@ -207,6 +228,14 @@ export function createMusic({ onTrack } = {}) {
 
   let order = shuffled(PLAYLIST);
   let index = 0;
+  // Kingston's own shuffle order/index — entirely separate from
+  // order/index above, the same way KINGSTON_PLAYLIST is entirely separate
+  // from PLAYLIST. Re-shuffled fresh each time playKingstonTrack() is
+  // (re)called, not just once at module load — a capsize+restart mid-
+  // approach, or a second run in the same session, gets its own fresh order
+  // rather than always replaying the same first pick.
+  let kingstonOrder = shuffled(KINGSTON_PLAYLIST);
+  let kingstonIndex = 0;
   // Bumped by stop() and playSpecial() — playCurrent() is async (it awaits
   // prefetch()), so a capsize, or a boss track cutting in, could in
   // principle land while a fetch is still resolving; without this, the
@@ -394,10 +423,20 @@ export function createMusic({ onTrack } = {}) {
   // costing one cheap timer firing each, not a full chain.
   const FADE_STEP_MS = 50;
 
-  function playSpecial(track, fadeOutMs = 0) {
+  // onEnded (default: drop back into the ambient shuffle) is overridable —
+  // the Kingston playlist below is the one caller that needs something
+  // else: the *next* Kingston track, not PLAYLIST, once the current one
+  // finishes on its own. Everything else (fights, chases) still wants the
+  // default.
+  function playSpecial(track, fadeOutMs = 0, onEnded) {
     special = true;
     generation++;
     const requestedGeneration = generation;
+    const finishedNaturally = onEnded ?? (() => {
+      special = false;
+      pendingSpecialAttempt = null;
+      playCurrent();
+    });
 
     // The actual commit — pause, swap src, wait for canplay, play — same
     // as before fadeOutMs existed, just pulled into its own function so it
@@ -415,15 +454,11 @@ export function createMusic({ onTrack } = {}) {
       // not wherever the old one's fade happened to leave the element.
       audio.volume = track.volume ?? DEFAULT_VOLUME;
       // If this track plays out to its own natural end without the fight
-      // resolving first (endBossTrack() cutting it short), drop back into
-      // the shuffle right here — see attachEndedHandler's own comment for
-      // why this has to be freshly attached per commit, not one shared
-      // listener.
-      attachEndedHandler(requestedGeneration, () => {
-        special = false;
-        pendingSpecialAttempt = null;
-        playCurrent();
-      });
+      // resolving first (endBossTrack() cutting it short), finishedNaturally
+      // above decides what happens next — see attachEndedHandler's own
+      // comment for why this has to be freshly attached per commit, not one
+      // shared listener.
+      attachEndedHandler(requestedGeneration, finishedNaturally);
 
       let retried = false;
       const attempt = () => {
@@ -488,6 +523,25 @@ export function createMusic({ onTrack } = {}) {
     }
   }
 
+  // Plays kingstonOrder[kingstonIndex] via playSpecial(), with a custom
+  // onEnded that advances to the next Kingston track instead of the
+  // default (drop back into PLAYLIST) — reshuffling KINGSTON_PLAYLIST once
+  // exhausted, the same way playCurrent()'s own 'ended' handler reshuffles
+  // PLAYLIST. Recurses through playSpecial's onEnded callback rather than a
+  // loop, so it's driven entirely by real 'ended' events, one track at a
+  // time — never hands back to the ambient shuffle.
+  function playKingstonPlaylistTrack() {
+    const track = kingstonOrder[kingstonIndex];
+    playSpecial(track, 0, () => {
+      kingstonIndex++;
+      if (kingstonIndex >= kingstonOrder.length) {
+        kingstonOrder = shuffled(KINGSTON_PLAYLIST);
+        kingstonIndex = 0;
+      }
+      playKingstonPlaylistTrack();
+    });
+  }
+
   audio.addEventListener('error', () => {
     const err = audio.error;
     debug(`audio error ${err?.code ?? '?'}: ${err?.message || '(no message)'}`);
@@ -504,6 +558,14 @@ export function createMusic({ onTrack } = {}) {
     // manual cue (e.g. unmuting).
     get nowPlaying() {
       return current;
+    },
+    // Test-only, same convention as bossfights/britishWarship.js's
+    // debugChaseShipPosition()/diable.js's debugCentreX() — lets a test
+    // simulate a track ending on its own (audio.dispatchEvent({type:
+    // 'ended'}), dom-shim.mjs's own test hook) without a real audio file
+    // playing out. Not used by any real caller.
+    debugAudioElement() {
+      return audio;
     },
     // Real bug this fixes: `started` used to be set true *before* knowing
     // whether play() actually succeeded, right when start() was first
@@ -622,12 +684,19 @@ export function createMusic({ onTrack } = {}) {
       playSpecial(PURSUIT_TRACK);
     },
     // Kingston's arrival cue — same cut-in-now behaviour as the other
-    // trigger-fired tracks, but deliberately never handed to endBossTrack()
-    // by any caller (see KINGSTON_TRACK's own comment) — once it starts, it
-    // plays through to the end of the run rather than resolving back into
-    // the shuffle.
+    // trigger-fired tracks, but now a small closed playlist of its own
+    // (KINGSTON_PLAYLIST) rather than one track — "an isolated playlist
+    // exclusively for Kingston," never mixed into PLAYLIST above. Reshuffled
+    // fresh on every call (kingstonOrder/kingstonIndex reset here), so a
+    // capsize+restart mid-approach — or a second run in the same session —
+    // doesn't always replay the same first pick. Deliberately never handed
+    // to endBossTrack() by any caller (see KINGSTON_PLAYLIST's own comment)
+    // — once it starts, this loops through the three tracks for the rest of
+    // the run rather than ever resolving back into the ambient shuffle.
     playKingstonTrack() {
-      playSpecial(KINGSTON_TRACK);
+      kingstonOrder = shuffled(KINGSTON_PLAYLIST);
+      kingstonIndex = 0;
+      playKingstonPlaylistTrack();
     },
     // Cuts the boss track short and drops back into the normal shuffle —
     // called the moment the fight resolves, rather than waiting out the
