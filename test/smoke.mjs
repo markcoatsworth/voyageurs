@@ -1570,6 +1570,36 @@ await step('music: the Kingston playlist cycles through all three tracks, never 
   }
 });
 
+await step('music: primeKingstonFirstTrack() pins the lead-off track for exactly one playKingstonTrack() call', async () => {
+  // "Make sure [Un Siècle d'Avance] is the first song in the playlist from
+  // ?start=kingston" — requested explicitly. main.js's real ?start=kingston
+  // URL flow isn't exercised by newGame()-based tests (a pre-existing
+  // limitation every other cheat here shares — see e.g. the ?start=kingston
+  // scenario's own comment), so this tests the underlying mechanism
+  // directly: priming pins the very next call, an unprimed call afterward
+  // goes back to a genuine shuffle (not always the same track, the way a
+  // real playthrough — which never primes at all — needs).
+  const mod = await import('../src/audio/music.js');
+  const music = mod.createMusic();
+  music.start();
+  music.primeKingstonFirstTrack(mod.KINGSTON_TRACK);
+  music.playKingstonTrack();
+  await new Promise((r) => setTimeout(r, 20));
+  if (music.nowPlaying?.title !== mod.KINGSTON_TRACK.title) {
+    throw new Error(`primed track didn't lead off — playing "${music.nowPlaying?.title}" instead of "${mod.KINGSTON_TRACK.title}"`);
+  }
+
+  // Consumed — a second, unprimed playKingstonTrack() call (e.g. a second
+  // run in the same session) must not keep replaying the same pinned pick.
+  let sawOtherFirst = false;
+  for (let i = 0; i < 20 && !sawOtherFirst; i++) {
+    music.playKingstonTrack();
+    await new Promise((r) => setTimeout(r, 20));
+    if (music.nowPlaying?.title !== mod.KINGSTON_TRACK.title) sawOtherFirst = true;
+  }
+  if (!sawOtherFirst) throw new Error('20 unprimed playKingstonTrack() calls in a row all led with the primed track — priming should only affect the one call right after it');
+});
+
 await step('weapons: the musket fires slower and hits harder than the pistol', () => {
   // Reported: "the middle gun [musket] looks bigger... but it shoots at
   // the same speed and I can't [see] much difference in damage — it
