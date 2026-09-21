@@ -1644,23 +1644,37 @@ function drawBandMember(ctx, x, y, time, seed, instrument, whiteHat = false) {
   // shape drawDockGreeter uses for opts.topHat.
   const coat = whiteHat ? KINGSTON_GREETER_COAT : BAND_COATS[seed % BAND_COATS.length];
   const phase = seed * 1.7;
-  const play = Math.sin(time * 6 + phase); // -1..1, generic "mid-note" motion
-  const bob = Math.sin(time * 2.2 + phase) * 0.3;
+  const play = Math.sin(time * 6 + phase); // -1..1, generic "mid-note" motion — also this whole figure's shared "beat"
+  // Whole-body sway + bob + a foot tap, all keyed off the same two clocks
+  // as the instrument motion below (time*6 for the fast beat, time*3 for
+  // the slower sway) rather than an independent one — asked for explicitly
+  // ("add some motion to the sprites on stage so they look more like an
+  // active performance"): previously only the instrument/prop moved at
+  // all, the body itself was static apart from a barely-visible 0.3px
+  // drift. ctx.rotate below pivots around the same (fx, fy) the existing
+  // ctx.scale already does — same translate/rotate-or-scale/translate-back
+  // pattern, just with a rotate slotted into the middle of it.
+  const sway = Math.sin(time * 3 + phase) * 0.09; // radians — a lean side to side
+  const bob = Math.abs(Math.sin(time * 6 + phase)) * 0.6; // a bounce on every beat, not a slow drift
+  const footTap = Math.sin(time * 3 + phase) > 0; // which foot is "down" this half-sway — a simple jig, not both feet flat the whole time
   const fx = Math.round(x);
-  const fy = Math.round(y + bob);
+  const fy = Math.round(y - bob);
 
   ctx.save();
   ctx.translate(fx, fy);
   ctx.scale(BAND_SCALE, BAND_SCALE);
+  ctx.rotate(sway);
   ctx.translate(-fx, -fy);
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.beginPath();
   ctx.ellipse(fx, fy + 1, 3.4, 1.3, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = '#241f1a'; // legs
-  ctx.fillRect(fx - 1.8, fy - 3.6, 1.4, 3.6);
-  ctx.fillRect(fx + 0.4, fy - 3.6, 1.4, 3.6);
+  ctx.fillStyle = '#241f1a'; // legs — one shortened a touch each half-beat, the tapping foot lifting clear of the deck
+  const liftL = footTap ? 0.8 : 0;
+  const liftR = footTap ? 0 : 0.8;
+  ctx.fillRect(fx - 1.8, fy - 3.6 + liftL, 1.4, 3.6 - liftL);
+  ctx.fillRect(fx + 0.4, fy - 3.6 + liftR, 1.4, 3.6 - liftR);
 
   ctx.fillStyle = coat; // coat
   ctx.fillRect(fx - 2.2, fy - 9.2, 4.4, 5.8);
@@ -1709,18 +1723,27 @@ function drawBandMember(ctx, x, y, time, seed, instrument, whiteHat = false) {
     const sq = 2 + Math.abs(play) * 0.8;
     ctx.fillRect(fx - sq / 2, fy - 8.4, sq, 3.2);
   } else if (instrument === 'fife') {
+    // the far end wavers with the beat — fingering, not a big arm swing,
+    // the way an actual fife's own hand motion reads at this scale
     ctx.strokeStyle = '#c9a45c';
     ctx.beginPath();
     ctx.moveTo(fx - 0.4, fy - 11.6);
-    ctx.lineTo(fx + 3.4, fy - 10.6);
+    ctx.lineTo(fx + 3.4 + play * 0.7, fy - 10.6 - Math.abs(play) * 0.4);
     ctx.stroke();
   } else {
-    // standing bass, a big rounded shape beside the figure — the one
-    // instrument not actually held, so no arm/prop motion for this one
+    // standing bass, a big rounded shape beside the figure — not held the
+    // way the others are, so its own motion is a short plucking hand/arm
+    // against the strings rather than the whole instrument moving.
     ctx.fillStyle = '#5c3a24';
     ctx.beginPath();
     ctx.ellipse(fx + 3, fy - 6, 2.2, 5.2, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = coat;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(fx + 1.8, fy - 8);
+    ctx.lineTo(fx + 2.6 + play * 0.6, fy - 7 - Math.abs(play) * 0.4);
+    ctx.stroke();
   }
   ctx.restore();
 }
