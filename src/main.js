@@ -5,7 +5,7 @@ import { createMusic } from './audio/music.js';
 import { createMinimap } from './world/minimap.js';
 import { createTouchControls, isTouchPrimary } from './core/touchControls.js';
 import { Input } from './core/input.js';
-import { Game, MIN_SPEED } from './core/game.js';
+import { Game, MIN_SPEED, KINGSTON_APPROACH_LEAD } from './core/game.js';
 import { VILLAGES } from './world/river/route.js';
 import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
 import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
@@ -173,20 +173,26 @@ function normalizeStartName(s) {
 //   5. 1/3 of the way from the Warship's own trigger to Kingston (~91
 //      units, ~5.3s simulated) — asked to move "back up" again, this time
 //      to 1/2 of the way from Jones Falls to Kingston directly (not
-//      measured off the Warship at all any more).
-// Below: KINGSTON_FLOW_DISTANCE - halfway, ~206 units out — past the
-// Warship's own "well past the trigger" auto-resolve threshold (+50 past
-// TRIGGER_DISTANCE) by ~19 units, close enough that it's worth flagging:
-// if the Warship's own fraction (WARSHIP_FRACTION, britishWarship.js) ever
-// moves further from Jones Falls, re-check this still clears it. Well
-// outside KINGSTON_RENDER_GATE, same as round 5 — the point is watching
-// the approach happen, not having it already on screen at spawn. Because
-// this is now short of the "KINGSTON — Fort Frontenac ahead" banner's own
-// trigger (KINGSTON_FLOW_DISTANCE - 70) too, game.js's normal distance-
-// triggered playKingstonTrack() wouldn't fire until partway through the
-// approach — reported separately as wanting the arrival track playing
-// immediately on the cheat, not after more paddling, so startedAtKingston
-// below forces it on load instead of waiting for that trigger.
+//      measured off the Warship at all any more). That landed short of the
+//      "KINGSTON — Fort Frontenac ahead" banner's own distance trigger
+//      (game.js), so game.js's normal playKingstonTrack() wouldn't fire
+//      until partway through the approach — worked around at the time by
+//      forcing the track on immediately here instead of waiting for it.
+//   6. That trigger itself moved further back — game.js's
+//      KINGSTON_APPROACH_LEAD, 70 -> 150, "kick in [the arrival track] a
+//      bit further back up the river sequence" — and this cheat repinned to
+//      land at that *exact* distance rather than an independently-tuned
+//      number ("update ?start=kingston to match it"), which removes the
+//      need for round 5's forced-on workaround entirely: game.js's own
+//      Game.update() hits this same trigger on its very first tick after
+//      landing here, so the banner and the track both fire through the
+//      normal path, same as reaching this point by paddling would.
+// Below: KINGSTON_FLOW_DISTANCE - KINGSTON_APPROACH_LEAD, ~150 units out —
+// past the Warship's own "well past the trigger" auto-resolve threshold
+// (+50 past TRIGGER_DISTANCE) by ~75 units (more margin than round 5 had),
+// and still well outside KINGSTON_RENDER_GATE — the point is watching the
+// whole lit-up approach happen, not having Kingston already on screen at
+// spawn.
 //
 
 // "gatineau" is the one keyword below that isn't a flowDistance/segment
@@ -200,7 +206,6 @@ function normalizeStartName(s) {
 // clamped straight into the fight instead of reaching the village.
 const RIDEAU_START = { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' };
 const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flowDistance ?? Infinity;
-const JONES_FALLS_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Jones Falls')?.flowDistance ?? Infinity;
 // Exported for test/smoke.mjs — a regression test checks every keyword
 // that targets a hand-authored village lands within that village's own
 // render gate (world/villages.js's VISIBLE_Z_RANGE), not just past
@@ -214,9 +219,9 @@ export const START_KEYWORDS = {
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
-  // See the module comment above (five rounds of tuning) on why this one.
+  // See the module comment above (six rounds of tuning) on why this one.
   [normalizeStartName('kingston')]: {
-    flowDistance: KINGSTON_FLOW_DISTANCE - (KINGSTON_FLOW_DISTANCE - JONES_FALLS_FLOW_DISTANCE) / 2,
+    flowDistance: KINGSTON_FLOW_DISTANCE - KINGSTON_APPROACH_LEAD,
     segment: 'rideau',
   },
 };
@@ -241,6 +246,27 @@ export function parseStartLocation() {
   return { flowDistance, segment: match.segment };
 }
 const { flowDistance: startFlowDistance, segment: startSegment } = parseStartLocation();
+
+// ?difficulty=easy — a debug-only knob for now ("for now it's just a debug
+// feature for me... we can add a UI toggle for non-gamers later"): less
+// damage taken in the boss fights, more damage dealt back, nothing else
+// changed (see game.js's own EASY_DAMAGE_TAKEN_SCALE/EASY_DAMAGE_GIVEN_SCALE
+// comment for the actual scope and numbers). Not stripped from the URL the
+// way ?start= is above — that's a one-shot spawn point, this is meant to
+// stay in effect for as long as it's in the address bar, including across a
+// reload. Exported (not read into a top-level const) for the same
+// testability reason as parseStartLocation() above.
+export function isEasyMode() {
+  return new URLSearchParams(window.location.search).get('difficulty')?.toLowerCase() === 'easy';
+}
+// Captured here, before the ?start=-stripping below runs — that code used
+// to wipe the entire query string (window.location.pathname with nothing
+// else), not just `start`, which silently discarded `difficulty` before it
+// was ever read at the Game() call site further down. Fixed in two parts:
+// this early capture, and the stripping itself now only deletes `start`,
+// leaving `?difficulty=` (and anything else) in the address bar — see that
+// code's own comment below.
+const startedEasy = isEasyMode();
 
 // The checkpoint list itself — every position this file already treats as
 // a real waypoint: START_KEYWORDS' own boss-fight approaches plus every
@@ -307,10 +333,12 @@ const startedAtDiable =
 // its own can't-express-this-as-flowDistance case.
 const startedAtGatineau =
   normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('gatineau');
-// "?start=kingston" lands short of the "KINGSTON — Fort Frontenac ahead"
+// "?start=kingston" lands exactly on the "KINGSTON — Fort Frontenac ahead"
 // banner's own distance trigger now (see START_KEYWORDS' own comment on
-// "kingston") — reported as wanting the arrival track playing immediately
-// on the cheat rather than only once paddling crosses that trigger.
+// "kingston") — game.js's normal Game.update() fires the banner and the
+// arrival track itself on the very first tick, no forced-on workaround
+// needed any more. Still used below for the cheat's own slow-start speed
+// override, a separate concern from the music.
 const startedAtKingston =
   normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('kingston');
 
@@ -321,9 +349,26 @@ const startedAtKingston =
 // game, not the URL). Restarts within the session still return to wherever
 // this run began — Game captures startFlowDistance/startSegment in its
 // constructor, before this runs.
+//
+// Only `start` is deleted, not the whole query string — used to blow away
+// window.location.search entirely (pathname + hash, nothing else), which
+// silently discarded `?difficulty=` too even though isEasyMode()'s own
+// comment already claimed it "stays in effect... including across a
+// reload." It never did, because this ran before that claim was ever
+// tested. `difficulty` (and anything else on the URL) survives here now.
+// The actual string transform is pulled out into its own pure, exported
+// function so a test can check it directly — the side effect around it
+// (history.replaceState, a real browser API the dom-shim doesn't provide)
+// isn't something a headless test can exercise anyway.
+export function stripStartParam(search) {
+  const params = new URLSearchParams(search);
+  params.delete('start');
+  const rest = params.toString();
+  return rest ? `?${rest}` : '';
+}
 if (window.location.search) {
   try {
-    history.replaceState(null, '', window.location.pathname + window.location.hash);
+    history.replaceState(null, '', window.location.pathname + stripStartParam(window.location.search) + window.location.hash);
   } catch {
     // Some embedded/sandboxed contexts forbid replaceState — harmless, the
     // cheat just stays in the URL there.
@@ -660,7 +705,7 @@ setTimeout(() => ui.titleScreen.classList.add('hidden'), 4500 + 900);
 
 let game = null;
 try {
-  game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance, startSegment });
+  game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance, startSegment, easyMode: startedEasy });
   // ?start=diable is a checkpoint, not just a spawn point — hand over the
   // pistol and mark it so a capsize respawns at the fight.
   if (startedAtDiable) game.armDiableCheckpoint();
@@ -670,26 +715,18 @@ try {
     const gatineau = VILLAGES.find((v) => v.name === 'Gatineau' && v.segment === 'lawrenceWest');
     if (gatineau) game.enterVillage(gatineau);
   }
-  // ?start=kingston — force the arrival track on immediately (see
-  // startedAtKingston's own comment) instead of waiting for the normal
-  // distance trigger to reach it. kingstonAnnounced marked true so that
-  // trigger, once paddling does reach it, doesn't restart the same track
-  // from 0:00 a second time (playSpecial() reloads audio.src regardless of
-  // what's already playing) — the banner it would have also shown is
-  // skipped here too, same as every other mid-run cheat skips the normal
-  // approach beats it jumps past.
+  // ?start=kingston — the arrival track/banner now fire on their own, the
+  // instant game.js's own update loop first ticks (the cheat lands exactly
+  // on that trigger — see startedAtKingston's own comment). Only the speed
+  // still needs a manual override here: every ?start= cheat otherwise
+  // begins at the same BASE_SPEED a normal playthrough carries into any
+  // segment — reported here as "already screaming fast" for a cheat whose
+  // whole point is a slow, chill approach. MIN_SPEED is this game's own
+  // "actual chill slow speed, not just a mild step down from medium" (see
+  // its own comment, game.js) — holding Up still accelerates normally from
+  // there, same as a real approach, just starting from a calm drift instead
+  // of already at cruising speed.
   if (startedAtKingston) {
-    game.music?.start();
-    game.music?.playKingstonTrack();
-    game.kingstonAnnounced = true;
-    // Every ?start= cheat otherwise begins at the same BASE_SPEED a normal
-    // playthrough carries into any segment — reported here as "already
-    // screaming fast" for a cheat whose whole point is a slow, chill
-    // approach. MIN_SPEED is this game's own "actual chill slow speed, not
-    // just a mild step down from medium" (see its own comment, game.js) —
-    // holding Up still accelerates normally from there, same as a real
-    // approach, just starting from a calm drift instead of already at
-    // cruising speed.
     game.speed = MIN_SPEED;
   }
 

@@ -246,8 +246,11 @@ export function createDiable() {
     // other hazard) to turn "still overlapping" into one penalty, not one
     // per frame.
     // Returns { hitBullets: [ref] } — shots that struck him this frame, for
-    // game.js to remove from the pool.
-    update(dt, playerFlowDistance, canoe, bulletScreens, onHitPlayer, onCollide) {
+    // game.js to remove from the pool. damageGivenScale (default 1) is
+    // game.js's this.damageGivenScale — the ?difficulty=easy knob's "more
+    // damage dealt" half (see game.js's own EASY_DAMAGE_GIVEN_SCALE
+    // comment); applied to the incoming-gunfire hit below, nowhere else.
+    update(dt, playerFlowDistance, canoe, bulletScreens, onHitPlayer, onCollide, damageGivenScale = 1) {
       const hitBullets = [];
 
       if (phase === 'idle') {
@@ -281,7 +284,7 @@ export function createDiable() {
         for (const b of bulletScreens) {
           if (Math.abs(b.x - cx) < BODY_HALF_W && Math.abs(b.y - cy) < BODY_HALF_H) {
             hitBullets.push(b.ref);
-            hp -= b.ref.type === 'musket' ? MUSKET_DAMAGE : PISTOL_DAMAGE;
+            hp -= (b.ref.type === 'musket' ? MUSKET_DAMAGE : PISTOL_DAMAGE) * damageGivenScale;
             // Only kick off a fresh blanch once the last one's spent, so a
             // fast stream of hits doesn't hold him permanently white.
             if (hitFlash <= 0) hitFlash = 0.08;

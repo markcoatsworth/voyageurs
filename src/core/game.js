@@ -123,6 +123,16 @@ const GATINEAU_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Gatineau')?.flow
 // Kingston is the end of the whole journey — reaching it (by dock or by
 // simply crossing its flowDistance on the Rideau) wins the run.
 const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flowDistance ?? Infinity;
+// How far short of Kingston the "KINGSTON — Fort Frontenac ahead" banner and
+// the arrival track (KINGSTON_TRACK, audio/music.js) cut in — was 70, moved
+// further back ("a bit further back up the river sequence," requested
+// explicitly) so "Un Siècle d'Avance" has real room to play under a longer
+// stretch of the approach, not just the last moment before the dock.
+// Exported so main.js can pin ?start=kingston to this exact distance
+// instead of an independently-tuned number — see that keyword's own
+// comment for why matching it matters (main.js's game loop then hits this
+// same trigger on the very first frame, no forced-on cheat needed).
+export const KINGSTON_APPROACH_LEAD = 150;
 const EDGE_MARGIN = 0.55;
 const ISLAND_HIT_MARGIN = 0.35;
 const LOG_PENALTY_SPEED = 4;
@@ -347,6 +357,33 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
+// ?difficulty=easy (main.js's isEasyMode(), read once at construction below)
+// — a debug-only knob for now, no UI control yet (a title-screen toggle for
+// non-gamers is planned separately). Deliberately narrow scope, requested
+// explicitly as "the only things we need to adjust are reducing damage
+// taken and increasing damage given. Everything else can stay the same" —
+// not a broader difficulty system that also loosens hit windows, hold
+// times, or cannon rate.
+//
+// Damage TAKEN is scaled at the single choke point every boss hit already
+// flows through, handleHit() below — only its boss-fight branches (cannon,
+// shiphull, steeple, diable, wolf, wendigo), not the general river hazards
+// (rock/island/bank/tree/log) a difficulty knob aimed at "boss fights" was
+// never asked to touch.
+//
+// Damage GIVEN has no equivalent single choke point — only the two
+// shootable, hit-point fights (the British Warship, Le Diable) have a
+// "damage given" number at all, and each applies it inline in its own
+// module rather than through a shared function — so this.damageGivenScale
+// is threaded through as an extra argument to each one's own update() call
+// (see those call sites below) instead.
+// Started at 0.5/2 (half taken, double given) — reported back as "still
+// not very easy" after actually trying it, so dialed further: quarter
+// damage taken, quadruple damage dealt. Debug-only knob, easy to keep
+// dialing from here if it's still not enough.
+const EASY_DAMAGE_TAKEN_SCALE = 0.25;
+const EASY_DAMAGE_GIVEN_SCALE = 4;
+
 export class Game {
   // startFlowDistance/startSegment: where the river clock begins instead of
   // the put-in (fjord, 0) — see main.js's ?start= URL cheat. Threaded
@@ -355,7 +392,7 @@ export class Game {
   // everything downstream (village arrival banners, mouthAnnounced, the
   // camera's own curve tracking) behaves exactly as if the player had
   // actually paddled here from 0.
-  constructor({ ctx, water, input, obstacles, world, ui, music, startFlowDistance = 0, startSegment = 'fjord' }) {
+  constructor({ ctx, water, input, obstacles, world, ui, music, startFlowDistance = 0, startSegment = 'fjord', easyMode = false }) {
     this.ctx = ctx;
     this.water = water; // null falls back to a 2D-drawn water fill
     this.input = input;
@@ -417,6 +454,21 @@ export class Game {
     // wherever it happened.
     this.startFlowDistance = startFlowDistance;
     this.startSegment = startSegment;
+    // See EASY_DAMAGE_TAKEN_SCALE/EASY_DAMAGE_GIVEN_SCALE's own comment
+    // above. Computed once here, not read fresh from the URL elsewhere —
+    // main.js reads it once at construction, same as startSegment/
+    // startFlowDistance, rather than every boss module reaching for the URL
+    // independently.
+    this.easyMode = !!easyMode;
+    this.damageTakenScale = this.easyMode ? EASY_DAMAGE_TAKEN_SCALE : 1;
+    this.damageGivenScale = this.easyMode ? EASY_DAMAGE_GIVEN_SCALE : 1;
+    // Confirms ?difficulty=easy actually landed — asked for explicitly
+    // after a real bug (main.js's ?start= URL-stripping was wiping
+    // ?difficulty= before it was ever read) made it look like the flag
+    // silently did nothing.
+    if (this.easyMode) {
+      console.log(`[GAME] Easy mode active — damageTakenScale=${this.damageTakenScale}, damageGivenScale=${this.damageGivenScale}`);
+    }
 
     this.time = 0;
     this.paddleSide = 1;
@@ -679,9 +731,10 @@ export class Game {
     // call endBossTrack() here, to drop a stale Warship/Blockade track back
     // to the shuffle if the player blitzed into Kingston before it resolved
     // — no longer needed, and would now be actively wrong: the only way to
-    // reach win() is crossing KINGSTON_FLOW_DISTANCE, which is always at
-    // least 70 units past where playKingstonTrack() already cut in (see its
-    // own call site above), so KINGSTON_TRACK is always what's playing here.
+    // reach win() is crossing KINGSTON_FLOW_DISTANCE, which is always
+    // KINGSTON_APPROACH_LEAD units past where playKingstonTrack() already
+    // cut in (see its own call site above), so KINGSTON_TRACK is always
+    // what's playing here.
   }
 
   leaveVillage() {
@@ -734,16 +787,16 @@ export class Game {
       // entry.damage overrides for the Pursuit chase phase's own, lighter
       // cannon (bossfights/blockade.js's CHASE_CANNON_DAMAGE) — the approach
       // frigate's broadside still hits for the full CANNON_DAMAGE below.
-      this.takeDamage(entry.damage ?? CANNON_DAMAGE);
+      this.takeDamage((entry.damage ?? CANNON_DAMAGE) * this.damageTakenScale);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'shiphull') {
-      this.takeDamage(SHIP_HULL_DAMAGE);
+      this.takeDamage(SHIP_HULL_DAMAGE * this.damageTakenScale);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'steeple') {
-      this.takeDamage(STEEPLE_DAMAGE);
+      this.takeDamage(STEEPLE_DAMAGE * this.damageTakenScale);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'diable') {
-      this.takeDamage(entry.damage ?? 18);
+      this.takeDamage((entry.damage ?? 18) * this.damageTakenScale);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'diable-touch') {
       // No hull damage — see DIABLE_TOUCH_FUR_PENALTY's own comment.
@@ -754,14 +807,14 @@ export class Game {
     } else if (entry.type === 'wolf') {
       // A lunge that connects knocks the canoe back a beat, then it springs off.
       this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - 3.5);
-      this.takeDamage(WOLF_DAMAGE);
+      this.takeDamage(WOLF_DAMAGE * this.damageTakenScale);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'wendigo') {
       // Caught still working the paddle as it listened — a cold raking blow
       // out of the trees that dumps your way and bleeds some hull. Meant to
       // teach the freeze, not to end the run.
       this.speed = Math.max(MIN_SPEED - 1, this.speed - 3);
-      this.takeDamage(WENDIGO_DAMAGE);
+      this.takeDamage(WENDIGO_DAMAGE * this.damageTakenScale);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'tree') {
       this.takeDamage(TREE_DAMAGE);
@@ -879,6 +932,7 @@ export class Game {
       dt, this.flowDistance, canoeScreen, bulletScreens,
       (dmg) => this.handleHit({ type: 'diable', damage: dmg }),
       () => this.handleHit({ type: 'diable-touch' }),
+      this.damageGivenScale,
     );
     for (const ref of res.hitBullets) this.weapons.removeBullet(ref);
 
@@ -1341,7 +1395,7 @@ export class Game {
     // approach banner first (the harbour is already opening up around you by
     // now — see path.js's rideauWidthAt), then the win a short stretch later.
     if (this.segment === 'rideau') {
-      if (!this.kingstonAnnounced && this.flowDistance >= KINGSTON_FLOW_DISTANCE - 70) {
+      if (!this.kingstonAnnounced && this.flowDistance >= KINGSTON_FLOW_DISTANCE - KINGSTON_APPROACH_LEAD) {
         this.kingstonAnnounced = true;
         this.showBanner('KINGSTON — Fort Frontenac ahead');
         // Journey's end gets its own deliberate cue, not whatever the
@@ -1545,6 +1599,7 @@ export class Game {
       const warship = this.britishWarship.update(
         dt, this.flowDistance - this._chaseHoldZ, this.canoeWorldX, effectiveSpeed,
         (entry) => this.handleHit(entry), this.weapons.getBullets(),
+        this.damageGivenScale,
       );
       for (const ref of warship.hitBullets) this.weapons.removeBullet(ref);
       // Only up once the fight is actually live — a real hull-HP readout
@@ -1628,11 +1683,11 @@ export class Game {
     // pure function of position, plus an extra glare while it listens.
     const frost = this.segment === 'fjord'
       ? this.wendigo.frostIntensity(this.flowDistance) : 0;
-    // The weather closing in ahead of the British Warship — only ever
-    // non-zero on the Rideau, and only in the approach before
-    // TRIGGER_DISTANCE (see britishWarship.js's stormIntensityAt); it's
-    // back to 0 by the time the held arena itself starts, so the fight gets
-    // its own look from the hull/hazards/ship, not a lingering storm.
+    // The weather closing in ahead of the British Warship, and staying
+    // through the fight itself — only ever non-zero on the Rideau. Held at
+    // full darkness for the whole held arena (britishWarship.js's
+    // stormIntensity(), not just its own stormIntensityAt), clearing again
+    // the instant the fight resolves.
     const warshipStorm = this.segment === 'rideau'
       ? this.britishWarship.stormIntensity(this.flowDistance) : 0;
     // A quick flicker right at each of the two thunderclaps (draw() below).

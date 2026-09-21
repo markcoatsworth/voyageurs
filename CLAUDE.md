@@ -115,7 +115,13 @@ src/
                        "brooding" stretch with no ship on screen at all (draw() renders nothing pre-fight
                        any more — an earlier fog+glimpse pass had the ship fading in as part of the
                        buildup, reported back as backwards: the environment should change first, the
-                       ship should be the payoff) until it appears abruptly at TRIGGER_DISTANCE.
+                       ship should be the payoff) until it appears abruptly at TRIGGER_DISTANCE. The
+                       storm itself now carries straight through the held arena too ("keep the weather
+                       darkness along for the fight") — the `stormIntensity()` instance method checks
+                       `chasePhase` directly rather than trusting the plain `stormIntensityAt` distance
+                       math, since flowDistance is clamped at TRIGGER_DISTANCE for the whole hold and
+                       that alone would read the storm as already cleared; it snaps back to 0 the
+                       instant the fight resolves.
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
                        TRIGGER_DISTANCE, FLIGHT_END.
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging
@@ -163,6 +169,19 @@ src/
   `chasse-galerie`, `diable`, `rideau`.
   `?start=diable` also arms a checkpoint (hands over the pistol, respawn returns
   there); `enterRideau()` clears that checkpoint and moves it to the Rideau start.
+- **`?difficulty=easy`** (main.js's `isEasyMode()`, not stripped like `?start=` —
+  stays in effect across a reload): debug-only for now, no UI toggle yet.
+  Deliberately narrow — only less damage taken and more damage dealt in the
+  boss fights, nothing else (hold times, hit windows, cannon rate all
+  unchanged). `Game`'s `easyMode` constructor option sets
+  `this.damageTakenScale`/`this.damageGivenScale` (0.5/2, `game.js`'s
+  `EASY_DAMAGE_TAKEN_SCALE`/`EASY_DAMAGE_GIVEN_SCALE`) once at construction.
+  Damage taken scales at `handleHit()`'s single choke point (its boss
+  branches only — cannon/shiphull/steeple/diable/wolf/wendigo — not the
+  generic river hazards). Damage given has no equivalent choke point — only
+  the two shootable hit-point fights (`britishWarship.js`, `diable.js`) have
+  one, each scaled inline via a `damageGivenScale` argument threaded through
+  their own `update()` calls.
 - **Mobile**: `isTouchPrimary()` (CSS `hover:none` + `pointer:coarse`) scales
   down forward speed/accel and halves steering authority. Lots of tuned
   constants at the top of `game.js` are touch-conditional.

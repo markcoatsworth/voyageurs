@@ -77,8 +77,13 @@ function smoothstep(t) {
 // ominous thunderclaps mark the approach closing, then a held, silent,
 // fully-dark "brooding" stretch — and only then does the ship itself
 // appear, abruptly, at TRIGGER_DISTANCE (draw() no longer renders it at all
-// before that point — see the chasePhase guard there). None of this gates
-// or delays the fight itself — it still starts the instant TRIGGER_DISTANCE
+// before that point — see the chasePhase guard there). The darkness itself
+// now carries straight through the fight too ("keep the weather darkness
+// along for the fight," requested once the approach existed to build it up
+// — see the stormIntensity() instance method's own comment for why that
+// needs its own check beyond stormIntensityAt's plain distance math), and
+// clears the instant the fight resolves. None of this gates or delays the
+// fight itself — it still starts the instant TRIGGER_DISTANCE
 // is crossed, same as ever — it's atmospheric lead-in inside the room this
 // trigger's own placement already leaves (~137 units of ordinary paddling
 // past Jones Falls, per the module comment above).
@@ -342,9 +347,19 @@ export function createBritishWarship() {
     // Same wrapper convention as wendigo.js's frostIntensity /
     // loupGarou.js's nightIntensity — game.js's render() calls these rather
     // than reaching for the module-level stormIntensityAt/stormFlashAt
-    // directly.
+    // directly. stormIntensity in particular isn't a plain pass-through:
+    // held at full darkness for the whole fight — requested explicitly
+    // ("keep the weather darkness along for the fight") after the first cut
+    // (stormIntensityAt alone, which snaps to 0 at TRIGGER_DISTANCE) meant
+    // the storm vanished the instant combat started. flowDistance itself is
+    // clamped at chaseHoldFlowDistance (>= TRIGGER_DISTANCE) for the whole
+    // hold, so stormIntensityAt(flowDistance) alone always reads 0 through
+    // it regardless — chasePhase is checked directly here instead. Clears
+    // again the instant the fight resolves: flowDistance moves forward past
+    // TRIGGER_DISTANCE the very next frame, where stormIntensityAt already
+    // returns 0 by construction, so no separate fade-out is needed.
     stormIntensity(flowDistance) {
-      return stormIntensityAt(flowDistance);
+      return chasePhase ? 1 : stormIntensityAt(flowDistance);
     },
     stormFlash(flowDistance) {
       return stormFlashAt(flowDistance);
@@ -364,8 +379,11 @@ export function createBritishWarship() {
     // getBullets(), world-space {worldX, flowDistance}) — checked against
     // the hull below. Returns hitBullets: [ref] (shots that struck the
     // hull this frame), same contract as bossfights/diable.js's update(),
-    // for game.js to remove from the weapon pool.
-    update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit, bullets = []) {
+    // for game.js to remove from the weapon pool. damageGivenScale (default
+    // 1) is game.js's this.damageGivenScale — the ?difficulty=easy knob's
+    // "more damage dealt" half (see game.js's own EASY_DAMAGE_GIVEN_SCALE
+    // comment); applied to the hull hit below, nowhere else in this file.
+    update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit, bullets = [], damageGivenScale = 1) {
       const hitBullets = [];
 
       // If the player starts well past the trigger (e.g. ?start=kingston),
@@ -475,7 +493,7 @@ export function createBritishWarship() {
             && Math.abs(b.worldX - chaseShipWorldX) < CHASE_SHIP_BEAM / 2 + 1.6) {
             hitBullets.push(b);
             if (chaseHullHP > 0) {
-              chaseHullHP -= b.type === 'musket' ? MUSKET_DAMAGE_TO_HULL : PISTOL_DAMAGE_TO_HULL;
+              chaseHullHP -= (b.type === 'musket' ? MUSKET_DAMAGE_TO_HULL : PISTOL_DAMAGE_TO_HULL) * damageGivenScale;
               sparks.push({ x: b.worldX, d: chaseShipD, t: 0 });
               if (chaseHullHP <= 0) {
                 chaseHullHP = 0;

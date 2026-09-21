@@ -49,7 +49,7 @@ async function step(name, fn) {
 // --- shared wiring, mirrors main.js -----------------------------------------
 
 const { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } = await import('../src/shared/config.js');
-const { Game, MIN_SPEED } = await import('../src/core/game.js');
+const { Game, MIN_SPEED, KINGSTON_APPROACH_LEAD } = await import('../src/core/game.js');
 const { Input } = await import('../src/core/input.js');
 const { createObstacleField } = await import('../src/world/obstacles.js');
 const { createMinimap } = await import('../src/world/minimap.js');
@@ -85,7 +85,7 @@ function makeUi(minimap) {
   };
 }
 
-function newGame(startSegment, startFlowDistance) {
+function newGame(startSegment, startFlowDistance, opts = {}) {
   const world = { distance: 0 };
   const obstacles = createObstacleField(world);
   const input = new Input();
@@ -93,7 +93,7 @@ function newGame(startSegment, startFlowDistance) {
   const minimap = createMinimap();
   const music = createMusic();
   const ui = makeUi(minimap);
-  const game = new Game({ ctx: makeElement('canvas').getContext('2d'), water: null, input, obstacles, world, ui, music, startFlowDistance, startSegment });
+  const game = new Game({ ctx: makeElement('canvas').getContext('2d'), water: null, input, obstacles, world, ui, music, startFlowDistance, startSegment, ...opts });
   return { game, input };
 }
 
@@ -487,6 +487,47 @@ await step('britishWarship: the weather darkens before any thunder, the first cl
   notes.push(`  note britishWarship: weather darkened first, 2 thunderclaps, first clap led the fight by ${lead.toFixed(2)}s`);
 });
 
+// --- scenario 4b2b: the storm stays dark through the fight, not just up to it
+
+await step('britishWarship: the storm holds through the whole fight, then clears once it resolves', () => {
+  // "Keep the weather darkness along for the fight" — stormIntensityAt
+  // alone (the pure function) already snaps to 0 at TRIGGER_DISTANCE by
+  // design, and flowDistance itself is clamped at chaseHoldFlowDistance
+  // (>= TRIGGER_DISTANCE) for the whole held arena, so that pure function
+  // alone would read 0 for the entire fight — this is what the
+  // stormIntensity() *instance* method (game.js's render() actually calls
+  // this, not the bare function) exists to fix, by checking chasePhase
+  // directly instead.
+  const g = newGame('rideau', WARSHIP_FLOW_DISTANCE + 2);
+  let inChase = false;
+  for (let i = 0; i < 500 && !inChase; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    if (g.game.britishWarship.isChaseHolding()) inChase = true;
+  }
+  if (!inChase) throw new Error('never entered the held arena to test the storm');
+  if (g.game.britishWarship.stormIntensity(g.game.flowDistance) !== 1) {
+    throw new Error('storm should be held at full darkness during the fight, via stormIntensity()');
+  }
+
+  // Survive out the CHASE_HOLD_TIME floor without fighting back — same
+  // no-combat resolution shape as the "held until resolved" scenario above
+  // — then confirm the storm clears the instant it does.
+  let resolved = false;
+  for (let i = 0; i < 7000 && !resolved; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    if (g.game.warshipPct === null) resolved = true;
+    if (g.game.state === 'gameover') throw new Error('died in the Warship hold with no combat — too harsh');
+  }
+  if (!resolved) throw new Error('the Warship fight never resolved within budget');
+  if (g.game.britishWarship.stormIntensity(g.game.flowDistance) !== 0) {
+    throw new Error('storm is still dark after the fight resolved — should have cleared');
+  }
+});
+
 // --- scenario 4b3: ?start=british-warship gives real lead time -------------
 
 await step('britishWarship: the ?start= cheat gives at least 3s of lead, not a hot drop into combat', async () => {
@@ -604,53 +645,43 @@ await step('kingston: running into the dock enters the town on foot', () => {
 
 // --- scenario 4e: ?start=kingston lands where the town actually renders ----
 
-await step('kingston: the ?start= cheat is 1/2 way from Jones Falls, past the Warship, with the arrival track forced on', async () => {
-  // Reported across five rounds of tuning (main.js's own comment has the
-  // full history) — most recently asked to move "back up" again, to 1/2 of
-  // the way from Jones Falls to Kingston directly (no longer measured off
-  // the Warship's own position at all).
+await step('kingston: the ?start= cheat lands exactly on the arrival-track trigger, past the Warship, and fires it on its own', async () => {
+  // Reported across six rounds of tuning (main.js's own comment has the
+  // full history) — most recently: the arrival-track trigger itself moved
+  // further back (game.js's KINGSTON_APPROACH_LEAD, 70 -> 150, "kick in
+  // [the track] a bit further back up the river sequence"), and this cheat
+  // repinned to land at that *exact* distance ("update ?start=kingston to
+  // match it") instead of an independently-tuned position — which means the
+  // arrival track/banner should now fire on their own, no forced-on hook
+  // needed any more (removed from main.js).
   const { START_KEYWORDS } = await import('../src/main.js');
   const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
-  const jonesFalls = VILLAGES.find((v) => v.name === 'Jones Falls');
   const start = START_KEYWORDS['kingston'];
   if (!start) throw new Error('no "kingston" entry in START_KEYWORDS — a name/lookup drifted');
 
-  const expected = kingston.flowDistance - (kingston.flowDistance - jonesFalls.flowDistance) / 2;
+  const expected = kingston.flowDistance - KINGSTON_APPROACH_LEAD;
   if (Math.abs(start.flowDistance - expected) > 0.01) {
-    throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) isn't 1/2 of the way from Jones Falls to Kingston (expected ${expected.toFixed(1)})`);
+    throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) isn't pinned to KINGSTON_APPROACH_LEAD (expected ${expected.toFixed(1)})`);
   }
   // Still has to clear the Warship's own "well past the trigger" auto-
   // resolve threshold — landing inside its real held-fight zone would
-  // freeze the approach entirely. Only ~19 units of margin at this
-  // position (tighter than earlier rounds), so this is worth checking
-  // directly rather than assuming it always will be.
+  // freeze the approach entirely.
   if (start.flowDistance <= WARSHIP_FLOW_DISTANCE + 50) {
     throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) lands inside the Warship's held-fight zone (auto-resolve needs > ${(WARSHIP_FLOW_DISTANCE + 50).toFixed(1)})`);
   }
-  // This position is now short of the "KINGSTON — Fort Frontenac ahead"
-  // banner's own distance trigger (KINGSTON_FLOW_DISTANCE - 70) — the
-  // reason main.js's startedAtKingston forces the arrival track on
-  // immediately instead of waiting for that trigger (reported separately:
-  // wanted the music playing right away on the cheat). If this ever stops
-  // being true, that force-on hook (and this whole scenario) needs
-  // reconsidering, not just this one check.
-  if (start.flowDistance >= kingston.flowDistance - 70) {
-    throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) is no longer short of the approach banner's own trigger — the forced-on arrival track may not be needed any more`);
-  }
 
-  // The forced-on behaviour itself: main.js doesn't expose the game/music
-  // instances it builds from a real ?start= URL (same as every other
-  // cheat here — none of them are tested through the actual URL parsing,
-  // just the underlying mechanism their startedAtX hook calls), so this
-  // calls playKingstonTrack() directly, the same one line
-  // startedAtKingston triggers, and confirms it actually lands.
+  // The natural trigger itself: a single update() tick from exactly this
+  // position should already fire the arrival track, the same way
+  // game.js's own Game.update() does for a real ?start=kingston page load
+  // (main.js doesn't expose the game/music instances it builds from a real
+  // ?start= URL — same limitation every other cheat here has — so this
+  // drives the Game class directly, same as every other scenario).
   const g = newGame('rideau', start.flowDistance);
-  g.game.music?.start();
-  g.game.music?.playKingstonTrack();
+  g.game.update(1 / 30);
   await new Promise((r) => setTimeout(r, 20)); // let the fake play()/canplay promises resolve
   if (g.game.music.nowPlaying?.title !== "Un Siècle d'Avance") {
-    throw new Error(`arrival track didn't start — playing "${g.game.music.nowPlaying?.title}" instead`);
+    throw new Error(`arrival track never cut in on its own — playing "${g.game.music.nowPlaying?.title}" instead`);
   }
 
   let arrived = false;
@@ -1172,11 +1203,12 @@ await step('kingston: the arrival track cuts in at the approach banner and survi
   // comment): it should still be playing under the victory card, not have
   // reverted to the ambient shuffle.
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
-  // -40 is past the approach banner's own trigger (-70) and — since the
-  // Warship now triggers much further back (~1/3 of the way from Jones
-  // Falls to Kingston, britishWarship.js's own comment) — comfortably past
-  // its "well past the trigger" auto-resolve threshold too, same margin
-  // ?start=kingston itself has to clear (see its own comment in main.js).
+  // -40 is past the approach banner's own trigger (KINGSTON_APPROACH_LEAD,
+  // game.js) and — since the Warship now triggers much further back (~1/3
+  // of the way from Jones Falls to Kingston, britishWarship.js's own
+  // comment) — comfortably past its "well past the trigger" auto-resolve
+  // threshold too, same margin ?start=kingston itself has to clear (see its
+  // own comment in main.js).
   const g = newGame('rideau', kingston.flowDistance - 40);
   g.game.update(1 / 30);
   await new Promise((r) => setTimeout(r, 20)); // let the fake play()/canplay promises resolve
@@ -1504,6 +1536,143 @@ await step('weapons: the musket fires slower and hits harder than the pistol', (
     if (!(musketDmg > pistolDmg)) {
       throw new Error(`${fight}: musket damage (${musketDmg}) isn't higher than pistol damage (${pistolDmg})`);
     }
+  }
+});
+
+// --- scenario 9b: ?difficulty=easy — less damage taken, more damage given --
+
+await step('difficulty: main.js isEasyMode() reads ?difficulty=easy from the URL', async () => {
+  const mod = await import('../src/main.js');
+  try {
+    windowShim.location.search = '';
+    if (mod.isEasyMode() !== false) throw new Error('isEasyMode() should be false with no ?difficulty= at all');
+    windowShim.location.search = '?difficulty=hard';
+    if (mod.isEasyMode() !== false) throw new Error('isEasyMode() should be false for any value other than "easy"');
+    windowShim.location.search = '?difficulty=easy';
+    if (mod.isEasyMode() !== true) throw new Error('isEasyMode() should be true for ?difficulty=easy');
+    windowShim.location.search = '?difficulty=EASY';
+    if (mod.isEasyMode() !== true) throw new Error('isEasyMode() should be case-insensitive');
+  } finally {
+    windowShim.location.search = '';
+  }
+});
+
+await step('main.js: stripStartParam only removes ?start=, preserving ?difficulty= and anything else', async () => {
+  // Regression test for a real bug: the ?start=-stripping code used to
+  // blow away window.location.search entirely (pathname + hash, nothing
+  // else — see this function's own comment in main.js), which silently
+  // discarded ?difficulty= before main.js ever read it, even though the
+  // whole point of not treating it as one-shot like ?start= is that it's
+  // supposed to survive. Reported as "the change didn't catch" with clean
+  // console logs — no crash, no error, just a flag that silently never took.
+  const mod = await import('../src/main.js');
+  if (mod.stripStartParam('?start=diable') !== '') {
+    throw new Error(`expected nothing left after stripping the only param, got "${mod.stripStartParam('?start=diable')}"`);
+  }
+  if (mod.stripStartParam('?start=diable&difficulty=easy') !== '?difficulty=easy') {
+    throw new Error(`expected ?difficulty=easy to survive stripping ?start=, got "${mod.stripStartParam('?start=diable&difficulty=easy')}"`);
+  }
+  if (mod.stripStartParam('?difficulty=easy&start=diable') !== '?difficulty=easy') {
+    throw new Error(`expected ?difficulty=easy to survive regardless of param order, got "${mod.stripStartParam('?difficulty=easy&start=diable')}"`);
+  }
+  if (mod.stripStartParam('') !== '') {
+    throw new Error(`expected an empty string back for an empty search string, got "${mod.stripStartParam('')}"`);
+  }
+});
+
+await step('difficulty: easyMode scales boss damage taken but leaves generic hazards alone', () => {
+  // "The only things we need to adjust are reducing damage taken and
+  // increasing damage given. Everything else can stay the same" — requested
+  // explicitly, so a generic river hazard (rock) must be untouched by
+  // easyMode; only handleHit()'s boss-fight branches (cannon, shiphull,
+  // steeple, diable, wolf, wendigo) should scale. Checks against
+  // damageTakenScale itself, not a hardcoded number — dialed once already
+  // ("still not very easy" after trying the first pass), so this shouldn't
+  // need touching again if it's dialed further.
+  const normal = newGame('fjord', 0);
+  const easy = newGame('fjord', 0, { easyMode: true });
+  if (!(easy.game.damageTakenScale > 0 && easy.game.damageTakenScale < 1)) {
+    throw new Error(`expected easyMode's damageTakenScale to be a real reduction (0,1), got ${easy.game.damageTakenScale}`);
+  }
+  if (normal.game.damageTakenScale !== 1) throw new Error(`expected normal damageTakenScale to be 1, got ${normal.game.damageTakenScale}`);
+  if (!(easy.game.damageGivenScale > 1)) {
+    throw new Error(`expected easyMode's damageGivenScale to be a real increase (>1), got ${easy.game.damageGivenScale}`);
+  }
+  if (normal.game.damageGivenScale !== 1) throw new Error(`expected normal damageGivenScale to be 1, got ${normal.game.damageGivenScale}`);
+
+  normal.game.invulnTimer = 0; // spawn invulnerability (SPAWN_INVULN_TIME) would otherwise swallow this first hit
+  easy.game.invulnTimer = 0;
+  normal.game.handleHit({ type: 'rock' });
+  easy.game.handleHit({ type: 'rock' });
+  const normalRockLoss = 100 - normal.game.health;
+  const easyRockLoss = 100 - easy.game.health;
+  if (normalRockLoss <= 0 || normalRockLoss !== easyRockLoss) {
+    throw new Error(`a generic rock hit should be identical regardless of difficulty (normal lost ${normalRockLoss}, easy lost ${easyRockLoss})`);
+  }
+
+  normal.game.health = 100;
+  easy.game.health = 100;
+  normal.game.invulnTimer = 0;
+  easy.game.invulnTimer = 0;
+  normal.game.handleHit({ type: 'wendigo' });
+  easy.game.handleHit({ type: 'wendigo' });
+  const normalWendigoLoss = 100 - normal.game.health;
+  const easyWendigoLoss = 100 - easy.game.health;
+  const expectedEasyLoss = normalWendigoLoss * easy.game.damageTakenScale;
+  if (easyWendigoLoss <= 0 || Math.abs(easyWendigoLoss - expectedEasyLoss) > 1e-9) {
+    throw new Error(`a wendigo hit should scale by exactly damageTakenScale under easyMode (normal lost ${normalWendigoLoss}, easy lost ${easyWendigoLoss}, expected ${expectedEasyLoss})`);
+  }
+});
+
+await step('difficulty: britishWarship.js doubles hull damage per hit under damageGivenScale=2', async () => {
+  const { createBritishWarship, TRIGGER_DISTANCE: T } = await import('../src/bossfights/britishWarship.js');
+  // Direct unit test against the module itself (not the full Game) — feeds
+  // a bullet at the ship's own last-known position every frame (same
+  // tracking-bot idiom the "shooting it sinks it" scenario above uses over
+  // a full fight) until one lands, then compares hull-% lost between
+  // damageGivenScale=1 and =2 on otherwise-identical instances.
+  function firstHitLoss(damageGivenScale) {
+    const ship = createBritishWarship();
+    const dt = 1 / 30;
+    const playerD = T + 1;
+    for (let i = 0; i < 60; i++) {
+      const pos = ship.debugChaseShipPosition();
+      const bullet = { worldX: pos.worldX, flowDistance: pos.flowDistance, type: 'pistol' };
+      const res = ship.update(dt, playerD, pos.worldX, 10, () => {}, [bullet], damageGivenScale);
+      if (res.hitBullets.length > 0) return 100 - res.progressPct;
+    }
+    throw new Error('never landed a hit within budget — test setup broke');
+  }
+  const lossNormal = firstHitLoss(1);
+  const lossEasy = firstHitLoss(2);
+  if (lossNormal <= 0) throw new Error('baseline (scale=1) hit never landed');
+  if (Math.abs(lossEasy - lossNormal * 2) > 1e-6) {
+    throw new Error(`damageGivenScale=2 should double the hull-% lost per hit (scale=1 lost ${lossNormal}, scale=2 lost ${lossEasy})`);
+  }
+});
+
+await step('difficulty: diable.js doubles hp damage per hit under damageGivenScale=2', async () => {
+  const { createDiable, DIABLE_FLOW_DISTANCE: D } = await import('../src/bossfights/diable.js');
+  function firstHitLoss(damageGivenScale) {
+    const devil = createDiable();
+    const dt = 1 / 30;
+    const playerD = D - 1; // already past the appearing trigger and the fighting-phase distance floor — only t>=1.0 gates the phase change
+    const canoe = { x: -1000, y: -1000 }; // far off, so onCollide/fur-penalty never fires and only the bullet hit is exercised
+    for (let i = 0; i < 200; i++) {
+      const cx = devil.debugCentreX();
+      // y=64 mirrors diable.js's own BASE_CY (module-private) — his sway is
+      // only +/-4 around it, well inside the 32-unit hit tolerance either way.
+      const bulletScreens = [{ x: cx, y: 64, ref: { type: 'pistol' } }];
+      const res = devil.update(dt, playerD, canoe, bulletScreens, () => {}, () => {}, damageGivenScale);
+      if (res.hitBullets.length > 0) return 100 - devil.hpPct();
+    }
+    throw new Error('never landed a hit within budget — test setup broke');
+  }
+  const lossNormal = firstHitLoss(1);
+  const lossEasy = firstHitLoss(2);
+  if (lossNormal <= 0) throw new Error('baseline (scale=1) hit never landed');
+  if (Math.abs(lossEasy - lossNormal * 2) > 1e-6) {
+    throw new Error(`damageGivenScale=2 should double the hp-% lost per hit (scale=1 lost ${lossNormal}, scale=2 lost ${lossEasy})`);
   }
 });
 
