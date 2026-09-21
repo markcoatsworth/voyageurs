@@ -431,21 +431,37 @@ const KINGSTON_PARK_TREE_SPOTS = [
 // through the park) — the path reads as leading straight to it, a natural
 // town-square arrangement, not an accident of matching x coordinates.
 const KINGSTON_BANDSTAND_POS = { x: 160, y: -158 };
-// Offsets from KINGSTON_BANDSTAND_POS, not absolute — five distinct
-// instruments (drawBandMember's own switch) rather than five copies of one
-// figure, spread across the now-much-wider stage (drawBandstand's own W —
-// widened, "a lot wider," so all five read as clearly separate performers
-// instead of a cramped cluster). The middle one, whiteHat: true, is the
-// dock greeter (villages.js's KINGSTON_GREETER_COAT/HAT, imported above) —
+// Offsets from KINGSTON_BANDSTAND_POS, not absolute — distinct instruments
+// (drawBandMember's own switch) rather than five copies of one figure,
+// spread across the now-much-wider stage (drawBandstand's own W — widened,
+// "a lot wider," so all five read as clearly separate performers instead
+// of a cramped cluster). The middle one, whiteHat: true, is the dock
+// greeter (villages.js's KINGSTON_GREETER_COAT/HAT, imported above) —
 // asked for explicitly as "the guy with the white hat... right in the
 // middle" — same recognizable figure, fronting the band now rather than
 // waving from the dock.
+//
+// Second pass on the lineup: "we need 2-3 of the guys playing an obvious
+// guitar... some obviously visible guitars up there." Was fiddle / drum /
+// concertina / fife / standing bass — the fiddle and fife props were a
+// stroke or two each, nothing on stage read as a guitar at all. Now two
+// guitars (the old fiddle and fife slots) plus the bass redrawn as a held
+// bass guitar (same silhouette, bigger — "doesn't need to be obviously a
+// 4-string or a 5-string," it just has to read as a guitar), so three
+// guitar shapes are up there. Two guitars + bass + drums + a frontman is
+// also exactly the lineup the Kingston playlist (audio/music.js's
+// KINGSTON_PLAYLIST) is winking at, which is a happy accident worth
+// keeping. `neck: -1` mirrors the instrument (headstock pointing
+// stage-left instead of stage-right) — the outer two point outward, the
+// inner guitar inward, so three near-identical props at three x's don't
+// read as one figure copy-pasted, and the left guitar's neck doesn't poke
+// into the drummer beside it.
 const KINGSTON_BAND_SPOTS = [
-  { dx: -55, dy: 3, instrument: 'fiddle' },
+  { dx: -55, dy: 3, instrument: 'guitar', neck: -1 },
   { dx: -27, dy: -2, instrument: 'drum' },
   { dx: 0, dy: 2, instrument: 'concertina', whiteHat: true },
-  { dx: 27, dy: -2, instrument: 'fife' },
-  { dx: 55, dy: 3, instrument: 'bass' },
+  { dx: 27, dy: -2, instrument: 'guitar', neck: 1 },
+  { dx: 55, dy: 3, instrument: 'bass', neck: 1 },
 ];
 // The audience — loose rows facing the stage, absolute world positions
 // (unlike the band spots above, since there's no single anchor these are
@@ -1637,7 +1653,10 @@ const BAND_COATS = ['#2f3a52', '#4a2f2f', '#2f4a3a', '#4a3f2f', '#3a2f4a'];
 // the now-CROWD_SCALE-sized audience. This figure's own undrawn height
 // (feet to top of hat brim, ~13.2px) times this lands right around 24px.
 const BAND_SCALE = 1.8;
-function drawBandMember(ctx, x, y, time, seed, instrument, whiteHat = false) {
+// `neck` (+1/-1) only matters for 'guitar'/'bass' — which side the
+// headstock points to; see KINGSTON_BAND_SPOTS' own comment on why the
+// three guitar-shaped props don't all point the same way.
+function drawBandMember(ctx, x, y, time, seed, instrument, whiteHat = false, neck = 1) {
   // The middle band member is the dock greeter (KINGSTON_BAND_SPOTS' own
   // comment) — same coat colour as villages.js draws him in, plus the
   // crown block below that turns the plain brim into his top hat, same
@@ -1730,22 +1749,125 @@ function drawBandMember(ctx, x, y, time, seed, instrument, whiteHat = false) {
     ctx.moveTo(fx - 0.4, fy - 11.6);
     ctx.lineTo(fx + 3.4 + play * 0.7, fy - 10.6 - Math.abs(play) * 0.4);
     ctx.stroke();
-  } else {
-    // standing bass, a big rounded shape beside the figure — not held the
-    // way the others are, so its own motion is a short plucking hand/arm
-    // against the strings rather than the whole instrument moving.
-    ctx.fillStyle = '#5c3a24';
-    ctx.beginPath();
-    ctx.ellipse(fx + 3, fy - 6, 2.2, 5.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = coat;
-    ctx.lineWidth = 1.1;
-    ctx.beginPath();
-    ctx.moveTo(fx + 1.8, fy - 8);
-    ctx.lineTo(fx + 2.6 + play * 0.6, fy - 7 - Math.abs(play) * 0.4);
-    ctx.stroke();
+  } else if (instrument === 'guitar' || instrument === 'bass') {
+    // Fiddle/fife above are unused by KINGSTON_BAND_SPOTS now but kept —
+    // one-line swaps in that array if the lineup changes again. The bass
+    // used to be a standing bass (a tall ellipse beside the figure);
+    // it's a held bass guitar now, see drawHeldGuitar's own comment.
+    drawHeldGuitar(ctx, fx, fy, play, coat, neck, instrument === 'bass', seed);
   }
   ctx.restore();
+}
+
+// A guitar held across the chest — or, isBass, a bass guitar: same shape,
+// bigger body, longer neck — drawn in drawBandMember's own unscaled units
+// (BAND_SCALE is already on the ctx). "Obviously visible guitars" was the
+// ask, so the read is carried by silhouette rather than detail: a
+// figure-8 body about as wide as the torso (two overlapping bouts, the
+// lower one bigger), a neck climbing to head height, and a wider headstock
+// block on the end — the three shapes that say "guitar" at 24px. The
+// soundhole/bridge/string line are a few pixels of dressing on top of
+// that. String count is deliberately not drawn at all ("doesn't need to
+// be obviously a 4-string or a 5-string") — a single pale line stands in
+// for the whole set. `dir` (+1/-1) mirrors the whole thing so the
+// headstock points to the viewer's right or left. Motion: the strumming
+// hand bounces over the soundhole on the beat (play), a smaller pluck for
+// the bass — the instrument itself stays put, like the old standing bass
+// did, since a whole guitar bobbing on its own reads as floating rather
+// than played.
+function drawHeldGuitar(ctx, fx, fy, play, coat, dir, isBass, seed) {
+  const skin = '#e2b688'; // same as the head
+  // Body colour: the two guitars differ (one pale spruce top, one
+  // sunburst) so they don't read as the same prop twice; the bass is dark.
+  const body = isBass ? '#4a2c18' : (seed % 2 ? '#a8642a' : '#d9b878');
+  // Body centre sits over the lower half of the coat, nudged toward the
+  // strumming side so the neck-side bout doesn't cover the whole torso.
+  const cx = fx - dir * 0.3;
+  const cy = fy - 6.4;
+  // Neck angle up from horizontal — steep enough that the headstock ends
+  // up beside the head (about fy - 12 for the guitar), where it reads as
+  // part of the figure rather than a stick lying across it.
+  const tilt = -0.72;
+  const bodyScale = isBass ? 1.15 : 1;
+  const neckLen = isBass ? 8.6 : 7.0; // body centre → start of headstock
+  const ux = Math.cos(tilt);
+  const uy = Math.sin(tilt);
+  const along = (t) => ({ x: cx + dir * ux * t, y: cy + uy * t }); // a point t units up the neck
+
+  // Fretting arm first, from the neck-side shoulder to a hand up the
+  // neck, so the neck is drawn over it.
+  const fret = along(neckLen * 0.7);
+  ctx.strokeStyle = coat;
+  ctx.lineWidth = 1.3;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(fx + dir * 1.8, fy - 8.6);
+  ctx.lineTo(fret.x, fret.y);
+  ctx.stroke();
+
+  // Body — local +x runs up the neck (dir mirror + tilt applied by the
+  // transform), bodyScale grows the bass's bouts without moving the neck.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(dir, 1);
+  ctx.rotate(tilt);
+  ctx.scale(bodyScale, bodyScale);
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(-1.4, 0, 2.4, 2.0, 0, 0, Math.PI * 2); // lower bout
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(1.3, 0, 1.9, 1.6, 0, 0, Math.PI * 2); // upper bout — smaller, so the waist between them shows
+  ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; // underside shading, same 0.25 as the coat's own
+  ctx.beginPath();
+  ctx.ellipse(-1.4, 0.7, 2.2, 1.2, 0, 0, Math.PI);
+  ctx.fill();
+  ctx.fillStyle = '#241f1a';
+  if (isBass) {
+    ctx.fillRect(-0.3, -0.9, 0.9, 1.8); // a pickup bar instead of a soundhole — the one visual tell that it's the bass
+  } else {
+    ctx.beginPath();
+    ctx.arc(0.3, 0, 0.75, 0, Math.PI * 2); // soundhole
+    ctx.fill();
+  }
+  ctx.fillRect(-2.4, -0.7, 0.6, 1.4); // bridge
+  ctx.restore();
+
+  // Neck + headstock — same transform minus bodyScale, so the neck is the
+  // same thickness on the bass and only its length differs.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(dir, 1);
+  ctx.rotate(tilt);
+  const neckStart = 2.6 * bodyScale; // where the upper bout ends
+  ctx.fillStyle = '#3a2616';
+  ctx.fillRect(neckStart, -0.5, neckLen - neckStart, 1.0);
+  ctx.fillRect(neckLen, -0.75, 1.4, 1.5); // headstock — wider than the neck, the silhouette cue that ends it
+  ctx.strokeStyle = '#e8dcc0'; // the strings, as one pale line from bridge to headstock
+  ctx.lineWidth = 0.35;
+  ctx.beginPath();
+  ctx.moveTo(-2.0 * bodyScale, 0);
+  ctx.lineTo(neckLen, 0);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = skin; // fretting hand, on top of the neck
+  ctx.fillRect(fret.x - 0.6, fret.y - 0.6, 1.2, 1.2);
+
+  // Strumming arm from the other shoulder down across the body, its hand
+  // bouncing over the soundhole with the beat.
+  const swing = isBass ? play * 0.4 : play * 0.9;
+  const hx = cx - dir * 0.6 * bodyScale;
+  const hy = cy - 0.6 + swing;
+  ctx.strokeStyle = coat;
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(fx - dir * 1.8, fy - 8.6);
+  ctx.lineTo(hx, hy);
+  ctx.stroke();
+  ctx.fillStyle = skin;
+  ctx.fillRect(hx - 0.6, hy - 0.6, 1.2, 1.2);
 }
 
 // One onlooker in the crowd, seen from behind (facing the stage, away from
@@ -2279,7 +2401,7 @@ export function createVillageScene() {
         ...(isKingston ? [
           ...KINGSTON_BAND_SPOTS.map((b, i) => ({
             y: KINGSTON_BANDSTAND_POS.y + b.dy,
-            draw: (c) => drawBandMember(c, KINGSTON_BANDSTAND_POS.x + b.dx, KINGSTON_BANDSTAND_POS.y + b.dy, ambientTime, i, b.instrument, b.whiteHat),
+            draw: (c) => drawBandMember(c, KINGSTON_BANDSTAND_POS.x + b.dx, KINGSTON_BANDSTAND_POS.y + b.dy, ambientTime, i, b.instrument, b.whiteHat, b.neck),
           })),
           ...KINGSTON_CROWD_SPOTS.map((p, i) => ({
             y: p.y,
