@@ -57,20 +57,23 @@ it's not the same running order every session:
   the British Blockade (the frigate gauntlet) — cuts in the instant it
   triggers, replacing whatever's playing. Supplied directly like "Reel du
   Paradis et Enfer" above, not sourced from an archive.
-- "Un Siècle d'Avance," "Boutique de Cadeaux," and "Le Caygeon de Bob" —
-  Kingston's own arrival playlist, an isolated three-track set exclusive to
-  Kingston, never mixed into the regular shuffle above. Cuts in on the
-  approach (the same "KINGSTON — Fort Frontenac ahead" banner trigger, well
-  before the dock) and — unlike every other reserved track above — never
-  drops back into the regular shuffle either: it plays through the dock,
-  the walk around town (including the Artillery Park bandstand scene, its
-  original reason for growing past one track), and the victory card,
-  looping through the three for as long as the run continues. Supplied
-  directly like "Reel du Paradis et Enfer"/"La Mer de la Folie" above, not
-  sourced from an archive; titled "Les Chevaliers" the same as those two on
-  the assumption it's the same source, but that credit (like the two later
-  titles themselves) is provisional, not independently confirmed the way
-  the archive-sourced catalog above is.
+- "Un Siècle d'Avance," "Boutique de Cadeaux," "Le Caygeon de Bob," and
+  "Les Rois de Blé" (the last one added last on purpose, and — "explicitly
+  just for Kingston, I don't want to hear that song anywhere else in the
+  game" — here rather than in the regular shuffle above) — Kingston's own
+  arrival playlist, an isolated set exclusive to Kingston, never mixed into
+  the regular shuffle above. Cuts in on the approach (the same "KINGSTON —
+  Fort Frontenac ahead" banner trigger, well before the dock) and — unlike
+  every other reserved track above — never drops back into the regular
+  shuffle either: it plays through the dock, the walk around town
+  (including the Artillery Park bandstand scene, its original reason for
+  growing past one track), and the victory card, looping through the set
+  for as long as the run continues. Supplied directly like "Reel du
+  Paradis et Enfer"/"La Mer de la Folie" above, not sourced from an
+  archive. The first three are titled "Les Chevaliers" on the assumption
+  it's the same source as those two; "Les Rois de Blé" has no such guess —
+  artist unknown, not just unconfirmed. None of these four credits are
+  independently confirmed the way the archive-sourced catalog above is.
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
@@ -87,7 +90,7 @@ holds, used here on the assumption that a jam-session recording shared
 publicly on the band's own podcast feed is low-risk for casual/personal
 use — not the same thing as a rights clearance. "Reel du Paradis et Enfer,"
 "La Mer de la Folie," and the Kingston arrival playlist ("Un Siècle
-d'Avance," "Boutique de Cadeaux," "Le Caygeon de Bob")
+d'Avance," "Boutique de Cadeaux," "Le Caygeon de Bob," "Les Rois de Blé")
 are a further step removed again: supplied directly rather than pulled from
 a documented archive, so there's no source link to point to and no
 independent confirmation of who holds what rights — treat them as the least

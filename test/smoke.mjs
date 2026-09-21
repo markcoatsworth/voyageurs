@@ -1221,13 +1221,13 @@ await step('rideau: reaching Kingston by its dock enters the town, then casting 
 });
 
 await step('kingston: the arrival playlist cuts in at the approach banner and survives to the win screen', async () => {
-  // "An isolated playlist exclusively for Kingston" — three tracks
-  // (KINGSTON_PLAYLIST, music.js), shuffled, never the ambient shuffle
-  // (PLAYLIST) itself. Cuts in at the same flowDistance as the "KINGSTON —
-  // Fort Frontenac ahead" banner (game.js), well before the dock, and —
-  // unlike every other boss track — nothing ever calls endBossTrack() for
-  // it (see win()'s own comment): it should still be one of these three
-  // playing under the victory card, not reverted to the ambient shuffle.
+  // "An isolated playlist exclusively for Kingston" — KINGSTON_PLAYLIST
+  // (music.js), shuffled, never the ambient shuffle (PLAYLIST) itself.
+  // Cuts in at the same flowDistance as the "KINGSTON — Fort Frontenac
+  // ahead" banner (game.js), well before the dock, and — unlike every
+  // other boss track — nothing ever calls endBossTrack() for it (see
+  // win()'s own comment): it should still be one of this set playing under
+  // the victory card, not reverted to the ambient shuffle.
   const { KINGSTON_PLAYLIST } = await import('../src/audio/music.js');
   const kingstonTitles = KINGSTON_PLAYLIST.map((t) => t.title);
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
@@ -1532,21 +1532,27 @@ await step('music: a special track that fails to autoplay recovers on the next r
   }
 });
 
-await step('music: the Kingston playlist cycles through all three tracks, never falling back to the ambient shuffle', async () => {
+await step('music: the Kingston playlist cycles through every track, never falling back to the ambient shuffle', async () => {
   // "An isolated playlist exclusively for Kingston... I don't want the
   // existing music to change when we get into Kingston" — requested
-  // explicitly. Simulates each track finishing on its own
+  // explicitly (and again for Les Rois de Blé specifically: "explicitly
+  // just for Kingston, I don't want to hear that song anywhere else in the
+  // game"). Simulates each track finishing on its own
   // (debugAudioElement().dispatchEvent({type:'ended'}), same test-only hook
   // used to fake a real playthrough elsewhere) enough times to cycle
-  // through the whole three-track set (KINGSTON_PLAYLIST) at least once,
-  // and confirms every track seen is one of those three — never a PLAYLIST
-  // (ambient shuffle) title leaking in, which is exactly what the old
-  // single-track version's default playSpecial() onEnded would have done.
+  // through the whole set (KINGSTON_PLAYLIST) at least twice over — full
+  // coverage in exactly KINGSTON_PLAYLIST.length transitions is actually
+  // guaranteed, not probabilistic (playKingstonPlaylistTrack() only
+  // reshuffles once every track in the current order has played, so one
+  // pass can't skip any), the 2x margin is just headroom — and confirms
+  // every track seen is one of those, never a PLAYLIST (ambient shuffle)
+  // title leaking in, which is exactly what the old default playSpecial()
+  // onEnded would have done.
   const mod = await import('../src/audio/music.js');
   const music = mod.createMusic();
   const kingstonTitles = mod.KINGSTON_PLAYLIST.map((t) => t.title);
-  // "I don't want the existing music to change" — the two new tracks must
-  // never have been folded into the regular ambient shuffle itself.
+  // "I don't want the existing music to change" — none of these must ever
+  // have been folded into the regular ambient shuffle itself.
   const ambientTitles = mod.PLAYLIST.map((t) => t.title);
   for (const t of kingstonTitles) {
     if (ambientTitles.includes(t)) throw new Error(`"${t}" is in both the Kingston playlist and the ambient shuffle — should be exclusive to Kingston`);
@@ -1555,7 +1561,8 @@ await step('music: the Kingston playlist cycles through all three tracks, never 
   music.playKingstonTrack();
   await new Promise((r) => setTimeout(r, 20));
   const seenTitles = [];
-  for (let i = 0; i < 7; i++) {
+  const transitions = mod.KINGSTON_PLAYLIST.length * 2 + 1;
+  for (let i = 0; i < transitions; i++) {
     if (music.nowPlaying) seenTitles.push(music.nowPlaying.title);
     music.debugAudioElement().dispatchEvent({ type: 'ended' });
     await new Promise((r) => setTimeout(r, 20));
@@ -1566,7 +1573,7 @@ await step('music: the Kingston playlist cycles through all three tracks, never 
     }
   }
   for (const t of kingstonTitles) {
-    if (!seenTitles.includes(t)) throw new Error(`"${t}" never came up across 7 transitions of a 3-track set (seen: ${JSON.stringify(seenTitles)})`);
+    if (!seenTitles.includes(t)) throw new Error(`"${t}" never came up across ${transitions} transitions of a ${kingstonTitles.length}-track set (seen: ${JSON.stringify(seenTitles)})`);
   }
 });
 

@@ -136,17 +136,24 @@ export const KINGSTON_TRACK = { src: '/audio/un-siecle-davance.mp3', title: "Un 
 // artist in this file is real researched attribution, not a guess.
 const KINGSTON_TRACK_2 = { src: '/audio/boutique-de-cadeaux.mp3', title: 'Boutique de Cadeaux', artist: 'Les Chevaliers', volume: 1.0 };
 const KINGSTON_TRACK_3 = { src: '/audio/le-caygeon-de-bob.mp3', title: 'Le Caygeon de Bob', artist: 'Les Chevaliers', volume: 1.0 };
+// Added last, deliberately ("make it last place in the Kingston playlist"),
+// and here — not PLAYLIST above — deliberately too ("explicitly just for
+// Kingston, I don't want to hear that song anywhere else in the game").
+// Supplied directly like the rest of this set, so no archive listing to
+// credit a performer from — artist genuinely unknown, not a placeholder
+// guess the way KINGSTON_TRACK_2/3's own "Les Chevaliers" is.
+const KINGSTON_TRACK_4 = { src: '/audio/les-rois-de-ble.mp3', title: 'Les Rois de Blé', artist: 'Unknown', volume: 1.0 };
 // Unlike every other boss track, nothing ever calls endBossTrack() for this
 // set (see win()'s own comment in game.js) — arriving at Kingston is the
 // end of the run, not a fight that resolves back into the ambient shuffle.
 // Instead, once the first one ends on its own, the next plays (see
-// playKingstonTrack() below) — a closed three-track loop of its own, never
-// handing back to PLAYLIST, for as long as the run goes on.
+// playKingstonTrack() below) — a closed loop of its own, never handing back
+// to PLAYLIST, for as long as the run goes on.
 // Exported for test/smoke.mjs — the arrival cue is shuffled among these
-// three now, not always KINGSTON_TRACK specifically, so a test checking
-// "did the arrival cue cut in" needs the real set to check membership
-// against rather than one hardcoded title.
-export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3];
+// now, not always KINGSTON_TRACK specifically, so a test checking "did the
+// arrival cue cut in" needs the real set to check membership against
+// rather than one hardcoded title.
+export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3, KINGSTON_TRACK_4];
 
 // Reported as quiet on the whole, relative to other applications running
 // at the same time — not a single track's own mix, the shuffle's own
@@ -713,7 +720,7 @@ export function createMusic({ onTrack } = {}) {
     // capsize+restart mid-approach, or a second ordinary run in the same
     // session, doesn't always replay the same first pick. Deliberately
     // never handed to endBossTrack() by any caller (see KINGSTON_PLAYLIST's
-    // own comment) — once it starts, this loops through the three tracks
+    // own comment) — once it starts, this loops through the whole set
     // for the rest of the run rather than ever resolving back into the
     // ambient shuffle.
     playKingstonTrack() {

@@ -131,7 +131,7 @@ src/
                        that has a dedicated cue (Rule Britannia/blockade, a diable reel/diable, St.
                        Anne's Reel/wendigo) — each plays via playSpecial() the instant its fight
                        starts, replacing whatever's playing, and endBossTrack() drops back into the
-                       shuffle once it resolves. KINGSTON_PLAYLIST is its own isolated 3-track set
+                       shuffle once it resolves. KINGSTON_PLAYLIST is its own isolated track set
                        (never mixed into PLAYLIST) for the Kingston arrival/on-foot visit —
                        playSpecial() takes an optional onEnded override so, unlike every other
                        reserved track, a finished Kingston track advances to the next Kingston track
