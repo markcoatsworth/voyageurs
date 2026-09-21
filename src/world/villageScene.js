@@ -323,12 +323,18 @@ const TADOUSSAC_PATH = { x: 25, y: 116, w: 285, h: 12 };
 // most direct route a landing party would actually take.
 const TADOUSSAC_CHAPEL_SPUR = { x: 159, y: 96, w: 12, h: DOCK_TOP - 96 };
 
-// Kingston's on-foot layout — mapped onto this fixed screen the same way
-// Trois-Rivières' own is (buildingsForTroisRivieres' comment): no walls or
-// scrolling world, just a denser two-row spread than the plain procedural
-// villages get, matching the "bigger built-up city" the river view
-// (world/villages.js's KINGSTON_BANDS) already gives it — 14 buildings,
-// same count as Québec City's own on-foot layout. St. George's (see
+// Kingston's on-foot layout — started out mapped onto the fixed screen the
+// same way Trois-Rivières' own is (buildingsForTroisRivieres' comment): no
+// walls or scrolling world, just a denser two-row spread than the plain
+// procedural villages get, matching the "bigger built-up city" the river
+// view (world/villages.js's KINGSTON_BANDS) already gives it — 14
+// buildings, same count as Québec City's own on-foot layout. It scrolls
+// now, on all three open sides — north into Artillery Park
+// (KINGSTON_WORLD_TOP), and since the grid was carried along the
+// waterfront in both directions (KINGSTON_CROSS_ROAD_W2's comment) west
+// past the fort into Clergy Reserve (KINGSTON_WORLD_LEFT) and east out to
+// Mississauga Point (KINGSTON_WORLD_RIGHT) — still no walls, and the dock
+// still centres on CANVAS_WIDTH like every other village's. St. George's (see
 // KINGSTON_CHURCH's own comment in villages.js) set back and central,
 // same convention every other hand-authored town's church uses; Fort
 // Frontenac's ruins (createRuinedFortSprite — unused anywhere else in the
@@ -352,6 +358,31 @@ const KINGSTON_ROAD_H2 = { y: 126, h: 16 }; // front avenue, nearest the harbour
 const KINGSTON_MAIN_ROAD_V = { x: 153, y: KINGSTON_ROAD_H1.y, w: 14, h: DOCK_TOP - KINGSTON_ROAD_H1.y }; // straight off the dock, up through the whole grid — the town's own spine, same role QUEBEC_ROAD_V plays off its gate
 const KINGSTON_CROSS_ROAD_W = { x: 76, y: KINGSTON_ROAD_H1.y, w: 14, h: KINGSTON_ROAD_H2.y + KINGSTON_ROAD_H2.h - KINGSTON_ROAD_H1.y };
 const KINGSTON_CROSS_ROAD_E = { x: 226, y: KINGSTON_ROAD_H1.y, w: 14, h: KINGSTON_ROAD_H2.y + KINGSTON_ROAD_H2.h - KINGSTON_ROAD_H1.y };
+// The grid carried on along the waterfront in both directions — the
+// survey's own "KINGSTON"/"TOWN" lettering runs the whole length of a
+// grid many blocks long along the shore, where the original four-block
+// spread here stopped dead one block either side of Main Street at the
+// old screen's own edges (asked for as "extend Kingston city left and
+// right along the waterfront, like in the map"). Same ~75px block pitch
+// the original cross streets set (76 -> 153 -> 226), just continued
+// outward two more blocks each way; the avenues run KINGSTON_GRID_X0..X1
+// below, the grid's own extent, not the whole (now much wider) world —
+// past the last cross street each way the ground is dirt road and open
+// lots, not paved town (KINGSTON_WEST_DIRT_PATH/KINGSTON_EAST_DIRT_PATH).
+const KINGSTON_CROSS_ROAD_W2 = { x: 1, y: KINGSTON_ROAD_H1.y, w: 14, h: KINGSTON_CROSS_ROAD_W.h };
+const KINGSTON_CROSS_ROAD_W3 = { x: -74, y: KINGSTON_ROAD_H1.y, w: 14, h: KINGSTON_CROSS_ROAD_W.h };
+const KINGSTON_CROSS_ROAD_E2 = { x: 301, y: KINGSTON_ROAD_H1.y, w: 14, h: KINGSTON_CROSS_ROAD_E.h };
+const KINGSTON_CROSS_ROAD_E3 = { x: 376, y: KINGSTON_ROAD_H1.y, w: 14, h: KINGSTON_CROSS_ROAD_E.h };
+// The avenues run one full block past the outermost cross street each
+// way (the ~75px block pitch again, less a little so the brick stops just
+// past the outer houses' own sprites rather than hanging out into open
+// ground), not merely to that cross street: a first pass stopped them at
+// KINGSTON_CROSS_ROAD_W3/E3 and left the outer block's own houses
+// fronting on the dirt road beyond, which read as a fringe hamlet rather
+// than the town's own last block — the map's streets run to the town's
+// edge.
+const KINGSTON_GRID_X0 = KINGSTON_CROSS_ROAD_W3.x - 56;
+const KINGSTON_GRID_X1 = KINGSTON_CROSS_ROAD_E3.x + KINGSTON_CROSS_ROAD_E3.w + 50;
 // Market Square — between the two avenues, straddling the main road the
 // same way a real market square sits astride the street leading up from
 // the wharf. The well (drawMarketWell, already used for Montréal's own
@@ -362,23 +393,167 @@ const KINGSTON_MARKET_SQUARE = { x: 110, y: 90, w: 100, h: 30 };
 const KINGSTON_MARKET_WELL_CENTER = { x: 135, y: 105 };
 
 const KINGSTON_ONFOOT_BUILDINGS = [
+  // --- west of the grid, past Fort Frontenac's ruins (KINGSTON_WORLD_LEFT
+  // opened this ground up; see its own comment) — the map's own "Clergy
+  // Reserve" and "Dock Yard No. 5," real detail it draws past the
+  // surveyed town's own western edge, not empty space the world happened
+  // to stop at (same reasoning Montréal's own west-suburb section above
+  // already uses for the ground past the Récollets Gate).
+  // The Dockyard — a modest wooden yard building, not the Royal Navy's
+  // real dockyard (that's across the water at Point Frederick, already a
+  // minimap landmark — see route.js's own KINGSTON_POINT_FREDERICK_MAP_POINT).
+  // The map labels this one separately, right at the town's own edge.
+  // Sits past the grid's *new* western end (KINGSTON_GRID_X0), where it
+  // used to sit past the old one — the whole Clergy Reserve group moved
+  // out with the world edge when the grid itself grew two blocks west.
+  // y=62, the back row's own line, not the y=88 it first had: that put
+  // it astride the reserve's dirt road (KINGSTON_WEST_DIRT_PATH, now on
+  // the back avenue's line at y 69..83), the road running straight under
+  // its walls. Faces the road from its north side instead, same way the
+  // back-row houses face the avenue.
+  { kind: 'cabin', x: -270, y: 62, variant: 0, mirror: false },
   // Upper Kingston, back row — north of the back avenue, one building per
-  // block the cross streets/main road divide the grid into.
+  // block the cross streets/main road divide the grid into. The x=45..265
+  // four are the original spread; the ones outside that are the two extra
+  // blocks each way (KINGSTON_CROSS_ROAD_W2/W3/E2/E3's own comment).
+  { kind: 'stone', x: -105, y: 60, variant: 2, mirror: false },
+  { kind: 'stone', x: -30, y: 62, variant: 0, mirror: true },
   { kind: 'stone', x: 45, y: 62, variant: 1, mirror: false },
   { kind: 'stone', x: 121, y: 60, variant: 2, mirror: true },
   { kind: 'stone', x: 196, y: 60, variant: 0, mirror: false },
   { kind: 'stone', x: 265, y: 62, variant: 1, mirror: true },
+  { kind: 'stone', x: 340, y: 60, variant: 2, mirror: false },
+  { kind: 'stone', x: 415, y: 62, variant: 0, mirror: true },
   // St. George's, facing the Market Square from its own east side.
   { kind: 'church', x: 185, y: 110, mirror: false },
+  // Nothing in the band between the avenues out in the new blocks, even
+  // though the map's grid is built up between its streets too: a first
+  // pass put a stone house there (y=112, one block out each way) and it
+  // read as a pile-up — a stone sprite is ~52px tall against the band's
+  // 42px, so its roof buried the back avenue and the front-row house
+  // below overlapped its base — and, worse, its footprint blocked the
+  // band itself, the natural lane for walking the grid end to end
+  // between the two avenues (headless walk-west check stalled dead on
+  // it). St. George's gets away with sitting in that band only because
+  // the Market Square's own open ground flanks it.
   // The town proper, south of the front avenue — closest to the harbour.
+  { kind: 'stone', x: -105, y: 155, variant: 1, mirror: true },
+  { kind: 'stone', x: -30, y: 152, variant: 2, mirror: false },
   { kind: 'stone', x: 50, y: 155, variant: 2, mirror: true },
   { kind: 'stone', x: 121, y: 155, variant: 0, mirror: false },
   { kind: 'stone', x: 196, y: 152, variant: 1, mirror: true },
   { kind: 'stone', x: 265, y: 155, variant: 2, mirror: false },
+  { kind: 'stone', x: 340, y: 155, variant: 0, mirror: true },
+  { kind: 'stone', x: 415, y: 152, variant: 1, mirror: false },
   // Fort Frontenac's ruins, standing apart at the grid's own western edge,
   // west of the whole street pattern — same "small cluster apart from the
-  // main spread" treatment the river view gives it.
-  { kind: 'ruinedfort', x: 25, y: 105, mirror: false },
+  // main spread" treatment the river view gives it. Was x=25 when the grid
+  // ended at the old screen edge; moved out past the westmost cross
+  // street (KINGSTON_CROSS_ROAD_W3) once the grid grew, so it still
+  // stands *beyond* the streets rather than getting swallowed by them.
+  { kind: 'ruinedfort', x: -155, y: 105, mirror: false },
+  // --- east of the grid, past its last cross street (KINGSTON_WORLD_RIGHT
+  // opened this ground up; see its own comment) — the map's own
+  // "Mississauga Point," the open ground the grid runs out into at its
+  // south-eastern end: surveyed farm lots (KINGSTON_EAST_FARM_STRIPS) and
+  // a couple of scattered dwellings, not more town.
+  { kind: 'cabin', x: 500, y: 64, variant: 1, mirror: false },
+  { kind: 'cabin', x: 548, y: 152, variant: 0, mirror: true },
+];
+
+// -320: the grid's own two extra west blocks end around x=-120
+// (KINGSTON_CROSS_ROAD_W3 plus the block beyond it), Fort Frontenac's
+// ruins stand just past that (x=-155), and then the same ~175px of Clergy
+// Reserve ground the first pass at this (worldLeft -140, grid ending at
+// the old screen edge) gave the Dockyard building plus the Ordnance
+// Yard/battery props (drawOrdnanceYard/drawEarthworkBattery, this file's
+// own draw()) — everything west of the fort simply moved out by the same
+// 175px the grid grew. Same reasoning MONTREAL_WORLD_LEFT's own comment
+// gives for opening ground west of the Récollets Gate.
+const KINGSTON_WORLD_LEFT = -320;
+// And the matching edge east — the grid's two extra east blocks end
+// around x=430 (KINGSTON_CROSS_ROAD_E3 plus the block beyond), then
+// Mississauga Point's own open ground out to here. Mirrors
+// MONTREAL_WORLD_RIGHT exactly: worldWidth itself stays CANVAS_WIDTH
+// (the dock's centring point, dockX0/dockX1), this is the separate
+// exploration boundary. Not quite symmetric about the dock (480 west,
+// 440 east) — the west end has the fort *and* the reserve to fit, the
+// east just farm lots.
+const KINGSTON_WORLD_RIGHT = 600;
+// A dirt road connecting the reserve to the grid's own western end
+// (KINGSTON_GRID_X0, not the whole way in — under the grid the ground is
+// the brick back avenue) — the map shows Clergy Reserve as open,
+// undeveloped land (a church land grant, not military works), so this
+// leads to the Dockyard/Ordnance Yard specifically rather than paving the
+// whole reserve. Continues the *back* avenue's own line (y offset 1 so
+// the 14px dirt sits inside the 16px brick band's edges): on the map the
+// reserve/dockyard road leaves the town's inland side. Same shape as
+// MONTREAL_DIRT_PATH_WEST above.
+const KINGSTON_WEST_DIRT_PATH = { x: KINGSTON_WORLD_LEFT, y: KINGSTON_ROAD_H1.y + 1, w: KINGSTON_GRID_X0 - KINGSTON_WORLD_LEFT, h: 14 };
+// The shore road out to Mississauga Point — continues the *front* avenue
+// (the one nearest the harbour), the other way round from the west road
+// above: on the map the road out of the grid's south-eastern end hugs the
+// waterfront.
+const KINGSTON_EAST_DIRT_PATH = { x: KINGSTON_GRID_X1, y: KINGSTON_ROAD_H2.y + 1, w: KINGSTON_WORLD_RIGHT - KINGSTON_GRID_X1, h: 14 };
+// The Ordnance Yard and the small proposed battery (the map's own "No. 5"
+// — see drawEarthworkBattery's own comment on why it's an earthwork, not a
+// stone fort like Fort Frontenac's ruins) — purely decorative props, like
+// the cannon/market well elsewhere in this file, not solid buildings.
+// Both moved out 175px with the world edge (KINGSTON_WORLD_LEFT's own
+// comment) so they stay past the fort, not inside the grid's new blocks.
+const KINGSTON_ORDNANCE_YARD_POS = { x: -275, y: 155 };
+const KINGSTON_BATTERY_POS = { x: -230, y: 130 };
+// Mississauga Point's surveyed farm lots — the map draws the ground past
+// the grid's south-eastern end divided into long narrow lots, the same
+// strip pattern drawFarmStrip already gives Montréal's côtes. North of
+// the two cabins there (KINGSTON_ONFOOT_BUILDINGS), ending at y=30 so the
+// front cabin's own 24px footprint (anchored y=64) never sits on a strip.
+// Long — up to y=-200, most of the way to the world's north edge: a
+// first pass stopped them at -70 and the headless walk-north check
+// showed the whole ground above as one bare lawn out to KINGSTON_WORLD_
+// TOP, where the map draws these lots running a long way back from the
+// shore. Start past KINGSTON_GRID_X1 so they never sit under the back
+// avenue's own last stretch of brick.
+const KINGSTON_EAST_FARM_STRIPS = [
+  { x: 452, y: -200, w: 38, h: 230, tone: 0 },
+  { x: 494, y: -200, w: 38, h: 230, tone: 1 },
+  { x: 536, y: -200, w: 38, h: 230, tone: 2 },
+];
+// Clergy Reserve's own scattered trees — real church land left undeveloped
+// reads as rougher, sparser ground than a laid-out park (KINGSTON_PARK_TREE_SPOTS),
+// so this leans looser than that array's own spacing. Shifted west 175px
+// with everything else in the reserve (KINGSTON_WORLD_LEFT's own comment).
+const KINGSTON_WEST_TREE_SPOTS = [
+  { x: -310, y: 20 }, { x: -290, y: 130 }, { x: -235, y: 25 }, { x: -205, y: 100 },
+  { x: -200, y: 155 }, { x: -310, y: 165 },
+];
+// Mississauga Point's own trees — around the farm lots and cabins, clear
+// of the strips themselves and the shore road, same loose spacing as the
+// reserve's.
+const KINGSTON_EAST_TREE_SPOTS = [
+  { x: 455, y: 100 }, { x: 585, y: 60 }, { x: 470, y: 168 }, { x: 590, y: 168 }, { x: 580, y: -50 },
+];
+// The forest line framing the extended ground's north edge either side
+// of Artillery Park (whose own tree spots, KINGSTON_PARK_TREE_SPOTS, only
+// ever framed the park's own x-range, 35..280) — plus a few scattered
+// across the open ground between there and the grid's back row, so the
+// widened world doesn't read as one flat lawn from the park out to its
+// new edges. Also stands in for the tree line TREE_SPOTS used to draw at
+// the old screen's own left/right edges (KINGSTON_TREE_SPOTS' comment).
+// The west half is deliberately the denser of the two — the reserve was
+// church land left uncleared, so the ground north of it reads as the
+// forest closing back in, where the east's own ground is under the
+// plough (KINGSTON_EAST_FARM_STRIPS) and only gets a tree line at its
+// far edge. A first pass had the west as sparse as the east and the
+// headless walk-north check showed it as one bare lawn.
+const KINGSTON_FRINGE_TREE_SPOTS = [
+  { x: -300, y: -240 }, { x: -220, y: -235 }, { x: -140, y: -245 }, { x: -60, y: -238 },
+  { x: -260, y: -195 }, { x: -170, y: -200 }, { x: -90, y: -185 },
+  { x: -200, y: -150 }, { x: -300, y: -140 }, { x: -120, y: -130 },
+  { x: -110, y: -95 }, { x: -240, y: -100 }, { x: -280, y: -60 }, { x: -170, y: -50 },
+  { x: -60, y: 14 }, { x: -135, y: 18 },
+  { x: 350, y: -240 }, { x: 430, y: -236 }, { x: 510, y: -244 }, { x: 585, y: -238 },
+  { x: 400, y: -150 }, { x: 370, y: 12 }, { x: 320, y: -60 }, { x: 585, y: -120 },
 ];
 
 // North of the grid — the real survey (kingston-1700s.jpg) labels this
@@ -978,6 +1153,13 @@ const TREE_SPOTS = [
   { x: 262, y: 150 }, { x: 276, y: 92 },
   { x: 196, y: 96 },
 ];
+// Kingston drops TREE_SPOTS' four screen-edge trees (x <= 12 / x >= 308):
+// they framed the old fixed screen's own left/right edges, which are now
+// the middle of the extended grid (KINGSTON_CROSS_ROAD_W2 runs right
+// through x=1..15, and the blocks beyond are built up on both sides) —
+// a forest tree standing in a paved cross street reads as a bug, not
+// scenery. KINGSTON_FRINGE_TREE_SPOTS frames the new edges instead.
+const KINGSTON_TREE_SPOTS = TREE_SPOTS.filter((t) => t.x > 12 && t.x < 308);
 // Montreal's own world is MONTREAL_WORLD_WIDTH (640) wide, twice
 // TREE_SPOTS' native 320 — reuse that same spot pattern for the near
 // half and mirror it (x -> 640-x, so it isn't just a repeated copy) for
@@ -1507,6 +1689,98 @@ function drawCannon(ctx, cx, cy) {
   ctx.restore();
 }
 
+// The Ordnance Yard west of the grid (KINGSTON_ORDNANCE_YARD_POS) — a
+// fenced storage yard, stacked round shot and crates rather than a proper
+// building, the same distinction drawCannon's own comment draws for
+// Artillery Park: the ground reads as what it actually was, not dressed
+// up as something grander. Purely decorative, like the cannon/market well
+// elsewhere in this file — not solid, never blocks the player.
+function drawOrdnanceYard(ctx, cx, cy) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 5, 20, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // low post-and-rail fence around the yard
+  ctx.strokeStyle = '#4a3826';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(cx - 20, cy - 12, 40, 24);
+  ctx.fillStyle = '#4a3826';
+  for (const fx of [-20, -6.5, 6.5, 20]) {
+    ctx.fillRect(cx + fx - 1, cy - 13, 2, 26);
+  }
+
+  // stacked round shot — a small pyramid, the one unmistakable "ordnance"
+  // cue at this scale
+  ctx.fillStyle = '#2b2b2b';
+  const shotRows = [3, 2, 1];
+  let sy = cy + 6;
+  for (const row of shotRows) {
+    for (let i = 0; i < row; i++) {
+      const sx = cx - 8 + (i - (row - 1) / 2) * 5.5;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    sy -= 4;
+  }
+
+  // a couple of crates off to the side
+  ctx.fillStyle = '#5c4530';
+  ctx.fillRect(cx + 4, cy - 2, 10, 8);
+  ctx.fillRect(cx + 6, cy - 8, 8, 7);
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cx + 4, cy - 2, 10, 8);
+  ctx.strokeRect(cx + 6, cy - 8, 8, 7);
+  ctx.restore();
+}
+
+// The proposed battery (KINGSTON_BATTERY_POS) — the survey's own "No. 5,"
+// one of several identically-numbered works it marks around the harbour
+// defences (kingston-1700s.jpg is titled "Plan shewing... the Works
+// proposed for the defence of Kingston" — a defence PROPOSAL layered onto
+// the base map, not a record of what already stood). Deliberately a low
+// earthen berm, not a stone fort — Fort Frontenac's ruins (already in
+// KINGSTON_ONFOOT_BUILDINGS) are the real, older, built fortification at
+// the grid's own edge; this is a separate, humbler earthwork, closer to
+// what a "proposed" 1820s-30s battery actually was on paper. Purely
+// decorative, like the cannon/market well elsewhere in this file — not
+// solid, never blocks the player.
+function drawEarthworkBattery(ctx, cx, cy) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 6, 22, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // the berm itself — a shallow grassed mound, darker on the shaded side
+  ctx.fillStyle = '#5a6b45';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 22, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#4c5c3a';
+  ctx.beginPath();
+  ctx.ellipse(cx - 4, cy + 1, 18, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#6b7d52';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - 3, 16, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // two field guns poking over the parapet, angled out toward the harbour
+  for (const dx of [-8, 8]) {
+    ctx.save();
+    ctx.translate(cx + dx, cy - 4);
+    ctx.rotate(dx < 0 ? -0.5 : 0.5);
+    ctx.fillStyle = '#2b2b2b';
+    ctx.fillRect(-1.6, -10, 3.2, 10);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 // A wayside calvaire — a plain wooden roadside cross on a small stone
 // base, the kind that genuinely marked farm roads like Côte Sainte-
 // Catherine (MONTREAL_CALVAIRE's own comment) in Catholic New France,
@@ -1849,12 +2123,12 @@ export function createVillageScene() {
       const isGatineau = village && village.name === 'Gatineau';
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : isQuebecCity ? QUEBEC_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : isKingston ? KINGSTON_WORLD_TOP : 0;
-      worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : 0;
+      worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : isKingston ? KINGSTON_WORLD_LEFT : 0;
       // worldRight tracks worldWidth (not always CANVAS_WIDTH) so Québec's
       // own wider world is actually walkable edge to edge — every other
       // village still has worldWidth === CANVAS_WIDTH, so this changes
       // nothing for them.
-      worldRight = isMontreal ? MONTREAL_WORLD_RIGHT : worldWidth;
+      worldRight = isMontreal ? MONTREAL_WORLD_RIGHT : isKingston ? KINGSTON_WORLD_RIGHT : worldWidth;
       walls = isMontreal ? MONTREAL_WALLS : isQuebecCity ? QUEBEC_CITY_WALLS : null;
       repairShop = repairShopFor(worldWidth);
       buildings = isQuebecCity
@@ -1877,7 +2151,7 @@ export function createVillageScene() {
       const treeSpots = isMontreal
         ? MONTREAL_TREE_SPOTS
         : isKingston
-        ? [...TREE_SPOTS, ...KINGSTON_PARK_TREE_SPOTS]
+        ? [...KINGSTON_TREE_SPOTS, ...KINGSTON_PARK_TREE_SPOTS, ...KINGSTON_WEST_TREE_SPOTS, ...KINGSTON_EAST_TREE_SPOTS, ...KINGSTON_FRINGE_TREE_SPOTS]
         : TREE_SPOTS;
       trees = treesClearOfBuildings(treesFor(seed, treeSpots), buildings);
       traderPos = traderPosFor(repairShop);
@@ -2065,17 +2339,20 @@ export function createVillageScene() {
       }
 
       // Kingston's own street grid, traced off the survey (see
-      // KINGSTON_ROAD_H1's own comment) — two avenues running the width of
-      // the grid, the main road straight off the dock crossing both, two
-      // cross streets flanking it, and the Market Square (with its own
-      // well, same prop Montréal's own square uses) straddling the main
-      // road between the avenues.
+      // KINGSTON_ROAD_H1's own comment) — two avenues running the length
+      // of the grid (KINGSTON_GRID_X0..X1, the grid's own extent, not the
+      // whole world — see KINGSTON_CROSS_ROAD_W2's comment), the main road
+      // straight off the dock crossing both, three cross streets flanking
+      // it each way, and the Market Square (with its own well, same prop
+      // Montréal's own square uses) straddling the main road between the
+      // avenues.
       if (isKingston) {
-        drawBrickRoad(ctx, 0, KINGSTON_ROAD_H1.y, worldWidth, KINGSTON_ROAD_H1.h);
-        drawBrickRoad(ctx, 0, KINGSTON_ROAD_H2.y, worldWidth, KINGSTON_ROAD_H2.h);
+        drawBrickRoad(ctx, KINGSTON_GRID_X0, KINGSTON_ROAD_H1.y, KINGSTON_GRID_X1 - KINGSTON_GRID_X0, KINGSTON_ROAD_H1.h);
+        drawBrickRoad(ctx, KINGSTON_GRID_X0, KINGSTON_ROAD_H2.y, KINGSTON_GRID_X1 - KINGSTON_GRID_X0, KINGSTON_ROAD_H2.h);
         drawBrickRoad(ctx, KINGSTON_MAIN_ROAD_V.x, KINGSTON_MAIN_ROAD_V.y, KINGSTON_MAIN_ROAD_V.w, KINGSTON_MAIN_ROAD_V.h);
-        drawBrickRoad(ctx, KINGSTON_CROSS_ROAD_W.x, KINGSTON_CROSS_ROAD_W.y, KINGSTON_CROSS_ROAD_W.w, KINGSTON_CROSS_ROAD_W.h);
-        drawBrickRoad(ctx, KINGSTON_CROSS_ROAD_E.x, KINGSTON_CROSS_ROAD_E.y, KINGSTON_CROSS_ROAD_E.w, KINGSTON_CROSS_ROAD_E.h);
+        for (const r of [KINGSTON_CROSS_ROAD_W3, KINGSTON_CROSS_ROAD_W2, KINGSTON_CROSS_ROAD_W, KINGSTON_CROSS_ROAD_E, KINGSTON_CROSS_ROAD_E2, KINGSTON_CROSS_ROAD_E3]) {
+          drawBrickRoad(ctx, r.x, r.y, r.w, r.h);
+        }
         drawBrickRoad(ctx, KINGSTON_MARKET_SQUARE.x, KINGSTON_MARKET_SQUARE.y, KINGSTON_MARKET_SQUARE.w, KINGSTON_MARKET_SQUARE.h);
         drawMarketWell(ctx, KINGSTON_MARKET_WELL_CENTER.x, KINGSTON_MARKET_WELL_CENTER.y);
         // Artillery Park, north of the grid (KINGSTON_WORLD_TOP's own
@@ -2097,6 +2374,19 @@ export function createVillageScene() {
         // already is, fixes that outright: nothing drawn afterwards (band,
         // crowd, player) can ever be occluded by it.
         drawBandstand(ctx, KINGSTON_BANDSTAND_POS.x, KINGSTON_BANDSTAND_POS.y);
+        // West of the grid, past Fort Frontenac's ruins — Clergy Reserve's
+        // own dirt road (KINGSTON_WEST_DIRT_PATH's own comment on why it's
+        // dirt, not brick, same reasoning as Artillery Park's own path
+        // above), the Ordnance Yard, and the proposed battery. Same fixed,
+        // always-behind pass as every other ground prop here.
+        drawDirtPath(ctx, KINGSTON_WEST_DIRT_PATH.x, KINGSTON_WEST_DIRT_PATH.y, KINGSTON_WEST_DIRT_PATH.w, KINGSTON_WEST_DIRT_PATH.h);
+        drawOrdnanceYard(ctx, KINGSTON_ORDNANCE_YARD_POS.x, KINGSTON_ORDNANCE_YARD_POS.y);
+        drawEarthworkBattery(ctx, KINGSTON_BATTERY_POS.x, KINGSTON_BATTERY_POS.y);
+        // East of the grid — the shore road out to Mississauga Point and
+        // its surveyed farm lots (KINGSTON_EAST_DIRT_PATH /
+        // KINGSTON_EAST_FARM_STRIPS' own comments).
+        drawDirtPath(ctx, KINGSTON_EAST_DIRT_PATH.x, KINGSTON_EAST_DIRT_PATH.y, KINGSTON_EAST_DIRT_PATH.w, KINGSTON_EAST_DIRT_PATH.h);
+        for (const f of KINGSTON_EAST_FARM_STRIPS) drawFarmStrip(ctx, f.x, f.y, f.w, f.h, f.tone);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe
