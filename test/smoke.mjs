@@ -493,49 +493,64 @@ await step('kingston: running into the dock enters the town on foot', () => {
 
 // --- scenario 4e: ?start=kingston lands where the town actually renders ----
 
-await step('kingston: the ?start= cheat gives a real ~5-6 second entrance, not an instant drop-in', async () => {
-  // Reported across four rounds of tuning (main.js's own comment has the
-  // full history) — this round asked for something different from every
-  // earlier one: deliberately further back than the render gate this time,
-  // calibrated to an actual number ("a 5-6 second entrance"), not just
-  // "further." Positioned at 1/3 of the way from the Warship's own trigger
-  // to Kingston — checked structurally here (the fraction itself), not
-  // just the derived travel time, so this doesn't go brittle against some
-  // unrelated future speed tuning; the travel-time check below is a wider-
-  // tolerance sanity check on top; kept it precise because that's the same
-  // way britishWarship.js's own 1/3-of-the-way positioning got verified.
+await step('kingston: the ?start= cheat is 1/2 way from Jones Falls, past the Warship, with the arrival track forced on', async () => {
+  // Reported across five rounds of tuning (main.js's own comment has the
+  // full history) — most recently asked to move "back up" again, to 1/2 of
+  // the way from Jones Falls to Kingston directly (no longer measured off
+  // the Warship's own position at all).
   const { START_KEYWORDS } = await import('../src/main.js');
   const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  const jonesFalls = VILLAGES.find((v) => v.name === 'Jones Falls');
   const start = START_KEYWORDS['kingston'];
   if (!start) throw new Error('no "kingston" entry in START_KEYWORDS — a name/lookup drifted');
 
-  const expected = kingston.flowDistance - (kingston.flowDistance - WARSHIP_FLOW_DISTANCE) / 3;
+  const expected = kingston.flowDistance - (kingston.flowDistance - jonesFalls.flowDistance) / 2;
   if (Math.abs(start.flowDistance - expected) > 0.01) {
-    throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) isn't 1/3 of the way from the Warship's trigger to Kingston (expected ${expected.toFixed(1)})`);
+    throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) isn't 1/2 of the way from Jones Falls to Kingston (expected ${expected.toFixed(1)})`);
   }
   // Still has to clear the Warship's own "well past the trigger" auto-
   // resolve threshold — landing inside its real held-fight zone would
-  // freeze the approach entirely, not just make it longer.
+  // freeze the approach entirely. Only ~19 units of margin at this
+  // position (tighter than earlier rounds), so this is worth checking
+  // directly rather than assuming it always will be.
   if (start.flowDistance <= WARSHIP_FLOW_DISTANCE + 50) {
     throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) lands inside the Warship's held-fight zone (auto-resolve needs > ${(WARSHIP_FLOW_DISTANCE + 50).toFixed(1)})`);
   }
+  // This position is now short of the "KINGSTON — Fort Frontenac ahead"
+  // banner's own distance trigger (KINGSTON_FLOW_DISTANCE - 70) — the
+  // reason main.js's startedAtKingston forces the arrival track on
+  // immediately instead of waiting for that trigger (reported separately:
+  // wanted the music playing right away on the cheat). If this ever stops
+  // being true, that force-on hook (and this whole scenario) needs
+  // reconsidering, not just this one check.
+  if (start.flowDistance >= kingston.flowDistance - 70) {
+    throw new Error(`?start=kingston (${start.flowDistance.toFixed(1)}) is no longer short of the approach banner's own trigger — the forced-on arrival track may not be needed any more`);
+  }
 
+  // The forced-on behaviour itself: main.js doesn't expose the game/music
+  // instances it builds from a real ?start= URL (same as every other
+  // cheat here — none of them are tested through the actual URL parsing,
+  // just the underlying mechanism their startedAtX hook calls), so this
+  // calls playKingstonTrack() directly, the same one line
+  // startedAtKingston triggers, and confirms it actually lands.
   const g = newGame('rideau', start.flowDistance);
-  let seconds = 0;
+  g.game.music?.start();
+  g.game.music?.playKingstonTrack();
+  await new Promise((r) => setTimeout(r, 20)); // let the fake play()/canplay promises resolve
+  if (g.game.music.nowPlaying?.title !== "Un Siècle d'Avance") {
+    throw new Error(`arrival track didn't start — playing "${g.game.music.nowPlaying?.title}" instead`);
+  }
+
   let arrived = false;
-  for (let i = 0; i < 1200 && !arrived; i++) {
+  for (let i = 0; i < 2000 && !arrived; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     g.game.update(1 / 30);
-    seconds += 1 / 30;
     if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') arrived = true;
     if (g.game.state === 'won') arrived = true;
   }
   if (!arrived) throw new Error('?start=kingston never reached Kingston within the test budget');
-  if (seconds < 4 || seconds > 8) {
-    throw new Error(`?start=kingston's entrance took ${seconds.toFixed(1)}s of straight paddling — expected roughly 5-6s (wide tolerance for acceleration/health-pin variance)`);
-  }
 });
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---

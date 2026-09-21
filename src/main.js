@@ -128,15 +128,23 @@ function normalizeStartName(s) {
 //      "almost directly on the dock," and wanting to "watch the coastline."
 //   4. -26 gave ~19 units of runway (a couple of seconds) — still reported
 //      as wanting "much further back," aiming for "a 5-6 second entrance."
-// Below: 1/3 of the way from the Warship's own trigger (britishWarship.js —
-// itself repositioned to sit 1/3 of the way from Jones Falls to Kingston,
-// same request) to Kingston's own dock — ~91 units out, which a straight
-// paddle covers in ~5.3s (checked by simulating it, not just computed).
-// Deliberately outside KINGSTON_RENDER_GATE now — the whole point this time
-// is watching the town scroll into view over those seconds, not having it
-// already on screen at spawn. Still comfortably past the Warship's own
-// auto-resolve threshold (+50 past TRIGGER_DISTANCE) — by design, since
-// TRIGGER_DISTANCE itself is what this is now measured from.
+//   5. 1/3 of the way from the Warship's own trigger to Kingston (~91
+//      units, ~5.3s simulated) — asked to move "back up" again, this time
+//      to 1/2 of the way from Jones Falls to Kingston directly (not
+//      measured off the Warship at all any more).
+// Below: KINGSTON_FLOW_DISTANCE - halfway, ~206 units out — past the
+// Warship's own "well past the trigger" auto-resolve threshold (+50 past
+// TRIGGER_DISTANCE) by ~19 units, close enough that it's worth flagging:
+// if the Warship's own fraction (WARSHIP_FRACTION, britishWarship.js) ever
+// moves further from Jones Falls, re-check this still clears it. Well
+// outside KINGSTON_RENDER_GATE, same as round 5 — the point is watching
+// the approach happen, not having it already on screen at spawn. Because
+// this is now short of the "KINGSTON — Fort Frontenac ahead" banner's own
+// trigger (KINGSTON_FLOW_DISTANCE - 70) too, game.js's normal distance-
+// triggered playKingstonTrack() wouldn't fire until partway through the
+// approach — reported separately as wanting the arrival track playing
+// immediately on the cheat, not after more paddling, so startedAtKingston
+// below forces it on load instead of waiting for that trigger.
 //
 
 // "gatineau" is the one keyword below that isn't a flowDistance/segment
@@ -150,6 +158,7 @@ function normalizeStartName(s) {
 // clamped straight into the fight instead of reaching the village.
 const RIDEAU_START = { flowDistance: SEGMENT_SHAPE_OFFSET.rideau + 3, segment: 'rideau' };
 const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flowDistance ?? Infinity;
+const JONES_FALLS_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Jones Falls')?.flowDistance ?? Infinity;
 // Exported for test/smoke.mjs — a regression test checks every keyword
 // that targets a hand-authored village lands within that village's own
 // render gate (world/villages.js's VISIBLE_Z_RANGE), not just past
@@ -163,9 +172,9 @@ export const START_KEYWORDS = {
   [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   [normalizeStartName('rideau')]: RIDEAU_START,
-  // See the module comment above (four rounds of tuning) on why this one.
+  // See the module comment above (five rounds of tuning) on why this one.
   [normalizeStartName('kingston')]: {
-    flowDistance: KINGSTON_FLOW_DISTANCE - (KINGSTON_FLOW_DISTANCE - WARSHIP_FLOW_DISTANCE) / 3,
+    flowDistance: KINGSTON_FLOW_DISTANCE - (KINGSTON_FLOW_DISTANCE - JONES_FALLS_FLOW_DISTANCE) / 2,
     segment: 'rideau',
   },
 };
@@ -198,6 +207,12 @@ const startedAtDiable =
 // its own can't-express-this-as-flowDistance case.
 const startedAtGatineau =
   normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('gatineau');
+// "?start=kingston" lands short of the "KINGSTON — Fort Frontenac ahead"
+// banner's own distance trigger now (see START_KEYWORDS' own comment on
+// "kingston") — reported as wanting the arrival track playing immediately
+// on the cheat rather than only once paddling crosses that trigger.
+const startedAtKingston =
+  normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('kingston');
 
 // A ?start= cheat is a one-shot for THIS page load. Strip it from the address
 // bar now that it's been read, so a reload, a restored tab, or a home-screen
@@ -554,6 +569,19 @@ try {
   if (startedAtGatineau) {
     const gatineau = VILLAGES.find((v) => v.name === 'Gatineau' && v.segment === 'lawrenceWest');
     if (gatineau) game.enterVillage(gatineau);
+  }
+  // ?start=kingston — force the arrival track on immediately (see
+  // startedAtKingston's own comment) instead of waiting for the normal
+  // distance trigger to reach it. kingstonAnnounced marked true so that
+  // trigger, once paddling does reach it, doesn't restart the same track
+  // from 0:00 a second time (playSpecial() reloads audio.src regardless of
+  // what's already playing) — the banner it would have also shown is
+  // skipped here too, same as every other mid-run cheat skips the normal
+  // approach beats it jumps past.
+  if (startedAtKingston) {
+    game.music?.start();
+    game.music?.playKingstonTrack();
+    game.kingstonAnnounced = true;
   }
 
   // Lets the index.html error handler word later crashes as "running the

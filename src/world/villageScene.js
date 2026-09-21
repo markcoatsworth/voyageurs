@@ -336,23 +336,49 @@ const TADOUSSAC_CHAPEL_SPUR = { x: 159, y: 96, w: 12, h: DOCK_TOP - 96 };
 // use by the 1790s, unlike the river view's still-standing KINGSTON_FORT
 // corner) standing apart at the town's own western edge, same "small
 // cluster apart from the main spread" treatment the river view gives it.
+// Kingston's own street grid — the actual layout traced off the survey
+// (kingston-1700s.jpg, dropped into the repo root; see world/villages.js's
+// own comment on it), not invented: the map shows a genuine rectangular
+// grid on the point (numbered cross streets running the letters of
+// "KINGSTON"/"TOWN" down the middle, per that map's own labels), a Market
+// square, and the old fort's own corner standing apart at the grid's
+// western edge — the same shape Montréal's own on-foot grid uses
+// (MONTREAL_ROAD_V/V2/V3/V4 + MONTREAL_ROAD_H/H2 + MONTREAL_SQUARE below),
+// reused here rather than the single-street treatment Québec City's on-foot
+// scene gets, since the real map genuinely shows a multi-street grid, not
+// one road up from a gate.
+const KINGSTON_ROAD_H1 = { y: 68, h: 16 };  // back avenue, inland edge of the grid
+const KINGSTON_ROAD_H2 = { y: 126, h: 16 }; // front avenue, nearest the harbour
+const KINGSTON_MAIN_ROAD_V = { x: 153, y: KINGSTON_ROAD_H1.y, w: 14, h: DOCK_TOP - KINGSTON_ROAD_H1.y }; // straight off the dock, up through the whole grid — the town's own spine, same role QUEBEC_ROAD_V plays off its gate
+const KINGSTON_CROSS_ROAD_W = { x: 76, y: KINGSTON_ROAD_H1.y, w: 14, h: KINGSTON_ROAD_H2.y + KINGSTON_ROAD_H2.h - KINGSTON_ROAD_H1.y };
+const KINGSTON_CROSS_ROAD_E = { x: 226, y: KINGSTON_ROAD_H1.y, w: 14, h: KINGSTON_ROAD_H2.y + KINGSTON_ROAD_H2.h - KINGSTON_ROAD_H1.y };
+// Market Square — between the two avenues, straddling the main road the
+// same way a real market square sits astride the street leading up from
+// the wharf. The well (drawMarketWell, already used for Montréal's own
+// square) sits west of the road through it; St. George's faces the square
+// from its own east side, same "set back, central" convention the church
+// gets everywhere else (villages.js's KINGSTON_CHURCH comment).
+const KINGSTON_MARKET_SQUARE = { x: 110, y: 90, w: 100, h: 30 };
+const KINGSTON_MARKET_WELL_CENTER = { x: 135, y: 105 };
+
 const KINGSTON_ONFOOT_BUILDINGS = [
-  // Upper Kingston, back row — inland from the harbour.
-  { kind: 'stone', x: 40, y: 58, variant: 1, mirror: false },
-  { kind: 'stone', x: 90, y: 54, variant: 2, mirror: true },
-  { kind: 'stone', x: 140, y: 60, variant: 0, mirror: false },
-  { kind: 'stone', x: 195, y: 56, variant: 1, mirror: true },
-  { kind: 'stone', x: 240, y: 60, variant: 2, mirror: false },
-  { kind: 'stone', x: 285, y: 54, variant: 0, mirror: true },
-  { kind: 'church', x: 165, y: 98, mirror: false },
-  // The town proper, front row — closer to the harbour.
-  { kind: 'stone', x: 45, y: 140, variant: 2, mirror: true },
-  { kind: 'stone', x: 95, y: 146, variant: 0, mirror: false },
-  { kind: 'stone', x: 140, y: 142, variant: 1, mirror: true },
-  { kind: 'stone', x: 195, y: 144, variant: 2, mirror: false },
-  { kind: 'stone', x: 245, y: 140, variant: 0, mirror: true },
-  { kind: 'stone', x: 290, y: 146, variant: 1, mirror: false },
-  { kind: 'ruinedfort', x: 25, y: 106, mirror: false },
+  // Upper Kingston, back row — north of the back avenue, one building per
+  // block the cross streets/main road divide the grid into.
+  { kind: 'stone', x: 45, y: 62, variant: 1, mirror: false },
+  { kind: 'stone', x: 121, y: 60, variant: 2, mirror: true },
+  { kind: 'stone', x: 196, y: 60, variant: 0, mirror: false },
+  { kind: 'stone', x: 265, y: 62, variant: 1, mirror: true },
+  // St. George's, facing the Market Square from its own east side.
+  { kind: 'church', x: 185, y: 110, mirror: false },
+  // The town proper, south of the front avenue — closest to the harbour.
+  { kind: 'stone', x: 50, y: 155, variant: 2, mirror: true },
+  { kind: 'stone', x: 121, y: 155, variant: 0, mirror: false },
+  { kind: 'stone', x: 196, y: 152, variant: 1, mirror: true },
+  { kind: 'stone', x: 265, y: 155, variant: 2, mirror: false },
+  // Fort Frontenac's ruins, standing apart at the grid's own western edge,
+  // west of the whole street pattern — same "small cluster apart from the
+  // main spread" treatment the river view gives it.
+  { kind: 'ruinedfort', x: 25, y: 105, mirror: false },
 ];
 
 // Montréal's on-foot layout — rebuilt from an actual period source: Thomas
@@ -1621,6 +1647,22 @@ export function createVillageScene() {
       if (isTadoussac) {
         drawDirtPath(ctx, TADOUSSAC_PATH.x, TADOUSSAC_PATH.y, TADOUSSAC_PATH.w, TADOUSSAC_PATH.h);
         drawDirtPath(ctx, TADOUSSAC_CHAPEL_SPUR.x, TADOUSSAC_CHAPEL_SPUR.y, TADOUSSAC_CHAPEL_SPUR.w, TADOUSSAC_CHAPEL_SPUR.h);
+      }
+
+      // Kingston's own street grid, traced off the survey (see
+      // KINGSTON_ROAD_H1's own comment) — two avenues running the width of
+      // the grid, the main road straight off the dock crossing both, two
+      // cross streets flanking it, and the Market Square (with its own
+      // well, same prop Montréal's own square uses) straddling the main
+      // road between the avenues.
+      if (isKingston) {
+        drawBrickRoad(ctx, 0, KINGSTON_ROAD_H1.y, worldWidth, KINGSTON_ROAD_H1.h);
+        drawBrickRoad(ctx, 0, KINGSTON_ROAD_H2.y, worldWidth, KINGSTON_ROAD_H2.h);
+        drawBrickRoad(ctx, KINGSTON_MAIN_ROAD_V.x, KINGSTON_MAIN_ROAD_V.y, KINGSTON_MAIN_ROAD_V.w, KINGSTON_MAIN_ROAD_V.h);
+        drawBrickRoad(ctx, KINGSTON_CROSS_ROAD_W.x, KINGSTON_CROSS_ROAD_W.y, KINGSTON_CROSS_ROAD_W.w, KINGSTON_CROSS_ROAD_W.h);
+        drawBrickRoad(ctx, KINGSTON_CROSS_ROAD_E.x, KINGSTON_CROSS_ROAD_E.y, KINGSTON_CROSS_ROAD_E.w, KINGSTON_CROSS_ROAD_E.h);
+        drawBrickRoad(ctx, KINGSTON_MARKET_SQUARE.x, KINGSTON_MARKET_SQUARE.y, KINGSTON_MARKET_SQUARE.w, KINGSTON_MARKET_SQUARE.h);
+        drawMarketWell(ctx, KINGSTON_MARKET_WELL_CENTER.x, KINGSTON_MARKET_WELL_CENTER.y);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe
