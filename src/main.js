@@ -686,11 +686,41 @@ function showNowPlaying(track) {
   nowPlayingEl.append(head, title, artist);
 
   nowPlayingEl.classList.add('show');
+  syncMediaSession(track);
 }
 
+// Media Session: tell the OS what's playing (Media Session API). On a phone
+// this is what gets the music treated as *media* rather than a web page
+// making noise — lock-screen/notification controls with the track's own
+// title and artist, and, the part that matters here, the browser is far
+// more willing to keep an <audio> element going once the screen is off
+// when it's registered as a media session. Belt-and-braces with the wake
+// lock below: that keeps the screen on while you play; this keeps the
+// music going if the screen goes off anyway (battery saver, a browser
+// without wake lock, the OS overriding it) — "I don't mind about the
+// screen going off, but can we preserve the audio?" The game itself is
+// frozen while hidden (rAF stops), so this is a music player at that
+// point, which is exactly the right thing to be. play/pause from the
+// lock screen map onto music.js's own resume()/stop() — the same pair a
+// capsize + restart already uses, so the track picks up where it was.
+// Feature-detected: no-op anywhere without it (desktop Firefox, the smoke
+// test's shim).
+function syncMediaSession(track) {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: track.title, artist: track.artist, album: 'Voyageurs' });
+    navigator.mediaSession.playbackState = 'playing';
+  } catch { /* metadata is a nicety — never let it break the card */ }
+}
 // Background music — browsers block autoplay until a real user gesture, so
 // this starts on the player's first keypress or click rather than on load.
 const music = createMusic({ onTrack: showNowPlaying });
+if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+  try {
+    navigator.mediaSession.setActionHandler('play', () => { music.resume(); navigator.mediaSession.playbackState = 'playing'; });
+    navigator.mediaSession.setActionHandler('pause', () => { music.stop(); navigator.mediaSession.playbackState = 'paused'; });
+  } catch { /* an action the platform doesn't support — fine */ }
+}
 
 // music.js's own debug() calls, on-screen instead of console-only — behind
 // ?musicdebug=1, never shown otherwise. console.log alone is invisible on a
@@ -788,7 +818,13 @@ muteBtn.addEventListener('click', () => {
 // own comment); once that happens every later call here is an instant
 // no-op, so leaving these listeners running permanently costs nothing.
 for (const evt of ['pointerdown', 'touchend', 'keydown', 'click']) {
-  window.addEventListener(evt, () => music.start());
+  window.addEventListener(evt, () => {
+    music.start();
+    // Retry the screen wake lock on a real gesture too (defined further
+    // down; hoisted) — for a browser that wants activation before
+    // granting one, or after a refusal.
+    syncWakeLock();
+  });
 }
 
 // Escape has no touch equivalent, hence a visible button — shown for every
@@ -852,6 +888,56 @@ let loopBroken = false;
 // then) rather than firing a burst of saves on return.
 const CHECKPOINT_CHECK_INTERVAL = 2;
 let checkpointCheckTimer = 0;
+// Screen Wake Lock: keep the phone's screen awake while a run is actually
+// live. Reported as "it goes to sleep pretty quickly" on a phone —
+// paddling is long stretches of small taps on the steer pad, or none at
+// all while drifting, and a phone's idle timer doesn't care that a game is
+// running. Held while there's a game in the 'playing' state that isn't
+// paused (never over the title, the pause screen or a game-over — those
+// can sleep), and only while the page is visible: the platform drops the
+// lock itself the moment the tab is hidden or the screen does go off, so
+// visibilitychange re-requests it on the way back. Feature-detected;
+// request() can also be refused outright (low-battery mode, some policies)
+// and that's just silently no lock — the Media Session registration above
+// is what carries the music through a screen-off in that case. Not tied
+// to a user gesture on purpose: the game launches straight into play, so
+// this has to work from the loop itself, and current Chrome/Safari allow
+// that for a visible document — the gesture listeners below also poke it
+// for any browser that wants activation first.
+let wakeLock = null;
+let wakeLockWanted = false;
+function syncWakeLock() {
+  if (typeof navigator === 'undefined' || !navigator.wakeLock || typeof document === 'undefined') return;
+  const want = wakeLockWanted && document.visibilityState === 'visible';
+  if (want && !wakeLock) {
+    const req = navigator.wakeLock.request('screen');
+    // Mark it held immediately so a burst of frames doesn't fire a stack
+    // of requests; the real sentinel replaces the placeholder on resolve.
+    wakeLock = req;
+    req.then(
+      (sentinel) => {
+        wakeLock = sentinel;
+        sentinel.addEventListener('release', () => { if (wakeLock === sentinel) wakeLock = null; });
+        // The want may have flipped while the request was in flight.
+        if (!(wakeLockWanted && document.visibilityState === 'visible')) sentinel.release().catch(() => {});
+      },
+      () => { wakeLock = null; }, // refused — nothing to hold
+    );
+  } else if (!want && wakeLock && typeof wakeLock.release === 'function') {
+    const held = wakeLock;
+    wakeLock = null;
+    held.release().catch(() => {});
+  }
+}
+function setWakeLockWanted(want) {
+  if (want === wakeLockWanted) return;
+  wakeLockWanted = want;
+  syncWakeLock();
+}
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('visibilitychange', syncWakeLock);
+}
+
 function loop(now) {
   // rAF's timestamp can occasionally predate the performance.now() call
   // above (most noticeably on the very first frame), so clamp dt to
@@ -859,6 +945,7 @@ function loop(now) {
   // backwards for a frame.
   const dt = Math.max(0, Math.min((now - lastTime) / 1000, 1 / 20));
   lastTime = now;
+  setWakeLockWanted(!!game && !loopBroken && game.state === 'playing' && !game.paused);
   if (game && !loopBroken) {
     try {
       game.update(dt);
