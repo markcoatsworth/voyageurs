@@ -1,7 +1,7 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './shared/config.js';
 import { createObstacleField } from './world/obstacles.js';
 import { createWaterRenderer } from './world/waterGL.js';
-import { createMusic, KINGSTON_TRACK } from './audio/music.js';
+import { createMusic } from './audio/music.js';
 import { createMinimap } from './world/minimap.js';
 import { createTouchControls, isTouchPrimary } from './core/touchControls.js';
 import { Input } from './core/input.js';
@@ -717,23 +717,21 @@ try {
   }
   // ?start=kingston — the arrival track/banner now fire on their own, the
   // instant game.js's own update loop first ticks (the cheat lands exactly
-  // on that trigger — see startedAtKingston's own comment). Two manual
-  // touches still needed here, both set before that first tick runs:
-  //   - primeKingstonFirstTrack(KINGSTON_TRACK) — "make sure [Un Siècle
-  //     d'Avance] is the first song in the playlist from ?start=kingston."
-  //     A real playthrough still gets a genuinely random lead track (this
-  //     is never called on that path); the cheat always leads with the
-  //     same familiar arrival cue instead.
-  //   - speed — every ?start= cheat otherwise begins at the same
-  //     BASE_SPEED a normal playthrough carries into any segment —
-  //     reported here as "already screaming fast" for a cheat whose whole
-  //     point is a slow, chill approach. MIN_SPEED is this game's own
-  //     "actual chill slow speed, not just a mild step down from medium"
-  //     (see its own comment, game.js) — holding Up still accelerates
-  //     normally from there, same as a real approach, just starting from a
-  //     calm drift instead of already at cruising speed.
+  // on that trigger — see startedAtKingston's own comment). One manual
+  // touch still needed here, set before that first tick runs: speed —
+  // every ?start= cheat otherwise begins at the same BASE_SPEED a normal
+  // playthrough carries into any segment — reported here as "already
+  // screaming fast" for a cheat whose whole point is a slow, chill
+  // approach. MIN_SPEED is this game's own "actual chill slow speed, not
+  // just a mild step down from medium" (see its own comment, game.js) —
+  // holding Up still accelerates normally from there, same as a real
+  // approach, just starting from a calm drift instead of already at
+  // cruising speed.
+  // (There used to be a second touch — priming Un Siècle d'Avance as the
+  // lead track for this cheat only. Gone: the Kingston playlist now always
+  // plays in fixed order from that track, cheat or not — see
+  // music.js's KINGSTON_TRACK/playKingstonTrack().)
   if (startedAtKingston) {
-    game.music?.primeKingstonFirstTrack(KINGSTON_TRACK);
     game.speed = MIN_SPEED;
   }
 

@@ -69,7 +69,11 @@ it's not the same running order every session:
   shuffle either: it plays through the dock, the walk around town
   (including the Artillery Park bandstand scene, its original reason for
   growing past one track), and the victory card, looping through the set
-  for as long as the run continues. Supplied directly like "Reel du
+  for as long as the run continues. Unlike the regular shuffle, this set
+  plays in fixed order — "Un Siècle d'Avance" is always first, every
+  arrival (real approach, `?start=kingston`, or a restart), then straight
+  through to "Le Grace Aussi" and back to the top; no randomness at all.
+  Supplied directly like "Reel du
   Paradis et Enfer"/"La Mer de la Folie" above, not sourced from an
   archive. The first three are titled "Les Chevaliers" on the assumption
   it's the same source as those two; "Le Grace Aussi" is credited to Les

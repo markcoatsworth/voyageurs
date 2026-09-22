@@ -769,6 +769,13 @@ await step('kingston: the ?start= cheat lands exactly on the arrival-track trigg
   if (!kingstonTitles.includes(g.game.music.nowPlaying?.title)) {
     throw new Error(`arrival playlist never cut in on its own — playing "${g.game.music.nowPlaying?.title}" instead`);
   }
+  // ...and specifically with Un Siècle d'Avance — "un-siecle-davance needs
+  // to be the first song once we hit the ?start=kingston waypoint." The
+  // list plays in order from the top (music.js's playKingstonTrack()), so
+  // this is exact, not a lucky draw.
+  if (g.game.music.nowPlaying?.title !== KINGSTON_PLAYLIST[0].title) {
+    throw new Error(`?start=kingston led with "${g.game.music.nowPlaying?.title}", not "${KINGSTON_PLAYLIST[0].title}"`);
+  }
 
   let arrived = false;
   for (let i = 0; i < 2000 && !arrived; i++) {
@@ -1303,6 +1310,13 @@ await step('kingston: the arrival playlist cuts in at the approach banner and su
   if (!kingstonTitles.includes(g.game.music.nowPlaying?.title)) {
     throw new Error(`arrival playlist never cut in — playing "${g.game.music.nowPlaying?.title}" instead`);
   }
+  // A real approach (not the cheat) leads with Un Siècle d'Avance too —
+  // "un-siecle-davance needs to be the first song as we pull into
+  // Kingston." Same fixed order as ?start=kingston gets; there is no
+  // separate path.
+  if (g.game.music.nowPlaying?.title !== KINGSTON_PLAYLIST[0].title) {
+    throw new Error(`a real approach led with "${g.game.music.nowPlaying?.title}", not "${KINGSTON_PLAYLIST[0].title}"`);
+  }
 
   let won = false;
   for (let i = 0; i < 2000 && !won; i++) {
@@ -1600,14 +1614,13 @@ await step('music: the Kingston playlist cycles through every track, never falli
   // game"). Simulates each track finishing on its own
   // (debugAudioElement().dispatchEvent({type:'ended'}), same test-only hook
   // used to fake a real playthrough elsewhere) enough times to cycle
-  // through the whole set (KINGSTON_PLAYLIST) at least twice over — full
-  // coverage in exactly KINGSTON_PLAYLIST.length transitions is actually
-  // guaranteed, not probabilistic (playKingstonPlaylistTrack() only
-  // reshuffles once every track in the current order has played, so one
-  // pass can't skip any), the 2x margin is just headroom — and confirms
-  // every track seen is one of those, never a PLAYLIST (ambient shuffle)
-  // title leaking in, which is exactly what the old default playSpecial()
-  // onEnded would have done.
+  // through the whole set (KINGSTON_PLAYLIST) at least twice over — the
+  // set plays in fixed list order and wraps (playKingstonPlaylistTrack()),
+  // so full coverage in exactly KINGSTON_PLAYLIST.length transitions is
+  // guaranteed, the 2x margin is just headroom — and confirms every track
+  // seen is one of those, never a PLAYLIST (ambient shuffle) title leaking
+  // in, which is exactly what the old default playSpecial() onEnded would
+  // have done. The exact sequence is the next scenario's job.
   const mod = await import('../src/audio/music.js');
   const music = mod.createMusic();
   const kingstonTitles = mod.KINGSTON_PLAYLIST.map((t) => t.title);
@@ -1637,34 +1650,45 @@ await step('music: the Kingston playlist cycles through every track, never falli
   }
 });
 
-await step('music: primeKingstonFirstTrack() pins the lead-off track for exactly one playKingstonTrack() call', async () => {
-  // "Make sure [Un Siècle d'Avance] is the first song in the playlist from
-  // ?start=kingston" — requested explicitly. main.js's real ?start=kingston
+await step('music: the Kingston playlist always leads with Un Siècle d\'Avance and plays in fixed list order, every time', async () => {
+  // "un-siecle-davance needs to be the first song once we hit the
+  // ?start=kingston waypoint... cooked in as the first song. Make the
+  // playlist straight order so there is no randomness." Requested after
+  // the previous arrangement (a shuffle, with a one-shot prime for the
+  // cheat only) was caught playing out of order. So: no randomness left
+  // to sample — assert the exact sequence. main.js's real ?start=kingston
   // URL flow isn't exercised by newGame()-based tests (a pre-existing
-  // limitation every other cheat here shares — see e.g. the ?start=kingston
-  // scenario's own comment), so this tests the underlying mechanism
-  // directly: priming pins the very next call, an unprimed call afterward
-  // goes back to a genuine shuffle (not always the same track, the way a
-  // real playthrough — which never primes at all — needs).
+  // limitation every other cheat here shares), but it no longer does
+  // anything music-specific anyway: playKingstonTrack() itself is what
+  // guarantees the order, for the cheat and a real approach alike.
   const mod = await import('../src/audio/music.js');
   const music = mod.createMusic();
-  music.start();
-  music.primeKingstonFirstTrack(mod.KINGSTON_TRACK);
-  music.playKingstonTrack();
-  await new Promise((r) => setTimeout(r, 20));
-  if (music.nowPlaying?.title !== mod.KINGSTON_TRACK.title) {
-    throw new Error(`primed track didn't lead off — playing "${music.nowPlaying?.title}" instead of "${mod.KINGSTON_TRACK.title}"`);
+  const expected = mod.KINGSTON_PLAYLIST.map((t) => t.title);
+  if (expected[0] !== mod.KINGSTON_TRACK.title) {
+    throw new Error(`KINGSTON_PLAYLIST[0] is "${expected[0]}", not "${mod.KINGSTON_TRACK.title}" — Un Siècle d'Avance has to be first in the list, since the list IS the play order`);
   }
-
-  // Consumed — a second, unprimed playKingstonTrack() call (e.g. a second
-  // run in the same session) must not keep replaying the same pinned pick.
-  let sawOtherFirst = false;
-  for (let i = 0; i < 20 && !sawOtherFirst; i++) {
+  if (expected[expected.length - 1] !== 'Le Grace Aussi') {
+    throw new Error(`KINGSTON_PLAYLIST ends with "${expected[expected.length - 1]}" — "Le Grace Aussi" was asked for "at the end"`);
+  }
+  music.start();
+  // Three separate arrivals (a first approach, then two capsize+restart
+  // re-triggers, or a second run in the same session — every one of them
+  // must lead with the same track), each played two full times around so
+  // the wrap is covered too.
+  for (let arrival = 0; arrival < 3; arrival++) {
     music.playKingstonTrack();
     await new Promise((r) => setTimeout(r, 20));
-    if (music.nowPlaying?.title !== mod.KINGSTON_TRACK.title) sawOtherFirst = true;
+    const seen = [];
+    for (let i = 0; i < expected.length * 2; i++) {
+      seen.push(music.nowPlaying?.title);
+      music.debugAudioElement().dispatchEvent({ type: 'ended' });
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const want = [...expected, ...expected];
+    if (JSON.stringify(seen) !== JSON.stringify(want)) {
+      throw new Error(`arrival #${arrival + 1} played ${JSON.stringify(seen)}, expected exactly ${JSON.stringify(want)}`);
+    }
   }
-  if (!sawOtherFirst) throw new Error('20 unprimed playKingstonTrack() calls in a row all led with the primed track — priming should only affect the one call right after it');
 });
 
 await step('weapons: the musket fires slower and hits harder than the pistol', () => {

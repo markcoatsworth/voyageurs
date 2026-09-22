@@ -123,9 +123,16 @@ const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de 
 // the shuffle's own default level is just genuinely quiet). Same ceiling,
 // same fix: 1.0 is as loud as audio.volume goes; if that's still not enough,
 // the fix has to move to the file itself (see those two tracks' own comments).
-// Exported (unlike KINGSTON_TRACK_2..5 below) so main.js's ?start=kingston
-// cheat can pin it as the lead-off track via primeKingstonFirstTrack() —
-// see that function's own comment for why.
+// ALWAYS the first Kingston track — on a real approach, on ?start=kingston,
+// and again after any restart. It's simply KINGSTON_PLAYLIST[0] and that
+// list plays in order (see playKingstonTrack()); nothing shuffles it.
+// This used to be pinned only for the ?start=kingston cheat, through a
+// one-shot primeKingstonFirstTrack() — reported back as still coming up
+// out of order ("you got the playlist out of order again... un-siecle-
+// davance needs to be cooked in as the first song"), since anything
+// beyond that one primed call (a capsize+restart re-triggering the
+// approach, the set wrapping around) went back to a shuffle. Exported
+// for test/smoke.mjs, which asserts it leads.
 export const KINGSTON_TRACK = { src: '/audio/un-siecle-davance.mp3', title: "Un Siècle d'Avance", artist: 'Les Chevaliers', volume: 1.0 };
 // Two more, added for the Artillery Park bandstand scene (villageScene.js)
 // — "an isolated playlist exclusively for Kingston," explicitly not folded
@@ -147,9 +154,8 @@ const KINGSTON_TRACK_4 = { src: '/audio/les-rois-de-ble.mp3', title: 'Les Rois d
 // Artist confirmed directly ("Le Grace Aussi is also by Les Chevaliers"),
 // so unlike KINGSTON_TRACK_2/3's filename-derived guess this one's a
 // stated credit, not a placeholder. Title is the filename's own
-// spelling. Note "at the end" is array position only —
-// playKingstonTrack() shuffles this set, so it's last in the list, not
-// guaranteed last to play.
+// spelling. "At the end" now genuinely means last to play, not just last
+// in the array — the set plays in order (playKingstonTrack()).
 const KINGSTON_TRACK_5 = { src: '/audio/le-grace-aussi.mp3', title: 'Le Grace Aussi', artist: 'Les Chevaliers', volume: 1.0 };
 // Unlike every other boss track, nothing ever calls endBossTrack() for this
 // set (see win()'s own comment in game.js) — arriving at Kingston is the
@@ -157,10 +163,11 @@ const KINGSTON_TRACK_5 = { src: '/audio/le-grace-aussi.mp3', title: 'Le Grace Au
 // Instead, once the first one ends on its own, the next plays (see
 // playKingstonTrack() below) — a closed loop of its own, never handing back
 // to PLAYLIST, for as long as the run goes on.
-// Exported for test/smoke.mjs — the arrival cue is shuffled among these
-// now, not always KINGSTON_TRACK specifically, so a test checking "did the
-// arrival cue cut in" needs the real set to check membership against
-// rather than one hardcoded title.
+// THIS ORDER IS THE PLAY ORDER. Unlike PLAYLIST above, this set is never
+// shuffled: Un Siècle d'Avance first, every time, then straight through
+// and back around to the top — "make the playlist straight order so
+// there is no randomness." Exported for test/smoke.mjs, which asserts
+// exactly that sequence.
 export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3, KINGSTON_TRACK_4, KINGSTON_TRACK_5];
 
 // Reported as quiet on the whole, relative to other applications running
@@ -246,18 +253,12 @@ export function createMusic({ onTrack } = {}) {
 
   let order = shuffled(PLAYLIST);
   let index = 0;
-  // Kingston's own shuffle order/index — entirely separate from
-  // order/index above, the same way KINGSTON_PLAYLIST is entirely separate
-  // from PLAYLIST. This initial value only matters until the first real
-  // playKingstonTrack() call, which always overwrites it (with a fresh
-  // shuffle, or — if primed — the pinned order below) before anything
-  // actually plays, so it's declared shuffled here too rather than left as
-  // a stray fixed order that nothing downstream would ever actually use.
-  let kingstonOrder = shuffled(KINGSTON_PLAYLIST);
+  // Kingston's own position in KINGSTON_PLAYLIST — entirely separate from
+  // order/index above, the same way that set is entirely separate from
+  // PLAYLIST. No `kingstonOrder` any more: the play order IS the array
+  // (KINGSTON_PLAYLIST's own comment), so an index is all the state there
+  // is. Reset to 0 by every playKingstonTrack() call.
   let kingstonIndex = 0;
-  // Set by primeKingstonFirstTrack() (below), consumed by the next
-  // playKingstonTrack() call — see that function's own comment.
-  let kingstonPrimed = false;
   // Bumped by stop() and playSpecial() — playCurrent() is async (it awaits
   // prefetch()), so a capsize, or a boss track cutting in, could in
   // principle land while a fetch is still resolving; without this, the
@@ -545,21 +546,20 @@ export function createMusic({ onTrack } = {}) {
     }
   }
 
-  // Plays kingstonOrder[kingstonIndex] via playSpecial(), with a custom
+  // Plays KINGSTON_PLAYLIST[kingstonIndex] via playSpecial(), with a custom
   // onEnded that advances to the next Kingston track instead of the
-  // default (drop back into PLAYLIST) — reshuffling KINGSTON_PLAYLIST once
-  // exhausted, the same way playCurrent()'s own 'ended' handler reshuffles
-  // PLAYLIST. Recurses through playSpecial's onEnded callback rather than a
-  // loop, so it's driven entirely by real 'ended' events, one track at a
-  // time — never hands back to the ambient shuffle.
+  // default (drop back into PLAYLIST) — wrapping straight back to the top
+  // once exhausted. Deliberately NOT a reshuffle the way playCurrent()'s
+  // own 'ended' handler reshuffles PLAYLIST: a reshuffle here is what put
+  // the same track back-to-back across the wrap (a 1-in-N chance every
+  // time round) and, worse, let anything but Un Siècle d'Avance lead.
+  // Recurses through playSpecial's onEnded callback rather than a loop, so
+  // it's driven entirely by real 'ended' events, one track at a time —
+  // never hands back to the ambient shuffle.
   function playKingstonPlaylistTrack() {
-    const track = kingstonOrder[kingstonIndex];
+    const track = KINGSTON_PLAYLIST[kingstonIndex];
     playSpecial(track, 0, () => {
-      kingstonIndex++;
-      if (kingstonIndex >= kingstonOrder.length) {
-        kingstonOrder = shuffled(KINGSTON_PLAYLIST);
-        kingstonIndex = 0;
-      }
+      kingstonIndex = (kingstonIndex + 1) % KINGSTON_PLAYLIST.length;
       playKingstonPlaylistTrack();
     });
   }
@@ -705,38 +705,24 @@ export function createMusic({ onTrack } = {}) {
     playPursuitTrack() {
       playSpecial(PURSUIT_TRACK);
     },
-    // Pins `track` as the lead-off track the *next* time playKingstonTrack()
-    // is called, without giving up the shuffle for the other two — used by
-    // main.js's ?start=kingston cheat ("make sure [Un Siècle d'Avance] is
-    // the first song in the playlist from ?start=kingston") so a quick dev
-    // visit always leads with the same familiar arrival cue, while a real
-    // playthrough (which never calls this) still gets a genuinely random
-    // lead track like any other call to playKingstonTrack() always has.
-    // Consumed (kingstonPrimed reset) the moment playKingstonTrack() reads
-    // it, so it only affects the very next call, not every future one.
-    primeKingstonFirstTrack(track) {
-      kingstonOrder = [track, ...shuffled(KINGSTON_PLAYLIST.filter((t) => t !== track))];
-      kingstonIndex = 0;
-      kingstonPrimed = true;
-    },
     // Kingston's arrival cue — same cut-in-now behaviour as the other
-    // trigger-fired tracks, but now a small closed playlist of its own
+    // trigger-fired tracks, but a small closed playlist of its own
     // (KINGSTON_PLAYLIST) rather than one track — "an isolated playlist
-    // exclusively for Kingston," never mixed into PLAYLIST above. Reshuffled
-    // fresh on every call (kingstonOrder/kingstonIndex reset here) unless
-    // primeKingstonFirstTrack() just pinned a specific lead-off track — so a
-    // capsize+restart mid-approach, or a second ordinary run in the same
-    // session, doesn't always replay the same first pick. Deliberately
-    // never handed to endBossTrack() by any caller (see KINGSTON_PLAYLIST's
-    // own comment) — once it starts, this loops through the whole set
-    // for the rest of the run rather than ever resolving back into the
-    // ambient shuffle.
+    // exclusively for Kingston," never mixed into PLAYLIST above. Always
+    // starts from the top: Un Siècle d'Avance (KINGSTON_TRACK, index 0),
+    // then the rest in list order, whether this is a real approach, the
+    // ?start=kingston cheat, or a capsize+restart re-crossing the approach
+    // trigger — "un-siecle-davance needs to be the first song as we pull
+    // into Kingston." There used to be a shuffle here, with a one-shot
+    // primeKingstonFirstTrack() the cheat used to pin the lead track
+    // (KINGSTON_TRACK's own comment on why that wasn't enough); both are
+    // gone, so there is no path left that can play anything else first.
+    // Deliberately never handed to endBossTrack() by any caller (see
+    // KINGSTON_PLAYLIST's own comment) — once it starts, this loops through
+    // the whole set for the rest of the run rather than ever resolving
+    // back into the ambient shuffle.
     playKingstonTrack() {
-      if (!kingstonPrimed) {
-        kingstonOrder = shuffled(KINGSTON_PLAYLIST);
-        kingstonIndex = 0;
-      }
-      kingstonPrimed = false;
+      kingstonIndex = 0;
       playKingstonPlaylistTrack();
     },
     // Cuts the boss track short and drops back into the normal shuffle —
