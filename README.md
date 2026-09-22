@@ -62,7 +62,8 @@ it's not the same running order every session:
   just for Kingston, I don't want to hear that song anywhere else in the
   game" — here rather than in the regular shuffle above), "Le Grace
   Aussi" (added after that, also "at the end"), and "Le Casquette de 50
-  Missions" (later again, same "right at the end" placement) — Kingston's own
+  Missions" and "Dépense à Tout Vitesse" (a later pair, same "right at
+  the end" placement) — Kingston's own
   arrival playlist, an isolated set exclusive to Kingston, never mixed into
   the regular shuffle above. Cuts in on the approach (the same "KINGSTON —
   Fort Frontenac ahead" banner trigger, well before the dock) and — unlike
@@ -81,8 +82,9 @@ it's not the same running order every session:
   it's the same source as those two; "Le Grace Aussi" and "Les Rois de
   Blé" are credited to Les Chevaliers on direct say-so rather than by
   assumption (the latter was carried as artist-unknown until that
-  confirmation); "Le Casquette de 50 Missions" is credited the same way,
-  stated with the file. None of these six credits are independently confirmed
+  confirmation); "Le Casquette de 50 Missions" and "Dépense à Tout
+  Vitesse" are credited the same way, stated with the files. None of
+  these seven credits are independently confirmed
   the way the archive-sourced catalog above is.
 
 **Rights note:** none of these recordings are confirmed public domain.
@@ -101,7 +103,8 @@ publicly on the band's own podcast feed is low-risk for casual/personal
 use — not the same thing as a rights clearance. "Reel du Paradis et Enfer,"
 "La Mer de la Folie," and the Kingston arrival playlist ("Un Siècle
 d'Avance," "Boutique de Cadeaux," "Le Caygeon de Bob," "Les Rois de Blé,"
-"Le Grace Aussi," "Le Casquette de 50 Missions") are a further step removed again: supplied directly rather than pulled from
+"Le Grace Aussi," "Le Casquette de 50 Missions," "Dépense à Tout
+Vitesse") are a further step removed again: supplied directly rather than pulled from
 a documented archive, so there's no source link to point to and no
 independent confirmation of who holds what rights — treat them as the least
 cleared tracks in the catalog, not more settled just because they lack a
