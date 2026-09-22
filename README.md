@@ -72,9 +72,10 @@ it's not the same running order every session:
   for as long as the run continues. Supplied directly like "Reel du
   Paradis et Enfer"/"La Mer de la Folie" above, not sourced from an
   archive. The first three are titled "Les Chevaliers" on the assumption
-  it's the same source as those two; "Les Rois de Blé" and "Le Grace
-  Aussi" have no such guess — artist unknown, not just unconfirmed. None
-  of these five credits are independently confirmed the way the
+  it's the same source as those two; "Le Grace Aussi" is credited to Les
+  Chevaliers on direct say-so rather than by assumption; "Les Rois de
+  Blé" has no such guess — artist unknown, not just unconfirmed. None of
+  these five credits are independently confirmed the way the
   archive-sourced catalog above is.
 
 **Rights note:** none of these recordings are confirmed public domain.
