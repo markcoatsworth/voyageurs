@@ -1015,9 +1015,11 @@ function loop(now) {
       checkpointCheckTimer = 0;
       // Reaching Kingston is the end of the run — clear the save so a
       // completed journey doesn't leave a returning player stuck reloading
-      // at the very end forever; "Play Again" already resets the visible
-      // game state, this just makes the implicit save agree with it.
-      if (game.state === 'won') {
+      // at the very end forever. There's no win screen or Play Again any
+      // more (game.js's journeyComplete — Kingston just silently won't let
+      // you leave), so this is now the only thing that makes a reload after
+      // arriving start a fresh run.
+      if (game.journeyComplete) {
         if (savedCheckpoint) {
           clearCheckpointStorage();
           savedCheckpoint = null;

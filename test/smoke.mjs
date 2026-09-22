@@ -348,25 +348,21 @@ await step('britishWarship: triggers ~1/3 of the way from Jones Falls to Kingsto
   if (!escaped) throw new Error('the Warship fight never resolved — it (and its music) would run forever');
 
   // Past the Warship, the remaining ~2/3 of the run to Kingston still
-  // works. Its dock is oversized (world/villages.js's KINGSTON_DOCK_REACH)
-  // and now walks the canoe ashore like any other village (enterVillage(),
-  // mode becomes 'village') rather than winning outright, so this has to
-  // leave again the same way any village visit would before the finish is
-  // reachable.
-  let won = false;
-  for (let i = 0; i < 3000 && !won; i++) {
-    if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') {
-      g.game.leaveVillage();
-    }
+  // works. Arriving is game.js's journeyComplete — either the oversized
+  // dock (world/villages.js's KINGSTON_DOCK_REACH) walking the canoe ashore
+  // or the canoe reaching the town's own line on the water; there's no
+  // win screen any more (see the comment above game.js's leaveVillage()).
+  let arrived = false;
+  for (let i = 0; i < 3000 && !arrived; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
     g.input.state.left = err > 0.4;
     g.input.state.right = err < -0.4;
     g.game.update(1 / 30);
-    if (g.game.state === 'won') won = true;
+    if (g.game.journeyComplete) arrived = true;
   }
-  if (!won) throw new Error('escaped the Warship but never reached Kingston — the run home is broken');
+  if (!arrived) throw new Error('escaped the Warship but never reached Kingston — the run home is broken');
   notes.push('  note britishWarship ran on its own, held until it resolved, then reached the Kingston finish');
 });
 
@@ -766,18 +762,17 @@ await step('kingston: running into the dock enters the town on foot', () => {
     if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') entered = true;
   }
   if (!entered) throw new Error('running into the dock never entered Kingston on foot');
-  if (g.game.state === 'won') throw new Error('entering via the dock should not win the run by itself — only reaching the dock/flowDistance does');
+  if (!g.game.journeyComplete) throw new Error('stepping ashore at Kingston should mark the journey complete (main.js clears the checkpoint on it)');
 
-  // Leaving (same as any other village) pushes flowDistance past Kingston's
-  // own line, so the next frame reaching the water completes the journey —
-  // the "walk the town, then cast off to finish" flow the report implied.
+  // There's no leaving Kingston: casting off used to push flowDistance
+  // past the town's line and put up a "JOURNEY'S END" card — asked to be
+  // removed ("just silently block me from leaving the city"). leaveVillage()
+  // is a silent no-op here: still on foot, still playing, no screen.
   g.game.leaveVillage();
-  let won = false;
-  for (let i = 0; i < 30 && !won; i++) {
-    g.game.update(1 / 30);
-    if (g.game.state === 'won') won = true;
-  }
-  if (!won) throw new Error('casting off from Kingston after the dock never reached the win condition');
+  for (let i = 0; i < 30; i++) g.game.update(1 / 30);
+  if (g.game.mode !== 'village' || g.game.currentVillage?.name !== 'Kingston') throw new Error('casting off from Kingston left the town — it should be silently blocked');
+  if (g.game.state !== 'playing') throw new Error(`state went to ${g.game.state} on trying to leave Kingston — nothing should happen at all`);
+  if (!g.game.ui.gameoverScreen.classList.contains('hidden')) throw new Error('a screen came up on trying to leave Kingston — it should be silent');
 });
 
 await step('kingston: the white-hat greeter walks the dock to meet the canoe wherever it lands', () => {
@@ -965,7 +960,7 @@ await step('kingston: the ?start= cheat lands exactly on the arrival-track trigg
     g.game.health = 100;
     g.game.update(1 / 30);
     if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') arrived = true;
-    if (g.game.state === 'won') arrived = true;
+    if (g.game.journeyComplete) arrived = true;
   }
   if (!arrived) throw new Error('?start=kingston never reached Kingston within the test budget');
 });
@@ -1341,12 +1336,12 @@ await step('gatineau: walk up to the musket master, get the musket', () => {
   }
 });
 
-await step('rideau: paddle the whole leg and reach Kingston -> won', () => {
+await step('rideau: paddle the whole leg and reach Kingston, where the canoe is silently held', () => {
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
   if (!kingston) throw new Error('no "Kingston" in VILLAGES — a name/lookup drifted');
   if (kingston.segment !== 'rideau') throw new Error(`Kingston should be on the Rideau leg, got ${kingston.segment}`);
   const g = newGame('rideau', SEGMENT_SHAPE_OFFSET.rideau + 2);
-  let won = false;
+  let arrived = false;
   let sawApproachBanner = false;
   let maxWidthSeen = 0;
   // This exercises the leg's *plumbing* end to end — the bespoke width curve
@@ -1357,14 +1352,7 @@ await step('rideau: paddle the whole leg and reach Kingston -> won', () => {
   // still has to be threaded (health can't shortcut a solid wall), so a
   // failure to find the gap fails this test loudly.
   const gapX = centerX(SHIP_FLOW_DISTANCE) + widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // right-side lane
-  for (let i = 0; i < 12000 && !won; i++) {
-    // Kingston's oversized dock (world/villages.js's KINGSTON_DOCK_REACH)
-    // is the real entrance to the town now — holding Up straight through
-    // walks the canoe into it (enterVillage()), so leave again the same way
-    // any village visit would before the finish is reachable.
-    if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') {
-      g.game.leaveVillage();
-    }
+  for (let i = 0; i < 12000 && !arrived; i++) {
     g.input.state.up = true;
     // blockade.js no longer exposes a progress field at all (no health/
     // hull/hold-time concept during a pure dodge-and-thread-the-gap leg);
@@ -1380,24 +1368,29 @@ await step('rideau: paddle the whole leg and reach Kingston -> won', () => {
     g.game.update(1 / 30);
     maxWidthSeen = Math.max(maxWidthSeen, widthAt(g.game.flowDistance));
     if (g.game.ui.milestoneBanner.textContent.includes('KINGSTON')) sawApproachBanner = true;
-    if (g.game.state === 'won') won = true;
+    if (g.game.journeyComplete) arrived = true;
     if (g.game.state === 'gameover') throw new Error('capsized despite pinned health — a non-collision death on the Rideau');
   }
-  if (!won) throw new Error('paddling the Rideau never reached the Kingston finish line — stuck or mis-wired');
+  if (!arrived) throw new Error('paddling the Rideau never reached Kingston — stuck or mis-wired');
   if (!sawApproachBanner) throw new Error('no Kingston approach banner before the finish');
   if (maxWidthSeen < 40) throw new Error(`Kingston harbour never opened up (max width seen ${maxWidthSeen.toFixed(1)})`);
-  if (g.game.ui.gameoverTitle.textContent !== "JOURNEY'S END") {
-    throw new Error(`won the run but the end screen said "${g.game.ui.gameoverTitle.textContent}"`);
+  // No end screen, ever — the journey ends by staying in Kingston (see
+  // the comment above game.js's leaveVillage()). Whether the canoe walked
+  // ashore or reached the town's own line on the water, keep pushing on
+  // for a while: on foot the re-board zone does nothing, on the water the
+  // canoe is held at KINGSTON's flowDistance; the state stays 'playing'
+  // and nothing comes up.
+  for (let i = 0; i < 300; i++) {
+    if (g.game.mode === 'village') g.game.leaveVillage();
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    if (g.game.mode === 'river' && g.game.flowDistance > kingston.flowDistance + 1e-6) {
+      throw new Error(`the canoe got ${(g.game.flowDistance - kingston.flowDistance).toFixed(2)} units past Kingston — it should be held at the town's line`);
+    }
   }
-  if (!/reached Kingston/.test(g.game.ui.finalStats.innerHTML)) {
-    throw new Error(`victory stats missing the arrival line: "${g.game.ui.finalStats.innerHTML}"`);
-  }
-  // A restart from the victory screen replays the whole journey from the put-in.
-  g.game.start();
-  if (g.game.segment !== 'fjord' || g.game.flowDistance !== 0) {
-    throw new Error('"Play Again" from the win screen did not return to the put-in');
-  }
-  if (g.game.state !== 'playing') throw new Error('restart after winning did not resume play');
+  if (g.game.state !== 'playing') throw new Error(`state is ${g.game.state} after arriving at Kingston — there is no end screen any more`);
+  if (!g.game.ui.gameoverScreen.classList.contains('hidden')) throw new Error('an end screen came up at Kingston');
 });
 
 await step('rideau: casting off from Kars survives drifting back onto its own dock', () => {
@@ -1447,10 +1440,11 @@ await step('rideau: casting off from Kars survives drifting back onto its own do
   if (away.game.flowDistance <= before) throw new Error('no forward progress leaving Kars');
 });
 
-await step('rideau: reaching Kingston by its dock enters the town, then casting off wins', () => {
-  // Kingston's dock walks the player ashore now (game.js's dockHit branch),
-  // same as every other village — it no longer wins the run the instant it's
-  // touched. The finish is still the dock: it's the "so big I cannot miss
+await step('rideau: reaching Kingston by its dock enters the town, and casting off is silently refused', () => {
+  // Kingston's dock walks the player ashore (game.js's dockHit branch),
+  // same as every other village — and unlike every other village, there's
+  // no re-boarding: leaveVillage() is a silent no-op at Kingston (see the
+  // comment above it in game.js). The dock is the "so big I cannot miss
   // it" landmark, so this is the path most runs actually take.
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
   const g = newGame('rideau', kingston.flowDistance - 12);
@@ -1462,21 +1456,18 @@ await step('rideau: reaching Kingston by its dock enters the town, then casting 
     g.input.state[kingston.side === 1 ? 'right' : 'left'] = true;
     g.game.health = 100; // testing the dock->village path, not the obstacle run
     g.game.update(1 / 30);
-    if (g.game.state === 'won') throw new Error('Kingston\'s dock won the run outright instead of walking the player ashore');
     if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') entered = true;
   }
   if (!entered) throw new Error('never reached Kingston\'s dock');
 
+  const bannerBefore = g.game.ui.milestoneBanner.textContent;
   g.game.leaveVillage();
-  let won = false;
-  for (let i = 0; i < 30 && !won; i++) {
-    g.game.update(1 / 30);
-    if (g.game.state === 'won') won = true;
-  }
-  if (!won) throw new Error('casting off from Kingston by its dock never reached the win condition');
+  for (let i = 0; i < 30; i++) g.game.update(1 / 30);
+  if (g.game.mode !== 'village') throw new Error('casting off from Kingston by its dock left the town — it should be silently refused');
+  if (g.game.ui.milestoneBanner.textContent !== bannerBefore) throw new Error(`refusing to leave Kingston put up a banner ("${g.game.ui.milestoneBanner.textContent}") — it should be silent`);
 });
 
-await step('kingston: the arrival playlist cuts in at the approach banner and survives to the win screen', async () => {
+await step('kingston: the arrival playlist cuts in at the approach banner and survives the arrival', async () => {
   // "An isolated playlist exclusively for Kingston" — KINGSTON_PLAYLIST
   // (music.js), shuffled, never the ambient shuffle (PLAYLIST) itself.
   // Cuts in at the same flowDistance as the "KINGSTON — Fort Frontenac
@@ -1507,18 +1498,19 @@ await step('kingston: the arrival playlist cuts in at the approach banner and su
     throw new Error(`a real approach led with "${g.game.music.nowPlaying?.title}", not "${KINGSTON_PLAYLIST[0].title}"`);
   }
 
-  let won = false;
-  for (let i = 0; i < 2000 && !won; i++) {
+  let arrived = false;
+  for (let i = 0; i < 2000 && !arrived; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     g.game.update(1 / 30);
-    if (g.game.mode === 'village' && g.game.currentVillage?.name === 'Kingston') g.game.leaveVillage();
-    if (g.game.state === 'won') won = true;
+    if (g.game.journeyComplete) arrived = true;
   }
-  if (!won) throw new Error('never reached the win condition after the arrival playlist cut in');
+  if (!arrived) throw new Error('never arrived at Kingston after the arrival playlist cut in');
+  // ...and it keeps playing through the (silent, screen-less) arrival.
+  for (let i = 0; i < 60; i++) g.game.update(1 / 30);
   await new Promise((r) => setTimeout(r, 20));
   if (!kingstonTitles.includes(g.game.music.nowPlaying?.title)) {
-    throw new Error(`arrival playlist didn't survive to the win screen — playing "${g.game.music.nowPlaying?.title}" instead`);
+    throw new Error(`arrival playlist didn't survive the arrival — playing "${g.game.music.nowPlaying?.title}" instead`);
   }
 });
 

@@ -170,9 +170,12 @@ src/
   Tadoussac (mouth crossing → lawrenceWest) and Gatineau (`enterRideau()` on
   cast-off or on crossing `GATINEAU_FLOW_DISTANCE`).
 - **Modes**: `river` / `village` (on-foot). Boss fights are states within the
-  river mode, not separate modes. `state` is `playing` / `gameover` / `won`
-  (`won` = reached Kingston; `win()` borrows the game-over screen). Game-over
-  title varies by killer: Devil / beast / plain capsize.
+  river mode, not separate modes. `state` is `playing` / `gameover` — there
+  is no `won`: Kingston is the end by simply not letting you leave
+  (`leaveVillage()` is a silent no-op there; on the water the canoe is held
+  at `KINGSTON_FLOW_DISTANCE`), no victory card. `journeyComplete` marks the
+  arrival for main.js's checkpoint clearing. Game-over title varies by
+  killer: Devil / beast / plain capsize.
 - **Boss fights, in route order**: Wendigo (lower fjord, before Tadoussac),
   Loup-garou (before Québec City, lawrenceWest), Chasse-galerie steeples + Le
   Diable (past Montréal, lawrenceWest), British Blockade (rideau, the frigate

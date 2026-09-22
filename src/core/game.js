@@ -511,6 +511,7 @@ export class Game {
     this.mouthAnnounced = false;
     this.troisRivieresAnnounced = false;
     this.kingstonAnnounced = false;
+    this.journeyComplete = false; // see the comment above leaveVillage()
     this.tilt = 0;
     this.paused = false;
     this.ui.pauseScreen?.classList.add('hidden');
@@ -659,6 +660,9 @@ export class Game {
     this.villageScene.enter(village);
     this.ui.hud.classList.add('hidden');
     this.syncWeaponControls(); // ashore: the fire console goes with the HUD
+    // Stepping ashore at Kingston is arriving — see the comment above
+    // leaveVillage(); there's no leaving again.
+    if (village.name === 'Kingston') this.journeyComplete = true;
 
     // Update respawn point to this village - if you capsize later, you'll
     // restart here instead of all the way back at the original put-in
@@ -733,29 +737,25 @@ export class Game {
   // (a frozen update loop, the same restart button) with a triumphant title
   // and stats, and points a restart back at the very put-in rather than the
   // Rideau checkpoint — "Play Again" means the whole journey.
-  win() {
-    this.state = 'won';
-    this.ui.hud.classList.add('hidden');
-    this.ui.hudDiable?.classList.add('hidden');
-    if (this.ui.gameoverTitle) this.ui.gameoverTitle.textContent = "JOURNEY'S END";
-    this.ui.finalStats.innerHTML =
-      `You reached Kingston with ${this.furs} fur${this.furs === 1 ? '' : 's'}.`;
-    if (this.ui.restartBtn) this.ui.restartBtn.textContent = 'Play Again';
-    this.ui.gameoverScreen.classList.remove('hidden');
-    this.startSegment = 'fjord';
-    this.startFlowDistance = 0;
-    // Let whatever's playing keep playing under the victory card — this
-    // isn't a death, so no capsize horn and no music.stop(). Used to also
-    // call endBossTrack() here, to drop a stale Warship/Blockade track back
-    // to the shuffle if the player blitzed into Kingston before it resolved
-    // — no longer needed, and would now be actively wrong: the only way to
-    // reach win() is crossing KINGSTON_FLOW_DISTANCE, which is always
-    // KINGSTON_APPROACH_LEAD units past where playKingstonTrack() already
-    // cut in (see its own call site above), so KINGSTON_TRACK is always
-    // what's playing here.
-  }
+  // Kingston is where the journey ends — and it ends by simply staying
+  // there, not with a card. There used to be a win(): crossing
+  // KINGSTON_FLOW_DISTANCE (on the river, or the moment you cast off from
+  // Kingston's own dock, which pushed you past it) set state = 'won' and
+  // borrowed the game-over screen as a "JOURNEY'S END" victory card with a
+  // Play Again button. Asked to drop it: "Remove the 'JOURNEY'S END' dialog
+  // in Kingston. Just silently block me from leaving the city." So now:
+  // on foot, leaveVillage() below is a silent no-op at Kingston (the
+  // re-board zone on the dock just doesn't work — no banner, no sound,
+  // nothing); on the river, update() holds flowDistance at
+  // KINGSTON_FLOW_DISTANCE the same way the boss holds do, so the harbour
+  // is as far as the canoe goes. The Kingston playlist keeps playing under
+  // both. journeyComplete is the one thing that still marks the arrival —
+  // main.js clears the saved checkpoint on it, so a reload after arriving
+  // starts a fresh run rather than dropping back into a town you can't
+  // leave.
 
   leaveVillage() {
+    if (this.currentVillage.name === 'Kingston') return; // see the comment above — the end of the line
     this.mode = 'river';
     this.syncWeaponControls(); // back in the canoe: the fire console returns
     if (this.currentVillage.name === 'Tadoussac') {
@@ -1427,9 +1427,10 @@ export class Game {
       return;
     }
 
-    // Journey's end — reaching Kingston on the Rideau wins the run. An
-    // approach banner first (the harbour is already opening up around you by
-    // now — see path.js's rideauWidthAt), then the win a short stretch later.
+    // Journey's end — Kingston on the Rideau. An approach banner first (the
+    // harbour is already opening up around you by now — see path.js's
+    // rideauWidthAt), then the canoe is simply held at the town's own line
+    // a short stretch later (see the comment above leaveVillage()).
     if (this.segment === 'rideau') {
       if (!this.kingstonAnnounced && this.flowDistance >= KINGSTON_FLOW_DISTANCE - KINGSTON_APPROACH_LEAD) {
         this.kingstonAnnounced = true;
@@ -1442,8 +1443,12 @@ export class Game {
         this.music?.playKingstonTrack();
       }
       if (this.flowDistance >= KINGSTON_FLOW_DISTANCE) {
-        this.win();
-        return;
+        // Held, silently — the ambient current keeps trying to carry the
+        // canoe on past every frame and this just puts it back. The dock
+        // check further down still runs, so drifting sideways onto the
+        // planks from here still walks you ashore.
+        this.flowDistance = KINGSTON_FLOW_DISTANCE;
+        this.journeyComplete = true;
       }
     }
 
