@@ -799,23 +799,49 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
   const beamPx = right.x - left.x; // across the hull's beam (side-to-side axis)
   const shipCenterX = (left.x + right.x) / 2;
 
-  // Wake: two curved, fading foam streaks trailing from the stern, drawn
-  // first so the hull covers their near end — the cheapest cue that this
-  // thing is actually underway and fast, not sitting still. A pair of
-  // straight uniform lines read as thin spindly legs stuck on the bottom
-  // of the hull rather than water — curving them outward (a real wake
-  // widens as it falls behind) and fading them out with alpha instead of
-  // a flat stroke reads as spreading foam instead.
-  for (const side of [-1, 1]) {
-    ctx.beginPath();
-    ctx.moveTo(shipCenterX + side * beamPx * 0.18, bottom - 2);
-    ctx.quadraticCurveTo(
-      shipCenterX + side * beamPx * 0.35, bottom + lenPx * 0.18,
-      shipCenterX + side * beamPx * 0.7, bottom + lenPx * 0.32,
-    );
-    ctx.strokeStyle = 'rgba(220, 235, 240, 0.4)';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
+  // Wake: a spreading, fading foam wash off the transom, drawn first so
+  // the hull covers its near end — the cheapest cue that this thing is
+  // actually underway and fast, not sitting still. Was two thin curved
+  // foam lines: asked about as "what [are] those fins hanging off the
+  // back of the warship?" — at this size two 2.5px arcs read as
+  // appendages, not water. A wash of translucent pale water widening aft
+  // in two layers (a faint wide one, a brighter narrow one) with a
+  // scatter of foam flecks fading out with distance reads as churned
+  // water because it's an area, not a line. Fleck positions are hashed
+  // off their index (shared/hash.js) — fixed relative to the hull, which
+  // is fine: the hull itself is always moving over the water.
+  // Both washes fade to nothing along their length (vertical gradients)
+  // so the wake dissolves into the river instead of ending on a hard
+  // straight edge.
+  const wakeFade = ctx.createLinearGradient(0, bottom, 0, bottom + lenPx * 0.4);
+  wakeFade.addColorStop(0, 'rgba(220, 235, 240, 0.18)');
+  wakeFade.addColorStop(1, 'rgba(220, 235, 240, 0)');
+  ctx.fillStyle = wakeFade;
+  ctx.beginPath();
+  ctx.moveTo(shipCenterX - beamPx * 0.42, bottom - 1);
+  ctx.lineTo(shipCenterX - beamPx * 0.8, bottom + lenPx * 0.4);
+  ctx.lineTo(shipCenterX + beamPx * 0.8, bottom + lenPx * 0.4);
+  ctx.lineTo(shipCenterX + beamPx * 0.42, bottom - 1);
+  ctx.closePath();
+  ctx.fill();
+  const wakeCore = ctx.createLinearGradient(0, bottom, 0, bottom + lenPx * 0.22);
+  wakeCore.addColorStop(0, 'rgba(232, 244, 248, 0.3)');
+  wakeCore.addColorStop(1, 'rgba(232, 244, 248, 0)');
+  ctx.fillStyle = wakeCore;
+  ctx.beginPath();
+  ctx.moveTo(shipCenterX - beamPx * 0.3, bottom - 1);
+  ctx.lineTo(shipCenterX - beamPx * 0.48, bottom + lenPx * 0.22);
+  ctx.lineTo(shipCenterX + beamPx * 0.48, bottom + lenPx * 0.22);
+  ctx.lineTo(shipCenterX + beamPx * 0.3, bottom - 1);
+  ctx.closePath();
+  ctx.fill();
+  for (let i = 0; i < 14; i++) {
+    const t = hashRange(i, 3, 0.05, 1); // 0 = at the transom, 1 = the wash's far end
+    const spread = 0.35 + 0.45 * t; // the wash widens aft
+    const fx = shipCenterX + (hashRange(i, 7, -1, 1)) * beamPx * spread;
+    const fy = bottom + t * lenPx * 0.38;
+    ctx.fillStyle = `rgba(240, 248, 250, ${(0.75 * (1 - t)).toFixed(2)})`;
+    ctx.fillRect(Math.round(fx), Math.round(fy), i % 3 === 0 ? 2 : 1, 1);
   }
 
   // HULL SHAPE - pointed bow, flat-ish transom stern. The taper is entirely
@@ -907,8 +933,9 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
   // the muzzle cap at the end is what makes it read as pointing outward.
   // Spaced to leave the flag (on the mainmast, 0.49, below) clear of the
   // starboard guns either side of it — a first spacing had the flag's
-  // lower edge sitting right on the middle gun.
-  const CANNON_FRACTIONS = [0.36, 0.57, 0.76];
+  // lower edge sitting right on the middle gun; opened up a little more
+  // again when the flag went back up to its full 22x13 ("a bit bigger").
+  const CANNON_FRACTIONS = [0.34, 0.59, 0.77];
   const BARREL_OUT = 5; // px of barrel past the hull's edge
   const CARRIAGE_W = 6;
   const CARRIAGE_H = 5;
@@ -1021,14 +1048,17 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
   // relative fraction rather than an absolute pixel count, so it keeps its
   // proportions if this size ever changes again.
   const mainMast = masts[1];
-  // 16x10 (was 22x14 on the old bow pole) — the biggest that fits between
-  // the starboard guns either side of the mainmast (CANNON_FRACTIONS
-  // above) without lying across one of them; hung a couple of px forward
-  // of centre on the mast head for the same reason.
-  const flagW = 16;
-  const flagH = 10;
+  // 22x13 — first shrunk to 16x10 to fit between the starboard guns
+  // either side of the mainmast, then asked for "a bit bigger": the guns
+  // were spaced out instead (CANNON_FRACTIONS above) and the flag hung a
+  // few px forward of the mast head, which is what lets it go back to
+  // its full width without lying across a gun. It overhangs the
+  // starboard rail — fine, it's flying at mast-top height, well above
+  // the deck and the barrels.
+  const flagW = 22;
+  const flagH = 13;
   const flagX = shipCenterX + 4;
-  const flagY = top + lenPx * mainMast.f - flagH / 2 - 1;
+  const flagY = top + lenPx * mainMast.f - flagH / 2 - 3;
 
   // Halyard — mast head to the flag's hoist.
   ctx.fillStyle = '#1a100a';
