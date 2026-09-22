@@ -733,6 +733,36 @@ button:hover {
   }
 }
 
+/* The FIRE caption on touch. Desktop has had one all along (the keycap-cue
+   block further down, mirroring the steer pad's MOVE) but it was written
+   into that block's own hover/pointer:fine media query, so a phone — where
+   the buttons are the real control and the label is arguably more useful —
+   got nothing: reported as "specifically on mobile, we lost the 'Fire'
+   heading above the Z and X buttons."
+   Deliberately not the desktop rule's sizing: that's a fraction of --key,
+   which on touch is a thumb-sized 58-80px and would put a ~17px heading
+   over the buttons — "don't make it enormous and obnoxious." A flat 8px
+   (Press Start 2P, so still legible at that size — the now-playing card
+   runs at 9) with the same letter-spacing and muted colour the desktop
+   caption uses, sitting just above the pad. Absolutely positioned outside
+   the pad's own box like the desktop one, so main.js's positionWeaponPad()
+   measurements — and therefore the pad's own placement — are unchanged. */
+@media (hover: none) and (pointer: coarse) {
+  #weapon-dpad::after {
+    content: 'FIRE';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 6px;
+    font-size: 8px;
+    letter-spacing: 0.22em;
+    color: rgba(244, 234, 210, 0.55);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+}
+
 .weapon-key {
   pointer-events: all;
   touch-action: none;

@@ -90,20 +90,32 @@ const DECEL_DRIFT = 1.8 * speedScale;
 const STEER_ACCEL = 20 * (isTouchPrimary() ? 0.5 : 1);
 const STEER_MAX = 7 * (isTouchPrimary() ? 0.5 : 1);
 const STEER_DAMPING = 6;
-// Direct lateral speed during the Diable fight (bypasses the physics above —
-// see the isHolding() branch in update()). Higher on touch: the pad is on/off
-// with no analog magnitude, so the only "sensitivity" knob is this number,
-// and dodging fireballs on a phone needs it to really move.
-const FIGHT_LATERAL_SPEED = isTouchPrimary() ? 28 : 15;
-// Same idea, same reason, for the British Warship's held chase — reported
-// as "the boss is too much faster than me." The gunboat's own lateral orbit
-// (britishWarship.js's CHASE_ORBIT_RADIUS_X/PERIOD) peaks at radius*(2π/period) ≈
-// 2.1 units/sec; the ramped STEER_ACCEL/STEER_DAMPING physics below always
-// lag a beat behind a target that's continuously reversing direction, same
-// failure as Diable's fight before FIGHT_LATERAL_SPEED existed. Set well
-// past that 2.1 peak so out-tracking the ship is a given, not a fight of
-// its own on top of the actual fight.
+// Direct lateral speed during the British Warship's held chase (bypasses
+// the physics above — see the isChaseHolding() branch in update()).
+// Reported as "the boss is too much faster than me." The gunboat's own
+// lateral orbit (britishWarship.js's CHASE_ORBIT_RADIUS_X/PERIOD) peaks at
+// radius*(2π/period) ≈ 2.1 units/sec; the ramped STEER_ACCEL/STEER_DAMPING
+// physics below always lag a beat behind a target that's continuously
+// reversing direction, same failure the Diable fight had before it got a
+// direct speed of its own. Set well past that 2.1 peak so out-tracking the
+// ship is a given, not a fight of its own on top of the actual fight.
 const CHASE_LATERAL_SPEED = isTouchPrimary() ? 8 : 4.5;
+// Same treatment for the Diable fight (its own isHolding() branch). Desktop
+// wants more than the chase does — his fireballs are aimed and arrive fast,
+// where the gunboat's threat is a slow orbit to out-track — so it keeps its
+// own, higher number there.
+//
+// Touch does NOT: it used to run at 28, on the reasoning that a pad with no
+// analog magnitude needs a big number to dodge with, and that turned out to
+// be badly wrong on a real phone — "the mobile controls are too sensitive.
+// I jump all over the place and cannot control the boat." Pinned to
+// CHASE_LATERAL_SPEED rather than a fresh number of its own, because the
+// Warship fight is the one that already feels right on a phone and the ask
+// was exactly that: "tone down the controls to the same sensitivity as the
+// British Warship fight." Desktop is untouched — "the controls on desktop
+// work just fine." (The vertical dodge needs nothing here: FIGHT_HOVER_SPEED
+// and the chase's own CHASE_HOLD_Z_SPEED are both already 5.)
+const FIGHT_LATERAL_SPEED = isTouchPrimary() ? CHASE_LATERAL_SPEED : 15;
 // The Diable fight sits at the head of the Ottawa gorge, where the river
 // itself is only ~6-10 units across (path.js's Ottawa branch) — far too
 // tight to dodge aimed hellfire in. The held fight gets its own lateral
