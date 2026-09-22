@@ -60,9 +60,8 @@ it's not the same running order every session:
 - "Un Siècle d'Avance," "Boutique de Cadeaux," "Le Caygeon de Bob,"
   "Les Rois de Blé" (added last on purpose at the time, and — "explicitly
   just for Kingston, I don't want to hear that song anywhere else in the
-  game" — here rather than in the regular shuffle above), "Le Grace
-  Aussi" (added after that, also "at the end"), and "Le Casquette de 50
-  Missions" (later again, same "right at the end" placement) — Kingston's own
+  game" — here rather than in the regular shuffle above), and "Le Grace
+  Aussi" (added after that, also "at the end") — Kingston's own
   arrival playlist, an isolated set exclusive to Kingston, never mixed into
   the regular shuffle above. Cuts in on the approach (the same "KINGSTON —
   Fort Frontenac ahead" banner trigger, well before the dock) and — unlike
@@ -73,17 +72,15 @@ it's not the same running order every session:
   for as long as the run continues. Unlike the regular shuffle, this set
   plays in fixed order — "Un Siècle d'Avance" is always first, every
   arrival (real approach, `?start=kingston`, or a restart), then straight
-  through to whichever track was added last and back to the top; no
-  randomness at all.
+  through to "Le Grace Aussi" and back to the top; no randomness at all.
   Supplied directly like "Reel du
   Paradis et Enfer"/"La Mer de la Folie" above, not sourced from an
   archive. The first three are titled "Les Chevaliers" on the assumption
-  it's the same source as those two; "Le Grace Aussi" and "Les Rois de
-  Blé" are credited to Les Chevaliers on direct say-so rather than by
-  assumption (the latter was carried as artist-unknown until that
-  confirmation); "Le Casquette de 50 Missions" is credited the same way,
-  stated with the file. None of these six credits are independently confirmed
-  the way the archive-sourced catalog above is.
+  it's the same source as those two; "Le Grace Aussi" is credited to Les
+  Chevaliers on direct say-so rather than by assumption; "Les Rois de
+  Blé" has no such guess — artist unknown, not just unconfirmed. None of
+  these five credits are independently confirmed the way the
+  archive-sourced catalog above is.
 
 **Rights note:** none of these recordings are confirmed public domain.
 Under the Music Modernization Act, US sound recordings first published
@@ -101,7 +98,7 @@ publicly on the band's own podcast feed is low-risk for casual/personal
 use — not the same thing as a rights clearance. "Reel du Paradis et Enfer,"
 "La Mer de la Folie," and the Kingston arrival playlist ("Un Siècle
 d'Avance," "Boutique de Cadeaux," "Le Caygeon de Bob," "Les Rois de Blé,"
-"Le Grace Aussi," "Le Casquette de 50 Missions") are a further step removed again: supplied directly rather than pulled from
+"Le Grace Aussi") are a further step removed again: supplied directly rather than pulled from
 a documented archive, so there's no source link to point to and no
 independent confirmation of who holds what rights — treat them as the least
 cleared tracks in the catalog, not more settled just because they lack a

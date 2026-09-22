@@ -143,17 +143,13 @@ export const KINGSTON_TRACK = { src: '/audio/un-siecle-davance.mp3', title: "Un 
 // artist in this file is real researched attribution, not a guess.
 const KINGSTON_TRACK_2 = { src: '/audio/boutique-de-cadeaux.mp3', title: 'Boutique de Cadeaux', artist: 'Les Chevaliers', volume: 1.0 };
 const KINGSTON_TRACK_3 = { src: '/audio/le-caygeon-de-bob.mp3', title: 'Le Caygeon de Bob', artist: 'Les Chevaliers', volume: 1.0 };
-// Added fourth, deliberately ("make it last place in the Kingston
-// playlist" at the time — KINGSTON_TRACK_5 below came later), and here —
-// not PLAYLIST above — deliberately too ("explicitly just for Kingston, I
-// don't want to hear that song anywhere else in the game"). Artist was
-// "Unknown" for a while: supplied directly like the rest of this set, so
-// there's no archive listing to credit a performer from, and it seemed
-// wrong to extend KINGSTON_TRACK_2/3's filename-derived guess to it.
-// Confirmed directly since — "Les Rois de Ble is another song by Les
-// Chevaliers" — so this is say-so attribution like KINGSTON_TRACK_5's,
-// not a guess.
-const KINGSTON_TRACK_4 = { src: '/audio/les-rois-de-ble.mp3', title: 'Les Rois de Blé', artist: 'Les Chevaliers', volume: 1.0 };
+// Added last, deliberately ("make it last place in the Kingston playlist"),
+// and here — not PLAYLIST above — deliberately too ("explicitly just for
+// Kingston, I don't want to hear that song anywhere else in the game").
+// Supplied directly like the rest of this set, so no archive listing to
+// credit a performer from — artist genuinely unknown, not a placeholder
+// guess the way KINGSTON_TRACK_2/3's own "Les Chevaliers" is.
+const KINGSTON_TRACK_4 = { src: '/audio/les-rois-de-ble.mp3', title: 'Les Rois de Blé', artist: 'Unknown', volume: 1.0 };
 // Fifth, "put it at the end" — Kingston-only like KINGSTON_TRACK_4 above.
 // Artist confirmed directly ("Le Grace Aussi is also by Les Chevaliers"),
 // so unlike KINGSTON_TRACK_2/3's filename-derived guess this one's a
@@ -161,13 +157,6 @@ const KINGSTON_TRACK_4 = { src: '/audio/les-rois-de-ble.mp3', title: 'Les Rois d
 // spelling. "At the end" now genuinely means last to play, not just last
 // in the array — the set plays in order (playKingstonTrack()).
 const KINGSTON_TRACK_5 = { src: '/audio/le-grace-aussi.mp3', title: 'Le Grace Aussi', artist: 'Les Chevaliers', volume: 1.0 };
-// Sixth — "put them right at the end of the existing playlist," so after
-// Le Grace Aussi, which had been last. Kingston-only like the four above
-// it. Artist stated directly with the file ("two new tracks by Les
-// Chevaliers"); title is the filename's own spelling, kept as-is the same
-// way KINGSTON_TRACK_5's was — note that's "Le Casquette", not the "La"
-// the noun would normally take, exactly as the source file names it.
-const KINGSTON_TRACK_6 = { src: '/audio/le-casquette-de-50-missions.mp3', title: 'Le Casquette de 50 Missions', artist: 'Les Chevaliers', volume: 1.0 };
 // Unlike every other boss track, nothing ever calls endBossTrack() for this
 // set (see win()'s own comment in game.js) — arriving at Kingston is the
 // end of the run, not a fight that resolves back into the ambient shuffle.
@@ -179,7 +168,7 @@ const KINGSTON_TRACK_6 = { src: '/audio/le-casquette-de-50-missions.mp3', title:
 // and back around to the top — "make the playlist straight order so
 // there is no randomness." Exported for test/smoke.mjs, which asserts
 // exactly that sequence.
-export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3, KINGSTON_TRACK_4, KINGSTON_TRACK_5, KINGSTON_TRACK_6];
+export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3, KINGSTON_TRACK_4, KINGSTON_TRACK_5];
 
 // Reported as quiet on the whole, relative to other applications running
 // at the same time — not a single track's own mix, the shuffle's own
