@@ -124,6 +124,14 @@ const GATINEAU_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Gatineau')?.flow
 // Kingston is the end of the whole journey — reaching it (by dock or by
 // simply crossing its flowDistance on the Rideau) wins the run.
 const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flowDistance ?? Infinity;
+
+// The Wendigo's cold, as a multiply tint over the whole 2D frame at full
+// frost (see render()'s frost pass) — what pure white becomes. A cold
+// slate-blue, dark enough that the fjord's greens and the sand go to deep
+// blue-black, light enough that rocks and the banks still separate from
+// the water: at [96, 118, 148] a mid green like the banks' (80,130,60)
+// lands around (30,60,35) — dark, still readable. Lower it for darker.
+const FROST_TINT = [96, 118, 148];
 // How far short of Kingston the "KINGSTON — Fort Frontenac ahead" banner and
 // the arrival track (KINGSTON_TRACK, audio/music.js) cut in — was 70, moved
 // further back ("a bit further back up the river sequence," requested
@@ -1823,8 +1831,11 @@ export class Game {
     drawBanks(ctx, this.flowDistance, cameraWorldX, { hideVillages: isFlying, time: this.time, canoeWorldX: this.canoeWorldX });
     if (this.water) {
       // warshipStorm reaches the water itself (chop, dead glints, slate
-      // colour — waterGL.js's u_storm); 0 everywhere but the Rideau.
-      this.water.render(this.time, this.flowDistance, cameraWorldX, warshipStorm);
+      // colour — waterGL.js's u_storm); 0 everywhere but the Rideau. frost
+      // likewise (u_frost — the water sinking to ink under the Wendigo's
+      // cold, since the 2D frost pass below can't reach this layer); 0
+      // everywhere but the lower fjord.
+      this.water.render(this.time, this.flowDistance, cameraWorldX, warshipStorm, frost);
     } else {
       drawWaterFallback(ctx, this.flowDistance, cameraWorldX);
     }
@@ -1999,27 +2010,73 @@ export class Game {
     // Draw the Chasse-galerie churches cutting into the gorge
     if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX);
 
-    // The Wendigo on the far fjord shore, then the cold closing in over the
-    // whole frame — a pale desaturating wash and an icy vignette that bites
-    // in hard while it listens, so "something is different NOW" reads even
-    // without the banner.
+    // The Wendigo's cold over the lower fjord. Asked for as "actually
+    // darker on the color palette, not just dimmer" — the first cut was
+    // the opposite, a pale bleaching wash (#e3eff5 at low alpha) plus an
+    // icy rim, which read as haze, and an alpha wash to black would only
+    // have flattened everything toward one grey. So this is a MULTIPLY
+    // blend with a cold slate-blue (FROST_TINT): every colour is scaled by
+    // it, so white becomes dark steel, the greens go deep blue-green, the
+    // blacks stay black — the palette itself shifts dark and cold while
+    // the contrast between things survives. Faded in by lerping the tint
+    // from white (multiply by white is a no-op) as frost rises.
+    //
+    // Masked to the 2D layer's own opaque pixels, via an offscreen copy:
+    // the river is a transparent hole in this canvas showing the WebGL
+    // water underneath, and a multiply over a transparent backdrop just
+    // paints the tint colour there opaque (per the compositing spec —
+    // source shows through where the backdrop has no alpha), which would
+    // hide the water entirely. The water darkens on its own layer instead
+    // (waterGL.js's u_frost). The mask costs three full-canvas draws at
+    // 320x220 — nothing. (drawWaterFallback's 2D water, when there's no
+    // WebGL, is opaque here and simply gets multiplied like the land.)
+    //
+    // Then the Wendigo itself, drawn *after* the darkening so it stays its
+    // own bloodless white against the dark shore, and the listen glare —
+    // the icy rim that bites in while it listens, the telegraph — kept,
+    // now the one bright thing in the frame, so "something is different
+    // NOW" reads even harder against a dark world than it did against a
+    // pale one.
     if (frost > 0) {
-      this.wendigo.draw(ctx);
       const glare = this.wendigo.listenGlare();
-      ctx.save();
-      ctx.globalAlpha = (0.08 + 0.15 * glare) * frost;
-      ctx.fillStyle = '#e3eff5';
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      const v = ctx.createRadialGradient(
-        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.56, 40,
-        CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.56, CANVAS_WIDTH * 0.74);
-      v.addColorStop(0, 'rgba(214, 236, 245, 0)');
-      v.addColorStop(0.6, `rgba(202, 230, 242, ${(0.04 + 0.18 * glare) * frost})`);
-      v.addColorStop(1, `rgba(228, 241, 248, ${(0.30 + 0.34 * glare) * frost})`);
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = v;
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.restore();
+      const layer = this._frostLayer ||= (typeof document !== 'undefined' ? document.createElement('canvas') : null);
+      if (layer && ctx.canvas) {
+        layer.width = CANVAS_WIDTH;
+        layer.height = CANVAS_HEIGHT;
+        const off = layer.getContext('2d');
+        off.imageSmoothingEnabled = false;
+        off.globalCompositeOperation = 'source-over';
+        off.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        off.drawImage(ctx.canvas, 0, 0);
+        off.globalCompositeOperation = 'multiply';
+        const t = frost;
+        const r = Math.round(255 + (FROST_TINT[0] - 255) * t);
+        const g = Math.round(255 + (FROST_TINT[1] - 255) * t);
+        const b = Math.round(255 + (FROST_TINT[2] - 255) * t);
+        off.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        off.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        // Keep only where the frame was opaque — the hole stays a hole.
+        off.globalCompositeOperation = 'destination-in';
+        off.drawImage(ctx.canvas, 0, 0);
+        off.globalCompositeOperation = 'source-over';
+        ctx.save();
+        ctx.globalCompositeOperation = 'copy';
+        ctx.drawImage(layer, 0, 0);
+        ctx.restore();
+      }
+      this.wendigo.draw(ctx);
+      if (glare > 0) {
+        ctx.save();
+        const v = ctx.createRadialGradient(
+          CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.56, 40,
+          CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.56, CANVAS_WIDTH * 0.74);
+        v.addColorStop(0, 'rgba(214, 236, 245, 0)');
+        v.addColorStop(0.6, `rgba(202, 230, 242, ${(0.2 * glare * frost).toFixed(3)})`);
+        v.addColorStop(1, `rgba(228, 241, 248, ${(0.6 * glare * frost).toFixed(3)})`);
+        ctx.fillStyle = v;
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.restore();
+      }
     }
 
     if (this.canoeVisible !== false) {

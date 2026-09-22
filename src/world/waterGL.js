@@ -77,6 +77,15 @@ uniform float u_braidOffsetB;
 // (banks, foam, rapids) is untouched, so it reads as the same river under
 // worse weather, not a different shader.
 uniform float u_storm;
+// 0..1, the Wendigo's cold on the lower fjord (bossfights/wendigo.js's
+// frostIntensity, via game.js's render()). The 2D layer darkens the land
+// with a multiply blend (game.js's frost pass); the water is on this
+// layer underneath, so it needs its own darkening here: down toward a
+// near-black ink blue, its glints thinned out and cooled to an icy
+// white — moonless, frozen-looking water, not a dimmed version of the
+// daytime river. Independent of u_storm (the two are on different
+// segments and never both non-zero).
+uniform float u_frost;
 
 const float CANOE_SCREEN_X = ${CANOE_SCREEN_X.toFixed(2)};
 const float CANOE_SCREEN_Y = ${CANOE_SCREEN_Y.toFixed(2)};
@@ -381,6 +390,12 @@ void main() {
   vec3 stormWater = vec3(0.13, 0.17, 0.19);
   color = mix(color, stormWater, u_storm * 0.7);
   color += highlight * glint * 1.3 * (1.0 - u_storm * 0.85);
+  // Frost: the whole surface sinks toward ink (see u_frost above). Applied
+  // after the glints so they darken with it too, then a thin icy glint
+  // added back on top so the water still reads as moving.
+  vec3 ink = vec3(0.02, 0.045, 0.09);
+  color = mix(color, ink, u_frost * 0.82);
+  color += vec3(0.62, 0.74, 0.86) * glint * 0.35 * u_frost;
 
   // Foam band hugging both shorelines, width breathing slightly with the
   // waves so it doesn't read as a static ring.
@@ -466,13 +481,15 @@ export function createWaterRenderer(canvas) {
     braidCycleB: gl.getUniformLocation(program, 'u_braidCycleB'),
     braidOffsetB: gl.getUniformLocation(program, 'u_braidOffsetB'),
     storm: gl.getUniformLocation(program, 'u_storm'),
+    frost: gl.getUniformLocation(program, 'u_frost'),
   };
 
   return {
     ok: true,
-    // storm: 0..1, see u_storm above — defaults to clear weather so every
-    // other caller (the smoke test drives this too) needs no change.
-    render(time, worldDistance, cameraWorldX, storm = 0) {
+    // storm/frost: 0..1, see u_storm/u_frost above — both default to clear
+    // weather so every other caller (the smoke test drives this too) needs
+    // no change.
+    render(time, worldDistance, cameraWorldX, storm = 0, frost = 0) {
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -487,6 +504,7 @@ export function createWaterRenderer(canvas) {
       gl.uniform1f(uniforms.worldDistance, worldDistance);
       gl.uniform1f(uniforms.cameraWorldX, cameraWorldX);
       gl.uniform1f(uniforms.storm, storm);
+      gl.uniform1f(uniforms.frost, frost);
 
       // The visible d-range spans at most two BRAID_PERIOD cycles (usually
       // just one) — compute both candidates' island offsets here on the CPU
