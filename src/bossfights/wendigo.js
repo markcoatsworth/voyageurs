@@ -31,8 +31,20 @@ export const DELIVERANCE_DISTANCE = MOUTH_DISTANCE - 50;
 
 // The cold fades in over this many units before the trigger and lifts after
 // deliverance — same shape as the loup-garou's nightIntensityAt.
-const FROST_FADE_IN = 58;   // ~from Petit-Saguenay's dock
+// FADE_IN was 58, which started the cold at MOUTH - 228 — three units
+// *before* Petit-Saguenay's dock (route.js puts it at MOUTH - 225), so the
+// palette was already turning as you passed the town. 26 starts it at
+// MOUTH - 196, a clear ~30 units past the dock: the town is behind you
+// and off the bottom of the screen before anything changes. That's also
+// what lets ?start=wendigo (main.js) sit a few seconds short of the dark
+// without landing before the dock — "I don't want to pass a town dock
+// before Wendigo." A brisker ramp (~3s at cruising speed) than before,
+// which suits it: the cold should come down, not seep.
+const FROST_FADE_IN = 26;
 const FROST_FADE_OUT = 42;  // clear again just before the mouth
+// Where the cold first becomes visible — exported for main.js's
+// ?start=wendigo, which lands a few seconds short of it (see there).
+export const FROST_START_DISTANCE = TRIGGER_DISTANCE - FROST_FADE_IN;
 
 // PROWL: safe, it paces. LISTEN: a telegraph (it rears up, eyes flare, a
 // drawn breath — react, no punishment yet), then the hot window (be off the
