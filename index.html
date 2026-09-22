@@ -18,8 +18,8 @@
        registered by main.js in production builds): "Add to Home Screen"
        gives it its own icon and a standalone window, and — on iPhone
        specifically — exempts its storage from Safari's week-of-disuse
-       eviction, which matters for the ~88 MB of audio the pause screen's
-       SAVE FOR OFFLINE button pulls down. The apple-* tags are what iOS
+       eviction, which matters for the ~88 MB of audio the worker pulls
+       down on its own after install. The apple-* tags are what iOS
        reads instead of the manifest for the icon and full-screen mode. -->
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0c1013" />
@@ -130,15 +130,12 @@
 
     <div id="pause-screen" class="screen hidden">
       <h1>PAUSED</h1>
-      <!-- Offline: pulls every music track into the service worker's cache
-           (main.js's offline block; public/sw.js) so the game plays with
-           no signal at all. Hidden until the service worker is actually
-           registered (production builds only), and replaced by a plain
-           status line once everything is stored. -->
-      <div id="offline-panel" class="hidden">
-        <button id="offline-btn">SAVE FOR OFFLINE</button>
-        <p id="offline-status"></p>
-      </div>
+      <!-- Offline: a passive status line only — the service worker pulls
+           every music track into its cache on its own once the game is up
+           (main.js's offline block; public/sw.js), this just says how far
+           along that is so you know when it's safe to lose signal. Hidden
+           until the worker is actually registered (production builds). -->
+      <p id="offline-status" class="hidden"></p>
     </div>
   </div>
 

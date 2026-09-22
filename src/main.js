@@ -828,53 +828,50 @@ for (const evt of ['pointerdown', 'touchend', 'keydown', 'click']) {
 }
 
 // Offline play — the service worker (public/sw.js, filled in by
-// scripts/postbuild.mjs) and the pause screen's SAVE FOR OFFLINE button.
-// Asked for as "I'm about to go on a camping trip where I'll be totally
-// offline, but I would love to get the game cached on my phone." The
-// worker keeps the app shell on its own the moment it installs; the music
-// (~88 MB, 26 tracks) is the part that has to be asked for, since pulling
-// that onto every visitor's phone unasked isn't on — hence the button,
-// which posts 'cache-audio' and shows progress from the worker's replies
-// until every track is stored, after which the button gives way to a
-// plain "ready" line. Production builds only: the template's placeholders
-// are only filled by postbuild, and a worker caching the dev server's
-// module graph would make every edit look like it hadn't taken.
-const offlinePanel = document.getElementById('offline-panel');
-const offlineBtn = document.getElementById('offline-btn');
+// scripts/postbuild.mjs). Asked for as "I'm about to go on a camping trip
+// where I'll be totally offline, but I would love to get the game cached
+// on my phone." The worker keeps the app shell on its own the moment it
+// installs; the music (~88 MB, 26 tracks) it pulls in on request — and
+// that request is made here, automatically, as soon as the worker is
+// ready: a first cut put a SAVE FOR OFFLINE button on the pause screen
+// for it, rejected — "I want that to just happen automatically without
+// user input." The one gate is the browser's own Data Saver signal
+// (navigator.connection.saveData, Chrome/Android): with that on, 88 MB
+// unasked is the wrong call and the cache fills only as tracks actually
+// get played (sw.js does that regardless). The pause screen shows a
+// passive "N/26 TRACKS SAVED" line from the worker's progress replies,
+// so it's possible to tell when it's safe to lose signal. Production
+// builds only: the template's placeholders are only filled by postbuild,
+// and a worker caching the dev server's module graph would make every
+// edit look like it hadn't taken.
 const offlineStatus = document.getElementById('offline-status');
 function showOfflineStatus(s) {
   if (!offlineStatus) return;
+  offlineStatus.classList.remove('hidden');
   if (s.complete) {
     offlineStatus.textContent = `READY TO PLAY OFFLINE — ${s.total} TRACKS SAVED`;
-    offlineBtn?.classList.add('hidden');
   } else if (s.failed) {
-    offlineStatus.textContent = `${s.done}/${s.total} TRACKS SAVED — ${s.failed} FAILED, TRY AGAIN`;
-    if (offlineBtn) offlineBtn.disabled = false;
-  } else if (s.done > 0) {
-    offlineStatus.textContent = `${s.done}/${s.total} TRACKS SAVED`;
+    offlineStatus.textContent = `SAVING FOR OFFLINE: ${s.done}/${s.total} TRACKS (${s.failed} FAILED — WILL RETRY NEXT VISIT)`;
+  } else if (s.skipped) {
+    offlineStatus.textContent = `OFFLINE MUSIC NOT SAVED — DATA SAVER IS ON (${s.done}/${s.total} TRACKS)`;
   } else {
-    offlineStatus.textContent = 'MUSIC NOT YET SAVED';
+    offlineStatus.textContent = `SAVING FOR OFFLINE: ${s.done}/${s.total} TRACKS`;
   }
 }
 // import.meta.env is vite's — absent under plain node (the smoke test
 // loads this file), hence the try.
 let isProdBuild = false;
 try { isProdBuild = !!import.meta.env.PROD; } catch { /* not vite: dev-ish, no worker */ }
-if (isProdBuild && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && offlinePanel) {
+if (isProdBuild && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && offlineStatus) {
+  const saveData = !!navigator.connection?.saveData;
   navigator.serviceWorker.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'audio-status') showOfflineStatus(e.data);
+    if (e.data && e.data.type === 'audio-status') showOfflineStatus({ ...e.data, skipped: saveData && !e.data.complete });
   });
   navigator.serviceWorker.register('/sw.js').then(async (reg) => {
-    offlinePanel.classList.remove('hidden');
     // The worker that's actually controlling this page, once there is one
     // (first ever load: the fresh install claims the page on activate).
-    const worker = async () => (await navigator.serviceWorker.ready).active;
-    (await worker())?.postMessage({ type: 'audio-status' });
-    offlineBtn?.addEventListener('click', async () => {
-      offlineBtn.disabled = true;
-      offlineStatus.textContent = 'SAVING…';
-      (await worker())?.postMessage({ type: 'cache-audio' });
-    });
+    const worker = (await navigator.serviceWorker.ready).active;
+    worker?.postMessage({ type: saveData ? 'audio-status' : 'cache-audio' });
     // A new build's worker takes over on the next load (skipWaiting +
     // clients.claim in sw.js) — nothing to prompt about here, the badge
     // already shows which build is running.

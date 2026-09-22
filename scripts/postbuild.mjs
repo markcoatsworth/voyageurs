@@ -65,8 +65,8 @@ if (existsSync(indexPath)) {
 
 // Fill in the service worker (public/sw.js — copied verbatim into dist/ by
 // vite like everything else under public/) with what this build actually
-// emitted: the hashed /assets/ files to precache, the audio list the
-// SAVE FOR OFFLINE button pulls, and a build id that names the shell cache
+// emitted: the hashed /assets/ files to precache, the audio list it pulls
+// in on its own after install, and a build id that names the shell cache
 // so each deploy replaces the last one's cleanly. Only ever read in a
 // production build — main.js registers /sw.js under import.meta.env.PROD
 // alone — so the unfilled template never runs against the dev server.

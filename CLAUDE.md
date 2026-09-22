@@ -211,9 +211,11 @@ src/
 `scripts/postbuild.mjs` from what vite emitted, so only the built copy is
 valid) + `public/manifest.webmanifest` + `public/icons/`. Registered by
 `main.js` in production builds only (never against the dev server). The
-app shell is precached at install; the ~88 MB of audio is **not** — it's
-stored as tracks get played, or all at once via the pause screen's SAVE
-FOR OFFLINE button (`cache-audio` message). Audio cache is versioned by
+app shell is precached at install; the ~88 MB of audio is pulled right
+after, automatically — `main.js` posts `cache-audio` as soon as the worker
+is ready (skipped only under Data Saver; tracks also cache as played).
+No button, by request; the pause screen shows a passive
+"N/26 TRACKS SAVED" line. Audio cache is versioned by
 hand (`voyageurs-audio-v1`) and survives deploys; the shell cache is per
 build. Range requests are answered by slicing the cached file (Safari
 needs this for `<audio>`).

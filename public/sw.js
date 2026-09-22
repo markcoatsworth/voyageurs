@@ -8,12 +8,14 @@
 //   SHELL  — index.html + the build's hashed /assets/ files, precached at
 //            install. Named per build (BUILD below), old ones deleted on
 //            activate, so a new deploy swaps the whole shell atomically.
-//   AUDIO  — the 26 tracks (~88 MB). NOT precached: that's too much to pull
-//            onto every visitor's phone unasked. Filled two ways — each
-//            track a normal play fetches gets stored in the background as a
-//            side effect (so a long session fills it up on its own), and
-//            the pause screen's SAVE FOR OFFLINE button (main.js) asks for
-//            the lot via the 'cache-audio' message below. Kept across
+//   AUDIO  — the 26 tracks (~88 MB). Not precached at install (an install
+//            has to be atomic and quick; 88 MB in it would fail on a bad
+//            connection and take the shell down with it) but pulled in
+//            right after, automatically: main.js posts 'cache-audio' the
+//            moment the worker is ready — no button, no prompt ("I want
+//            that to just happen automatically without user input") —
+//            unless the browser reports Data Saver on. Each track a normal
+//            play fetches is stored as a side effect too. Kept across
 //            builds (versioned by hand, not by BUILD) since the files
 //            themselves never change — see nginx.conf's /audio/ comment.
 //   FONTS  — Google Fonts' CSS + the Press Start 2P woff, cached on the
@@ -200,18 +202,32 @@ self.addEventListener('message', (event) => {
   if (event.data.type === 'audio-status') {
     event.waitUntil(audioStatus().then(reply));
   } else if (event.data.type === 'cache-audio') {
+    // waitUntil keeps the worker alive for the download even if the page
+    // goes away; a browser that caps that (Chrome, ~5 min) just leaves the
+    // rest for the next visit, which re-posts this and skips what's
+    // already stored. A few at a time: one-by-one was slow over 26 files,
+    // and more than a handful just contends with the game's own audio.
     event.waitUntil((async () => {
       const cache = await caches.open(AUDIO_CACHE);
       let done = 0;
       let failed = 0;
-      for (const url of AUDIO) if (await cache.match(url)) done++;
-      reply({ type: 'audio-status', done, total: AUDIO.length, complete: done === AUDIO.length });
+      const todo = [];
       for (const url of AUDIO) {
-        if (await cache.match(url)) continue;
-        const ok = await storeAudio(url);
-        if (ok) done++; else failed++;
-        reply({ type: 'audio-status', done, total: AUDIO.length, complete: done === AUDIO.length, failed });
+        if (await cache.match(url)) done++; else todo.push(url);
       }
+      const status = () => reply({ type: 'audio-status', done, total: AUDIO.length, complete: done === AUDIO.length, failed });
+      status();
+      const CONCURRENCY = 3;
+      let next = 0;
+      const lane = async () => {
+        while (next < todo.length) {
+          const url = todo[next++];
+          const ok = await storeAudio(url);
+          if (ok) done++; else failed++;
+          status();
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, todo.length) }, lane));
     })());
   }
 });
