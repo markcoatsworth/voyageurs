@@ -13,7 +13,7 @@ import { TRIGGER_DISTANCE as WARSHIP_FLOW_DISTANCE, FIRST_THUNDERCLAP_DISTANCE a
 import { TRIGGER_DISTANCE as CHASSE_GALERIE_FLOW_DISTANCE } from './bossfights/chasseGalerie.js';
 import { DIABLE_FLOW_DISTANCE } from './bossfights/diable.js';
 import { TRIGGER_DISTANCE as LOUP_GAROU_FLOW_DISTANCE } from './bossfights/loupGarou.js';
-import { TRIGGER_DISTANCE as WENDIGO_FLOW_DISTANCE } from './bossfights/wendigo.js';
+import { FROST_START_DISTANCE as WENDIGO_FROST_START_DISTANCE } from './bossfights/wendigo.js';
 
 const app = document.getElementById('app');
 
@@ -117,7 +117,19 @@ function normalizeStartName(s) {
 //
 // "wendigo" drops the canoe on the lower Saguenay a short calm paddle
 // before the famine-spirit stirs (bossfights/wendigo.js) — the first
-// encounter in the game, on the lonely reach down to Tadoussac.
+// encounter in the game, on the lonely reach down to Tadoussac. Placed
+// off where the cold first shows (FROST_START_DISTANCE), not the fight's
+// own trigger: it used to sit at TRIGGER_DISTANCE - 24, which is 34 units
+// *inside* the frost fade-in — the screen was already going dark on the
+// first frame. Asked for as "about 2-3 seconds before the screen goes
+// dark": 21 units is ~2.6s at the BASE_SPEED (8) a cheat start carries,
+// under 2s if you hold Up and accelerate from the first frame. A first
+// cut used 25 units off the old, earlier fade start, which put the cheat
+// 28 units *before* Petit-Saguenay's dock — "I don't want to pass a town
+// dock before Wendigo" — so the fade itself moved later (wendigo.js's
+// FROST_FADE_IN) and this now lands ~8 units past that dock: off the
+// bottom of the screen, and clear of its hit zone. test/smoke.mjs pins
+// both facts.
 //
 // "loup-garou" drops the canoe on the Beaupré shore a short calm paddle
 // before the beast is spotted (bossfights/loupGarou.js) — the last encounter
@@ -212,7 +224,7 @@ const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flow
 // whatever boss fight happens to sit in front of it. See "kingston"'s own
 // comment above for the bug this is guarding against.
 export const START_KEYWORDS = {
-  [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FLOW_DISTANCE - 24, segment: 'fjord' },
+  [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FROST_START_DISTANCE - 21, segment: 'fjord' },
   [normalizeStartName('loup-garou')]: { flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
   [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
   [normalizeStartName('british-warship')]: { flowDistance: WARSHIP_FIRST_THUNDERCLAP_DISTANCE, segment: 'rideau' },
@@ -333,14 +345,13 @@ const startedAtDiable =
 // its own can't-express-this-as-flowDistance case.
 const startedAtGatineau =
   normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('gatineau');
-// "?start=kingston" lands exactly on the "KINGSTON — Fort Frontenac ahead"
-// banner's own distance trigger now (see START_KEYWORDS' own comment on
-// "kingston") — game.js's normal Game.update() fires the banner and the
-// arrival track itself on the very first tick, no forced-on workaround
-// needed any more. Still used below for the cheat's own slow-start speed
-// override, a separate concern from the music.
-const startedAtKingston =
-  normalizeStartName(new URLSearchParams(window.location.search).get('start') || '') === normalizeStartName('kingston');
+// Any explicit ?start= at all (village or keyword) — for the slow-start
+// speed override below. (Used to be a Kingston-only check; "?start=kingston"
+// needs nothing else special any more — it lands exactly on the "KINGSTON —
+// Fort Frontenac ahead" banner's own distance trigger, see START_KEYWORDS'
+// own comment on "kingston", and game.js's normal Game.update() fires the
+// banner and the arrival track itself on the very first tick.)
+const startedExplicitly = !!(new URLSearchParams(window.location.search).get('start') || '').trim();
 
 // A ?start= cheat is a one-shot for THIS page load. Strip it from the address
 // bar now that it's been read, so a reload, a restored tab, or a home-screen
@@ -727,23 +738,24 @@ try {
     const gatineau = VILLAGES.find((v) => v.name === 'Gatineau' && v.segment === 'lawrenceWest');
     if (gatineau) game.enterVillage(gatineau);
   }
-  // ?start=kingston — the arrival track/banner now fire on their own, the
-  // instant game.js's own update loop first ticks (the cheat lands exactly
-  // on that trigger — see startedAtKingston's own comment). One manual
-  // touch still needed here, set before that first tick runs: speed —
-  // every ?start= cheat otherwise begins at the same BASE_SPEED a normal
-  // playthrough carries into any segment — reported here as "already
-  // screaming fast" for a cheat whose whole point is a slow, chill
-  // approach. MIN_SPEED is this game's own "actual chill slow speed, not
-  // just a mild step down from medium" (see its own comment, game.js) —
-  // holding Up still accelerates normally from there, same as a real
-  // approach, just starting from a calm drift instead of already at
-  // cruising speed.
-  // (There used to be a second touch — priming Un Siècle d'Avance as the
-  // lead track for this cheat only. Gone: the Kingston playlist now always
-  // plays in fixed order from that track, cheat or not — see
-  // music.js's KINGSTON_TRACK/playKingstonTrack().)
-  if (startedAtKingston) {
+  // Every ?start= cheat begins from a calm drift, not cruising speed. Set
+  // before game.js's first tick runs: a cheat otherwise begins at the same
+  // BASE_SPEED a normal playthrough carries into any segment — first
+  // reported for Kingston alone ("already screaming fast" for a cheat
+  // whose whole point is a slow, chill approach), then for all of them:
+  // "my canoe is already flying out of the gate when the game kicks in."
+  // MIN_SPEED is this game's own "actual chill slow speed, not just a mild
+  // step down from medium" (see its own comment, game.js) — holding Up
+  // still accelerates normally from there, same as a real approach, just
+  // starting from a drift instead of already at cruising speed. Harmless
+  // for the cheats that open a village scene directly (gatineau) — the
+  // speed only matters once you're back on the water.
+  // (?start=kingston used to need a second touch here too — priming Un
+  // Siècle d'Avance as the lead track. Gone: the Kingston playlist now
+  // always plays in fixed order from that track, cheat or not — see
+  // music.js's KINGSTON_TRACK/playKingstonTrack(); the arrival banner and
+  // track fire on their own the instant the update loop first ticks.)
+  if (startedExplicitly) {
     game.speed = MIN_SPEED;
   }
 

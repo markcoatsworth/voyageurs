@@ -659,6 +659,49 @@ await step('britishWarship: the ?start= cheat gives at least 3s of lead, not a h
   if (triggerTime < 2.9) throw new Error(`the fight triggered only ${triggerTime.toFixed(2)}s after ?start=british-warship — short of the requested 3s of lead`);
 });
 
+await step('wendigo: the ?start= cheat lands past Petit-Saguenay\'s dock, a couple of seconds before the cold shows', async () => {
+  // "About 2-3 seconds before the screen goes dark" and "I don't want to
+  // pass a town dock before Wendigo" — both at once. The frost fade-in
+  // (wendigo.js's FROST_FADE_IN) had to move later for that, since it used
+  // to start three units *before* the dock; this pins the whole
+  // arrangement so neither number drifts back.
+  const { START_KEYWORDS } = await import('../src/main.js');
+  const { FROST_START_DISTANCE, frostIntensityAt } = await import('../src/bossfights/wendigo.js');
+  const { dockHitZ } = await import('../src/world/villages.js');
+  const start = START_KEYWORDS['wendigo'];
+  if (!start || start.segment !== 'fjord') throw new Error('no fjord "wendigo" entry in START_KEYWORDS');
+  const petit = VILLAGES.find((v) => v.name === 'Petit-Saguenay');
+  if (!petit) throw new Error('no "Petit-Saguenay" in VILLAGES — a name/lookup drifted');
+  // Past the dock: clear of its hit zone, and the dock itself already off
+  // the bottom of the screen (CANVAS_HEIGHT - CANOE_SCREEN_Y px below the
+  // canoe is all that's visible behind it).
+  const behindVisible = (CANVAS_HEIGHT - CANOE_SCREEN_Y) / PIXELS_PER_UNIT;
+  if (start.flowDistance <= petit.flowDistance + dockHitZ(petit)) throw new Error(`?start=wendigo (${start.flowDistance.toFixed(1)}) lands on or before Petit-Saguenay's dock (${petit.flowDistance.toFixed(1)})`);
+  if (start.flowDistance < petit.flowDistance + behindVisible) throw new Error(`?start=wendigo (${start.flowDistance.toFixed(1)}) still has Petit-Saguenay's dock on screen behind it`);
+  // Not yet dark on the first frame, and the cold starts within ~2-3s at
+  // a cheat start's BASE_SPEED (8) — i.e. 16..24 units ahead. Also the
+  // cold must not start before the dock either.
+  if (frostIntensityAt(start.flowDistance) !== 0) throw new Error('?start=wendigo already has the cold showing on its first frame');
+  const lead = FROST_START_DISTANCE - start.flowDistance;
+  if (lead < 16 || lead > 24) throw new Error(`the cold starts ${lead.toFixed(1)} units after ?start=wendigo — wanted ~2-3s worth (16..24 at BASE_SPEED)`);
+  if (FROST_START_DISTANCE <= petit.flowDistance + dockHitZ(petit)) throw new Error('the cold starts before Petit-Saguenay\'s dock');
+  // Lived: from the cheat's spot, coasting, nothing is dark for ~2s and
+  // the cold is fully in well before the trigger.
+  const g = newGame('fjord', start.flowDistance);
+  let t = 0;
+  let firstDarkT = null;
+  for (let i = 0; i < 900 && frostIntensityAt(g.game.flowDistance) < 1; i++) {
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    t += 1 / 30;
+    if (firstDarkT === null && frostIntensityAt(g.game.flowDistance) > 0) firstDarkT = t;
+    if (g.game.mode === 'village') throw new Error('?start=wendigo docked at a village on the way in');
+  }
+  if (firstDarkT === null) throw new Error('the cold never showed after ?start=wendigo');
+  if (firstDarkT < 1.5) throw new Error(`the cold showed only ${firstDarkT.toFixed(2)}s after ?start=wendigo — too soon`);
+  notes.push(`  note wendigo: ?start=wendigo lands ${(start.flowDistance - petit.flowDistance).toFixed(1)} units past Petit-Saguenay, the cold shows ${firstDarkT.toFixed(1)}s in`);
+});
+
 // --- scenario 4c: the ship's fore/aft hold never renders off-screen --------
 
 await step('britishWarship: Up/Down keeps the ship on screen', () => {
