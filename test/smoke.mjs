@@ -56,7 +56,7 @@ const { createMinimap } = await import('../src/world/minimap.js');
 const { createMusic } = await import('../src/audio/music.js');
 const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
-const { getDockHit } = await import('../src/world/villages.js');
+const { getDockHit, drawVillages, debugKingstonGreeterX } = await import('../src/world/villages.js');
 const { KINGSTON_CATARAQUI } = await import('../src/world/villageScene.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
@@ -735,6 +735,52 @@ await step('kingston: running into the dock enters the town on foot', () => {
     if (g.game.state === 'won') won = true;
   }
   if (!won) throw new Error('casting off from Kingston after the dock never reached the win condition');
+});
+
+await step('kingston: the white-hat greeter walks the dock to meet the canoe wherever it lands', () => {
+  // "Make the guy in the white hat meet us where we land at the dock in
+  // Kingston... landed way left, couldn't see him." villages.js's Kingston
+  // greeter now follows the canoe's worldX along the dock (at a capped
+  // walking pace) instead of standing at one fixed fraction of a dock
+  // ~1.5 screens long. Driven straight through drawVillages() with a
+  // canoeWorldX, the way game.js's render() feeds it, against the shim's
+  // no-op canvas context.
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  const ctx = makeElement('canvas').getContext('2d');
+  // Well clear of Kingston first: he must not exist yet (nothing drawn).
+  drawVillages(ctx, kingston.flowDistance - 500, 0, 0, 3);
+  if (debugKingstonGreeterX() !== null) throw new Error('greeter state should be null while Kingston is off-screen');
+  // Now level with the dock, the canoe sitting far out from the shore.
+  // Which side of the channel the dock is on decides the sign of "far
+  // out" — just use the canoe positions themselves: hold one x, then the
+  // other, and check he heads toward each in turn, at a bounded pace.
+  const d = kingston.flowDistance;
+  let t = 0;
+  drawVillages(ctx, d, 0, t, 0);
+  const x0 = debugKingstonGreeterX();
+  if (typeof x0 !== 'number') throw new Error('greeter never placed once Kingston was on-screen');
+  const hold = (canoeX, seconds) => {
+    let prev = debugKingstonGreeterX();
+    for (let i = 0; i < seconds * 30; i++) {
+      t += 1 / 30;
+      drawVillages(ctx, d, 0, t, canoeX);
+      const now = debugKingstonGreeterX();
+      if (Math.abs(now - prev) > 9 / 30 + 1e-6) throw new Error(`greeter jumped ${(now - prev).toFixed(2)} units in one frame — he should walk, not teleport`);
+      prev = now;
+    }
+    return debugKingstonGreeterX();
+  };
+  // Ask him toward each end of the channel in turn: he must move toward
+  // the canoe each time, and settle within the dock's own reach (30) of
+  // the shore rather than following the canoe out into open water.
+  const xA = hold(-40, 8);
+  const xB = hold(40, 8);
+  if (!(xA < xB)) throw new Error(`greeter didn't follow the canoe across: -40 -> ${xA.toFixed(1)}, +40 -> ${xB.toFixed(1)}`);
+  if (Math.abs(xB - xA) > 30) throw new Error(`greeter ranged ${(xB - xA).toFixed(1)} units, more than the dock's own reach`);
+  if (Math.abs(xB - xA) < 10) throw new Error(`greeter barely moved (${(xB - xA).toFixed(1)} units) — he should cover most of the dock`);
+  // Off-screen again resets him.
+  drawVillages(ctx, d - 500, 0, t, 0);
+  if (debugKingstonGreeterX() !== null) throw new Error('greeter state not reset once Kingston left the screen');
 });
 
 await step('kingston: walking up into Artillery Park (the band/crowd) never crashes', () => {

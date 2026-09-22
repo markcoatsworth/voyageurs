@@ -104,6 +104,28 @@ const KINGSTON_DOCK_REACH = 30; // ~ Quebec City's own reach, channel here is a 
 const KINGSTON_DOCK_WIDTH_Z = 12;
 const KINGSTON_DOCK_HIT_Z = 7;
 
+// The Kingston greeter walking the dock to meet the canoe — see the
+// greeter block at the end of drawOneVillage(). World units/s along the
+// planks: about the canoe's own cruising pace (game.js's BASE_SPEED is
+// 8), so a canoe crabbing across the harbour on its way in never leaves
+// him far behind, but slow enough that he reads as hurrying down the
+// dock, not sliding. He'll never stand right at either end: the
+// shore-end margin keeps him off the bank, the water-end margin keeps him
+// off the last few planks where the canoe actually ties up.
+const KINGSTON_GREETER_WALK_SPEED = 9;
+const KINGSTON_GREETER_MIN_FRACTION = 0.08;
+const KINGSTON_GREETER_MAX_FRACTION = 0.92;
+let kingstonGreeterX = null; // world x along the dock, null = not currently on screen
+let kingstonGreeterT = 0; // `time` at his last update, for the walk step
+function kingstonGreeterTargetX(v, edge, canoeWorldX) {
+  const near = edge + reachSign(v) * KINGSTON_DOCK_REACH * KINGSTON_GREETER_MIN_FRACTION;
+  const far = edge + reachSign(v) * KINGSTON_DOCK_REACH * KINGSTON_GREETER_MAX_FRACTION;
+  return clamp(canoeWorldX, Math.min(near, far), Math.max(near, far));
+}
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
 // A synthetic village-like object for that second pier: same flowDistance/
 // seed/name as the real Montreal (so every island-geometry helper above —
 // bankEdge/reachSign/inlandSign/shoreEdgeAt/clampToIsland — treats it as
@@ -681,12 +703,19 @@ export const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;
 const KINGSTON_RENDER_GATE_EXTRA = 10;
 export const KINGSTON_RENDER_GATE = VISIBLE_Z_RANGE + KINGSTON_RENDER_GATE_EXTRA;
 
-export function drawVillages(ctx, worldDistance, cameraWorldX, time = 0) {
+// canoeWorldX (optional): the canoe's own lateral position, only used by
+// Kingston's dock greeter to walk out and meet it — see drawOneVillage.
+export function drawVillages(ctx, worldDistance, cameraWorldX, time = 0, canoeWorldX = null) {
   VILLAGES.forEach((v, i) => {
     const z = worldDistance - v.flowDistance;
     const range = v.name === 'Kingston' ? KINGSTON_RENDER_GATE : VISIBLE_Z_RANGE;
-    if (Math.abs(z) > range) return;
-    drawOneVillage(ctx, v, i, worldDistance, cameraWorldX, time);
+    if (Math.abs(z) > range) {
+      // Kingston out of range: forget where its greeter had walked to, so
+      // the next approach (a restart, say) starts him at his default spot.
+      if (v.name === 'Kingston') kingstonGreeterX = null;
+      return;
+    }
+    drawOneVillage(ctx, v, i, worldDistance, cameraWorldX, time, canoeWorldX);
   });
 }
 
@@ -831,7 +860,7 @@ function drawDockStructure(ctx, v, worldDistance, cameraWorldX) {
   ctx.fillRect(pilingX - 1, top - 1, 2, bottom - top + 2);
 }
 
-function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
+function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0, canoeWorldX = null) {
   const layout = villageLayout(v.seed);
   const edge = bankEdge(v);
   const inner = edge + reachSign(v) * dockReach(v);
@@ -1049,9 +1078,39 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
   // just a d-offset that happens to read that way) — so he's visible the
   // moment the dock itself comes into view, not only once the canoe has
   // drawn level with the dock's own centre.
+  //
+  // Kingston again: "make the guy in the white hat meet us where we land
+  // at the dock... I just did a test run and landed way left, couldn't
+  // see him." The dock here reaches KINGSTON_DOCK_REACH (30 units, ~1.5
+  // screens) out across the harbour and getDockHit() accepts the canoe
+  // anywhere along it, but the greeter stood at one fixed fraction of it
+  // — touch the planks anywhere else and he's simply off-screen. Now he
+  // walks along the dock to stand across from wherever the canoe is
+  // heading (kingstonGreeterTargetX, up by KINGSTON_DOCK_REACH: the canoe's own worldX,
+  // clamped to the planks with a margin at each end), at a capped pace
+  // (KINGSTON_GREETER_WALK_SPEED) so he visibly hurries down the dock to
+  // meet you rather than snapping to your x. The one bit of per-frame
+  // state this otherwise stateless module keeps (kingstonGreeterX, its
+  // clock) — reset whenever Kingston isn't being drawn, so every approach
+  // starts him at his default spot. Every other village keeps its fixed
+  // greeterFraction: their docks are short enough that he's always in
+  // view.
   {
     const greeterFraction = isKingston ? 0.15 : 0.32;
-    const gWorldX = edge + reachSign(v) * dockReach(v) * greeterFraction;
+    const restX = edge + reachSign(v) * dockReach(v) * greeterFraction;
+    let gWorldX = restX;
+    if (isKingston) {
+      const target = typeof canoeWorldX === 'number' ? kingstonGreeterTargetX(v, edge, canoeWorldX) : restX;
+      if (kingstonGreeterX === null) {
+        kingstonGreeterX = restX;
+        kingstonGreeterT = time;
+      }
+      const dt = clamp(time - kingstonGreeterT, 0, 0.1);
+      kingstonGreeterT = time;
+      const step = KINGSTON_GREETER_WALK_SPEED * dt;
+      kingstonGreeterX += clamp(target - kingstonGreeterX, -step, step);
+      gWorldX = kingstonGreeterX;
+    }
     const greeterZBias = isKingston ? dockWidthZ(v) * 0.4 : 0;
     const g = toScreen(gWorldX, z0 + greeterZBias, cameraWorldX);
     const greeterOpts = {
@@ -1060,4 +1119,10 @@ function drawOneVillage(ctx, v, vIndex, worldDistance, cameraWorldX, time = 0) {
     };
     drawDockGreeter(ctx, g.x, g.y, time, v.seed, greeterOpts);
   }
+}
+
+// test support — where the Kingston greeter currently stands along the
+// dock (world x), null while Kingston is off-screen. See drawOneVillage.
+export function debugKingstonGreeterX() {
+  return kingstonGreeterX;
 }

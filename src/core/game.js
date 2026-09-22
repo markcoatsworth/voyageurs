@@ -1820,7 +1820,7 @@ export class Game {
 
     // While flying the Chasse-galerie there are no docks or town buildings
     // below — the riverbank parishes read as steeples only (drawn later).
-    drawBanks(ctx, this.flowDistance, cameraWorldX, { hideVillages: isFlying, time: this.time });
+    drawBanks(ctx, this.flowDistance, cameraWorldX, { hideVillages: isFlying, time: this.time, canoeWorldX: this.canoeWorldX });
     if (this.water) {
       // warshipStorm reaches the water itself (chop, dead glints, slate
       // colour — waterGL.js's u_storm); 0 everywhere but the Rideau.
