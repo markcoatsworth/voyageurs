@@ -641,6 +641,7 @@ export class Game {
     this.currentVillage = village;
     this.villageScene.enter(village);
     this.ui.hud.classList.add('hidden');
+    this.syncWeaponControls(); // ashore: the fire console goes with the HUD
 
     // Update respawn point to this village - if you capsize later, you'll
     // restart here instead of all the way back at the original put-in
@@ -739,6 +740,7 @@ export class Game {
 
   leaveVillage() {
     this.mode = 'river';
+    this.syncWeaponControls(); // back in the canoe: the fire console returns
     if (this.currentVillage.name === 'Tadoussac') {
       // Always continues upriver toward Québec City — no choice any more,
       // just a real segment jump (fjord and lawrenceWest don't share a
@@ -896,20 +898,29 @@ export class Game {
   }
 
   // Show the on-screen weapon controls (index.html #weapon-dpad, opposite
-  // the move controls) exactly when you actually have a gun — so it's up
-  // after picking a first weapon up, and gone again after a capsize+restart
-  // (start() below clears the weapon pool). Each weapon's own button inside
-  // the pad is separately toggled so a pistol-only run doesn't show an X
-  // button that does nothing. layoutWeaponPad re-pins the pad the moment it
-  // stops being display:none, since resize() may not fire then.
+  // the move controls) exactly when you actually have a gun AND are in the
+  // canoe — so it's up once you've cast off with a first weapon, gone
+  // ashore in a village (guns don't fire on foot: the onWeaponFire callback
+  // in the constructor already ignores anything but river mode, and a lit
+  // Z/X console over a town you can't shoot in read as a broken control —
+  // "a solid limit between open water and the cities", asked for
+  // directly), and gone again after a capsize+restart (start() below
+  // clears the weapon pool). So picking a gun up at the Montréal gunsmith
+  // or the Gatineau musket master doesn't show it on the spot — it shows
+  // the moment you walk back onto the dock (leaveVillage() re-syncs).
+  // Each weapon's own button inside the pad is separately toggled so a
+  // pistol-only run doesn't show an X button that does nothing.
+  // layoutWeaponPad re-pins the pad the moment it stops being
+  // display:none, since resize() may not fire then.
   syncWeaponControls() {
     const hasPistol = this.weapons.has('pistol');
     const hasMusket = this.weapons.has('musket');
     const armed = hasPistol || hasMusket;
-    this.ui.weaponPad?.classList.toggle('hidden', !armed);
+    const shown = armed && this.mode === 'river';
+    this.ui.weaponPad?.classList.toggle('hidden', !shown);
     this.ui.fireZBtn?.classList.toggle('hidden', !hasPistol);
     this.ui.fireXBtn?.classList.toggle('hidden', !hasMusket);
-    if (armed) this.ui.layoutWeaponPad?.();
+    if (shown) this.ui.layoutWeaponPad?.();
   }
 
   // Le Diable — feeds the boss this frame's canoe position and pistol shots

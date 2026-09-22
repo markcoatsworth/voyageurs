@@ -1134,8 +1134,15 @@ await step('gatineau: walk up to the musket master, get the musket', () => {
     if (g.game.weapons.has('musket')) armed = true;
   }
   if (!armed) throw new Error('walking up to the Gatineau musket master never granted the musket');
+  // Still ashore: the pad stays hidden (guns don't fire on foot — see
+  // syncWeaponControls()) even though the musket is now owned. It comes
+  // up on cast-off, with the X button live.
+  if (!g.game.ui.weaponPad.classList.contains('hidden')) {
+    throw new Error('weapon controls showing on foot in Gatineau after picking up the musket');
+  }
+  g.game.leaveVillage();
   if (g.game.ui.weaponPad.classList.contains('hidden')) {
-    throw new Error('weapon controls still hidden after picking up the musket');
+    throw new Error('weapon controls still hidden after casting off from Gatineau with the musket');
   }
   if (g.game.ui.fireXBtn.classList.contains('hidden')) {
     throw new Error('musket fire button (X) still hidden after picking up the musket');
@@ -1396,8 +1403,23 @@ await step('montreal: walk up to the gunsmith, get the pistol', () => {
   walk(38, ['down']);
   walk(12, ['left']);
   if (!armed) throw new Error('walking up to the Montreal gunsmith never granted the pistol');
+  // Still on foot: the pad stays hidden until you're back in the canoe
+  // (syncWeaponControls() gates on mode, not just on owning a gun).
+  if (!g.game.ui.weaponPad.classList.contains('hidden')) {
+    throw new Error('weapon controls showing on foot in Montreal after picking up the pistol');
+  }
+  g.game.leaveVillage();
   if (g.game.ui.weaponPad.classList.contains('hidden')) {
-    throw new Error('weapon controls still hidden after picking up the pistol');
+    throw new Error('weapon controls still hidden after casting off from Montreal with the pistol');
+  }
+  // Docking again anywhere hides it again; casting off brings it back.
+  g.game.enterVillage(montreal);
+  if (!g.game.ui.weaponPad.classList.contains('hidden')) {
+    throw new Error('weapon controls still showing after docking at Montreal with the pistol');
+  }
+  g.game.leaveVillage();
+  if (g.game.ui.weaponPad.classList.contains('hidden')) {
+    throw new Error('weapon controls hidden after re-boarding at Montreal with the pistol');
   }
   // A capsize + restart clears the weapon pool — the pad should go too.
   g.game.start();
