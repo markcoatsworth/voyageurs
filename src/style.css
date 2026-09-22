@@ -680,9 +680,10 @@ button:hover {
 
 /* Weapon controls — the mirror image of #touch-dpad on the left edge, shown
    only once you've picked up a gun (game.js toggles .hidden). Z first, more
-   slots lining up beside it as further guns unlock (row, not column —
-   easier to glance across for which guns are live than to scan down a
-   stack — overridden below on a small touch viewport specifically). Same
+   slots lining up as further guns unlock. The row here is the base rule,
+   but it only actually survives on a big touch viewport (tablet, touch
+   laptop) now: a small touch viewport and desktop both override it to a
+   column below, each for its own reason — see their comments. Same
    per-input-type treatment as the steer pad: a real tappable button on
    touch, a light-up "how to play" keycap on desktop where the keyboard's Z
    is the real control. left/top are set by main.js's resize() so it stays
@@ -769,10 +770,26 @@ button:hover {
    Sized off the SAME --key regardless of how many guns are actually
    unlocked (one key or two) — each key visible right now (game.js's
    syncWeaponControls() toggles them independently) is exactly this size,
-   not shrunk to fit more of them into the column. */
+   not shrunk to fit more of them into the column.
+   Stacked in a column, not the base rule's row — asked for directly, so
+   desktop reads the same as a phone (the small-touch override above),
+   rather than the guns lining up sideways on one and downwards on the
+   other. Room-wise it's fine: main.js's positionWeaponPad() centres the
+   pad on the move cluster opposite, and this column (2·1.3 keys + gap,
+   ~2.8·--key) only overhangs that cluster's own ~2.16·--key height by
+   ~0.3·--key top and bottom. In the side-column layout the cluster keeps
+   a bigger margin than that below it at every --key resize() can pick
+   (its byHeight cap is what guarantees it); in the clamped-to-the-bottom
+   layout it doesn't, and positionWeaponPad() slides the pad up to stay
+   on-screen — see its own comment. The
+   FIRE caption ends up ~0.6·--key higher than the row layout put it, but
+   still well clear of #top-left-panel's HUD/now-playing stack on any
+   normal window shape (at 1920x1080 it sits ~500px down, the stack ends
+   ~250px down). */
 @media (hover: hover) and (pointer: fine) {
   #weapon-dpad {
     --k: calc(var(--key, 34px) * 1.3);
+    flex-direction: column;
   }
   .weapon-key {
     width: var(--k);

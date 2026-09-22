@@ -444,8 +444,10 @@ const DPAD_GAP = 4; // breathing room between the canvas and the steer pad
 
 // Keep the weapon controls (index.html #weapon-dpad) level with the move
 // controls, straight across on the left edge: vertically centred on the move
-// cluster (which is taller — 2+ keycap rows vs. one), anchored left instead
-// of right. Called at the end of resize() and again by game.js (via
+// cluster, anchored left instead of right. Whichever is taller (the cluster
+// is ~2.16 keys; the fire pad is one key as a row on a big touch viewport,
+// ~2.8 keys as the column desktop and phones use — style.css) the two stay
+// centred on each other. Called at the end of resize() and again by game.js (via
 // ui.layoutWeaponPad) the moment the pistol is picked up and the pad stops
 // being display:none, since resize() may not fire around then. A zero-size
 // rect (still hidden) just parks it at the cluster's centre — harmless, and
@@ -456,7 +458,17 @@ function positionWeaponPad() {
   weaponDpad.style.left = '20px';
   weaponDpad.style.right = 'auto';
   weaponDpad.style.bottom = 'auto';
-  weaponDpad.style.top = `${Math.round(r.top + r.height / 2 - wr.height / 2)}px`;
+  // Centred on the cluster, but never past the bottom of the window: when
+  // resize() has had to clamp the cluster to the lowest on-screen row (its
+  // "neither margin fits" case — e.g. a 1440x900 window, 80px side margin,
+  // 20px below the canvas), a fire pad taller than the cluster (the
+  // two-key column, ~0.3 keys taller each end) would otherwise hang its
+  // bottom key ~12px off-screen. Sliding it up to sit flush instead costs
+  // nothing — the two pads are a few px off-centre from each other only in
+  // exactly the window shape where the cluster is already overlapping the
+  // canvas anyway.
+  const centred = r.top + r.height / 2 - wr.height / 2;
+  weaponDpad.style.top = `${Math.round(Math.min(centred, window.innerHeight - wr.height))}px`;
 }
 
 function resize() {
