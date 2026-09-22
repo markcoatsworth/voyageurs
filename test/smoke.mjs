@@ -579,6 +579,39 @@ await step('britishWarship: the approach keeps darkening to the trigger, rumbles
 
 // --- scenario 4b2b: the storm stays dark through the fight, not just up to it
 
+await step('britishWarship: no river obstacles inside the held arena — only the fight can hit you', () => {
+  // "Can we remove the obstacles in the river for the British Warship
+  // fight?" The fight clamps flowDistance, so the canoe isn't travelling —
+  // but obstacles.js's pool kept drifting past and hitting it anyway. The
+  // hold now passes collidable=false (game.js), same as flying over them
+  // in the Chasse-galerie, and skips drawing them.
+  const g = newGame('rideau', WARSHIP_FLOW_DISTANCE + 2);
+  const hits = [];
+  const origHandleHit = g.game.handleHit.bind(g.game);
+  g.game.handleHit = (entry) => { hits.push(entry?.type); return origHandleHit(entry); };
+  let inChase = false;
+  for (let i = 0; i < 500 && !inChase; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    if (g.game.britishWarship.isChaseHolding()) inChase = true;
+  }
+  if (!inChase) throw new Error('never entered the held arena');
+  // Long enough for the pool to sweep the whole arena several times over,
+  // steering across the full width so nothing is missed by sitting still.
+  hits.length = 0;
+  for (let i = 0; i < 3000; i++) {
+    g.game.health = 100;
+    g.input.state.left = i % 120 < 60;
+    g.input.state.right = i % 120 >= 60;
+    g.game.update(1 / 30);
+    if (!g.game.britishWarship.isChaseHolding()) break;
+  }
+  const riverHits = hits.filter((t) => t === 'rock' || t === 'island' || t === 'log');
+  if (riverHits.length) throw new Error(`${riverHits.length} river-obstacle hit(s) inside the held arena (${[...new Set(riverHits)].join(', ')}) — they should be suppressed`);
+  notes.push(`  note britishWarship: ${hits.length} hit(s) in the arena, none from river obstacles`);
+});
+
 await step('britishWarship: the storm holds through the whole fight, then clears once it resolves', () => {
   // "Keep the weather darkness along for the fight" — stormIntensityAt
   // alone (the pure function) already snaps to 0 at TRIGGER_DISTANCE by
