@@ -486,6 +486,25 @@ html, body {
   margin-bottom: 28px;
 }
 
+/* The pause screen's SAVE FOR OFFLINE control (index.html #offline-panel)
+   — under the PAUSED headline, which otherwise has nothing below it, so
+   it brings its own top margin. The status line doubles as the "all
+   saved" state once the button is gone. */
+#offline-panel {
+  margin-top: 28px;
+}
+#offline-status {
+  font-size: 9px;
+  line-height: 1.8;
+  margin: 12px 0 0;
+  color: #f4ead2;
+  min-height: 1.8em;
+}
+#offline-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 button {
   pointer-events: all;
   font-family: 'Press Start 2P', monospace;

@@ -4,7 +4,7 @@
 // Left in, they'd ship to the nginx image and Cloud Run. Strip them from
 // the build output here.
 
-import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { rmSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -61,4 +61,38 @@ if (existsSync(indexPath)) {
   } else {
     console.warn('postbuild: __BUILD_STAMP__ placeholder not found in dist/index.html');
   }
+}
+
+// Fill in the service worker (public/sw.js — copied verbatim into dist/ by
+// vite like everything else under public/) with what this build actually
+// emitted: the hashed /assets/ files to precache, the audio list the
+// SAVE FOR OFFLINE button pulls, and a build id that names the shell cache
+// so each deploy replaces the last one's cleanly. Only ever read in a
+// production build — main.js registers /sw.js under import.meta.env.PROD
+// alone — so the unfilled template never runs against the dev server.
+const swPath = resolve(root, 'dist/sw.js');
+if (existsSync(swPath)) {
+  const list = (dir, filter) => {
+    const abs = resolve(root, dir);
+    if (!existsSync(abs)) return [];
+    return readdirSync(abs).filter(filter).sort();
+  };
+  const assets = list('dist/assets', () => true).map((f) => `/assets/${f}`);
+  const audio = list('dist/audio', (f) => f.endsWith('.mp3')).map((f) => `/audio/${f}`);
+  const icons = list('dist/icons', () => true).map((f) => `/icons/${f}`);
+  const precache = ['/', '/index.html', '/favicon.svg', '/manifest.webmanifest', ...icons, ...assets];
+  let build = String(Date.now());
+  try {
+    const v = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
+    if (v) build = `${v}-${build}`;
+  } catch { /* timestamp alone still changes per build */ }
+  const sw = readFileSync(swPath, 'utf8')
+    .replaceAll('__BUILD__', build)
+    .replaceAll('__PRECACHE__', JSON.stringify(precache))
+    .replaceAll('__AUDIO__', JSON.stringify(audio));
+  if (sw.includes('__PRECACHE__') || sw.includes('__AUDIO__')) {
+    console.warn('postbuild: sw.js placeholders not all replaced');
+  }
+  writeFileSync(swPath, sw);
+  console.log(`postbuild: filled sw.js — ${precache.length} shell files, ${audio.length} audio tracks, build ${build}`);
 }

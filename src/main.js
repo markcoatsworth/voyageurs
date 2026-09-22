@@ -827,6 +827,63 @@ for (const evt of ['pointerdown', 'touchend', 'keydown', 'click']) {
   });
 }
 
+// Offline play — the service worker (public/sw.js, filled in by
+// scripts/postbuild.mjs) and the pause screen's SAVE FOR OFFLINE button.
+// Asked for as "I'm about to go on a camping trip where I'll be totally
+// offline, but I would love to get the game cached on my phone." The
+// worker keeps the app shell on its own the moment it installs; the music
+// (~88 MB, 26 tracks) is the part that has to be asked for, since pulling
+// that onto every visitor's phone unasked isn't on — hence the button,
+// which posts 'cache-audio' and shows progress from the worker's replies
+// until every track is stored, after which the button gives way to a
+// plain "ready" line. Production builds only: the template's placeholders
+// are only filled by postbuild, and a worker caching the dev server's
+// module graph would make every edit look like it hadn't taken.
+const offlinePanel = document.getElementById('offline-panel');
+const offlineBtn = document.getElementById('offline-btn');
+const offlineStatus = document.getElementById('offline-status');
+function showOfflineStatus(s) {
+  if (!offlineStatus) return;
+  if (s.complete) {
+    offlineStatus.textContent = `READY TO PLAY OFFLINE — ${s.total} TRACKS SAVED`;
+    offlineBtn?.classList.add('hidden');
+  } else if (s.failed) {
+    offlineStatus.textContent = `${s.done}/${s.total} TRACKS SAVED — ${s.failed} FAILED, TRY AGAIN`;
+    if (offlineBtn) offlineBtn.disabled = false;
+  } else if (s.done > 0) {
+    offlineStatus.textContent = `${s.done}/${s.total} TRACKS SAVED`;
+  } else {
+    offlineStatus.textContent = 'MUSIC NOT YET SAVED';
+  }
+}
+// import.meta.env is vite's — absent under plain node (the smoke test
+// loads this file), hence the try.
+let isProdBuild = false;
+try { isProdBuild = !!import.meta.env.PROD; } catch { /* not vite: dev-ish, no worker */ }
+if (isProdBuild && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && offlinePanel) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'audio-status') showOfflineStatus(e.data);
+  });
+  navigator.serviceWorker.register('/sw.js').then(async (reg) => {
+    offlinePanel.classList.remove('hidden');
+    // The worker that's actually controlling this page, once there is one
+    // (first ever load: the fresh install claims the page on activate).
+    const worker = async () => (await navigator.serviceWorker.ready).active;
+    (await worker())?.postMessage({ type: 'audio-status' });
+    offlineBtn?.addEventListener('click', async () => {
+      offlineBtn.disabled = true;
+      offlineStatus.textContent = 'SAVING…';
+      (await worker())?.postMessage({ type: 'cache-audio' });
+    });
+    // A new build's worker takes over on the next load (skipWaiting +
+    // clients.claim in sw.js) — nothing to prompt about here, the badge
+    // already shows which build is running.
+    reg.update?.();
+  }).catch((e) => {
+    console.warn('service worker registration failed', e);
+  });
+}
+
 // Escape has no touch equivalent, hence a visible button — shown for every
 // input type, not just touch, since a tappable/clickable pause control is
 // a reasonable thing to want on desktop too. The label flips to RESUME

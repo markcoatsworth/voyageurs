@@ -1,0 +1,15 @@
+{
+  "name": "Voyageurs",
+  "short_name": "Voyageurs",
+  "description": "A canoe river-runner from the Saguenay Fjord up the Saint Lawrence to Kingston.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c1013",
+  "theme_color": "#0c1013",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
