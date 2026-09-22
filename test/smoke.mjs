@@ -667,6 +667,28 @@ await step('kingston: walking up into Artillery Park (the band/crowd) never cras
   }
 });
 
+await step('kingston: walking west into the Clergy Reserve/Dockyard extension never crashes', () => {
+  // The west extension (villageScene.js's KINGSTON_WORLD_LEFT, the
+  // Dockyard building, the Ordnance Yard/battery props, Clergy Reserve's
+  // own trees) is purely cosmetic like Artillery Park above — no trigger,
+  // nothing to assert on beyond "the game survives walking into it."
+  // WALK_SPEED=62, dock (near x=160) to the world's own new left edge
+  // (KINGSTON_WORLD_LEFT=-140) is ~300px, so budget generously.
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  const g = newGame('rideau', kingston.flowDistance - 20);
+  for (let i = 0; i < 200 && g.game.mode !== 'village'; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (g.game.mode !== 'village') throw new Error('never entered Kingston on foot');
+  for (let i = 0; i < 400; i++) {
+    g.input.state.left = true;
+    g.input.state.up = i % 60 < 30;
+    g.input.state.down = i % 60 >= 30;
+    g.game.update(1 / 30);
+  }
+});
+
 // --- scenario 4e: ?start=kingston lands where the town actually renders ----
 
 await step('kingston: the ?start= cheat lands exactly on the arrival-track trigger, past the Warship, and fires it on its own', async () => {

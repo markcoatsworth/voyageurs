@@ -362,6 +362,17 @@ const KINGSTON_MARKET_SQUARE = { x: 110, y: 90, w: 100, h: 30 };
 const KINGSTON_MARKET_WELL_CENTER = { x: 135, y: 105 };
 
 const KINGSTON_ONFOOT_BUILDINGS = [
+  // --- west of the grid, past Fort Frontenac's ruins (KINGSTON_WORLD_LEFT
+  // opened this ground up; see its own comment) — the map's own "Clergy
+  // Reserve" and "Dock Yard No. 5," real detail it draws past the
+  // surveyed town's own western edge, not empty space the world happened
+  // to stop at (same reasoning Montréal's own west-suburb section above
+  // already uses for the ground past the Récollets Gate).
+  // The Dockyard — a modest wooden yard building, not the Royal Navy's
+  // real dockyard (that's across the water at Point Frederick, already a
+  // minimap landmark — see route.js's own KINGSTON_POINT_FREDERICK_MAP_POINT).
+  // The map labels this one separately, right at the town's own edge.
+  { kind: 'cabin', x: -95, y: 88, variant: 0, mirror: false },
   // Upper Kingston, back row — north of the back avenue, one building per
   // block the cross streets/main road divide the grid into.
   { kind: 'stone', x: 45, y: 62, variant: 1, mirror: false },
@@ -379,6 +390,32 @@ const KINGSTON_ONFOOT_BUILDINGS = [
   // west of the whole street pattern — same "small cluster apart from the
   // main spread" treatment the river view gives it.
   { kind: 'ruinedfort', x: 25, y: 105, mirror: false },
+];
+
+// -140: comfortable room for the Dockyard building above plus the
+// Ordnance Yard/battery props below (drawOrdnanceYard/drawEarthworkBattery,
+// this file's own draw()) without crowding Fort Frontenac's ruins at the
+// old edge (x=25) — same reasoning MONTREAL_WORLD_LEFT's own comment gives
+// for opening ground west of the Récollets Gate.
+const KINGSTON_WORLD_LEFT = -140;
+// A dirt path connecting the new west ground to the existing grid — the
+// map shows Clergy Reserve as open, undeveloped land (a church land grant,
+// not military works), so this leads to the Dockyard/Ordnance Yard
+// specifically rather than paving the whole reserve. Same shape as
+// MONTREAL_DIRT_PATH_WEST above.
+const KINGSTON_WEST_DIRT_PATH = { x: KINGSTON_WORLD_LEFT, y: 75, w: KINGSTON_CROSS_ROAD_W.x - KINGSTON_WORLD_LEFT, h: 14 };
+// The Ordnance Yard and the small proposed battery (the map's own "No. 5"
+// — see drawEarthworkBattery's own comment on why it's an earthwork, not a
+// stone fort like Fort Frontenac's ruins) — purely decorative props, like
+// the cannon/market well elsewhere in this file, not solid buildings.
+const KINGSTON_ORDNANCE_YARD_POS = { x: -100, y: 155 };
+const KINGSTON_BATTERY_POS = { x: -55, y: 130 };
+// Clergy Reserve's own scattered trees — real church land left undeveloped
+// reads as rougher, sparser ground than a laid-out park (KINGSTON_PARK_TREE_SPOTS),
+// so this leans looser than that array's own spacing.
+const KINGSTON_WEST_TREE_SPOTS = [
+  { x: -130, y: 60 }, { x: -115, y: 130 }, { x: -70, y: 55 }, { x: -30, y: 65 },
+  { x: -25, y: 155 }, { x: -135, y: 165 },
 ];
 
 // North of the grid — the real survey (kingston-1700s.jpg) labels this
@@ -1523,6 +1560,98 @@ function drawCannon(ctx, cx, cy) {
   ctx.restore();
 }
 
+// The Ordnance Yard west of the grid (KINGSTON_ORDNANCE_YARD_POS) — a
+// fenced storage yard, stacked round shot and crates rather than a proper
+// building, the same distinction drawCannon's own comment draws for
+// Artillery Park: the ground reads as what it actually was, not dressed
+// up as something grander. Purely decorative, like the cannon/market well
+// elsewhere in this file — not solid, never blocks the player.
+function drawOrdnanceYard(ctx, cx, cy) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 5, 20, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // low post-and-rail fence around the yard
+  ctx.strokeStyle = '#4a3826';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(cx - 20, cy - 12, 40, 24);
+  ctx.fillStyle = '#4a3826';
+  for (const fx of [-20, -6.5, 6.5, 20]) {
+    ctx.fillRect(cx + fx - 1, cy - 13, 2, 26);
+  }
+
+  // stacked round shot — a small pyramid, the one unmistakable "ordnance"
+  // cue at this scale
+  ctx.fillStyle = '#2b2b2b';
+  const shotRows = [3, 2, 1];
+  let sy = cy + 6;
+  for (const row of shotRows) {
+    for (let i = 0; i < row; i++) {
+      const sx = cx - 8 + (i - (row - 1) / 2) * 5.5;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    sy -= 4;
+  }
+
+  // a couple of crates off to the side
+  ctx.fillStyle = '#5c4530';
+  ctx.fillRect(cx + 4, cy - 2, 10, 8);
+  ctx.fillRect(cx + 6, cy - 8, 8, 7);
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cx + 4, cy - 2, 10, 8);
+  ctx.strokeRect(cx + 6, cy - 8, 8, 7);
+  ctx.restore();
+}
+
+// The proposed battery (KINGSTON_BATTERY_POS) — the survey's own "No. 5,"
+// one of several identically-numbered works it marks around the harbour
+// defences (kingston-1700s.jpg is titled "Plan shewing... the Works
+// proposed for the defence of Kingston" — a defence PROPOSAL layered onto
+// the base map, not a record of what already stood). Deliberately a low
+// earthen berm, not a stone fort — Fort Frontenac's ruins (already in
+// KINGSTON_ONFOOT_BUILDINGS) are the real, older, built fortification at
+// the grid's own edge; this is a separate, humbler earthwork, closer to
+// what a "proposed" 1820s-30s battery actually was on paper. Purely
+// decorative, like the cannon/market well elsewhere in this file — not
+// solid, never blocks the player.
+function drawEarthworkBattery(ctx, cx, cy) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 6, 22, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // the berm itself — a shallow grassed mound, darker on the shaded side
+  ctx.fillStyle = '#5a6b45';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 22, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#4c5c3a';
+  ctx.beginPath();
+  ctx.ellipse(cx - 4, cy + 1, 18, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#6b7d52';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - 3, 16, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // two field guns poking over the parapet, angled out toward the harbour
+  for (const dx of [-8, 8]) {
+    ctx.save();
+    ctx.translate(cx + dx, cy - 4);
+    ctx.rotate(dx < 0 ? -0.5 : 0.5);
+    ctx.fillStyle = '#2b2b2b';
+    ctx.fillRect(-1.6, -10, 3.2, 10);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 // A wayside calvaire — a plain wooden roadside cross on a small stone
 // base, the kind that genuinely marked farm roads like Côte Sainte-
 // Catherine (MONTREAL_CALVAIRE's own comment) in Catholic New France,
@@ -1971,7 +2100,7 @@ export function createVillageScene() {
       const isGatineau = village && village.name === 'Gatineau';
       worldWidth = isMontreal ? MONTREAL_WORLD_WIDTH : isQuebecCity ? QUEBEC_WORLD_WIDTH : CANVAS_WIDTH;
       worldTop = isMontreal ? MONTREAL_WORLD_TOP : isKingston ? KINGSTON_WORLD_TOP : 0;
-      worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : 0;
+      worldLeft = isMontreal ? MONTREAL_WORLD_LEFT : isKingston ? KINGSTON_WORLD_LEFT : 0;
       // worldRight tracks worldWidth (not always CANVAS_WIDTH) so Québec's
       // own wider world is actually walkable edge to edge — every other
       // village still has worldWidth === CANVAS_WIDTH, so this changes
@@ -1999,7 +2128,7 @@ export function createVillageScene() {
       const treeSpots = isMontreal
         ? MONTREAL_TREE_SPOTS
         : isKingston
-        ? [...TREE_SPOTS, ...KINGSTON_PARK_TREE_SPOTS]
+        ? [...TREE_SPOTS, ...KINGSTON_PARK_TREE_SPOTS, ...KINGSTON_WEST_TREE_SPOTS]
         : TREE_SPOTS;
       trees = treesClearOfBuildings(treesFor(seed, treeSpots), buildings);
       traderPos = traderPosFor(repairShop);
@@ -2219,6 +2348,14 @@ export function createVillageScene() {
         // already is, fixes that outright: nothing drawn afterwards (band,
         // crowd, player) can ever be occluded by it.
         drawBandstand(ctx, KINGSTON_BANDSTAND_POS.x, KINGSTON_BANDSTAND_POS.y);
+        // West of the grid, past Fort Frontenac's ruins — Clergy Reserve's
+        // own dirt path (KINGSTON_WEST_DIRT_PATH's own comment on why it's
+        // dirt, not brick, same reasoning as Artillery Park's own path
+        // above), the Ordnance Yard, and the proposed battery. Same fixed,
+        // always-behind pass as every other ground prop here.
+        drawDirtPath(ctx, KINGSTON_WEST_DIRT_PATH.x, KINGSTON_WEST_DIRT_PATH.y, KINGSTON_WEST_DIRT_PATH.w, KINGSTON_WEST_DIRT_PATH.h);
+        drawOrdnanceYard(ctx, KINGSTON_ORDNANCE_YARD_POS.x, KINGSTON_ORDNANCE_YARD_POS.y);
+        drawEarthworkBattery(ctx, KINGSTON_BATTERY_POS.x, KINGSTON_BATTERY_POS.y);
       }
 
       // dock, planks + pilings, leading from the shore down to the canoe
