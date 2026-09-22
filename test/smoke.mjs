@@ -1901,7 +1901,7 @@ await step('music: the Kingston playlist always leads with Un Siècle d\'Avance 
   // 50 Missions — so what's pinned here is the *current* last one, and
   // this assertion moves each time another is appended. (It used to name
   // Le Grace Aussi.)
-  if (expected[expected.length - 1] !== 'Le Casquette de 50 Missions') {
+  if (expected[expected.length - 1] !== 'Dépense à Tout Vitesse') {
     throw new Error(`KINGSTON_PLAYLIST ends with "${expected[expected.length - 1]}" — the newest track was asked for right at the end`);
   }
   music.start();

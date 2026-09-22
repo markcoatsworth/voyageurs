@@ -168,6 +168,13 @@ const KINGSTON_TRACK_5 = { src: '/audio/le-grace-aussi.mp3', title: 'Le Grace Au
 // way KINGSTON_TRACK_5's was — note that's "Le Casquette", not the "La"
 // the noun would normally take, exactly as the source file names it.
 const KINGSTON_TRACK_6 = { src: '/audio/le-casquette-de-50-missions.mp3', title: 'Le Casquette de 50 Missions', artist: 'Les Chevaliers', volume: 1.0 };
+// Seventh — the other half of the same pair as KINGSTON_TRACK_6 ("two new
+// tracks by Les Chevaliers"), which arrived a few minutes later once its
+// source file was saved properly, and takes the end slot from it on the
+// same "right at the end" instruction. Title from the filename again;
+// that's "Depense a Tout Vitesse" as named, accents included here the way
+// the rest of the catalog carries them.
+const KINGSTON_TRACK_7 = { src: '/audio/depense-a-tout-vitesse.mp3', title: 'Dépense à Tout Vitesse', artist: 'Les Chevaliers', volume: 1.0 };
 // Unlike every other boss track, nothing ever calls endBossTrack() for this
 // set (see win()'s own comment in game.js) — arriving at Kingston is the
 // end of the run, not a fight that resolves back into the ambient shuffle.
@@ -179,7 +186,7 @@ const KINGSTON_TRACK_6 = { src: '/audio/le-casquette-de-50-missions.mp3', title:
 // and back around to the top — "make the playlist straight order so
 // there is no randomness." Exported for test/smoke.mjs, which asserts
 // exactly that sequence.
-export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3, KINGSTON_TRACK_4, KINGSTON_TRACK_5, KINGSTON_TRACK_6];
+export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3, KINGSTON_TRACK_4, KINGSTON_TRACK_5, KINGSTON_TRACK_6, KINGSTON_TRACK_7];
 
 // Reported as quiet on the whole, relative to other applications running
 // at the same time — not a single track's own mix, the shuffle's own
