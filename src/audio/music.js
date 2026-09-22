@@ -123,7 +123,7 @@ const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de 
 // the shuffle's own default level is just genuinely quiet). Same ceiling,
 // same fix: 1.0 is as loud as audio.volume goes; if that's still not enough,
 // the fix has to move to the file itself (see those two tracks' own comments).
-// Exported (unlike KINGSTON_TRACK_2/3 below) so main.js's ?start=kingston
+// Exported (unlike KINGSTON_TRACK_2..5 below) so main.js's ?start=kingston
 // cheat can pin it as the lead-off track via primeKingstonFirstTrack() —
 // see that function's own comment for why.
 export const KINGSTON_TRACK = { src: '/audio/un-siecle-davance.mp3', title: "Un Siècle d'Avance", artist: 'Les Chevaliers', volume: 1.0 };
@@ -143,6 +143,12 @@ const KINGSTON_TRACK_3 = { src: '/audio/le-caygeon-de-bob.mp3', title: 'Le Cayge
 // credit a performer from — artist genuinely unknown, not a placeholder
 // guess the way KINGSTON_TRACK_2/3's own "Les Chevaliers" is.
 const KINGSTON_TRACK_4 = { src: '/audio/les-rois-de-ble.mp3', title: 'Les Rois de Blé', artist: 'Unknown', volume: 1.0 };
+// Fifth, "put it at the end" — same standing as KINGSTON_TRACK_4 above:
+// Kingston-only, added last, artist unknown (supplied directly, no
+// listing to credit from). Title is the filename's own spelling. Note
+// "at the end" is array position only — playKingstonTrack() shuffles
+// this set, so it's last in the list, not guaranteed last to play.
+const KINGSTON_TRACK_5 = { src: '/audio/le-grace-aussi.mp3', title: 'Le Grace Aussi', artist: 'Unknown', volume: 1.0 };
 // Unlike every other boss track, nothing ever calls endBossTrack() for this
 // set (see win()'s own comment in game.js) — arriving at Kingston is the
 // end of the run, not a fight that resolves back into the ambient shuffle.
@@ -153,7 +159,7 @@ const KINGSTON_TRACK_4 = { src: '/audio/les-rois-de-ble.mp3', title: 'Les Rois d
 // now, not always KINGSTON_TRACK specifically, so a test checking "did the
 // arrival cue cut in" needs the real set to check membership against
 // rather than one hardcoded title.
-export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3, KINGSTON_TRACK_4];
+export const KINGSTON_PLAYLIST = [KINGSTON_TRACK, KINGSTON_TRACK_2, KINGSTON_TRACK_3, KINGSTON_TRACK_4, KINGSTON_TRACK_5];
 
 // Reported as quiet on the whole, relative to other applications running
 // at the same time — not a single track's own mix, the shuffle's own
