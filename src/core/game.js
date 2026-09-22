@@ -1530,24 +1530,11 @@ export class Game {
     // interacts with the canoe — rocks and deadfall can't hit it, fur pelts
     // can't be collected. The field still advances so it's coherent again on
     // landing. Only the steeples matter up there.
-    //
-    // Same treatment inside the British Warship's held arena, asked for
-    // directly: "can we remove the obstacles in the river for the British
-    // Warship fight?" They made no sense there in the first place — the
-    // fight clamps flowDistance, so the canoe isn't actually travelling,
-    // yet obstacles.js's pool kept drifting past and hitting it: scenery
-    // sliding by and doing damage in a fight that's meant to be you, the
-    // gunboat and its cannonballs. This is also the one genuinely
-    // procedural thing on the water (the pool is placed with Math.random,
-    // so it differs run to run, unlike the hash-placed trees/whales, which
-    // are the same every time) — see the reply that came with this request
-    // about wanting a static landscape.
-    const warshipHeld = this.segment === 'rideau' && this.britishWarship.isChaseHolding();
     this.obstacles.update(
       this.time, dt, effectiveSpeed, this.canoeWorldX,
       (entry) => this.handleHit(entry),
       (entry) => this.handleCollect(entry),
-      !airborne && !warshipHeld,
+      !airborne,
     );
 
     // Le Loup-garou — the night beast pacing the Beaupré shore, just before
@@ -1903,13 +1890,6 @@ export class Game {
     // don't draw the rocks, logs, pelts, whitewater or whales the canoe is
     // flying over. (They still can't touch it either — see obstacles.update
     // below.) Only the steeples on the banks matter up there.
-    //
-    // The Warship's held arena hides the obstacle pool the same way (see
-    // its own comment at that update() call) — but only the pool: the
-    // whitewater and the water itself stay, so it's still plainly the
-    // river, just without rocks and logs sliding past a canoe that the
-    // fight is holding in place.
-    const warshipHeldDraw = this.segment === 'rideau' && this.britishWarship.isChaseHolding();
     if (!isFlying) {
       drawCurrentEffects(ctx, this.time, this.flowDistance, this.rapids);
       // Belugas are a Tadoussac-estuary sight — the wide Rideau Lake reaches
@@ -1918,7 +1898,7 @@ export class Game {
       if (this.segment !== 'rideau') {
         drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
       }
-      if (!warshipHeldDraw) this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
+      this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     }
 
     // Loup-garou night: a final wash over the obstacles/whales too, so
