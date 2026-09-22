@@ -405,6 +405,25 @@ function lerp(a, b, t) {
 const EASY_DAMAGE_TAKEN_SCALE = 0.25;
 const EASY_DAMAGE_GIVEN_SCALE = 4;
 
+// Le Diable's fireballs hit for less on touch. Reported from a phone: "I
+// don't even last 10 seconds." The arithmetic backs that up exactly — his
+// CONTACT_DAMAGE is 30 against MAX_HEALTH 100, so the 4th hit kills, and
+// INVULN_TIME (1.2s) means four hits can't take longer than ~3.6s. That's
+// survivable on a keyboard, where the dodge is precise; on a steer pad it
+// isn't, and the fight's difficulty was tuned entirely against desktop
+// play (see diable.js's own history of tightening FIREBALL_SPEED/
+// TELEGRAPH/SPREAD_GAP after "cleared it without taking a single hit").
+// 0.5 puts it at 7 hits instead of 4 — ~8.4s of nothing but hits taken,
+// and realistically much longer, without making a landed hit meaningless
+// the way a token 0.8 would. Deliberately its own constant rather than
+// folding into damageTakenScale (?difficulty=easy), which is a separate,
+// deliberately debug-only knob that scales every boss: this is the one
+// fight, on the one input type, and it applies whether or not easy mode
+// is on. Nothing else about the fight changes — his hp, fireball speed,
+// telegraph and cadence are all untouched, so it's the same fight, just
+// survivable with a thumb.
+const DIABLE_TOUCH_DAMAGE_SCALE = isTouchPrimary() ? 0.5 : 1;
+
 export class Game {
   // startFlowDistance/startSegment: where the river clock begins instead of
   // the put-in (fjord, 0) — see main.js's ?start= URL cheat. Threaded
@@ -827,7 +846,8 @@ export class Game {
       this.takeDamage(STEEPLE_DAMAGE * this.damageTakenScale);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'diable') {
-      this.takeDamage((entry.damage ?? 18) * this.damageTakenScale);
+      // DIABLE_TOUCH_DAMAGE_SCALE is 1 on desktop — see its own comment.
+      this.takeDamage((entry.damage ?? 18) * this.damageTakenScale * DIABLE_TOUCH_DAMAGE_SCALE);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'diable-touch') {
       // No hull damage — see DIABLE_TOUCH_FUR_PENALTY's own comment.
