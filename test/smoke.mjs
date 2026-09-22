@@ -57,6 +57,7 @@ const { createMusic } = await import('../src/audio/music.js');
 const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
 const { getDockHit } = await import('../src/world/villages.js');
+const { KINGSTON_CATARAQUI } = await import('../src/world/villageScene.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
@@ -686,6 +687,43 @@ await step('kingston: walking west into the Clergy Reserve/Dockyard extension ne
     g.input.state.up = i % 60 < 30;
     g.input.state.down = i % 60 >= 30;
     g.game.update(1 / 30);
+  }
+});
+
+await step('kingston: walking east onto the point stops at the Cataraqui — the far bank is never reachable', () => {
+  // The east extension (villageScene.js's KINGSTON_WORLD_RIGHT, the
+  // extra grid block, the King's storehouses, the ferry landing, and the
+  // Royal Navy Dock Yard across the water) is mostly cosmetic like the
+  // west one above, with one real rule: the Cataraqui (KINGSTON_CATARAQUI,
+  // enforced through isWalkable()'s walls strip) is a barrier, the
+  // dockyard a vista. So beyond the usual liveness check, hold Right for
+  // well past what it takes to reach the shore (dock x=160 to the water
+  // at x=430 is 270px at WALK_SPEED=62 — ~130 frames; 500 is generous,
+  // and drifting up/down along the way sweeps a good stretch of bank) and
+  // assert the player is still on the town side of the water.
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  const g = newGame('rideau', kingston.flowDistance - 20);
+  for (let i = 0; i < 200 && g.game.mode !== 'village'; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (g.game.mode !== 'village') throw new Error('never entered Kingston on foot');
+  let furthest = -Infinity;
+  for (let i = 0; i < 500; i++) {
+    g.input.state.up = false;
+    g.input.state.right = true;
+    g.input.state.up = i % 120 < 40;
+    g.input.state.down = i % 120 >= 80;
+    g.game.update(1 / 30);
+    furthest = Math.max(furthest, g.game.villageScene.debugPlayer().x);
+  }
+  if (furthest >= KINGSTON_CATARAQUI.x) {
+    throw new Error(`walked into/across the Cataraqui — reached x=${furthest.toFixed(1)}, water starts at x=${KINGSTON_CATARAQUI.x}`);
+  }
+  // ...and did actually get out onto the new ground past the old 320px
+  // edge, so this isn't passing because something stopped the walk early.
+  if (furthest < CANVAS_WIDTH) {
+    throw new Error(`never got east of the old world edge — furthest x=${furthest.toFixed(1)} (CANVAS_WIDTH=${CANVAS_WIDTH})`);
   }
 });
 

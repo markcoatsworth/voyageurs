@@ -390,6 +390,33 @@ const KINGSTON_ONFOOT_BUILDINGS = [
   // west of the whole street pattern — same "small cluster apart from the
   // main spread" treatment the river view gives it.
   { kind: 'ruinedfort', x: 25, y: 105, mirror: false },
+
+  // --- east of the grid, out to the point (KINGSTON_WORLD_RIGHT opened
+  // this ground up; see its own comment). The survey's grid doesn't stop
+  // at the old 320px edge — it runs on northeast to the tip of the point
+  // where the shoreline swings north into the Cataraqui mouth, so one
+  // more block of the same two-row pattern past a third cross street
+  // (KINGSTON_CROSS_ROAD_E2), then the point itself.
+  { kind: 'stone', x: 340, y: 62, variant: 2, mirror: false },
+  { kind: 'stone', x: 340, y: 155, variant: 1, mirror: true },
+  // The King's storehouses at the tip — government stores stood on the
+  // point from the 1780s (the map draws a yard right at the grid's own
+  // northeast end; its label is too small to read confidently at this
+  // scan's resolution, so the name here is the period's own generic one
+  // rather than a guess at the map's). One stone store, one timber shed.
+  { kind: 'stone', x: 395, y: 66, variant: 0, mirror: false },
+  { kind: 'cabin', x: 400, y: 150, variant: 2, mirror: true },
+
+  // --- across the Cataraqui, on Point Frederick: the Royal Navy Dock
+  // Yard (the map's own "Dock Yard" on the far shore — established 1789,
+  // so it's genuinely there in this game's own decade, unlike the Martello
+  // towers the same map proposes). Drawn on the far bank, past
+  // KINGSTON_CATARAQUI's water, which isWalkable() never lets the player
+  // cross — a vista, not a place to visit, the same way the river view
+  // already shows it (villages.js's KINGSTON_NAVY_BAY). Solid like any
+  // other building, which never matters since nothing can reach them.
+  { kind: 'cabin', x: 535, y: 58, variant: 1, mirror: false },
+  { kind: 'stone', x: 536, y: 138, variant: 2, mirror: false },
 ];
 
 // -140: comfortable room for the Dockyard building above plus the
@@ -459,6 +486,66 @@ const KINGSTON_PARK_TREE_SPOTS = [
   { x: 45, y: -90 }, { x: 260, y: -85 },
   { x: 35, y: -30 }, { x: 280, y: -35 },
   { x: 65, y: -135 }, { x: 255, y: -140 },
+];
+
+// East of the grid — the other half of "expand Kingston on the left-right
+// axis according to the map" (KINGSTON_WORLD_LEFT above is the west
+// half). The survey shows the town sitting on a point: harbour along the
+// south (this scene's water band), and on the east the shoreline turning
+// north into the mouth of the Cataraqui, with the Royal Navy's Dock Yard
+// on Point Frederick across that water. So the east extension is ground
+// out to a shore, then water, then an unreachable far bank — not more
+// open field the way Montréal's own east side is.
+//
+// A third cross street past the old 320px edge, same width/rows as the
+// other two, giving the extra block of grid the map shows.
+const KINGSTON_CROSS_ROAD_E2 = { x: 300, y: KINGSTON_ROAD_H1.y, w: 14, h: KINGSTON_ROAD_H2.y + KINGSTON_ROAD_H2.h - KINGSTON_ROAD_H1.y };
+// The Cataraqui — a vertical water strip running the world's full height
+// (KINGSTON_WORLD_TOP down into the harbour band at the bottom, so the
+// two waters join at the point's tip and the corner reads as a real
+// point, not a canal). x is where the town's ground ends; 75 wide is
+// enough to read as a river mouth at this scale without pushing the far
+// bank off the right of the screen when the player stands at the shore.
+// Exported for test/smoke.mjs — the one assertion the east extension
+// has (the water actually stops you) needs to know where the water is.
+export const KINGSTON_CATARAQUI = { x: 430, w: 75 };
+// Far bank: 55px of Point Frederick, just enough for the dockyard's own
+// two buildings (a 38px stone sprite fits) and a slip. worldRight is the
+// exploration/camera boundary (MONTREAL_WORLD_RIGHT's own comment on why
+// it's separate from worldWidth, which still centres the dock at 160);
+// the camera's east clamp puts this exactly at the screen's right edge,
+// so the far bank is fully visible from the point but never any further.
+const KINGSTON_WORLD_RIGHT = KINGSTON_CATARAQUI.x + KINGSTON_CATARAQUI.w + 55;
+// The water is a real barrier — reuses isWalkable()'s walls mechanism
+// (Montréal's ramparts) as one gateless vertical strip covering the
+// Cataraqui plus 4px of bank either side, so the player stops on the
+// sand rather than a pixel into the water. Full world height, since the
+// strip runs the whole way; the harbour band below WATER_TOP is already
+// blocked by isWalkable()'s own dock-width check.
+const KINGSTON_CATARAQUI_WALLS = [
+  { axis: 'v', lo: KINGSTON_CATARAQUI.x - 4, hi: KINGSTON_CATARAQUI.x + KINGSTON_CATARAQUI.w + 4, spanLo: KINGSTON_WORLD_TOP, spanHi: CANVAS_HEIGHT, gates: [] },
+];
+// The ferry landing at the point's tip, on the front avenue's own line —
+// a plank stub into the Cataraqui with a moored canoe, same shape as
+// Montréal's Passage de Longueuil (MONTREAL_FERRY_LANDING). Before the
+// Cataraqui bridge (1829 — the dotted crossing the map draws, deliberately
+// left out as decades too late for this game) the only way over to the
+// naval yard was by boat, so this is what the road actually led to.
+// Purely scenery, not a second reboard point.
+const KINGSTON_FERRY_LANDING = { y: KINGSTON_ROAD_H2.y + 2, h: 12, len: 16 };
+// The dockyard's own slip on the far bank — planks running out into the
+// water toward the town, the one thing that says "dock yard" rather than
+// "two buildings on a shore" at this size.
+const KINGSTON_NAVY_SLIP = { y: 96, h: 12, len: 14 };
+// Trees on the point (loose, the map shows it mostly open) and on the far
+// bank (denser — Point Frederick beyond the yard is drawn wooded).
+// Checked against the buildings above; treesClearOfBuildings() drops any
+// overlap regardless.
+const KINGSTON_EAST_TREE_SPOTS = [
+  { x: 335, y: -45 }, { x: 405, y: -30 }, { x: 365, y: -120 }, { x: 415, y: -175 },
+  { x: 345, y: -210 }, { x: 400, y: -240 }, { x: 375, y: 115 },
+  { x: 520, y: -40 }, { x: 548, y: -110 }, { x: 518, y: -190 }, { x: 550, y: -235 },
+  { x: 552, y: -5 },
 ];
 
 // A 5-piece band on a bandstand, with a crowd watching — asked for
@@ -2105,8 +2192,11 @@ export function createVillageScene() {
       // own wider world is actually walkable edge to edge — every other
       // village still has worldWidth === CANVAS_WIDTH, so this changes
       // nothing for them.
-      worldRight = isMontreal ? MONTREAL_WORLD_RIGHT : worldWidth;
-      walls = isMontreal ? MONTREAL_WALLS : isQuebecCity ? QUEBEC_CITY_WALLS : null;
+      worldRight = isMontreal ? MONTREAL_WORLD_RIGHT : isKingston ? KINGSTON_WORLD_RIGHT : worldWidth;
+      // Kingston's "walls" are water — the Cataraqui strip (see
+      // KINGSTON_CATARAQUI_WALLS), the same gateless-strip mechanism the
+      // two fortified towns use for their ramparts.
+      walls = isMontreal ? MONTREAL_WALLS : isQuebecCity ? QUEBEC_CITY_WALLS : isKingston ? KINGSTON_CATARAQUI_WALLS : null;
       repairShop = repairShopFor(worldWidth);
       buildings = isQuebecCity
         ? [...buildingsForQuebecCity(), repairShop]
@@ -2128,7 +2218,7 @@ export function createVillageScene() {
       const treeSpots = isMontreal
         ? MONTREAL_TREE_SPOTS
         : isKingston
-        ? [...TREE_SPOTS, ...KINGSTON_PARK_TREE_SPOTS, ...KINGSTON_WEST_TREE_SPOTS]
+        ? [...TREE_SPOTS, ...KINGSTON_PARK_TREE_SPOTS, ...KINGSTON_WEST_TREE_SPOTS, ...KINGSTON_EAST_TREE_SPOTS]
         : TREE_SPOTS;
       trees = treesClearOfBuildings(treesFor(seed, treeSpots), buildings);
       traderPos = traderPosFor(repairShop);
@@ -2233,6 +2323,14 @@ export function createVillageScene() {
       return { reboard, tradeRequested, gunsmithMet, musketMasterMet };
     },
 
+    // Test-only peek at where the player is standing (same idea as
+    // music.js's debugAudioElement()) — the on-foot scenes' smoke tests
+    // are otherwise pure liveness checks; this is what lets one assert
+    // that a barrier (Kingston's Cataraqui) actually held.
+    debugPlayer() {
+      return { x: player.x, y: player.y };
+    },
+
     draw(ctx) {
       const pat = ensurePatterns(ctx);
 
@@ -2322,11 +2420,29 @@ export function createVillageScene() {
       // well, same prop Montréal's own square uses) straddling the main
       // road between the avenues.
       if (isKingston) {
-        drawBrickRoad(ctx, 0, KINGSTON_ROAD_H1.y, worldWidth, KINGSTON_ROAD_H1.h);
-        drawBrickRoad(ctx, 0, KINGSTON_ROAD_H2.y, worldWidth, KINGSTON_ROAD_H2.h);
+        // Both avenues run from the grid's old west edge all the way out
+        // to the Cataraqui shore (not just worldWidth) — the map's grid
+        // reaches the tip of the point, and the front avenue is what
+        // leads to the ferry landing there.
+        drawBrickRoad(ctx, 0, KINGSTON_ROAD_H1.y, KINGSTON_CATARAQUI.x, KINGSTON_ROAD_H1.h);
+        drawBrickRoad(ctx, 0, KINGSTON_ROAD_H2.y, KINGSTON_CATARAQUI.x, KINGSTON_ROAD_H2.h);
         drawBrickRoad(ctx, KINGSTON_MAIN_ROAD_V.x, KINGSTON_MAIN_ROAD_V.y, KINGSTON_MAIN_ROAD_V.w, KINGSTON_MAIN_ROAD_V.h);
         drawBrickRoad(ctx, KINGSTON_CROSS_ROAD_W.x, KINGSTON_CROSS_ROAD_W.y, KINGSTON_CROSS_ROAD_W.w, KINGSTON_CROSS_ROAD_W.h);
         drawBrickRoad(ctx, KINGSTON_CROSS_ROAD_E.x, KINGSTON_CROSS_ROAD_E.y, KINGSTON_CROSS_ROAD_E.w, KINGSTON_CROSS_ROAD_E.h);
+        drawBrickRoad(ctx, KINGSTON_CROSS_ROAD_E2.x, KINGSTON_CROSS_ROAD_E2.y, KINGSTON_CROSS_ROAD_E2.w, KINGSTON_CROSS_ROAD_E2.h);
+        // The Cataraqui (KINGSTON_CATARAQUI's own comment) — the same
+        // water fill as the harbour band, run the world's full height so
+        // the two join at the point's tip, over the top of whatever the
+        // full-width grass/sand/road fills above already put there. A
+        // sand strip down each bank, same 6px as the harbour's own
+        // shoreline, so the beach reads as turning the corner rather
+        // than the water just starting.
+        const cq = KINGSTON_CATARAQUI;
+        ctx.fillStyle = pat.sand;
+        ctx.fillRect(cq.x - 6, worldTop, 6, WATER_TOP - worldTop);
+        ctx.fillRect(cq.x + cq.w, worldTop, 6, WATER_TOP - worldTop);
+        ctx.fillStyle = pat.water;
+        ctx.fillRect(cq.x, worldTop, cq.w, CANVAS_HEIGHT - worldTop);
         drawBrickRoad(ctx, KINGSTON_MARKET_SQUARE.x, KINGSTON_MARKET_SQUARE.y, KINGSTON_MARKET_SQUARE.w, KINGSTON_MARKET_SQUARE.h);
         drawMarketWell(ctx, KINGSTON_MARKET_WELL_CENTER.x, KINGSTON_MARKET_WELL_CENTER.y);
         // Artillery Park, north of the grid (KINGSTON_WORLD_TOP's own
@@ -2395,6 +2511,41 @@ export function createVillageScene() {
         ctx.rotate(Math.PI / 2);
         ctx.drawImage(parkedCanoeSprite, -parkedCanoeSprite.width / 2, -parkedCanoeSprite.height / 2);
         ctx.restore();
+      }
+
+      // Kingston's ferry landing at the point (KINGSTON_FERRY_LANDING) and
+      // the naval yard's slip on the far bank (KINGSTON_NAVY_SLIP) — the
+      // Montréal stub above turned sideways: planks running east-west
+      // out into the Cataraqui, plank lines across them every 5px the
+      // way the main dock's own run across its width. The moored canoe
+      // sits off the end of the town-side landing, turned to lie along
+      // the planks the same way Montréal's is (the sprite's natural
+      // orientation is bow-up, in line with the main dock).
+      if (isKingston) {
+        const cq = KINGSTON_CATARAQUI;
+        const stub = (x0, x1, y, h) => {
+          ctx.fillStyle = '#3f2b1a';
+          ctx.fillRect(x0 - 1, y - 1, x1 - x0 + 2, h + 2);
+          ctx.fillStyle = '#8a5a34';
+          ctx.fillRect(x0, y, x1 - x0, h);
+          ctx.strokeStyle = '#5f3b20';
+          ctx.lineWidth = 1;
+          for (let px = x0 + 5; px < x1; px += 5) {
+            ctx.beginPath();
+            ctx.moveTo(px, y);
+            ctx.lineTo(px, y + h);
+            ctx.stroke();
+          }
+        };
+        const fl = KINGSTON_FERRY_LANDING;
+        stub(cq.x - 4, cq.x + fl.len, fl.y, fl.h);
+        ctx.save();
+        ctx.translate(cq.x + fl.len + 4 + parkedCanoeSprite.height / 2, fl.y + fl.h / 2);
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(parkedCanoeSprite, -parkedCanoeSprite.width / 2, -parkedCanoeSprite.height / 2);
+        ctx.restore();
+        const ns = KINGSTON_NAVY_SLIP;
+        stub(cq.x + cq.w - ns.len, cq.x + cq.w + 4, ns.y, ns.h);
       }
 
       // Mont-Royal itself — real Montreal's one unmistakable landmark,
