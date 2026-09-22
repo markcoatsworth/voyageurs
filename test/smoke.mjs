@@ -1863,8 +1863,13 @@ await step('music: the Kingston playlist always leads with Un Siècle d\'Avance 
   if (expected[0] !== mod.KINGSTON_TRACK.title) {
     throw new Error(`KINGSTON_PLAYLIST[0] is "${expected[0]}", not "${mod.KINGSTON_TRACK.title}" — Un Siècle d'Avance has to be first in the list, since the list IS the play order`);
   }
-  if (expected[expected.length - 1] !== 'Le Grace Aussi') {
-    throw new Error(`KINGSTON_PLAYLIST ends with "${expected[expected.length - 1]}" — "Le Grace Aussi" was asked for "at the end"`);
+  // Each new Kingston track has been asked for "at the end" of the set as
+  // it stood — Les Rois de Blé, then Le Grace Aussi, then Le Casquette de
+  // 50 Missions — so what's pinned here is the *current* last one, and
+  // this assertion moves each time another is appended. (It used to name
+  // Le Grace Aussi.)
+  if (expected[expected.length - 1] !== 'Le Casquette de 50 Missions') {
+    throw new Error(`KINGSTON_PLAYLIST ends with "${expected[expected.length - 1]}" — the newest track was asked for right at the end`);
   }
   music.start();
   // Three separate arrivals (a first approach, then two capsize+restart
