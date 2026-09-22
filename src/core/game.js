@@ -3,8 +3,9 @@ import { FEATURE_ISLAND_RANGE } from '../world/river/islands.js';
 import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
 import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
+import { drawRain } from '../world/weather.js';
 import { createCanoeSprites } from '../world/canoe.js';
-import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek, playThunderclap } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import {
@@ -509,6 +510,14 @@ export class Game {
     this.currentVillage = null;
     this.blockadeCrossCurrent = 0;
     this._bossTrackCued = false;
+    // A capsize mid-storm restarts back at Jones Falls (or wherever this
+    // run began) under clear skies — the weather bed and the music duck
+    // both have to let go here, since neither is a pure function of
+    // position the way the visuals are; they're driven by update() and
+    // would otherwise just hold their last level until the next frame
+    // that happens to run on the Rideau.
+    setStormBed(0);
+    this.music?.setDuck(1);
     this._castOffGrace = 0;
     this._castOffGraceVillage = null;
     this._steepleGraceUntil = -Infinity;
@@ -1218,6 +1227,14 @@ export class Game {
         this.lateralVX += this.chasseGalerie.windAccel(this.flowDistance, this.time) * dt;
       }
 
+      // The Warship squall's gusts (britishWarship.js's stormGustAt) — the
+      // same treatment, on the approach only: its windAccel() reads 0 the
+      // instant the hold starts, and that branch above never reaches here
+      // anyway. Segment-guarded like every other Warship call.
+      if (this.segment === 'rideau') {
+        this.lateralVX += this.britishWarship.windAccel(this.flowDistance) * dt;
+      }
+
       this.lateralVX = clamp(this.lateralVX, -STEER_MAX, STEER_MAX);
     }
 
@@ -1624,6 +1641,25 @@ export class Game {
       // nothing else sounds until the fight itself kicks in. No banner:
       // this is heard, not announced.
       for (let i = 0; i < warship.thunderCount; i++) playThunderclap();
+      // The heavier build-up layered under those two claps — see
+      // britishWarship.js's "second, heavier layer" block. Distant rumbles
+      // ride the sheet-lightning flickers while the storm is still coming
+      // in (never in the brooding stretch, by construction there); the
+      // wind/rain bed and the ambient music's duck both follow the storm's
+      // own ramp every frame (each no-ops on an unchanged level), so by the
+      // second clap the shuffle is gone and only the weather is left under
+      // the dark — then playPursuitTrack() below lands at full, with the
+      // duck already released by musicDuck()'s own chasePhase check.
+      for (let i = 0; i < warship.rumbleCount; i++) playDistantRumble();
+      setStormBed(this.britishWarship.stormBedLevel(this.flowDistance));
+      this.music?.setDuck(this.britishWarship.musicDuck(this.flowDistance));
+      if (this.britishWarship.consumeJustStormArrived()) {
+        // The one announced beat of the approach — the claps and the
+        // brooding stay heard-not-announced (see thunderCount above). This
+        // is the "game clearly leading into" the fight: name the threat
+        // while the sky is only just starting to turn.
+        this.showBanner('The sky goes black — the Royal Navy hunts these waters');
+      }
       if (this.britishWarship.consumeJustStartedChase()) {
         // The big title card, same treatment as BRITISH BLOCKADE above —
         // this fight is triggered instantly on crossing TRIGGER_DISTANCE,
@@ -1656,6 +1692,11 @@ export class Game {
     } else {
       this.blockadeCrossCurrent = 0;
       this.warshipPct = null;
+      // Off the Rideau the storm can't be in play — both no-op unless the
+      // segment just changed out from under a live storm (a mid-approach
+      // restart to an earlier put-in, say).
+      setStormBed(0);
+      this.music?.setDuck(1);
     }
 
     this.render();
@@ -1704,6 +1745,14 @@ export class Game {
     // A quick flicker right at each of the two thunderclaps (draw() below).
     const warshipFlash = warshipStorm > 0
       ? this.britishWarship.stormFlash(this.flowDistance) : 0;
+    // The heavier layer under the same storm (britishWarship.js's "second,
+    // heavier layer" block): gloom is the extra darkening across the
+    // brooding stretch, held lower through the fight; flicker is the
+    // irregular sheet lightning between the claps.
+    const warshipGloom = warshipStorm > 0
+      ? this.britishWarship.stormGloom(this.flowDistance) : 0;
+    const warshipFlicker = warshipStorm > 0
+      ? this.britishWarship.stormFlicker(this.flowDistance) : 0;
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -1773,7 +1822,9 @@ export class Game {
     // below — the riverbank parishes read as steeples only (drawn later).
     drawBanks(ctx, this.flowDistance, cameraWorldX, { hideVillages: isFlying, time: this.time });
     if (this.water) {
-      this.water.render(this.time, this.flowDistance, cameraWorldX);
+      // warshipStorm reaches the water itself (chop, dead glints, slate
+      // colour — waterGL.js's u_storm); 0 everywhere but the Rideau.
+      this.water.render(this.time, this.flowDistance, cameraWorldX, warshipStorm);
     } else {
       drawWaterFallback(ctx, this.flowDistance, cameraWorldX);
     }
@@ -1845,9 +1896,42 @@ export class Game {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
     }
-    if (warshipFlash > 0) {
+    // Gloom: the last stretch before the ship keeps getting darker on top
+    // of the storm's own plateau — a near-black wash plus a vignette
+    // closing in from the edges, so the frame narrows down to the canoe
+    // and the water right around it. Asked for as "visuals getting darker
+    // in the seconds leading up to the fight" once the plain storm above
+    // existed: that one had hit its ceiling by the second clap and just
+    // sat there for the brooding stretch. The vignette's a radial gradient
+    // (transparent centre, black rim) rebuilt each frame — cheap at 320x220.
+    if (warshipGloom > 0) {
       ctx.save();
-      ctx.globalAlpha = warshipFlash * 0.55;
+      ctx.globalAlpha = 0.45 * warshipGloom;
+      ctx.fillStyle = '#04060a';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      const vg = ctx.createRadialGradient(
+        CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_HEIGHT * 0.22,
+        CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_HEIGHT * 0.95,
+      );
+      vg.addColorStop(0, 'rgba(2, 3, 6, 0)');
+      vg.addColorStop(1, 'rgba(2, 3, 6, 1)');
+      ctx.globalAlpha = 0.75 * warshipGloom;
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+    // Rain over everything below the HUD, thickening with the storm —
+    // world/weather.js. Drawn after the washes so the streaks stay
+    // visible on top of the dark rather than being buried under it.
+    drawRain(ctx, warshipStorm, this.time);
+    // Lightning: the two scripted claps' own bright flashes (warshipFlash)
+    // and the irregular, quieter sheet-lightning between them
+    // (warshipFlicker) — the max of the two, one fill, so a clap landing
+    // mid-flicker doesn't double up into a white-out.
+    const lightning = Math.max(warshipFlash * 0.55, warshipFlicker * 0.32);
+    if (lightning > 0) {
+      ctx.save();
+      ctx.globalAlpha = lightning;
       ctx.fillStyle = '#dce8ee';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();

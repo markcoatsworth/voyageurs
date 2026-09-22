@@ -69,6 +69,15 @@ uniform float u_braidOffsetA;
 uniform float u_braidCycleB;
 uniform float u_braidOffsetB;
 
+// 0..1, the British Warship's storm (bossfights/britishWarship.js's
+// stormIntensity, handed in by game.js's render()) — the one weather
+// effect that reaches the water itself rather than being washed over it
+// in 2D: wind chop on the surface, the sun-glints gone (no sun), and the
+// water going a cold slate grey-green. Everything else about the surface
+// (banks, foam, rapids) is untouched, so it reads as the same river under
+// worse weather, not a different shader.
+uniform float u_storm;
+
 const float CANOE_SCREEN_X = ${CANOE_SCREEN_X.toFixed(2)};
 const float CANOE_SCREEN_Y = ${CANOE_SCREEN_Y.toFixed(2)};
 const float PPU = ${PIXELS_PER_UNIT.toFixed(2)};
@@ -335,6 +344,14 @@ void main() {
       sin(worldX * 9.0 - d * 3.5 + t * 4.0) * sin(worldX * 4.7 + d * 2.1 - t * 3.1);
   wave += turbulence * rapids * 0.7;
 
+  // Storm chop — wind across the surface: a second turbulence term running
+  // crosswise (worldX-dominant, fast) rather than with the current like the
+  // rapids' own, so the water reads as whipped by wind, not as whitewater.
+  // Scaled by u_storm, so it comes up with the sky.
+  float chop =
+      sin(worldX * 11.0 + d * 1.3 + t * 5.2) * sin(worldX * 6.3 - d * 0.8 + t * 3.7);
+  wave += chop * u_storm * 0.5;
+
   // A second, higher-frequency layer drives sparkle highlights — sparse,
   // bright glints rather than a smooth gradient, the way sun on ripples
   // actually looks. Two product terms at differently-oriented, non-aligned
@@ -357,7 +374,13 @@ void main() {
   // Deeper toward mid-channel, lighter toward the banks (shallows).
   vec3 color = mix(shallow, deep, distFrac);
   color = mix(color, shallow, clamp(wave * 0.5 + 0.5, 0.0, 1.0) * 0.35);
-  color += highlight * glint * 1.3;
+  // Under the storm the water goes slate — the blue drains out toward a
+  // cold grey-green, and the sun-glints fade with it (there's no sun to
+  // glint). The chop above still shows through the wave-driven mix, just
+  // in the darker palette.
+  vec3 stormWater = vec3(0.13, 0.17, 0.19);
+  color = mix(color, stormWater, u_storm * 0.7);
+  color += highlight * glint * 1.3 * (1.0 - u_storm * 0.85);
 
   // Foam band hugging both shorelines, width breathing slightly with the
   // waves so it doesn't read as a static ring.
@@ -442,11 +465,14 @@ export function createWaterRenderer(canvas) {
     braidOffsetA: gl.getUniformLocation(program, 'u_braidOffsetA'),
     braidCycleB: gl.getUniformLocation(program, 'u_braidCycleB'),
     braidOffsetB: gl.getUniformLocation(program, 'u_braidOffsetB'),
+    storm: gl.getUniformLocation(program, 'u_storm'),
   };
 
   return {
     ok: true,
-    render(time, worldDistance, cameraWorldX) {
+    // storm: 0..1, see u_storm above — defaults to clear weather so every
+    // other caller (the smoke test drives this too) needs no change.
+    render(time, worldDistance, cameraWorldX, storm = 0) {
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -460,6 +486,7 @@ export function createWaterRenderer(canvas) {
       gl.uniform1f(uniforms.time, time);
       gl.uniform1f(uniforms.worldDistance, worldDistance);
       gl.uniform1f(uniforms.cameraWorldX, cameraWorldX);
+      gl.uniform1f(uniforms.storm, storm);
 
       // The visible d-range spans at most two BRAID_PERIOD cycles (usually
       // just one) — compute both candidates' island offsets here on the CPU

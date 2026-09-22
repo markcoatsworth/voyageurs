@@ -67,6 +67,9 @@ const { PISTOL_DAMAGE_TO_HULL: WARSHIP_PISTOL_DAMAGE, MUSKET_DAMAGE_TO_HULL: WAR
 const {
   FIRST_THUNDERCLAP_DISTANCE: WARSHIP_FIRST_THUNDERCLAP_DISTANCE,
   stormIntensityAt: warshipStormIntensityAt,
+  stormGloomAt: warshipStormGloomAt,
+  stormFlickerAt: warshipStormFlickerAt,
+  stormGustAt: warshipStormGustAt,
 } = await import('../src/bossfights/britishWarship.js');
 const { PISTOL_DAMAGE_TO_HULL: BLOCKADE_PISTOL_DAMAGE, MUSKET_DAMAGE_TO_HULL: BLOCKADE_MUSKET_DAMAGE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
@@ -486,6 +489,96 @@ await step('britishWarship: the weather darkens before any thunder, the first cl
   if (lead < 2.9) throw new Error(`only ${lead.toFixed(2)}s between the first thunderclap and the fight starting — short of the requested >=3s (small slack for the test's own 1/30 frame step)`);
   if (warshipStormIntensityAt(g.game.flowDistance) !== 0) throw new Error('storm is still showing once the held arena has started');
   notes.push(`  note britishWarship: weather darkened first, 2 thunderclaps, first clap led the fight by ${lead.toFixed(2)}s`);
+});
+
+// --- scenario 4b2a: the heavier layer under that storm — gloom, rumbles,
+// the banner, the music duck, the gusts (britishWarship.js's "second,
+// heavier layer" block)
+
+await step('britishWarship: the approach keeps darkening to the trigger, rumbles only while building, ducks the music out, gusts only before the hold', () => {
+  // Pure-function shape first. Gloom is the second ramp: nothing until
+  // the second clap (the plain storm is still ramping there), then 0 -> 1
+  // by the trigger, 0 past it — the darkest frame is the one right before
+  // the ship appears, never partway through.
+  const secondClap = WARSHIP_FLOW_DISTANCE - 35; // SECOND_THUNDERCLAP_DISTANCE, module-private
+  if (warshipStormGloomAt(secondClap - 1) !== 0) throw new Error('gloom started before the second thunderclap');
+  if (warshipStormGloomAt(WARSHIP_FLOW_DISTANCE - 0.01) < 0.99) throw new Error('gloom should be at full right before the trigger');
+  if (warshipStormGloomAt(WARSHIP_FLOW_DISTANCE) !== 0) throw new Error('gloom should snap off at the trigger (the instance method holds the fight\'s own level)');
+  let prev = 0;
+  for (let d = secondClap; d < WARSHIP_FLOW_DISTANCE; d += 0.5) {
+    const v = warshipStormGloomAt(d);
+    if (v < prev) throw new Error(`gloom went backwards at ${d}`);
+    prev = v;
+  }
+  // Flicker/gusts are gated on the storm itself — dead before it, live
+  // once it's well in. Gusts are signed (a squall shoves both ways).
+  const wellBefore = WARSHIP_FIRST_THUNDERCLAP_DISTANCE - 300;
+  let anyFlicker = 0, anyGust = 0;
+  for (let t = 0; t < 40; t += 0.05) {
+    if (warshipStormFlickerAt(wellBefore, t) !== 0) throw new Error('sheet lightning before the storm has even started');
+    if (warshipStormGustAt(wellBefore, t) !== 0) throw new Error('gusts before the storm has even started');
+    anyFlicker = Math.max(anyFlicker, warshipStormFlickerAt(secondClap, t));
+    anyGust = Math.max(anyGust, Math.abs(warshipStormGustAt(secondClap, t)));
+  }
+  if (anyFlicker <= 0) throw new Error('no sheet lightning at all across 40s of full storm');
+  if (anyGust <= 0) throw new Error('no gusts at all across 40s of full storm');
+
+  // Now the lived version, wrapping the module's update() the same way
+  // the scenario above does, to see rumbles/banner/duck from the outside.
+  const g = newGame('rideau', WARSHIP_FIRST_THUNDERCLAP_DISTANCE - 120);
+  const origUpdate = g.game.britishWarship.update.bind(g.game.britishWarship);
+  let rumblesWhileBuilding = 0, rumblesWhileBrooding = 0, thunder = 0;
+  g.game.britishWarship.update = (...args) => {
+    const res = origUpdate(...args);
+    thunder += res.thunderCount;
+    if (res.rumbleCount > 0) {
+      if (g.game.flowDistance >= secondClap) rumblesWhileBrooding += res.rumbleCount;
+      else rumblesWhileBuilding += res.rumbleCount;
+    }
+    return res;
+  };
+  const banners = [];
+  const origBanner = g.game.showBanner.bind(g.game);
+  g.game.showBanner = (text) => { banners.push(text); origBanner(text); };
+  let duckAtSecondClap = null;
+  let duckBeforeStorm = null;
+  let minDuckPreFight = 1;
+  let gustSeenPreFight = false;
+  let holding = false;
+  for (let i = 0; i < 4000 && !holding; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    const fd = g.game.flowDistance;
+    const duck = g.game.britishWarship.musicDuck(fd);
+    if (duckBeforeStorm === null && warshipStormIntensityAt(fd) === 0) duckBeforeStorm = duck;
+    if (duckAtSecondClap === null && fd >= secondClap) duckAtSecondClap = duck;
+    if (!g.game.britishWarship.isChaseHolding()) {
+      minDuckPreFight = Math.min(minDuckPreFight, duck);
+      if (g.game.britishWarship.windAccel(fd) !== 0) gustSeenPreFight = true;
+    }
+    if (g.game.britishWarship.isChaseHolding()) holding = true;
+  }
+  if (!holding) throw new Error('never reached the held arena');
+  if (thunder !== 2) throw new Error(`the two scripted claps must still be exactly two, got ${thunder} — the rumbles must not leak into thunderCount`);
+  if (rumblesWhileBuilding < 1) throw new Error('no distant rumbles at all while the storm was building');
+  if (rumblesWhileBrooding !== 0) throw new Error(`${rumblesWhileBrooding} rumble(s) in the brooding stretch — that silence is the point`);
+  const stormBanners = banners.filter((b) => /sky goes black/i.test(b));
+  if (stormBanners.length !== 1) throw new Error(`expected exactly one "sky goes black" banner, got ${stormBanners.length}: ${JSON.stringify(banners)}`);
+  if (duckBeforeStorm !== 1) throw new Error(`music should be untouched before the storm, duck was ${duckBeforeStorm}`);
+  if (duckAtSecondClap !== 0) throw new Error(`music should be fully ducked out by the second clap, was ${duckAtSecondClap}`);
+  if (minDuckPreFight !== 0) throw new Error('music never reached silence before the fight');
+  if (!gustSeenPreFight) throw new Error('never felt a gust during the approach');
+  // In the hold: the pursuit track plays at full (duck released), the
+  // gusts are off (lateral control is the dodge), the gloom is held at
+  // its lower fight level, and the plain storm is still at full.
+  const fd = g.game.flowDistance;
+  if (g.game.britishWarship.musicDuck(fd) !== 1) throw new Error('music still ducked once the fight started');
+  if (g.game.britishWarship.windAccel(fd) !== 0) throw new Error('gusts still shoving the canoe inside the held arena');
+  const fightGloom = g.game.britishWarship.stormGloom(fd);
+  if (!(fightGloom > 0 && fightGloom < 1)) throw new Error(`fight gloom should be held partway (readable cannonballs), got ${fightGloom}`);
+  if (g.game.britishWarship.stormBedLevel(fd) !== 1) throw new Error('the wind/rain bed should run at full through the fight');
+  notes.push(`  note britishWarship: ${rumblesWhileBuilding} distant rumble(s) while building, 0 while brooding; music ducked to 0 by the second clap`);
 });
 
 // --- scenario 4b2b: the storm stays dark through the fight, not just up to it

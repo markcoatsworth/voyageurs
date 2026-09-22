@@ -251,6 +251,25 @@ export function createMusic({ onTrack } = {}) {
   // one-off mute click look like "the music broke" days later).
   let muted = false;
 
+  // A 0..1 multiplier over whatever level the current track plays at — the
+  // Warship storm's approach (game.js, via britishWarship.js's musicDuck)
+  // drives the ambient shuffle down to silence as the weather closes in,
+  // so the brooding stretch before the fight is rain and wind only and the
+  // pursuit track then lands at full. trackVolume is the un-ducked level
+  // the track itself wants (DEFAULT_VOLUME or its own override), kept
+  // separately so setDuck can re-derive audio.volume from it at any time;
+  // every place that sets a track's level goes through setTrackVolume so
+  // the two never drift apart. A fade-out (playSpecial's own) reads and
+  // writes audio.volume directly, fading from wherever the duck left it —
+  // fine, it's heading to 0 either way — and commit() then re-applies the
+  // duck to the new track's level.
+  let duck = 1;
+  let trackVolume = DEFAULT_VOLUME;
+  function setTrackVolume(v) {
+    trackVolume = v;
+    audio.volume = trackVolume * duck;
+  }
+
   let order = shuffled(PLAYLIST);
   let index = 0;
   // Kingston's own position in KINGSTON_PLAYLIST — entirely separate from
@@ -381,7 +400,7 @@ export function createMusic({ onTrack } = {}) {
     audio.src = src;
     // Always the shuffle's own level — undoes whatever a special track
     // (e.g. DIABLE_TRACK's own volume) left it at.
-    audio.volume = DEFAULT_VOLUME;
+    setTrackVolume(DEFAULT_VOLUME);
     attachEndedHandler(requestedGeneration, () => {
       index++;
       if (index >= order.length) {
@@ -475,7 +494,7 @@ export function createMusic({ onTrack } = {}) {
       // Set here (after any fade-out above already dragged audio.volume
       // toward 0) so the new track always starts at its own real level,
       // not wherever the old one's fade happened to leave the element.
-      audio.volume = track.volume ?? DEFAULT_VOLUME;
+      setTrackVolume(track.volume ?? DEFAULT_VOLUME);
       // If this track plays out to its own natural end without the fight
       // resolving first (endBossTrack() cutting it short), finishedNaturally
       // above decides what happens next — see attachEndedHandler's own
@@ -665,6 +684,15 @@ export function createMusic({ onTrack } = {}) {
       muted = !muted;
       audio.muted = muted;
       return muted;
+    },
+    // See `duck` above. Called every frame by game.js while the Warship
+    // storm is anywhere in play, so it no-ops on an unchanged level rather
+    // than touching audio.volume 60 times a second for nothing.
+    setDuck(level) {
+      const d = Math.max(0, Math.min(1, level));
+      if (d === duck) return;
+      duck = d;
+      audio.volume = trackVolume * duck;
     },
     // Cuts in immediately, replacing whatever's currently playing — see
     // BOSS_TRACK's own comment. Safe to call even before start() (e.g. a

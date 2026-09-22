@@ -345,6 +345,115 @@ export function playThunderclap() {
   sub.stop(t0 + 0.65);
 }
 
+// A far-off rumble — playThunderclap's roll without its crack or sub-thump,
+// at a fraction of the level. Rides the sheet-lightning flickers during the
+// Warship storm's build-up (britishWarship.js's rumbleCount): lightning a
+// long way off, heard late and low, so the two real claps above still land
+// as the loud, close beats they're meant to be. Longer and slower than the
+// clap's own roll — distance smears thunder out.
+export function playDistantRumble() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  const jitter = 0.85 + Math.random() * 0.3;
+  const rumbleDur = 3.0 * jitter;
+  const bufferSize = Math.max(1, Math.floor(c.sampleRate * rumbleDur));
+  const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  for (const [delay, level, dur] of [[0.3, 0.13, rumbleDur], [0.9, 0.09, rumbleDur * 0.7]]) {
+    const noise = c.createBufferSource();
+    noise.buffer = buffer;
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(140, t0 + delay);
+    filter.frequency.exponentialRampToValueAtTime(40, t0 + delay + dur);
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.0001, t0 + delay);
+    gain.gain.exponentialRampToValueAtTime(level, t0 + delay + 0.5);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + dur);
+    noise.connect(filter).connect(gain).connect(c.destination);
+    noise.start(t0 + delay);
+    noise.stop(t0 + delay + dur + 0.05);
+  }
+}
+
+// The storm's continuous bed — wind and rain under the Warship approach
+// and fight (britishWarship.js's stormBedLevel drives it, game.js calls
+// this every frame). Two looping noise layers built once and left running
+// at silence: a slow-swelling low band (wind — a lowpass whose cutoff
+// wanders up and down on an LFO, so it moans rather than hums) and a
+// steady hiss band (rain — bandpass up high). Level 0..1 sets both gains
+// with a short setTargetAtTime slew, never a hard step, so the bed fades
+// in and out with the storm's own ramp instead of clicking on. Nothing is
+// created until the first non-zero level (so a run that never reaches the
+// Rideau never allocates it), and the graph is left connected at zero gain
+// rather than torn down and rebuilt each time — the storm comes and goes
+// exactly once per run, and a restart just drives it back to 0.
+let stormBed = null;
+let stormBedLevelWas = 0;
+function makeStormBed(c) {
+  const seconds = 4;
+  const buffer = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * seconds)), c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+
+  const wind = c.createBufferSource();
+  wind.buffer = buffer;
+  wind.loop = true;
+  const windFilter = c.createBiquadFilter();
+  windFilter.type = 'lowpass';
+  windFilter.frequency.value = 320;
+  windFilter.Q.value = 1.4;
+  // The moan: an LFO sweeping the wind's cutoff between ~180 and ~460 Hz
+  // every few seconds.
+  const lfo = c.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 0.17;
+  const lfoGain = c.createGain();
+  lfoGain.gain.value = 140;
+  lfo.connect(lfoGain).connect(windFilter.frequency);
+  const windGain = c.createGain();
+  windGain.gain.value = 0;
+  wind.connect(windFilter).connect(windGain).connect(c.destination);
+
+  const rain = c.createBufferSource();
+  rain.buffer = buffer;
+  rain.loop = true;
+  rain.playbackRate.value = 1.31; // decorrelate it from the wind's copy of the same buffer
+  const rainFilter = c.createBiquadFilter();
+  rainFilter.type = 'bandpass';
+  rainFilter.frequency.value = 3800;
+  rainFilter.Q.value = 0.6;
+  const rainGain = c.createGain();
+  rainGain.gain.value = 0;
+  rain.connect(rainFilter).connect(rainGain).connect(c.destination);
+
+  const t0 = c.currentTime;
+  wind.start(t0);
+  rain.start(t0);
+  lfo.start(t0);
+  return { windGain, rainGain };
+}
+// Peak gains: the wind carries the bed, the rain sits under it — a hiss
+// that's noticed once the wind drops out rather than a wall of static.
+const STORM_BED_WIND_GAIN = 0.22;
+const STORM_BED_RAIN_GAIN = 0.07;
+export function setStormBed(level) {
+  const l = Math.max(0, Math.min(1, level || 0));
+  if (l === stormBedLevelWas) return;
+  if (!stormBed) {
+    if (l === 0) return;
+    stormBed = makeStormBed(getCtx());
+  }
+  const c = getCtx();
+  // Rain arrives later than the wind (squared), so the first thing heard
+  // is the wind picking up, and the rain only really comes on once the
+  // sky is well dark — the same order the visuals use.
+  stormBed.windGain.gain.setTargetAtTime(STORM_BED_WIND_GAIN * l, c.currentTime, 0.25);
+  stormBed.rainGain.gain.setTargetAtTime(STORM_BED_RAIN_GAIN * l * l, c.currentTime, 0.25);
+  stormBedLevelWas = l;
+}
+
 export function playDiableDefeat() {
   const c = getCtx();
   const t0 = c.currentTime;

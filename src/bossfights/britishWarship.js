@@ -38,6 +38,7 @@
 import { centerX, widthAt } from '../world/river/path.js';
 import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../shared/config.js';
 import { VILLAGES } from '../world/villages.js';
+import { hashRange } from '../shared/hash.js';
 
 const KINGSTON = VILLAGES.find((v) => v.name === 'Kingston');
 const JONES_FALLS = VILLAGES.find((v) => v.name === 'Jones Falls');
@@ -150,6 +151,96 @@ export function stormFlashAt(flowDistance) {
     clapFlashAt(flowDistance, FIRST_THUNDERCLAP_DISTANCE),
     clapFlashAt(flowDistance, SECOND_THUNDERCLAP_DISTANCE),
   );
+}
+
+// --- the second, heavier layer of the approach ------------------------------
+// Asked for once the storm above existed: "the mood to get dark in the
+// seconds leading up to the fight: visuals getting darker, more weather,
+// and game clearly leading into a brutal fight." stormIntensityAt alone
+// plateaus at SECOND_THUNDERCLAP_DISTANCE and the brooding stretch after it
+// just held that same grey — flat, when it should be the darkest, heaviest
+// moment. Everything below is layered on top of it, and the rain, wind and
+// music ducking in game.js all key off these same pure functions.
+
+// Gloom: a second ramp, 0 -> 1 across the brooding stretch alone (second
+// clap -> trigger), on top of stormIntensityAt's own 0 -> 1 before it. Drives
+// the extra near-black wash and the vignette in game.js's render() — so the
+// scene keeps getting darker right up until the ship appears, instead of
+// stalling at "overcast" for the last few seconds. Snaps to 0 past
+// TRIGGER_DISTANCE like stormIntensityAt; the instance method below holds
+// it (lower) through the fight.
+export function stormGloomAt(flowDistance) {
+  if (flowDistance <= SECOND_THUNDERCLAP_DISTANCE || flowDistance >= TRIGGER_DISTANCE) return 0;
+  return smoothstep((flowDistance - SECOND_THUNDERCLAP_DISTANCE) / (TRIGGER_DISTANCE - SECOND_THUNDERCLAP_DISTANCE));
+}
+// How much of that gloom stays on through the held arena. Full gloom
+// (the wash + vignette in game.js) on top of the fight's own held storm
+// buried the cannonballs' telegraphs in the dark; this keeps the "darkest
+// right before" beat — it visibly lifts a little the instant the ship is
+// on you — without the fight being unreadable.
+const FIGHT_GLOOM = 0.4;
+
+// Sheet lightning: irregular, silent flickers across the whole sky between
+// the two scripted claps, so the storm is alive rather than two isolated
+// bangs — same schedule idea as chasseGalerie.js's lightningFlash (one
+// hashed window per fixed period, so it's a pure function of time and
+// needs no state), gated by how far the storm has come in: nothing until
+// the sky has visibly turned, then brighter as it deepens. Time here is
+// this module's own clock (stormT in the instance below), not game.js's —
+// this module never sees this.time.
+// 2.2s, with each flash landing anywhere in the first ~1.4s of its slot,
+// gives gaps of 1-3.4s between flashes — irregular enough not to read as
+// a metronome. A first cut (3.6s slots, a quarter of them skipped
+// outright) left a 7.5s dead gap right at the start of the schedule,
+// which at full paddling speed is the *entire* build-up (the ramp from
+// the sky turning to the second clap is ~80 units, under 5s flat out) —
+// the smoke test's flat-out approach saw no lightning at all.
+const FLICKER_PERIOD = 2.2;
+const FLICKER_MIN_STORM = 0.2;
+function flickerEnvelope(time) {
+  const idx = Math.floor(time / FLICKER_PERIOD);
+  const local = time - idx * FLICKER_PERIOD;
+  const start = hashRange(idx, 5, 0.2, FLICKER_PERIOD - 0.8);
+  const t = local - start;
+  if (t < 0 || t > 0.45) return 0;
+  const envelope = 1 - t / 0.45;
+  // Two-stroke flicker — the main flash, a dip, a fainter restrike.
+  const stroke = (t < 0.07 || (t > 0.14 && t < 0.2)) ? 1 : 0.3;
+  return envelope * stroke;
+}
+export function stormFlickerAt(flowDistance, time) {
+  const storm = stormIntensityAt(flowDistance);
+  if (storm < FLICKER_MIN_STORM) return 0;
+  const gate = (storm - FLICKER_MIN_STORM) / (1 - FLICKER_MIN_STORM);
+  return flickerEnvelope(time) * gate;
+}
+// A distant rumble (sfx.js's playDistantRumble) accompanies each flicker
+// only while the storm is still building — between STORM_START_DISTANCE
+// and SECOND_THUNDERCLAP_DISTANCE. The brooding stretch after the second
+// clap stays thunder-silent on purpose (that held silence, with only the
+// rain/wind bed under it, is the beat the whole approach is built toward —
+// see SECOND_THUNDERCLAP_DISTANCE's own comment); lightning there is
+// visual only.
+function rumblesAllowedAt(flowDistance) {
+  return flowDistance > STORM_START_DISTANCE && flowDistance < SECOND_THUNDERCLAP_DISTANCE;
+}
+
+// Squall gusts: a lateral shove on the canoe that rises with the storm,
+// gusting (two non-harmonic sines over the module's own clock, so it
+// swings side to side unpredictably) rather than the Chasse-galerie's
+// steady positional crosswind. Same units as that one (world units/s²,
+// applied before game.js's STEER_MAX clamp); peak strength sits well
+// under chasseGalerie.js's WIND_STRENGTH (3.5) — it's weather you feel in
+// the paddle, not a hazard, and only during the approach: the instance
+// method below zeroes it the moment the held arena starts, where lateral
+// control is the dodge and the fight has already been toned down twice
+// (see CHASE_CANNON_DAMAGE's own comment).
+const GUST_STRENGTH = 2.2;
+export function stormGustAt(flowDistance, time) {
+  const storm = stormIntensityAt(flowDistance);
+  if (storm <= 0) return 0;
+  const gust = 0.6 * Math.sin(time * 0.9) + 0.4 * Math.sin(time * 2.3 + 1.7);
+  return GUST_STRENGTH * gust * storm;
 }
 
 // Reported as "impossible," then "still too difficult" through two rounds
@@ -294,12 +385,20 @@ export function createBritishWarship() {
   let justSunk = false;
   let clap1Fired = false; // latches once FIRST_THUNDERCLAP_DISTANCE is crossed — never resets on its own
   let clap2Fired = false; // ditto, SECOND_THUNDERCLAP_DISTANCE
+  let stormT = 0; // this module's own clock for the flicker/gust schedules — advanced every update()
+  let flickerWas = 0; // last frame's flicker level, for rising-edge rumble detection
+  let stormArrived = false; // latches on crossing STORM_START_DISTANCE (the "sky goes black" banner)
+  let justStormArrived = false;
 
   function reset() {
     started = false;
     resolved = false;
     clap1Fired = false;
     clap2Fired = false;
+    stormT = 0;
+    flickerWas = 0;
+    stormArrived = false;
+    justStormArrived = false;
     chasePhase = false;
     chaseIntroT = 0;
     chaseOrbitAngle = 0;
@@ -364,6 +463,40 @@ export function createBritishWarship() {
     stormFlash(flowDistance) {
       return stormFlashAt(flowDistance);
     },
+    // The heavier layer (see stormGloomAt and friends above), same
+    // chasePhase treatment as stormIntensity(): the pure functions all
+    // read 0 through the hold (flowDistance is clamped at/after
+    // TRIGGER_DISTANCE), so the fight's own held levels are set here.
+    stormGloom(flowDistance) {
+      return chasePhase ? FIGHT_GLOOM : stormGloomAt(flowDistance);
+    },
+    // Flicker keeps going through the fight (the storm is still overhead),
+    // scaled down so a flash never masks a cannonball's telegraph.
+    stormFlicker(flowDistance) {
+      return chasePhase ? flickerEnvelope(stormT) * 0.5 : stormFlickerAt(flowDistance, stormT);
+    },
+    // How much of the wind/rain audio bed (sfx.js's setStormBed) to run —
+    // the storm's own level, held at full through the fight like the
+    // darkness.
+    stormBedLevel(flowDistance) {
+      return chasePhase ? 1 : stormIntensityAt(flowDistance);
+    },
+    // Ambient music ducks out as the storm comes in — gone entirely by the
+    // second clap, so the brooding stretch is nothing but rain and wind
+    // before the pursuit track lands at full at the trigger ("game clearly
+    // leading into a brutal fight"). 1 = untouched. Through the hold the
+    // boss track itself is playing, at full.
+    musicDuck(flowDistance) {
+      return chasePhase ? 1 : 1 - stormIntensityAt(flowDistance);
+    },
+    windAccel(flowDistance) {
+      return chasePhase ? 0 : stormGustAt(flowDistance, stormT);
+    },
+    consumeJustStormArrived() {
+      const v = justStormArrived;
+      justStormArrived = false;
+      return v;
+    },
     // Same convention as diable.js's debugCentreX() — test/autopilot support
     // for aiming at a moving target, not used by game.js's own rendering.
     debugChaseShipPosition() {
@@ -407,6 +540,27 @@ export function createBritishWarship() {
       // game.js can just loop playThunderclap() the same way it already
       // loops playCannonBoom() for hazards.
       let thunderCount = 0;
+      // The storm's own clock only runs once the approach has begun — it
+      // seeds the flicker/gust schedules, and there's nothing to schedule
+      // before then.
+      if (playerFlowDistance > STORM_START_DISTANCE) stormT += dt;
+      // "The sky goes black" — one banner as the weather first turns
+      // (game.js shows it), same !resolved gating as the claps so a spawn
+      // past the fight never announces a storm it skipped.
+      if (!stormArrived && !resolved && playerFlowDistance >= STORM_START_DISTANCE) {
+        stormArrived = true;
+        justStormArrived = true;
+      }
+      // Distant rumbles ride the sheet-lightning flickers' rising edges
+      // (see rumblesAllowedAt for where they're allowed) — counted like
+      // thunderCount but kept separate from it, since the two scripted
+      // claps are their own, louder, exactly-twice beat.
+      let rumbleCount = 0;
+      if (!resolved && !chasePhase) {
+        const flicker = stormFlickerAt(playerFlowDistance, stormT);
+        if (flicker > 0 && flickerWas === 0 && rumblesAllowedAt(playerFlowDistance)) rumbleCount++;
+        flickerWas = flicker;
+      }
       if (!clap1Fired && !resolved && playerFlowDistance >= FIRST_THUNDERCLAP_DISTANCE) {
         clap1Fired = true;
         thunderCount++;
@@ -555,10 +709,10 @@ export function createBritishWarship() {
         // floor everyone gets regardless of gunnery; it just isn't what
         // this bar shows.
         const chaseHullPct = clamp((chaseHullHP / CHASE_HULL_HP) * 100, 0, 100);
-        return { active: true, progressPct: chaseHullPct, boomCount, chaseShipDistance: chaseShipD, hitBullets, thunderCount };
+        return { active: true, progressPct: chaseHullPct, boomCount, chaseShipDistance: chaseShipD, hitBullets, thunderCount, rumbleCount };
       }
 
-      return { active: false, progressPct: 0, boomCount, hitBullets, thunderCount };
+      return { active: false, progressPct: 0, boomCount, hitBullets, thunderCount, rumbleCount };
     },
 
     // Rendering doesn't care whether the encounter is currently "active" by

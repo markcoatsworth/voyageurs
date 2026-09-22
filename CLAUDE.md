@@ -58,6 +58,7 @@ src/
     waterGL.js         GLSL water under the 2D layer; river shape is DUPLICATED in GLSL — keep in sync with path.js
     obstacles.js       the one stateful system: pooled rocks/logs/islands/pelts with collision/collection
     whales.js          stateless hash-placed belugas once the channel reads as open estuary
+    weather.js         stateless hashed rain streaks (drawRain) — the Warship storm's only user so far
     sprites.js         (~1000 lines) hand-drawn pixel sprites
     villages.js        dock + buildings per waypoint; getDockHit detects the canoe touching a dock
     villageScene.js    on-foot scene at a dock; walk back onto the dock to re-board
@@ -121,7 +122,20 @@ src/
                        `chasePhase` directly rather than trusting the plain `stormIntensityAt` distance
                        math, since flowDistance is clamped at TRIGGER_DISTANCE for the whole hold and
                        that alone would read the storm as already cleared; it snaps back to 0 the
-                       instant the fight resolves.
+                       instant the fight resolves. A second, heavier layer sits under that storm
+                       ("visuals getting darker, more weather, clearly leading into a brutal fight"):
+                       stormGloomAt (a second 0→1 ramp across the brooding stretch alone → extra
+                       near-black wash + vignette in game.js, held at FIGHT_GLOOM through the hold),
+                       stormFlickerAt (hashed sheet lightning on the module's own stormT clock, with
+                       playDistantRumble on each rising edge — only while building, never in the
+                       brooding stretch, and never through thunderCount, which stays exactly 2),
+                       stormGustAt (lateral shove on the canoe, approach only — windAccel() reads 0
+                       in the hold), rain (world/weather.js's drawRain, count scales with the
+                       storm), the water shader's u_storm (chop, dead glints, slate colour), a
+                       wind/rain audio bed (sfx.js's setStormBed) and the ambient shuffle ducked to
+                       silence by the second clap (music.js's setDuck via musicDuck()) so the pursuit
+                       track lands at full. One banner as the sky first turns
+                       (consumeJustStormArrived).
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
                        TRIGGER_DISTANCE, FLIGHT_END.
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging
