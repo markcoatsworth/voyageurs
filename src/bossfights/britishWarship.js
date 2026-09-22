@@ -840,23 +840,6 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
   ctx.fill();
   ctx.stroke();
 
-  // "Nelson chequer" — an ochre stripe with black gunport squares along
-  // each side, the single detail that reads unmistakably as "old warship"
-  // rather than an unrecognizable brown hull. Kept to the hull's known
-  // full-beam midsection (between the bow and stern taper zones above, with
-  // real margin) so it never overflows the outline.
-  const stripeY = top + lenPx * 0.5;
-  const stripeH = lenPx * 0.12;
-  ctx.fillStyle = '#b98a3e';
-  ctx.fillRect(left.x + beamPx * 0.06, stripeY, beamPx * 0.88, stripeH);
-  const portSize = Math.max(2.5, stripeH * 0.6);
-  const portCount = 3;
-  for (let i = 0; i < portCount; i++) {
-    const px = left.x + beamPx * 0.2 + (i / (portCount - 1)) * beamPx * 0.6;
-    ctx.fillStyle = '#0c0805';
-    ctx.fillRect(px - portSize / 2, stripeY + stripeH / 2 - portSize / 2, portSize, portSize);
-  }
-
   // Deck - lighter wood showing ship interior, inset from the hull outline
   // by beamPx-relative margins (an absolute pixel inset looked fine at a
   // much wider old beam but oversized now that beamPx is genuinely
@@ -873,72 +856,183 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
   ctx.closePath();
   ctx.fill();
 
-  // Three masts - clear vertical elements, positioned along the hull's
-  // length (lenPx) but sized across (yard/sail width) off beamPx — mixing
-  // those up is exactly what made an earlier pass balloon the sails the
-  // moment the hull was actually made longer than it was wide (see the
-  // function's own opening comment). A real yard does run a bit past the
-  // hull's own beam, so these intentionally overhang beamPx slightly rather
-  // than staying inside it.
-  const mastPositions = [
-    shipCenterX,
-    shipCenterX - beamPx * 0.55,
-    shipCenterX + beamPx * 0.55,
-  ];
+  // Everything from here down was redone together off a rasterized look
+  // at the sprite (three points reported at once: "the flag should be
+  // closer to the mast," "the sail looks like a big white block instead
+  // of an obvious sail," "there should be obvious cannons on the sprite,
+  // 3 per side"). What it replaced: three masts standing side by side
+  // *across* the bow, each with a sail 1.6 beams wide — they overlapped
+  // into one ~2.7-beam white slab ahead of the hull; the flag on its own
+  // pole half a hull-length ahead of the bow, attached to nothing; and a
+  // "Nelson chequer" gunport stripe running across the deck (a side-view
+  // detail on a top-down sprite) that the deck fill, drawn after it,
+  // mostly buried anyway.
+  //
+  // The hull's full-beam midsection — between the bow taper ending at
+  // top + 0.22·len and the stern taper starting at bottom − 0.08·len (the
+  // hull-shape comment above). Everything along the sides is placed
+  // inside this so it never overflows the taper zones.
+  const fullBeamTop = top + lenPx * 0.22;
+  const fullBeamBottom = bottom - lenPx * 0.08;
+  // The side's actual x at a given y inside that zone: the hull outline
+  // narrows by 0.06·beam over the zone's length, so this tracks it
+  // exactly rather than assuming a straight vertical side.
+  const sideInsetAt = (y) => beamPx * 0.06 * clamp((y - fullBeamTop) / (fullBeamBottom - fullBeamTop), 0, 1);
 
-  // Reported as "the sail is in front of the boat instead of on top of it"
-  // — the sail block sits on positive offsets from `top` (the bow's own
-  // screen position, confirmed by the hull-shape comment above) so it
-  // overlaps the hull's own forward deck — drawn after the deck (above, in
-  // source order) so it correctly layers on top of it, not the open water
-  // ahead of the bow.
-  for (const mx of mastPositions) {
-    // Mast pole — short; it only needs to peek above the sail, not carry
-    // the whole height cue on its own.
-    ctx.strokeStyle = '#2a1a10';
-    ctx.lineWidth = 3;
+  // Gun deck rails — a thin ochre strip along each side (the one bit of the
+  // old chequer that reads from above: the painted gunwale), with a black
+  // gunport notched into it at each cannon.
+  const railTop = top + lenPx * 0.28;
+  const railBottom = bottom - lenPx * 0.1;
+  const RAIL_W = 3;
+  for (const side of [-1, 1]) {
+    ctx.fillStyle = '#b98a3e';
     ctx.beginPath();
-    ctx.moveTo(mx, top + lenPx * 0.32);
-    ctx.lineTo(mx, top - lenPx * 0.08);
-    ctx.stroke();
+    for (const [y, inner] of [[railTop, 1], [railBottom, 1], [railBottom, 1 + RAIL_W], [railTop, 1 + RAIL_W]]) {
+      const edge = side < 0 ? left.x + sideInsetAt(y) : right.x - sideInsetAt(y);
+      const x = edge - side * inner;
+      if (y === railTop && inner === 1) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
 
-    // Horizontal sail yard
+  // Cannons — three per side, small but unmistakable: a carriage block on
+  // the deck, an iron barrel running out through the gunport and past the
+  // hull's edge, a black gunport square where it crosses the rail. Placed
+  // in the gaps *behind* each sail band below (a sail bulges forward of
+  // its yard), so the sails, drawn later, never cover them. Three shades
+  // down the barrel (light top edge, iron body, dark underside) is what
+  // makes a 3px-thick line read as a round gun rather than a stick, and
+  // the muzzle cap at the end is what makes it read as pointing outward.
+  // Spaced to leave the flag (on the mainmast, 0.49, below) clear of the
+  // starboard guns either side of it — a first spacing had the flag's
+  // lower edge sitting right on the middle gun.
+  const CANNON_FRACTIONS = [0.36, 0.57, 0.76];
+  const BARREL_OUT = 5; // px of barrel past the hull's edge
+  const CARRIAGE_W = 6;
+  const CARRIAGE_H = 5;
+  for (const side of [-1, 1]) {
+    for (const f of CANNON_FRACTIONS) {
+      const y = Math.round(top + lenPx * f);
+      const edge = Math.round(side < 0 ? left.x + sideInsetAt(y) : right.x - sideInsetAt(y));
+      const railInner = edge - side * (1 + RAIL_W); // the rail's inboard face
+      // Gunport: a black notch in the rail, a hair taller than the barrel.
+      ctx.fillStyle = '#0c0805';
+      ctx.fillRect(Math.min(edge - side * 1, railInner), y - 2, RAIL_W, 5);
+      // Carriage — a red-brown block on the deck just inboard of the rail,
+      // outlined in black so it separates from the deck (a first cut in a
+      // brown one shade off the deck's own all but vanished), wider than
+      // the barrel so it reads as a mount.
+      const carriageX = side < 0 ? railInner + 1 : railInner - 1 - CARRIAGE_W;
+      ctx.fillStyle = '#0a0705';
+      ctx.fillRect(carriageX - 1, y - 3, CARRIAGE_W + 2, CARRIAGE_H + 2);
+      ctx.fillStyle = '#6e3a24';
+      ctx.fillRect(carriageX, y - 2, CARRIAGE_W, CARRIAGE_H);
+      // Barrel, three 1px rows from the middle of the carriage out past
+      // the hull's edge — light top edge, iron body, dark underside is what
+      // makes 3px read as a round gun rather than a stick.
+      const inboardEnd = carriageX + CARRIAGE_W / 2;
+      const x0 = side < 0 ? edge - BARREL_OUT : inboardEnd;
+      const barrelLen = side < 0 ? inboardEnd - x0 : edge + BARREL_OUT - inboardEnd;
+      ctx.fillStyle = '#8a8e96';
+      ctx.fillRect(x0, y - 1, barrelLen, 1);
+      ctx.fillStyle = '#2e3138';
+      ctx.fillRect(x0, y, barrelLen, 1);
+      ctx.fillStyle = '#121418';
+      ctx.fillRect(x0, y + 1, barrelLen, 1);
+      // Breech — the fat rear end of the gun, sitting on the carriage: a
+      // taller dark block at the inboard end, the shape that says "cannon"
+      // more than anything else about it.
+      ctx.fillStyle = '#1c1e23';
+      const breechX = side < 0 ? inboardEnd - 1 : inboardEnd - 2;
+      ctx.fillRect(breechX, y - 2, 3, 5);
+      // Muzzle cap — one column, a touch taller, right at the outboard end.
+      ctx.fillStyle = '#0a0b0e';
+      const muzzleX = side < 0 ? edge - BARREL_OUT : edge + BARREL_OUT - 1;
+      ctx.fillRect(muzzleX, y - 2, 1, 4);
+    }
+  }
+
+  // Three masts along the hull's length (fore, main, mizzen — bow to
+  // stern), each a mast-head dot with a yard across it and a square sail
+  // bellied *forward* of the yard, the way a sail set before a following
+  // wind looks from straight above: a curved band, not a rectangle. Yard
+  // half-widths and bulges are sized off beamPx/lenPx respectively (see
+  // the function's opening comment for why mixing those axes up matters);
+  // the main is the biggest, fore next, mizzen smallest, and all three
+  // stay inside the gun rails so the cannons' outboard barrels are never
+  // covered. Sails are the last big shapes drawn, so they layer over the
+  // deck and carriages (on a real deck they'd be far overhead).
+  const masts = [
+    { f: 0.30, hw: beamPx * 0.38, bulge: lenPx * 0.10 },
+    { f: 0.49, hw: beamPx * 0.42, bulge: lenPx * 0.125 },
+    { f: 0.68, hw: beamPx * 0.34, bulge: lenPx * 0.09 },
+  ];
+  for (const m of masts) {
+    const mx = shipCenterX;
+    const my = top + lenPx * m.f;
+    // Sail — the full belly first, then a darker crescent back near the
+    // yard so the curve reads as a billow with depth, then the leading
+    // edge outlined so it stays a sail against the pale deck highlights
+    // and the storm's own flashes.
+    ctx.fillStyle = '#e8e0d0';
+    ctx.beginPath();
+    ctx.moveTo(mx - m.hw, my);
+    ctx.quadraticCurveTo(mx, my - 2 * m.bulge, mx + m.hw, my);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#cdc3ad';
+    ctx.beginPath();
+    ctx.moveTo(mx - m.hw, my);
+    ctx.quadraticCurveTo(mx, my - 0.8 * m.bulge, mx + m.hw, my);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#a89d86';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(mx - m.hw, my);
+    ctx.quadraticCurveTo(mx, my - 2 * m.bulge, mx + m.hw, my);
+    ctx.stroke();
+    // Yard — runs a little past the sail's own width, as a real yard does.
     ctx.strokeStyle = '#2a1a10';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(mx - beamPx * 0.9, top + lenPx * 0.02);
-    ctx.lineTo(mx + beamPx * 0.9, top + lenPx * 0.02);
+    ctx.moveTo(mx - m.hw - 2.5, my);
+    ctx.lineTo(mx + m.hw + 2.5, my);
     ctx.stroke();
-
-    // Sail
-    ctx.fillStyle = '#e8e0d0';
-    ctx.fillRect(mx - beamPx * 0.8, top - lenPx * 0.02, beamPx * 1.6, lenPx * 0.17);
-
-    // Sail shading
-    ctx.fillStyle = '#d0c8b8';
-    ctx.fillRect(mx - beamPx * 0.8, top + lenPx * 0.12, beamPx * 1.6, lenPx * 0.04);
+    // Mast head — the pole seen end-on.
+    ctx.fillStyle = '#1a100a';
+    ctx.beginPath();
+    ctx.arc(mx, my, 2.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // Bow details - make the front clear
+  // Bowsprit — the front pole, jutting ahead of the bow.
   ctx.fillStyle = '#0a0805';
-  // Bowsprit (front pole)
   ctx.fillRect(shipCenterX - beamPx * 0.05, top - beamPx * 0.45, beamPx * 0.1, beamPx * 0.3);
 
-  // Union Jack flag at bow — made deliberately bigger and more prominent
-  // than a strict scale-model would call for, the clearest single "this is
-  // the British warship" cue on a hull that's otherwise shrunk down. Every
-  // stripe below is a flagW/flagH-relative fraction rather than an
-  // absolute pixel count, so it keeps its correct proportions if this size
-  // ever changes again rather than needing every sub-element retuned by
-  // hand.
-  const flagW = 22;
-  const flagH = 14;
-  const flagX = shipCenterX - flagW / 2;
-  const flagY = top - lenPx * 0.49;
+  // Union Jack, flown from the mainmast: hung right off the mast head
+  // (three px clear of it, a halyard drawn across the gap), streaming to
+  // starboard. Still deliberately bigger than a strict scale-model would
+  // call for — the clearest single "this is the British warship" cue on a
+  // hull this small — just no longer floating on its own pole half a
+  // hull-length ahead of the bow. Every stripe below is a flagW/flagH-
+  // relative fraction rather than an absolute pixel count, so it keeps its
+  // proportions if this size ever changes again.
+  const mainMast = masts[1];
+  // 16x10 (was 22x14 on the old bow pole) — the biggest that fits between
+  // the starboard guns either side of the mainmast (CANNON_FRACTIONS
+  // above) without lying across one of them; hung a couple of px forward
+  // of centre on the mast head for the same reason.
+  const flagW = 16;
+  const flagH = 10;
+  const flagX = shipCenterX + 4;
+  const flagY = top + lenPx * mainMast.f - flagH / 2 - 1;
 
-  // Flag pole
-  ctx.fillStyle = '#2a1a10';
-  ctx.fillRect(shipCenterX - 1, top - lenPx * 0.49, 2, lenPx * 0.17);
+  // Halyard — mast head to the flag's hoist.
+  ctx.fillStyle = '#1a100a';
+  ctx.fillRect(shipCenterX, top + lenPx * mainMast.f - 1, flagX - shipCenterX, 2);
 
   // Union Jack
   ctx.fillStyle = '#012169';
@@ -1106,3 +1200,8 @@ function drawHazard(ctx, h, z, cameraWorldX, zFrom) {
     // confuse the two into looking like separate threats.
   }
 }
+
+// test/debug support — the sprite drawn on its own, off-screen, so it can be
+// rasterized and looked at without a browser (a software canvas — see the
+// job tmp rastercanvas). Same convention as debugChaseShipPosition().
+export { drawChaseShip as debugDrawChaseShip };
