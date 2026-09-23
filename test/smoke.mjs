@@ -56,7 +56,7 @@ const { createMinimap } = await import('../src/world/minimap.js');
 const { createMusic } = await import('../src/audio/music.js');
 const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
-const { getDockHit, drawVillages, debugKingstonGreeterX } = await import('../src/world/villages.js');
+const { getDockHit, drawVillages, debugKingstonGreeterX, dockSpanAt } = await import('../src/world/villages.js');
 const { KINGSTON_CATARAQUI } = await import('../src/world/villageScene.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
@@ -92,13 +92,14 @@ function makeUi(minimap) {
 function newGame(startSegment, startFlowDistance, opts = {}) {
   const world = { distance: 0 };
   const obstacles = createObstacleField(world);
+  obstacles._world = world; // test-only handle: scenarios need d = world.distance - z
   const input = new Input();
   createTouchControls(input);
   const minimap = createMinimap();
   const music = createMusic();
   const ui = makeUi(minimap);
   const game = new Game({ ctx: makeElement('canvas').getContext('2d'), water: null, input, obstacles, world, ui, music, startFlowDistance, startSegment, ...opts });
-  return { game, input };
+  return { game, input, world, obstacles };
 }
 
 // Run `frames` updates; inputFn(i) may mutate the input state each frame.
@@ -776,6 +777,55 @@ await step('britishWarship: Up/Down keeps the ship on screen', () => {
 });
 
 // --- scenario 4d: Kingston's dock is a real entrance into the town ---------
+
+await step('docks: no rock, log, island or pelt is ever drawn overlapping a dock', () => {
+  // "The rocks and logs obstacles often overlap the docks. This doesn't
+  // matter for the actual gameplay, but cosmetically it does not look
+  // right." obstacles.js's pickX now excludes villages.js's dockSpanAt()
+  // span, widened by each sprite's own drawn half-width.
+  //
+  // Checks the real pool, not the placement function: an entry's d
+  // (world.distance - z) is invariant while it drifts, so a spawn-time
+  // exclusion is permanent — this asserts that property holds frame by
+  // frame down a stretch carrying four village docks.
+  const HALF_W = { rock: 18 / 32, log: 30 / 32, island: 40 / 32, pelt: 15 / 32 };
+  const check = (g, where) => {
+    for (const e of g.obstacles.pool) {
+      const d = g.world.distance - e.z;
+      const span = dockSpanAt(d);
+      if (!span) continue;
+      const hw = HALF_W[e.type] ?? 18 / 32;
+      if (e.x + hw > span.lo && e.x - hw < span.hi) {
+        throw new Error(`a ${e.type} overlaps a dock at d=${d.toFixed(1)}: x=${e.x.toFixed(2)} (+/-${hw.toFixed(2)}) inside planks ${span.lo.toFixed(2)}..${span.hi.toFixed(2)} (${where})`);
+      }
+    }
+  };
+  // The fjord run passes four docks (Sainte-Rose-du-Nord through
+  // Petit-Saguenay). Steer for mid-channel so the canoe doesn't dock and
+  // cut the run short.
+  const g = newGame('fjord', 240);
+  for (let i = 0; i < 6000; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
+    g.input.state.left = err > 0.4;
+    g.input.state.right = err < -0.4;
+    g.game.update(1 / 30);
+    if (g.game.mode === 'village') g.game.leaveVillage();
+    check(g, 'fjord villages');
+  }
+  // Kingston's dock is the extreme case — KINGSTON_DOCK_REACH is 30 units,
+  // far enough out that mid-channel itself can sit on the planks.
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  const k = newGame('rideau', kingston.flowDistance - 60);
+  for (let i = 0; i < 1200; i++) {
+    k.input.state.up = true;
+    k.game.health = 100;
+    k.game.update(1 / 30);
+    if (k.game.mode === 'village') k.game.leaveVillage();
+    check(k, 'Kingston');
+  }
+});
 
 await step('kingston: running into the dock enters the town on foot', () => {
   // Reported: "no obvious way to actually get into Kingston" — its dock

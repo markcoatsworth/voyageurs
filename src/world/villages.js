@@ -665,6 +665,34 @@ function hitsDock(v, flowDistance, canoeWorldX) {
   return canoeWorldX >= lo && canoeWorldX <= hi;
 }
 
+// The lateral span (world x) a village's dock planks occupy at downstream
+// distance d, or null if no dock is there. Exported for world/obstacles.js,
+// which keeps rocks/logs/islands/pelts out of it — reported as "the rocks
+// and logs obstacles often overlap the docks... cosmetically it does not
+// look right." Deliberately the *drawn* rectangle, matching
+// drawDockStructure()'s own corners (edge..inner across, flowDistance ±
+// dockWidthZ/2 along), not dockHitZ's gameplay trigger box, which is a
+// different (smaller) shape: this is a purely cosmetic exclusion.
+function dockSpanFor(v, d) {
+  if (Math.abs(d - v.flowDistance) > dockWidthZ(v) / 2) return null;
+  const edge = bankEdge(v);
+  const inner = edge + reachSign(v) * dockReach(v);
+  return { lo: Math.min(edge, inner), hi: Math.max(edge, inner) };
+}
+export function dockSpanAt(d) {
+  for (const v of VILLAGES) {
+    const span = dockSpanFor(v, d);
+    if (span) return span;
+    // Montreal's second pier is real geometry without its own VILLAGES
+    // entry — same special case getDockHit() below makes for it.
+    if (v.name === 'Montreal') {
+      const twin = dockSpanFor(montrealNorthTwin(v), d);
+      if (twin) return twin;
+    }
+  }
+  return null;
+}
+
 export function getDockHit(flowDistance, canoeWorldX) {
   for (const v of VILLAGES) {
     if (hitsDock(v, flowDistance, canoeWorldX)) return v;

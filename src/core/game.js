@@ -818,6 +818,18 @@ export class Game {
       this._castOffGraceVillage = this.currentVillage;
       this._castOffGrace = 3;
       this.world.distance = this.flowDistance;
+      // Re-seed the obstacle field, same reason enterSegment() does (see
+      // its own comment): the line above moves world.distance
+      // discontinuously, and every pooled obstacle's downstream distance is
+      // d = world.distance - z — invariant only while the river advances
+      // smoothly. A jump slides the whole field relative to the world, and
+      // since this particular jump is measured from a village's own
+      // flowDistance, what it slides obstacles onto is that village's dock:
+      // the "rocks and logs overlap the docks" report, at the exact moment
+      // the dock fills the screen. Invisible here — the player is arriving
+      // from the on-foot scene, so there's no previous river frame to
+      // compare against.
+      this.obstacles.reset();
       this.showBanner('Casting off');
     }
     this.currentVillage = null;

@@ -1,6 +1,7 @@
 import { centerX, widthAt, braidAt, southIslandAt } from './river/path.js';
+import { dockSpanAt } from './villages.js';
 import { createRockSprite, createLogSprite, createIslandSprite, createPeltSprite } from './sprites.js';
-import { AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
+import { AHEAD_UNITS, BEHIND_UNITS, PIXELS_PER_UNIT } from '../shared/config.js';
 
 const SPAWN_Z = -AHEAD_UNITS;
 const RECYCLE_Z = BEHIND_UNITS;
@@ -68,6 +69,52 @@ function hitRadiusFor(type) {
   return 0.55;
 }
 
+// Half of each sprite's actual drawn width, in world units (its pixel width
+// from sprites.js over PIXELS_PER_UNIT). Deliberately separate from
+// hitRadiusFor above, which is a gameplay collision radius and doesn't
+// match the art (an island hits at 1.7 but only draws 1.25 wide): the dock
+// exclusion below is about what overlaps on screen, so it has to measure
+// what's actually drawn.
+function drawHalfWidthFor(type) {
+  if (type === LOG) return 30 / 2 / PIXELS_PER_UNIT;
+  if (type === ISLAND) return 40 / 2 / PIXELS_PER_UNIT;
+  if (type === PELT) return 15 / 2 / PIXELS_PER_UNIT;
+  return 18 / 2 / PIXELS_PER_UNIT; // rock
+}
+
+// The dock's span at this d, widened by the sprite's own half-width so the
+// obstacle clears the planks entirely rather than just having its centre
+// outside them. Null when there's no dock here, which is almost always.
+function dockExclusionAt(type, d) {
+  const span = dockSpanAt(d);
+  if (!span) return null;
+  const hw = drawHalfWidthFor(type);
+  return { lo: span.lo - hw, hi: span.hi + hw };
+}
+
+// Picks uniformly in [lo, hi] but never inside `avoid` ({lo, hi} or null),
+// splitting into lanes on either side and weighting by lane width so a
+// sliver isn't as likely as an open stretch. Returns null when neither
+// side leaves usable room — callers treat that as "nothing fits here."
+// Same lane-splitting the braid branch below already does by hand for the
+// south island; factored out so the dock exclusion can reuse it.
+const MIN_LANE = 0.3;
+function pickInLanes(lo, hi, avoid) {
+  if (hi - lo < MIN_LANE) return null;
+  if (!avoid || avoid.hi <= lo || avoid.lo >= hi) return lo + Math.random() * (hi - lo);
+  const lanes = [];
+  if (avoid.lo - lo >= MIN_LANE) lanes.push([lo, avoid.lo]);
+  if (hi - avoid.hi >= MIN_LANE) lanes.push([avoid.hi, hi]);
+  if (lanes.length === 0) return null;
+  const total = lanes.reduce((sum, [a, b]) => sum + (b - a), 0);
+  let r = Math.random() * total;
+  for (const [a, b] of lanes) {
+    if (r < b - a) return a + r;
+    r -= b - a;
+  }
+  return lanes[0][0];
+}
+
 // Picks a world X for an obstacle at downstream distance d, staying clear of
 // the banks. Islands bias toward mid-channel so they force a real left/right
 // choice; everything else scatters across the navigable width. During a
@@ -97,21 +144,23 @@ function pickX(type, d) {
         if (hi - southHi >= 0.3) lanes.push([southHi, hi]);
         if (lanes.length === 0) return null; // both sub-lanes too tight here
         const [laneLo, laneHi] = lanes[Math.floor(Math.random() * lanes.length)];
-        return laneLo + Math.random() * (laneHi - laneLo);
+        return pickInLanes(laneLo, laneHi, dockExclusionAt(type, d));
       }
     }
 
-    if (hi - lo < 0.3) return null; // that side channel is too tight here
-    return lo + Math.random() * (hi - lo);
+    if (hi - lo < MIN_LANE) return null; // that side channel is too tight here
+    return pickInLanes(lo, hi, dockExclusionAt(type, d));
   }
 
   const half = widthAt(d) / 2 - EDGE_MARGIN;
+  const dock = dockExclusionAt(type, d);
   if (type === ISLAND) {
     const clearance = half - 1.3;
     if (clearance < 0.4) return null;
-    return centerX(d) + (Math.random() * 2 - 1) * clearance * 0.5;
+    return pickInLanes(centerX(d) - clearance * 0.5, centerX(d) + clearance * 0.5, dock);
   }
-  return centerX(d) + (Math.random() * 2 - 1) * Math.max(0.1, half);
+  const reach = Math.max(0.1, half);
+  return pickInLanes(centerX(d) - reach, centerX(d) + reach, dock);
 }
 
 function gapFor(distance) {
@@ -125,7 +174,16 @@ function place(world, z) {
   let type = pickType(hasBraid);
   let x = pickX(type, d);
   if (x === null) { type = ROCK; x = pickX(type, d); }
-  if (x === null) x = centerX(d); // last-resort safe default, shouldn't normally hit
+  if (x === null) {
+    // Last-resort default, shouldn't normally hit — but mid-channel can
+    // itself sit on a dock (Kingston's reaches 30 units out), so push clear
+    // of the planks rather than parking an obstacle on them.
+    x = centerX(d);
+    const dock = dockExclusionAt(type, d);
+    if (dock && x > dock.lo && x < dock.hi) {
+      x = (x - dock.lo < dock.hi - x) ? dock.lo : dock.hi;
+    }
+  }
   return { type, x, z, active: true, spinPhase: Math.random() * Math.PI * 2 };
 }
 
