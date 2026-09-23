@@ -18,6 +18,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
 } from '../shared/config.js';
 import { FLIGHT_END } from './chasseGalerie.js';
+import { isTouchPrimary } from '../core/touchControls.js';
 
 // A good chunk before Gatineau's dock (FLIGHT_END is GATINEAU - 18), far
 // enough back that the canoe is still at real cruising altitude when the
@@ -135,7 +136,19 @@ const SPREAD_GAP = 28;
 // exception, not the model for every tier.
 const SPREAD_TIGHT_GAP = 20;
 const TELEGRAPH_FULL = 0.5;   // wind-up at full health — a fair, readable tell
-const TELEGRAPH_LOW = 0.22;   // wind-up once badly hurt — barely enough to react
+// Wind-up once badly hurt. 0.22s on desktop — "barely enough to react" is
+// the intent, and it works there because a keyboard dodge is instant and
+// the player is usually already moving. On touch it's below plain human
+// reaction time (~0.2s) before a thumb has moved at all, which is what
+// made the late fight unwinnable on a phone rather than merely hard:
+// "it works great on a big screen, but I'm getting absolutely slaughtered
+// on a small mobile screen." 0.35 gives a thumb a real window — with
+// game.js's touch FIGHT_LATERAL_SPEED (14 u/s = 224 px/s) that's 78px of
+// travel against the 41px worst case its own comment works through, so
+// the hardest volley in the fight is clearable with margin instead of
+// arithmetically impossible. Everything else about his ramp — fireball
+// speed, fire interval, spread tiers, hp — is identical on both.
+const TELEGRAPH_LOW = isTouchPrimary() ? 0.35 : 0.22;
 const FIRE_INTERVAL_FULL = 1.8;   // seconds between shots at full health
 const FIRE_INTERVAL_LOW = 0.65;   // ...and when nearly dead — genuinely relentless
 

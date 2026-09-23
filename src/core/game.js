@@ -105,17 +105,34 @@ const CHASE_LATERAL_SPEED = isTouchPrimary() ? 8 : 4.5;
 // where the gunboat's threat is a slow orbit to out-track — so it keeps its
 // own, higher number there.
 //
-// Touch does NOT: it used to run at 28, on the reasoning that a pad with no
-// analog magnitude needs a big number to dodge with, and that turned out to
-// be badly wrong on a real phone — "the mobile controls are too sensitive.
-// I jump all over the place and cannot control the boat." Pinned to
-// CHASE_LATERAL_SPEED rather than a fresh number of its own, because the
-// Warship fight is the one that already feels right on a phone and the ask
-// was exactly that: "tone down the controls to the same sensitivity as the
-// British Warship fight." Desktop is untouched — "the controls on desktop
-// work just fine." (The vertical dodge needs nothing here: FIGHT_HOVER_SPEED
-// and the chase's own CHASE_HOLD_Z_SPEED are both already 5.)
-const FIGHT_LATERAL_SPEED = isTouchPrimary() ? CHASE_LATERAL_SPEED : 15;
+// Touch has been through three values, and the arithmetic is worth writing
+// down because eyeballing it got it wrong twice. It started at 28 (448
+// px/s), on the reasoning that a pad with no analog magnitude needs a big
+// number — reported as "too sensitive. I jump all over the place and
+// cannot control the boat." It was then pinned to CHASE_LATERAL_SPEED (8)
+// on the ask to "tone down the controls to the same sensitivity as the
+// British Warship fight," which is right for that fight (a slow orbit to
+// out-track) and wrong for this one, where the threat is aimed volleys you
+// must physically clear. That produced "it works great on a big screen,
+// but I'm getting absolutely slaughtered on a small mobile screen."
+//
+// What has to be possible, in the worst case (diable.js: telegraph at its
+// ramped floor, the spread tiers, FIREBALL_R + CANOE_HIT_R = 11px lethal
+// radius): leaving a 3-shot spread needs 28 + 11 = 39px of lateral travel
+// inside the telegraph window, and the near-death 4-shot tier needs
+// 30 + 11 = 41px (its own comment notes it leaves no lane to thread).
+//   desktop 15 u/s = 240 px/s x 0.22s = 53px  -> clears both
+//   touch    8 u/s = 128 px/s x 0.22s = 28px  -> clears NEITHER
+// At 8 the only survivable line was threading the ~6px lane between shots,
+// which at 128 px/s is ~47ms of timing precision with a thumb. It wasn't
+// difficulty; it was arithmetic.
+//
+// 14 u/s (224 px/s) restores the dodge — 49px at the ramped floor, and
+// 78px with diable.js's touch telegraph floor alongside it — while staying
+// well under the 28 that was unmanageable. Desktop keeps its own 15
+// untouched: "it works great on a big screen." (The vertical dodge needs
+// nothing here: FIGHT_HOVER_SPEED and CHASE_HOLD_Z_SPEED are both 5.)
+const FIGHT_LATERAL_SPEED = isTouchPrimary() ? 14 : 15;
 // The Diable fight sits at the head of the Ottawa gorge, where the river
 // itself is only ~6-10 units across (path.js's Ottawa branch) — far too
 // tight to dodge aimed hellfire in. The held fight gets its own lateral
