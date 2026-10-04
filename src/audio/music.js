@@ -40,6 +40,22 @@ export const PLAYLIST = [
   { src: '/audio/reel-du-gouvernement.mp3', title: 'Reel du Gouvernement', artist: 'Les Chevaliers du Folklore' },
 ];
 
+// The put-in's own tune. A run that starts at the very beginning always
+// opens on this one, so the first bars of the journey are recognizable —
+// but ONLY there: "I don't want it to be the opening track every time I
+// start the game... if I capsize later in the game and start again at a
+// random village, we should get back into the random rotation." A session
+// that begins anywhere else (a resumed checkpoint, any ?start=, any ?debug
+// jump) gets a plain shuffle, which is why the pin is a createMusic()
+// option rather than baked into the order itself.
+//
+// It is NOT reserved the way the boss cues below are: it stays in PLAYLIST
+// and can come up again on a later cycle even in a pinned run. All that's
+// ever pinned is slot 0 of the session's first order (openingOrder()).
+// Exported for test/smoke.mjs so the assertion reads the real entry
+// instead of re-hardcoding the title.
+export const OPENING_TRACK = PLAYLIST.find((t) => t.src === '/audio/reel-des-forets.mp3');
+
 // Not part of the shuffle above — this only ever plays on cue, the moment
 // the Château Gauntlet (bossfights/blockade.js) is spotted, replacing whatever
 // track happens to be playing. Once it ends (or the fight resolves first —
@@ -259,7 +275,27 @@ function shuffled(list) {
   return arr;
 }
 
-export function createMusic({ onTrack } = {}) {
+// The first play order for a run that starts at the put-in: an ordinary
+// shuffle with OPENING_TRACK swapped into slot 0, so it opens on that tune
+// while the other 14 stay random. A swap rather than filter-then-unshift:
+// whatever was drawn into slot 0 takes the opener's old slot, so the tail
+// is still a uniform shuffle of the remaining tracks and nothing can be
+// dropped.
+function openingOrder() {
+  const arr = shuffled(PLAYLIST);
+  const at = arr.indexOf(OPENING_TRACK);
+  // at === 0 is already right; -1 means the opener fell out of PLAYLIST
+  // (a renamed file, say) — leave the plain shuffle alone rather than
+  // swapping an undefined into slot 0 and blowing up playCurrent().
+  if (at > 0) [arr[0], arr[at]] = [arr[at], arr[0]];
+  return arr;
+}
+
+// pinOpeningTrack: true only when this run begins at the put-in (main.js
+// decides, via isPutIn()). Defaults to false — a plain shuffle is the
+// ordinary behaviour and the pin is the special case, so nothing gets the
+// opener by accident just by forgetting to say.
+export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
   const audio = new Audio();
   audio.volume = DEFAULT_VOLUME;
   audio.preload = 'auto';
@@ -288,7 +324,13 @@ export function createMusic({ onTrack } = {}) {
     audio.volume = trackVolume * duck;
   }
 
-  let order = shuffled(PLAYLIST);
+  // openingOrder() only for a run starting at the put-in (see
+  // OPENING_TRACK and pinOpeningTrack above); everywhere else this is the
+  // plain shuffle it always was. The reshuffle in playCurrent()'s 'ended'
+  // handler is plain shuffled() either way, so even in a pinned run the pin
+  // applies to the opening cycle alone and doesn't re-open on the same tune
+  // every 15 tracks.
+  let order = pinOpeningTrack ? openingOrder() : shuffled(PLAYLIST);
   let index = 0;
   // Kingston's own position in KINGSTON_PLAYLIST — entirely separate from
   // order/index above, the same way that set is entirely separate from

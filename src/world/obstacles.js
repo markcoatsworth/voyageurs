@@ -1,7 +1,7 @@
 import { centerX, widthAt, braidAt, southIslandAt } from './river/path.js';
 import { dockSpanAt } from './villages.js';
 import { createRockSprite, createLogSprite, createIslandSprite, createPeltSprite } from './sprites.js';
-import { AHEAD_UNITS, BEHIND_UNITS, PIXELS_PER_UNIT } from '../shared/config.js';
+import { AHEAD_UNITS, BEHIND_UNITS, PIXELS_PER_UNIT, CANOE_HALF_LENGTH } from '../shared/config.js';
 
 const SPAWN_Z = -AHEAD_UNITS;
 const RECYCLE_Z = BEHIND_UNITS;
@@ -67,6 +67,49 @@ function hitRadiusFor(type) {
   if (type === LOG) return 1.0;
   if (type === ISLAND) return 1.7;
   return 0.55;
+}
+
+// Does this obstacle touch the canoe's hull?
+//
+// The hull is a CANOE_HALF_LENGTH line through the canoe, swung to its
+// heading (game.js's `heading`). `hullZHalf` is how far that line still
+// reaches up/downstream once turned, and `hullTan` is how far it slides
+// sideways per unit of z — together they say which lateral lane the hull
+// occupies at the obstacle's own row. The obstacle is the circle
+// hitRadiusFor() has always described, so: is its centre within its radius
+// of the hull's lane at that row?
+//
+// This replaced a point-vs-box test (|z| < 0.7 && |dx| < radius) when the
+// canoe got a real heading, and pointed straight downstream the two are
+// *identical* — cos(0) leaves the band at exactly CANOE_HALF_LENGTH and
+// tan(0) puts the lane dead centre. That was the point: the heading is a new
+// mechanic, not a difficulty change to the ordinary rock field.
+//
+// (The obvious implementation — closest point on the hull segment compared
+// against the radius, i.e. a capsule — was written first and is wrong here.
+// It dilates the hull by the radius in *every* direction, up/downstream
+// included, so it collides out to CANOE_HALF_LENGTH + radius in z. For an
+// island, whose 1.7 is a deliberately generous lateral gameplay number that
+// doesn't match its 1.25-wide art, that meant getting clipped 2.4 units
+// after clearing it. Checked against the old rule over a 6x6-unit grid at
+// heading 0, the capsule hit on 22,676 extra cells for an island and 2,377
+// for a rock; the lane test adds none.)
+//
+// Turned, the lane slants across the channel and the canoe genuinely
+// presents a wider target: the widest |dx| that can still hit goes from the
+// obstacle's own radius to radius + CANOE_HALF_LENGTH * sin(heading) — about
+// 0.4 units of extra reach to either side at full lock (game.js's
+// HEADING_MAX). Holding a hard turn through a rock field really does clip
+// what a straight run would have threaded.
+function hullHit(entry, canoeWorldX, hullZHalf, hullTan) {
+  const dz = entry.z;
+  if (dz <= -hullZHalf || dz >= hullZHalf) return false;
+  // Where the hull crosses this obstacle's row. Negative dz is upstream,
+  // which is where the bow is, so a starboard heading (+) puts the bow out
+  // at +x up there — hence the sign.
+  const gap = entry.x - canoeWorldX + dz * hullTan;
+  const r = hitRadiusFor(entry.type);
+  return gap > -r && gap < r;
 }
 
 // Half of each sprite's actual drawn width, in world units (its pixel width
@@ -219,17 +262,19 @@ export function createObstacleField(world) {
     // `collidable` false (Chasse-galerie flight) still advances and recycles
     // every entry so the field keeps scrolling under the canoe, but nothing
     // is hit or picked up — the canoe is in the air, not on the water.
-    update(time, dt, speed, canoeWorldX, onHit, onCollect, collidable = true) {
+    update(time, dt, speed, canoeWorldX, onHit, onCollect, collidable = true, canoeHeading = 0) {
+      // The canoe's hull, swung to whatever heading it's holding (see hullHit
+      // below). Hoisted out of the pool loop — one cos/tan per frame, not one
+      // per obstacle.
+      const hullZHalf = CANOE_HALF_LENGTH * Math.cos(canoeHeading);
+      const hullTan = Math.tan(canoeHeading);
       for (const entry of pool) {
         entry.z += speed * dt;
 
-        if (collidable && entry.active && Math.abs(entry.z) < 0.7) {
-          const dx = Math.abs(entry.x - canoeWorldX);
-          if (dx < hitRadiusFor(entry.type)) {
-            entry.active = false;
-            if (entry.type === PELT) onCollect(entry);
-            else onHit(entry);
-          }
+        if (collidable && entry.active && hullHit(entry, canoeWorldX, hullZHalf, hullTan)) {
+          entry.active = false;
+          if (entry.type === PELT) onCollect(entry);
+          else onHit(entry);
         }
 
         if (entry.z > RECYCLE_Z) respawn(entry);

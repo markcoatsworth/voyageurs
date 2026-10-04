@@ -48,8 +48,8 @@ async function step(name, fn) {
 
 // --- shared wiring, mirrors main.js -----------------------------------------
 
-const { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT } = await import('../src/shared/config.js');
-const { Game, MIN_SPEED, KINGSTON_APPROACH_LEAD } = await import('../src/core/game.js');
+const { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT, CANOE_HALF_LENGTH } = await import('../src/shared/config.js');
+const { Game, MIN_SPEED, KINGSTON_APPROACH_LEAD, HEADING_MAX, EDGE_MARGIN: GAME_EDGE_MARGIN } = await import('../src/core/game.js');
 const { Input } = await import('../src/core/input.js');
 const { createObstacleField } = await import('../src/world/obstacles.js');
 const { createMinimap } = await import('../src/world/minimap.js');
@@ -122,6 +122,146 @@ await step('fjord: paddle downstream 120s', () => {
   const g = newGame('fjord', 0);
   run(g, 3600, 1 / 30, (s, i) => { s.up = true; s.left = i % 240 < 40; s.right = i % 240 >= 120 && i % 240 < 160; });
   if (g.game.segment !== 'fjord') notes.push(`  note fjord run auto-advanced to ${g.game.segment} @ ${g.game.flowDistance | 0}`);
+});
+
+// --- scenario 1a: the canoe's heading, and the hull hitbox that rides on it -
+
+await step('heading: left/right swing the bow for real, and it comes back when released', () => {
+  const g = newGame('fjord', 40);
+  if (g.game.heading !== 0) throw new Error(`a fresh canoe should start pointed downstream, heading was ${g.game.heading}`);
+
+  // Right: the bow comes round to starboard (+) and the canoe follows it
+  // across the channel. Both halves matter — a sprite rotation alone would
+  // satisfy the first check, which is what the old `tilt` did (and it
+  // leaned the wrong way, -lateralVX, so this test would have caught the
+  // sign too).
+  run(g, 45, 1 / 30, (st) => { st.up = true; st.right = true; });
+  if (!(g.game.heading > HEADING_MAX * 0.9)) {
+    throw new Error(`holding right should swing the bow to nearly full lock (${HEADING_MAX}), got ${g.game.heading.toFixed(3)}`);
+  }
+  if (!(g.game.lateralOffset > 0.2)) {
+    throw new Error(`the canoe should have travelled toward the bow it's pointing, lateralOffset was ${g.game.lateralOffset.toFixed(3)}`);
+  }
+
+  run(g, 60, 1 / 30, (st) => { st.up = true; st.right = false; st.left = true; });
+  if (!(g.game.heading < -HEADING_MAX * 0.9)) {
+    throw new Error(`holding left should swing the bow to port, got ${g.game.heading.toFixed(3)}`);
+  }
+
+  // Let go and the bow straightens out rather than staying cranked over.
+  run(g, 45, 1 / 30, (st) => { st.up = true; st.left = false; });
+  if (Math.abs(g.game.heading) > 0.03) {
+    throw new Error(`releasing the keys should bring the bow back downstream, heading was still ${g.game.heading.toFixed(3)}`);
+  }
+});
+
+await step('heading: the collision hull turns with the bow — same obstacle hits only on the side you turn toward', () => {
+  // The whole point of a real heading rather than a drawn lean: the hull is
+  // a line segment (CANOE_HALF_LENGTH long) swung to the canoe's heading,
+  // so an obstacle off the bow quarter is reachable turned and not
+  // reachable straight. Driven against obstacles.js directly — one probe
+  // rock at a fixed offset, the heading as the only variable.
+  const world = { distance: 0 };
+  const field = createObstacleField(world);
+  field.reset();
+
+  const CANOE_X = 0;
+  // Fire one frame at dt=0/speed=0 so nothing drifts: the probe sits exactly
+  // where it's placed and the only thing under test is the hull geometry.
+  const probeHits = (dx, dz, heading) => {
+    for (const e of field.pool) e.active = false;
+    const probe = field.pool[0];
+    probe.type = 'rock';
+    probe.active = true;
+    probe.x = CANOE_X + dx;
+    probe.z = dz;
+    let hits = 0;
+    field.update(0, 0, 0, CANOE_X, () => { hits++; }, () => {}, true, heading);
+    return hits > 0;
+  };
+
+  // Straight ahead, dead centre of the hull: unchanged from the old
+  // point-vs-radius check (a rock hits inside 0.55 units, misses outside).
+  // This is the regression guard — adding a heading must not have made the
+  // ordinary straight-line rock field any harder to thread.
+  if (!probeHits(0.5, 0, 0)) throw new Error('a rock 0.5 units abeam should still hit a straight-running canoe (rock radius is 0.55)');
+  if (probeHits(0.62, 0, 0)) throw new Error('a rock 0.62 units abeam should still miss a straight-running canoe');
+
+  // Off the starboard bow: out of reach pointed downstream, in reach once
+  // the bow swings right, and still out of reach if you swing it left. That
+  // last one is what separates a rotating hull from a merely bigger one.
+  const DX = 0.8, DZ = -0.5; // right of, and ahead of, the canoe
+  if (probeHits(DX, DZ, 0)) throw new Error('the probe should clear a straight-running canoe — pick a further offset');
+  if (!probeHits(DX, DZ, HEADING_MAX)) throw new Error('turning the bow toward the probe should bring the hull onto it');
+  if (probeHits(DX, DZ, -HEADING_MAX)) throw new Error('turning the bow away from the probe should not hit it — the hull is growing, not rotating');
+
+  // Mirrored, so neither side is special-cased.
+  if (probeHits(-DX, DZ, 0)) throw new Error('mirrored probe should clear a straight-running canoe');
+  if (!probeHits(-DX, DZ, -HEADING_MAX)) throw new Error('turning the bow to port should bring the hull onto the port-side probe');
+  if (probeHits(-DX, DZ, HEADING_MAX)) throw new Error('turning to starboard should not hit the port-side probe');
+
+  // And the number that actually decides difficulty: the widest lateral
+  // offset at which an obstacle sweeping down the river can still catch you.
+  // Every obstacle passes through every row, so this — not the hull's
+  // area or its reach up/downstream — is what says whether you thread a gap.
+  // Straight it must be exactly the rock's own radius (the old rule, intact);
+  // turned it must grow by the hull's lateral sweep, and nothing more.
+  const lateralReach = (heading) => {
+    let reach = 0;
+    for (let dx = 0; dx < 2; dx += 0.01) {
+      for (let dz = -1.5; dz <= 1.5; dz += 0.01) {
+        if (probeHits(dx, dz, heading)) { reach = dx; break; }
+      }
+    }
+    return reach;
+  };
+  const ROCK_RADIUS = 0.55;
+  const straight = lateralReach(0);
+  if (Math.abs(straight - ROCK_RADIUS) > 0.02) {
+    throw new Error(`a straight-running canoe should still be caught at exactly the rock's ${ROCK_RADIUS} radius, measured ${straight.toFixed(3)} — the heading changed the ordinary rock field`);
+  }
+  const turned = lateralReach(HEADING_MAX);
+  const expected = ROCK_RADIUS + CANOE_HALF_LENGTH * Math.sin(HEADING_MAX);
+  if (Math.abs(turned - expected) > 0.03) {
+    throw new Error(`at full lock the hull should reach ${expected.toFixed(3)} (radius + CANOE_HALF_LENGTH * sin), measured ${turned.toFixed(3)}`);
+  }
+  notes.push(`  note heading: a rock catches the hull out to ${straight.toFixed(2)} running straight, ${turned.toFixed(2)} at full lock (+${(100 * (turned / straight - 1)).toFixed(0)}%)`);
+});
+
+await step('heading: a turned hull grounds out before the channel edge the old point canoe reached', () => {
+  // The bank boundary moves with the heading too (game.js pulls the
+  // navigable half-width in by CANOE_HALF_LENGTH * sin(heading)), so running
+  // the shore with the bow swung out can't put the canoe as far across as a
+  // straight run could. Same geometry as the obstacle hull, applied to the
+  // edge of the water.
+  // Hold hard right into the bank and record, frame by frame, how far across
+  // the canoe actually got versus the straight-canoe limit at that same
+  // flowDistance (game.js's waterEdge). Measured per frame, not once at the
+  // start, because the channel width changes as you travel.
+  const g = newGame('fjord', 60);
+  let worstSlack = Infinity; // smallest (waterEdge - lateralOffset) seen
+  let maxOffset = 0;
+  let hitTheBank = false;
+  for (let i = 0; i < 300; i++) {
+    g.input.state.up = true;
+    g.input.state.right = true;
+    g.game.update(1 / 30);
+    const waterEdge = widthAt(g.game.flowDistance) / 2 - GAME_EDGE_MARGIN;
+    if (g.game.lateralOffset > waterEdge - 0.01) hitTheBank = true;
+    worstSlack = Math.min(worstSlack, waterEdge - g.game.lateralOffset);
+    maxOffset = Math.max(maxOffset, g.game.lateralOffset);
+  }
+  if (!(maxOffset > 0.5)) throw new Error(`the canoe never crossed the channel at all (max offset ${maxOffset.toFixed(2)}) — this scenario isn't testing anything`);
+  if (hitTheBank) {
+    throw new Error(`a hard-right canoe reached the straight-hull limit (offset ${maxOffset.toFixed(3)}) — the bank boundary isn't accounting for the heading`);
+  }
+  // And it isn't held back by some unrelated huge margin either: the slack
+  // should be about the hull's own reach at full lock, not metres of it.
+  const expectedReach = CANOE_HALF_LENGTH * Math.sin(HEADING_MAX);
+  if (worstSlack > expectedReach * 2) {
+    throw new Error(`the canoe stopped ${worstSlack.toFixed(3)} short of the edge, far more than the hull's ${expectedReach.toFixed(3)} of reach — something else is clamping it`);
+  }
+  notes.push(`  note heading: hard right into the bank stopped ${worstSlack.toFixed(2)} short of the straight-hull edge (hull reach at full lock is ${expectedReach.toFixed(2)})`);
 });
 
 // --- scenario 2: the explicit fjord -> lawrenceWest mouth crossing ---------
@@ -270,6 +410,232 @@ await step('loup-garou: the demon-wolf strikes, then Québec City checks it', ()
   const elsewhere = newGame('fjord', 0);
   run(elsewhere, 200, 1 / 30, (s) => { s.up = true; });
   if (elsewhere.game.loupGarou.isActive()) throw new Error('the loup-garou activated on the fjord');
+});
+
+// --- scenario 3c: hit feedback on the two shootable bosses ---------------
+
+// Counts the marks a draw call actually puts on the canvas. The dom shim's
+// own context is a no-op proxy, which is fine for "does it crash" but says
+// nothing about whether a medium impact is visibly bigger than a small one —
+// and "bigger" is the entire requirement.
+function recordingCtx() {
+  // `painted` is the ordered list of fill colours actually put on the
+  // canvas, which is how the layering test below can tell what ended up on
+  // top of what.
+  const rec = { arcs: 0, strokes: 0, fills: 0, lines: 0, painted: [] };
+  let fillStyle = null;
+  const counters = {
+    arc: 'arcs', ellipse: 'arcs',
+    lineTo: 'lines',
+    stroke: 'strokes', strokeRect: 'strokes',
+    fill: 'fills', fillRect: 'fills',
+  };
+  // Everything else no-ops, the same way dom-shim.mjs's own context does —
+  // this is only here to count marks, and it has to survive being handed to
+  // a whole boss fight's draw(), not just drawImpact().
+  const ctx = new Proxy({}, {
+    get(_t, prop) {
+      if (prop === 'canvas') return { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
+      if (prop === 'measureText') return () => ({ width: 8 });
+      if (prop === 'createLinearGradient' || prop === 'createRadialGradient') {
+        return () => ({ addColorStop() {} });
+      }
+      const key = counters[prop];
+      if (key) {
+        return () => {
+          rec[key]++;
+          if (key === 'fills') rec.painted.push(String(fillStyle));
+        };
+      }
+      return () => {};
+    },
+    set(_t, prop, value) {
+      if (prop === 'fillStyle') fillStyle = value;
+      return true;
+    },
+  });
+  return { ctx, rec };
+}
+
+// The fireball colour from world/impact.js — unique to that module, so its
+// presence in a paint log means an impact really was drawn, and its position
+// in that log says what it was drawn over.
+const IMPACT_FIRE_FILL = 'rgb(255, 122, 30)';
+// The Warship's hull fill, inside drawChaseShip.
+const WARSHIP_HULL_FILL = '#3a2716';
+// The Devil's shirt wedge, inside drawDevil — a fill that only his body
+// draws, so it marks where his silhouette landed in the paint order.
+const DEVIL_BODY_FILL = '#0d0d16';
+
+await step('impacts: a landed shot leaves a mark, and a bigger gun leaves a bigger one', async () => {
+  const { drawImpact, impactLife, impactTierFor } = await import('../src/world/impact.js');
+
+  // The tiers are the weapons — core/weapons.js's own "Z = small (pistol),
+  // X = medium (musket), C = large (blunderbuss)".
+  if (impactTierFor('pistol') !== 'small') throw new Error(`pistol should be the small impact, got ${impactTierFor('pistol')}`);
+  if (impactTierFor('musket') !== 'medium') throw new Error(`musket should be the medium impact, got ${impactTierFor('musket')}`);
+  if (impactTierFor('blunderbuss') !== 'large') throw new Error(`blunderbuss should be the large impact, got ${impactTierFor('blunderbuss')}`);
+  // A bullet with no tier of its own must still flash rather than throw or
+  // vanish — feedback should never be the thing that breaks a fight.
+  if (impactTierFor('trebuchet') !== 'small') throw new Error('an unknown bullet type should fall back to the small impact');
+
+  // Lifetimes climb with the tier, so a bigger hit also reads for longer.
+  const lives = ['small', 'medium', 'large'].map(impactLife);
+  for (let i = 1; i < lives.length; i++) {
+    if (!(lives[i] > lives[i - 1])) throw new Error(`impact lifetimes should grow with the tier, got ${JSON.stringify(lives)}`);
+  }
+
+  // Now the thing that actually matters: more gets drawn for a bigger tier.
+  // Summed over the whole life at 60fps, so this measures the effect as
+  // seen, not one arbitrary frame of it.
+  const weight = (tier) => {
+    const { ctx, rec } = recordingCtx();
+    for (let age = 0; age < impactLife(tier); age += 1 / 60) {
+      drawImpact(ctx, 160, 110, age, tier, 1.23);
+    }
+    return rec;
+  };
+  const small = weight('small');
+  const medium = weight('medium');
+  const large = weight('large');
+  if (!(small.lines > 0 && small.fills > 0)) throw new Error(`even the small impact has to draw something: ${JSON.stringify(small)}`);
+  for (const [a, b, names] of [[small, medium, 'small->medium'], [medium, large, 'medium->large']]) {
+    if (!(b.lines > a.lines)) throw new Error(`${names}: more shards expected, ${a.lines} -> ${b.lines}`);
+    if (!(b.fills > a.fills)) throw new Error(`${names}: more fill (core + smoke) expected, ${a.fills} -> ${b.fills}`);
+  }
+  // The ring is the medium tier's signature — small shouldn't stroke at all.
+  if (small.strokes > 0 && medium.strokes <= small.strokes) {
+    throw new Error('the medium impact should add a ring the small one does not have');
+  }
+  // Nothing is drawn before the hit or after it's spent.
+  const spent = recordingCtx();
+  drawImpact(spent.ctx, 160, 110, impactLife('medium') + 0.01, 'medium', 0);
+  drawImpact(spent.ctx, 160, 110, -0.05, 'medium', 0);
+  if (spent.rec.lines || spent.rec.fills || spent.rec.arcs) throw new Error('an expired or not-yet-due impact still drew');
+
+  notes.push(`  note impacts: shard/fill marks over one effect — small ${small.lines}/${small.fills}, medium ${medium.lines}/${medium.fills}, large ${large.lines}/${large.fills}`);
+});
+
+await step('impacts: the Warship fight marks every landed shot at the spot it struck', () => {
+  const g = newGame('rideau', WARSHIP_FLOW_DISTANCE - 40);
+  // Into the hold, where the ship is shootable.
+  for (let i = 0; i < 600 && !g.game.britishWarship.isChaseHolding(); i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (!g.game.britishWarship.isChaseHolding()) throw new Error('never reached the Warship hold');
+
+  // Land one shot of each gun by handing the fight a bullet sitting right on
+  // the hull, rather than trying to out-shoot a swinging target. The ship's
+  // position is read fresh each time — its orbit moves it every frame.
+  const impactsFor = (type) => {
+    const ship = g.game.britishWarship.debugChaseShipPosition();
+    const before = g.game.britishWarship.getImpacts().length;
+    g.game.britishWarship.update(
+      1 / 60, g.game.flowDistance, g.game.canoeWorldX, g.game.effectiveSpeed,
+      () => {},
+      [{ type, flowDistance: ship.flowDistance, worldX: ship.worldX }],
+      1,
+    );
+    return g.game.britishWarship.getImpacts().slice(before);
+  };
+
+  const fromPistol = impactsFor('pistol');
+  if (fromPistol.length !== 1) throw new Error(`a landed pistol shot should leave exactly one impact, got ${fromPistol.length}`);
+  if (fromPistol[0].tier !== 'small') throw new Error(`a pistol hit on the hull should be a small impact, got ${fromPistol[0].tier}`);
+  if (!Number.isFinite(fromPistol[0].x) || !Number.isFinite(fromPistol[0].d)) throw new Error('the impact has no position');
+
+  const fromMusket = impactsFor('musket');
+  if (fromMusket.length !== 1) throw new Error(`a landed musket shot should leave exactly one impact, got ${fromMusket.length}`);
+  if (fromMusket[0].tier !== 'medium') throw new Error(`a musket hit on the hull should be a medium impact, got ${fromMusket[0].tier}`);
+
+  // --- and the explosion has to land ON TOP OF the ship -----------------
+  // This is the bug that shipped first time round and was reported as
+  // "looks exactly the same as before": the impacts (and the single spark
+  // before them) were drawn above drawChaseShip in the fight's draw(), so
+  // the hull — ~35px by ~80px on screen, and every hit lands inside it by
+  // definition — was painted straight over the effect. Checked by paint
+  // order rather than by eye, since the shim can't rasterize.
+  impactsFor('musket');
+  const { ctx, rec } = recordingCtx();
+  g.game.britishWarship.draw(ctx, g.game.flowDistance - g.game._chaseHoldZ, g.game.cameraWorldX);
+  const hullAt = rec.painted.lastIndexOf(WARSHIP_HULL_FILL);
+  const impactAt = rec.painted.lastIndexOf(IMPACT_FIRE_FILL);
+  if (hullAt < 0) throw new Error('the ship hull never drew — this scenario is not testing the layering it claims to');
+  if (impactAt < 0) throw new Error('a live impact drew nothing at all during the fight\'s own draw()');
+  if (!(impactAt > hullAt)) {
+    throw new Error(`the impact is painted under the ship (impact at op ${impactAt}, hull at ${hullAt}) — the hull covers it up, which is exactly how the effect ended up invisible before`);
+  }
+
+  // They expire on their own rather than piling up for the rest of the fight.
+  for (let i = 0; i < 120; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (g.game.britishWarship.getImpacts().length !== 0) {
+    throw new Error(`${g.game.britishWarship.getImpacts().length} impact(s) still live two seconds on — they should fade out`);
+  }
+});
+
+await step('impacts: the Diable fight marks hits too, where it only had a body flash before', () => {
+  const g = newGame('lawrenceWest', DIABLE_FLOW_DISTANCE - 20);
+  for (let i = 0; i < 900 && !g.game.diable.isHolding(); i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (!g.game.diable.isHolding()) throw new Error('never reached the Diable arena');
+  // isHolding() is already true through his 'appearing' entrance, which
+  // doesn't check incoming fire at all — give him time to actually be
+  // fighting before shooting at him.
+  for (let i = 0; i < 150; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+
+  const canoe = { x: g.game.canoeWorldX, y: 200 };
+  const landOne = (type) => {
+    // Dead on his torso. BASE_CY (64) is its centre at rest and it only
+    // sways +/-4, well inside the BODY_HALF_H box, so this always connects.
+    const cx = g.game.diable.debugCentreX();
+    const before = g.game.diable.getImpacts().length;
+    g.game.diable.update(
+      1 / 60, g.game.flowDistance, canoe,
+      [{ x: cx, y: 64, ref: { type } }],
+      () => {}, () => {}, 1,
+    );
+    return g.game.diable.getImpacts().slice(before);
+  };
+
+  const pistol = landOne('pistol');
+  if (pistol.length !== 1) throw new Error(`a landed pistol shot on the Devil should leave one impact, got ${pistol.length}`);
+  if (pistol[0].tier !== 'small') throw new Error(`a pistol hit should be small, got ${pistol[0].tier}`);
+  if (!Number.isFinite(pistol[0].x) || !Number.isFinite(pistol[0].y)) throw new Error('the impact should mark where the shot struck him');
+
+  // The musket can't actually be carried this early (it unlocks at
+  // Gatineau, past this fight) but diable.js handles bullet type
+  // generically, so the tier has to come out right the day that changes.
+  const musket = landOne('musket');
+  if (musket[0]?.tier !== 'medium') throw new Error(`a musket hit should be medium, got ${musket[0]?.tier}`);
+
+  // Every shot gets its own mark — unlike the body blanch, which
+  // deliberately coalesces so a held trigger doesn't hold him white.
+  const burst = [];
+  for (let i = 0; i < 3; i++) burst.push(...landOne('pistol'));
+  if (burst.length !== 3) throw new Error(`three landed shots should leave three impacts, got ${burst.length}`);
+
+  // And they land ON TOP OF him, not behind — same check, and same reason,
+  // as the Warship's hull layering above. Against a black silhouette
+  // standing in front of a wall of hellfire, an impact drawn underneath
+  // either of them would be completely lost.
+  const { ctx, rec } = recordingCtx();
+  g.game.diable.draw(ctx, g.game.time);
+  const bodyAt = rec.painted.lastIndexOf(DEVIL_BODY_FILL);
+  const impactAt = rec.painted.lastIndexOf(IMPACT_FIRE_FILL);
+  if (bodyAt < 0) throw new Error('the Devil never drew — this scenario is not testing the layering it claims to');
+  if (impactAt < 0) throw new Error('a live impact drew nothing at all during the fight\'s own draw()');
+  if (!(impactAt > bodyAt)) {
+    throw new Error(`the impact is painted under the Devil (impact at op ${impactAt}, body at ${bodyAt}) — it would be invisible against his silhouette`);
+  }
 });
 
 // --- scenario 4: the British Blockade (frigate approach only, on the Rideau) --
@@ -1284,13 +1650,29 @@ await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
   // the arena), so simulating a player who lets go of the stick entirely
   // for a whole DESCENT_DISTANCE isn't a real playstyle to guarantee safe;
   // a merely-reasonable pilot still finishing the glide is the actual bar.
+  //
+  // Health pinned, for the same reason the Rideau leg below pins it: this
+  // stretch inherits whatever hull the fight left, and a hard-won clear can
+  // come out of the arena on a sliver. A single steeple clip (~32) then ends
+  // the run here, which is nothing to do with what this scenario is
+  // checking — and because a dead game freezes update() entirely, it used to
+  // surface three loops later as the thoroughly misleading "never reached
+  // the Rideau leg". Whether a glide on fumes is survivable is the
+  // chasse-galerie scenario's business, not this one's.
   for (let i = 0; i < 6000 && g.game.chasseGalerie.isActive(); i++) {
     g.input.state.up = true;
+    g.game.health = 100;
     const want = g.game.chasseGalerie.clearOffsetAhead(g.game.flowDistance);
     const err = g.game.lateralOffset - want;
     g.input.state.left = err > 0.12;
     g.input.state.right = err < -0.12;
     g.game.update(1 / 30);
+  }
+  // A dead game freezes update(), so every later loop in this scenario would
+  // spin out its full budget and then fail on whatever it was waiting for
+  // instead of on the death that actually caused it. Say so here.
+  if (g.game.state !== 'playing' || g.game.capsize.isActive()) {
+    throw new Error('capsized during the post-fight descent despite pinned health — something other than the hull is killing the glide');
   }
   if (g.game.chasseGalerie.getAltitude() > 0.6) throw new Error('canoe never glided back down after the fight');
 
@@ -1305,7 +1687,14 @@ await step('diable: hold the arena, kill him, fly on to Gatineau', () => {
     if (g.game.mode === 'village') g.game.leaveVillage(); // walked onto Gatineau's dock
     if (g.game.segment === 'rideau') onRideau = true;
   }
-  if (!onRideau) throw new Error('past Le Diable the run never reached the Rideau leg toward Kingston');
+  if (!onRideau) {
+    // Same trap as after the descent above — name the death rather than
+    // blaming the segment hand-off for a loop that was never running.
+    if (g.game.state !== 'playing' || g.game.capsize.isActive()) {
+      throw new Error(`capsized on the run down to Gatineau at ${g.game.flowDistance | 0} despite pinned health`);
+    }
+    throw new Error(`past Le Diable the run never reached the Rideau leg toward Kingston (stuck at ${g.game.flowDistance | 0}, segment ${g.game.segment})`);
+  }
   notes.push(`  note diable fight won after ${deaths} death(s); rolled onto the Rideau at ${g.game.flowDistance | 0}`);
 });
 
@@ -1760,14 +2149,91 @@ await step(`village: enter+tick each of the ${VILLAGES.length} villages`, () => 
 await step('capsize -> restart -> keep playing', () => {
   const g = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
   run(g, 60, 1 / 30, (s) => { s.up = true; });
-  for (let i = 0; i < 20 && g.game.state === 'playing'; i++) {
+  for (let i = 0; i < 20 && !g.game.capsize.isActive(); i++) {
     g.game.invulnTimer = 0;
     g.game.handleHit({ type: 'rock' });
   }
-  if (g.game.state !== 'gameover') throw new Error('never capsized after 20 unmitigated rock hits');
+  if (!g.game.capsize.isActive()) throw new Error('never capsized after 20 unmitigated rock hits');
+  // The card no longer lands on the fatal hit — the canoe rolls over first
+  // (world/capsize.js), which takes frames.
+  run(g, 90, 1 / 30);
+  if (g.game.state !== 'gameover') throw new Error('the capsize animation never handed over to the game-over screen');
   g.game.start();
   if (g.game.state !== 'playing') throw new Error('restart did not return to playing');
+  if (g.game.capsize.isActive()) throw new Error('restart left the old capsize animation running');
   run(g, 300, 1 / 30, (s) => { s.up = true; });
+});
+
+// --- scenario 7a: the capsize animation itself ----------------------------
+
+await step('capsize: the hull rolls over on a frozen river, then the card comes up', async () => {
+  const { TOTAL_TIME } = await import('../src/world/capsize.js');
+  const g = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
+  run(g, 60, 1 / 30, (s) => { s.up = true; });
+
+  const hudHiddenBefore = g.game.ui.hud.classList.contains('hidden');
+  g.game.invulnTimer = 0;
+  g.game.takeDamage(999);
+
+  // The fatal hit starts the roll; it does NOT put up the card. That split
+  // is the whole point — gameOver() hides the HUD and freezes the frame, so
+  // anything it triggered would be covered over on the same tick.
+  if (!g.game.capsize.isActive()) throw new Error('a fatal hit should start the canoe going over');
+  if (g.game.state !== 'playing') throw new Error(`state jumped straight to ${g.game.state} — the roll never got a chance to play`);
+  if (!g.game.ui.gameoverScreen.classList.contains('hidden')) throw new Error('the game-over card came up over the canoe still rolling');
+  if (g.game.ui.hud.classList.contains('hidden') !== hudHiddenBefore) throw new Error('the HUD vanished as the canoe went over — it should stay up until the card');
+  // The blink of a still-open invulnerability window must not be able to
+  // switch the canoe off for the roll.
+  if (g.game.canoeVisible === false) throw new Error('the canoe was left invisible for its own capsize');
+
+  // Sample the roll. The premise is a width collapse: upright (+1) through
+  // edge-on (0) to fully inverted (-1), which is what reads as "went over"
+  // from straight overhead instead of "spun around".
+  const frozenAt = g.game.flowDistance;
+  const rolls = [];
+  const sinks = [];
+  let framesToCard = 0;
+  for (let i = 0; i < 200 && g.game.state === 'playing'; i++) {
+    rolls.push(g.game.capsize.rollScale());
+    sinks.push(g.game.capsize.sinkFraction());
+    g.game.update(1 / 30);
+    framesToCard++;
+  }
+  if (g.game.state !== 'gameover') throw new Error('the capsize never finished');
+  if (g.game.flowDistance !== frozenAt) {
+    throw new Error(`the river kept moving during the capsize (${frozenAt.toFixed(2)} -> ${g.game.flowDistance.toFixed(2)}) — it should be frozen so the wreck doesn't scroll away`);
+  }
+
+  if (!(rolls[0] > 0.95)) throw new Error(`the roll should start upright, began at ${rolls[0].toFixed(2)}`);
+  if (!rolls.some((r) => Math.abs(r) < 0.25)) throw new Error('the hull never passed through edge-on — that zero crossing is what makes it read as a roll (and it hides the sprite swap)');
+  if (!(Math.min(...rolls) < -0.9)) throw new Error(`the hull never came fully over, lowest roll was ${Math.min(...rolls).toFixed(2)}`);
+  // Monotonic: it goes over once and stays over, no rocking back.
+  for (let i = 1; i < rolls.length; i++) {
+    if (rolls[i] > rolls[i - 1] + 1e-9) throw new Error(`the hull rolled back upright at frame ${i} (${rolls[i - 1].toFixed(3)} -> ${rolls[i].toFixed(3)})`);
+  }
+  // And the sink only starts once the roll is done.
+  const firstSink = sinks.findIndex((v) => v > 0);
+  if (firstSink < 0) throw new Error('the hull never started to sink');
+  if (!(rolls[firstSink] < -0.9)) throw new Error('the sink began before the hull was over — the phases are out of order');
+  if (!(sinks[sinks.length - 1] > 0.9)) throw new Error('the hull never finished sinking before the card');
+
+  const seconds = framesToCard / 30;
+  if (Math.abs(seconds - TOTAL_TIME) > 0.1) throw new Error(`the card was held back ${seconds.toFixed(2)}s, expected about ${TOTAL_TIME}s`);
+  notes.push(`  note capsize: rolled over and sank in ${seconds.toFixed(2)}s on a frozen river, then the card`);
+});
+
+await step('capsize: the overturned hull is its own sprite, matching the upright footprint', async () => {
+  // world/capsize.js swaps upright -> overturned at the roll's zero
+  // crossing. The two have to share the silhouette (sprites.js's
+  // canoeHullPath) or the swap pops, and they have to actually differ or
+  // there was no point drawing a hull bottom at all.
+  const { createCanoeSprites } = await import('../src/world/canoe.js');
+  const sprites = createCanoeSprites();
+  if (!sprites.capsized) throw new Error('no capsized canoe sprite');
+  if (sprites.capsized.width !== sprites.right.width || sprites.capsized.height !== sprites.right.height) {
+    throw new Error(`the overturned hull is ${sprites.capsized.width}x${sprites.capsized.height}, the upright one ${sprites.right.width}x${sprites.right.height} — the mid-roll swap would pop`);
+  }
+  if (sprites.capsized === sprites.right) throw new Error('the capsized sprite is just the upright one');
 });
 
 // --- scenario 8: pause / resume toggling --------------------------------
@@ -1800,6 +2266,90 @@ await step('music: playlist metadata + onTrack fires a well-formed track', async
     }
   }
   if (music.nowPlaying == null) throw new Error('music.nowPlaying still null after playback started');
+});
+
+await step('music: a run from the put-in opens on Reel des Forêts; one starting anywhere else does not', async () => {
+  // "seed the shuffle so it opens with Reel des Forêts" — music.js's
+  // openingOrder() — but then narrowed: "I only want reel-des-forets pinned
+  // to the very start point, at the put-in... if I capsize later in the game
+  // and start again at a random village, we should get back into the random
+  // rotation." So the pin is createMusic()'s pinOpeningTrack option, which
+  // main.js sets from isPutIn(), and it is OFF by default.
+  //
+  // Unlike the reserved boss cues the opener is NOT pulled out of the
+  // ambient shuffle: it stays in PLAYLIST and can recur later. Only slot 0
+  // of a pinned session's first order is fixed.
+  const mod = await import('../src/audio/music.js');
+  if (mod.OPENING_TRACK == null) throw new Error('OPENING_TRACK no longer resolves — its src fell out of PLAYLIST');
+  if (!mod.PLAYLIST.includes(mod.OPENING_TRACK)) {
+    throw new Error(`the opener ("${mod.OPENING_TRACK.title}") left the ambient shuffle — it's meant to stay in rotation, not become a reserved cue`);
+  }
+
+  // Many sessions, because a single one passing proves nothing about a
+  // shuffle: pre-fix, 1-in-15 of these would have opened correctly by luck.
+  const SESSIONS = 20;
+  const seconds = new Set();
+  for (let i = 0; i < SESSIONS; i++) {
+    const music = mod.createMusic({ pinOpeningTrack: true });
+    music.start();
+    await new Promise((r) => setTimeout(r, 20));
+    if (music.nowPlaying?.title !== mod.OPENING_TRACK.title) {
+      throw new Error(`session ${i + 1} opened on "${music.nowPlaying?.title}", not "${mod.OPENING_TRACK.title}"`);
+    }
+    // One track on: still a shuffle, so this should vary across sessions.
+    music.debugAudioElement().dispatchEvent({ type: 'ended' });
+    await new Promise((r) => setTimeout(r, 20));
+    if (music.nowPlaying?.title) seconds.add(music.nowPlaying.title);
+    music.stop();
+  }
+  // Catches the fix overreaching into a fully fixed order (and it can't
+  // flake: 20 independent draws from 14 tracks landing identical is ~1e-22).
+  if (seconds.size < 2) {
+    throw new Error(`the whole order looks pinned, not just the opener — ${SESSIONS} sessions all played "${[...seconds][0]}" second`);
+  }
+
+  // And the other half of the request: NOT pinned anywhere else. Default
+  // (no option at all) and an explicit false both have to land back in the
+  // plain rotation. Many sessions, because one landing on a different track
+  // proves nothing — the opener is 1 of 15 and would come up by luck.
+  const firsts = new Set();
+  for (let i = 0; i < SESSIONS; i++) {
+    const music = mod.createMusic(i % 2 ? { pinOpeningTrack: false } : {});
+    music.start();
+    await new Promise((r) => setTimeout(r, 20));
+    if (music.nowPlaying?.title) firsts.add(music.nowPlaying.title);
+    music.stop();
+  }
+  if (firsts.size < 2) {
+    throw new Error(`an unpinned run opened on "${[...firsts][0]}" in all ${SESSIONS} sessions — that is still a pin, not a shuffle`);
+  }
+  if (firsts.size === 1 && firsts.has(mod.OPENING_TRACK.title)) {
+    throw new Error('an unpinned run still always opens on the put-in track');
+  }
+  notes.push(`  note music: opener pinned to ${mod.OPENING_TRACK.title} across ${SESSIONS} put-in sessions (${seconds.size} distinct second tracks); ${firsts.size} distinct openers across ${SESSIONS} unpinned ones`);
+});
+
+await step('music: main.js pins the opener at the put-in and nowhere else', async () => {
+  // The decision itself, rather than the mechanism: isPutIn() is what
+  // main.js hands to createMusic({ pinOpeningTrack }), so every real
+  // starting point the game has needs to come out on the right side of it.
+  const mod = await import('../src/main.js');
+  if (!mod.isPutIn('fjord', 0)) throw new Error('the put-in (fjord @ 0) has to count as the beginning — it is the only place the opener is wanted');
+  if (!mod.isPutIn('fjord', 0.4)) throw new Error('a hair past 0 on the fjord is still the put-in (see PUT_IN_EPSILON)');
+  // Every waypoint the ?debug picker offers, other than the put-in itself,
+  // must be unpinned — "start again at a random village" means the rotation.
+  for (const wp of mod.debugWaypoints()) {
+    const pinned = mod.isPutIn(wp.segment, wp.flowDistance);
+    if (wp.kind === 'put-in') {
+      if (!pinned) throw new Error('the picker\'s put-in entry should be pinned');
+    } else if (pinned) {
+      throw new Error(`"${wp.label}" (${wp.segment} @ ${wp.flowDistance | 0}) counts as the put-in — it would wrongly get the pinned opener`);
+    }
+  }
+  // Other segments never count, whatever their numbers happen to be.
+  for (const seg of ['lawrenceEast', 'lawrenceWest', 'rideau']) {
+    if (mod.isPutIn(seg, 0)) throw new Error(`${seg} @ 0 is not the put-in — only the fjord starts the journey`);
+  }
 });
 
 // --- scenario 9a: a ?start= cheat's boss track survives the player's own --
@@ -2008,6 +2558,230 @@ await step('weapons: the musket fires slower and hits harder than the pistol', (
       throw new Error(`${fight}: musket damage (${musketDmg}) isn't higher than pistol damage (${pistolDmg})`);
     }
   }
+});
+
+// --- scenario 9a2: ?debug — the waypoint picker ---------------------------
+
+await step('debug: isDebugMode() reads ?debug and stays off by default', async () => {
+  const mod = await import('../src/main.js');
+  try {
+    windowShim.location.search = '';
+    if (mod.isDebugMode() !== false) throw new Error('?debug absent should mean off — an ordinary player must never get the overlay');
+    windowShim.location.search = '?difficulty=easy';
+    if (mod.isDebugMode() !== false) throw new Error('another param alone should not turn debug on');
+    // Bare ?debug (no value) is the form you type by hand, so it has to work.
+    for (const q of ['?debug', '?debug=', '?debug=1', '?debug=yes', '?debug=on', '?start=diable&debug=1']) {
+      windowShim.location.search = q;
+      if (mod.isDebugMode() !== true) throw new Error(`"${q}" should turn debug on`);
+    }
+    // An explicit off, so a stale bookmark can be defused without editing.
+    for (const q of ['?debug=0', '?debug=false', '?debug=off', '?debug=NO']) {
+      windowShim.location.search = q;
+      if (mod.isDebugMode() !== false) throw new Error(`"${q}" should turn debug off`);
+    }
+
+    // ?debug=play is debug mode with the picker shut — what a jump
+    // navigates to. Reported bug: the picker used to open on every ?debug
+    // load, so clicking a waypoint reloaded straight back into a
+    // full-screen overlay covering the part of the game you'd just asked
+    // to see.
+    windowShim.location.search = '?debug=play';
+    if (mod.isDebugMode() !== true) throw new Error('?debug=play is still debug mode — backquote has to work');
+    if (mod.shouldOpenDebugMenuOnLoad() !== false) throw new Error('?debug=play must NOT open the picker on load — that is the whole point of it');
+    windowShim.location.search = '?start=diable&debug=PLAY';
+    if (mod.shouldOpenDebugMenuOnLoad() !== false) throw new Error('?debug=play should be case-insensitive like the rest');
+
+    // A bare ?debug (or =1) does open it — that's the "I want to choose"
+    // form, and it's what you type by hand.
+    for (const q of ['?debug', '?debug=', '?debug=1', '?debug=yes']) {
+      windowShim.location.search = q;
+      if (mod.shouldOpenDebugMenuOnLoad() !== true) throw new Error(`"${q}" should open the picker on load`);
+    }
+    // Off means off — no picker, even on load.
+    windowShim.location.search = '?debug=0';
+    if (mod.shouldOpenDebugMenuOnLoad() !== false) throw new Error('?debug=0 should not open the picker');
+    windowShim.location.search = '';
+    if (mod.shouldOpenDebugMenuOnLoad() !== false) throw new Error('no ?debug at all should not open the picker');
+  } finally {
+    windowShim.location.search = '';
+  }
+});
+
+await step('debug: every waypoint the picker offers resolves back to itself through ?start=', async () => {
+  // The one that actually rots. The overlay's list and the ?start= resolver
+  // are built from the same two sources (START_KEYWORD_LIST and VILLAGES),
+  // but the names still have to survive normalizeStartName() round-tripping
+  // — a label that stops matching its own village would show up as a button
+  // that silently drops you at the put-in instead, with only a console
+  // warning nobody reads.
+  const mod = await import('../src/main.js');
+  const waypoints = mod.debugWaypoints();
+  if (waypoints.length < 30) throw new Error(`only ${waypoints.length} waypoints — the picker should list the whole route`);
+
+  // The put-in comes first and is the one entry with no ?start= to give.
+  if (waypoints[0].kind !== 'put-in') throw new Error('the put-in should be the first thing offered — it is the point of this feature');
+  if (waypoints[0].startParam !== null) throw new Error('the put-in has no ?start= name; it is "no ?start= plus a cleared checkpoint"');
+  if (waypoints.filter((w) => w.startParam === null).length !== 1) throw new Error('only the put-in should lack a ?start= name');
+
+  // Real route order, so the list reads like the journey.
+  const RANK = { fjord: 0, lawrenceEast: 0, lawrenceWest: 1, rideau: 2 };
+  for (let i = 2; i < waypoints.length; i++) {
+    const a = waypoints[i - 1];
+    const b = waypoints[i];
+    const ra = RANK[a.segment];
+    const rb = RANK[b.segment];
+    if (rb < ra || (ra === rb && b.flowDistance < a.flowDistance)) {
+      throw new Error(`waypoints out of route order: ${a.label} (${a.segment} ${a.flowDistance | 0}) before ${b.label} (${b.segment} ${b.flowDistance | 0})`);
+    }
+  }
+
+  try {
+    for (const wp of waypoints) {
+      if (!wp.startParam) continue;
+      windowShim.location.search = `?start=${encodeURIComponent(wp.startParam)}`;
+      const got = mod.parseStartLocation();
+      if (got.segment !== wp.segment) {
+        throw new Error(`"${wp.label}" offers ?start=${wp.startParam}, which resolves to segment ${got.segment}, not ${wp.segment}`);
+      }
+      // Boss keywords land on their exact number; village docks get
+      // START_APPROACH_BUFFER of run-up (main.js), floored at the segment
+      // start. Either way the resolved spot has to be the one named, not
+      // the put-in fallback a non-matching name silently gives.
+      const slack = wp.kind === 'village' ? 26 : 0.001;
+      if (Math.abs(got.flowDistance - wp.flowDistance) > slack
+        && got.flowDistance !== SEGMENT_SHAPE_OFFSET[wp.segment]) {
+        throw new Error(`"${wp.label}" resolved to ${got.flowDistance | 0}, expected within ${slack} of ${wp.flowDistance | 0}`);
+      }
+    }
+  } finally {
+    windowShim.location.search = '';
+  }
+  // No two buttons may land in the same place. The Kingston keyword and the
+  // Kingston village dock share a normalized name, and since keywords win
+  // in parseStartLocation() the dock entry used to resolve to the keyword's
+  // position — two buttons, one destination, one of them lying about where
+  // it went. debugWaypoints() drops the shadowed village now.
+  const seen = new Map();
+  for (const wp of waypoints) {
+    const key = `${wp.segment}@${Math.round(wp.flowDistance)}`;
+    if (seen.has(key)) throw new Error(`"${wp.label}" and "${seen.get(key)}" are both offered at ${key} — one of them can't be reached`);
+    seen.set(key, wp.label);
+  }
+  notes.push(`  note debug: all ${waypoints.filter((w) => w.startParam).length} named waypoints round-trip through ?start=, plus the put-in`);
+});
+
+await step('debug: debugStartUrl keeps the tool and the difficulty, drops the old start', async () => {
+  const mod = await import('../src/main.js');
+  const url = (search, wp) => mod.debugStartUrl(search, '', '/', wp);
+  const toParams = (u) => new URLSearchParams(u.slice(u.indexOf('?')));
+
+  // Jumping somewhere named. debug=play, so the tool stays reachable but
+  // the picker doesn't reopen over the game on arrival.
+  let p = toParams(url('?debug=1', { startParam: 'diable' }));
+  if (p.get('start') !== 'diable') throw new Error('picking a waypoint should set ?start= to its name');
+  if (p.get('debug') !== 'play') throw new Error(`a jump should land on ?debug=play, got ?debug=${p.get('debug')}`);
+
+  // The put-in: no ?start= at all, which is what the cleared checkpoint
+  // then resolves to.
+  p = toParams(url('?debug=1&start=kingston', { startParam: null }));
+  if (p.has('start')) throw new Error('the put-in must REMOVE ?start=, not set it — otherwise it jumps to the old waypoint again');
+  if (p.get('debug') !== 'play') throw new Error('picking the put-in should land on ?debug=play too, not reopen the picker');
+
+  // An old ?start= is always replaced, never stacked.
+  p = toParams(url('?start=kingston&debug=1', { startParam: 'wendigo' }));
+  if (p.getAll('start').length !== 1 || p.get('start') !== 'wendigo') {
+    throw new Error(`expected exactly one start=wendigo, got ${JSON.stringify(p.getAll('start'))}`);
+  }
+
+  // ?difficulty= rides along, same as it does through stripStartParam.
+  p = toParams(url('?difficulty=easy&debug=1', { startParam: 'rideau' }));
+  if (p.get('difficulty') !== 'easy') throw new Error('?difficulty= should survive a debug jump');
+
+  // Jumping from a URL that had debug explicitly off re-asserts it rather
+  // than leaving it off.
+  p = toParams(url('?debug=0', { startParam: 'diable' }));
+  if (p.get('debug') !== 'play') throw new Error('a jump should leave debug on');
+
+  // And the round trip holds: every jump target lands on a URL that does
+  // not reopen the picker. Checked through the real predicate rather than
+  // by eyeballing the string.
+  const mod2 = await import('../src/main.js');
+  try {
+    for (const wp of mod2.debugWaypoints()) {
+      const jumped = mod2.debugStartUrl('?debug=1', '', '/', wp);
+      windowShim.location.search = jumped.slice(jumped.indexOf('?'));
+      if (mod2.shouldOpenDebugMenuOnLoad()) {
+        throw new Error(`jumping to "${wp.label}" lands on ${jumped}, which reopens the picker over the game`);
+      }
+      if (!mod2.isDebugMode()) throw new Error(`jumping to "${wp.label}" lost debug mode entirely`);
+    }
+  } finally {
+    windowShim.location.search = '';
+  }
+
+  // The hash is preserved verbatim.
+  if (!mod.debugStartUrl('?debug=1', '#frag', '/', { startParam: 'diable' }).endsWith('#frag')) {
+    throw new Error('the URL hash should survive a debug jump');
+  }
+});
+
+await step('debug: the overlay lists one button per waypoint, each wired to its own, and toggles', async () => {
+  const { createDebugMenu } = await import('../src/core/debugMenu.js');
+  const mod = await import('../src/main.js');
+  const waypoints = mod.debugWaypoints();
+
+  const picked = [];
+  let cleared = 0;
+  let checkpoint = { segment: 'rideau', flowDistance: 95630 };
+  const menu = createDebugMenu({
+    waypoints,
+    describeCheckpoint: () => (checkpoint ? `${checkpoint.segment} @ ${checkpoint.flowDistance}` : null),
+    onPick: (wp) => picked.push(wp),
+    onClearCheckpoint: () => { cleared++; checkpoint = null; },
+  });
+
+  // Starts closed, so main.js's explicit show() on load is what opens it —
+  // not a side effect of construction.
+  if (menu.isOpen()) throw new Error('the overlay should be built closed and opened deliberately');
+  if (menu.toggle() !== true || !menu.isOpen()) throw new Error('toggle should open a closed overlay');
+  if (menu.toggle() !== false || menu.isOpen()) throw new Error('toggle should close an open overlay');
+  menu.show();
+  menu.hide();
+  if (menu.isOpen()) throw new Error('hide() should close it');
+
+  const buttons = menu.debugButtons();
+  if (buttons.length !== waypoints.length) {
+    throw new Error(`${buttons.length} buttons for ${waypoints.length} waypoints — every waypoint needs one and no waypoint needs two`);
+  }
+  // Each button hands back the waypoint it is labelled with. An off-by-one
+  // in the build loop would be invisible on screen and send you to the
+  // wrong place every time.
+  for (let i = 0; i < buttons.length; i++) {
+    if (buttons[i].waypoint !== waypoints[i]) throw new Error(`button ${i} ("${buttons[i].waypoint.label}") is wired to the wrong waypoint`);
+    buttons[i].element.dispatchEvent({ type: 'click' });
+    if (picked[picked.length - 1] !== waypoints[i]) {
+      throw new Error(`clicking "${waypoints[i].label}" picked "${picked[picked.length - 1]?.label}"`);
+    }
+  }
+  if (picked.length !== waypoints.length) throw new Error('some buttons did not fire');
+  if (cleared !== 0) throw new Error('picking a waypoint should not go through onClearCheckpoint — main.js clears it itself before navigating');
+
+  // Picking closes the overlay. main.js's onPick hides it before navigating
+  // (the navigation is what really swaps the screen, but a browser can take
+  // a moment, and a blocked navigation never gets there) — so the handler
+  // has to be free to hide from inside the callback without the menu
+  // fighting it.
+  menu.show();
+  if (!menu.isOpen()) throw new Error('show() should open it');
+  const hidingMenu = createDebugMenu({
+    waypoints,
+    describeCheckpoint: () => null,
+    onPick: () => hidingMenu.hide(),
+    onClearCheckpoint: () => {},
+  });
+  hidingMenu.show();
+  hidingMenu.debugButtons()[0].element.dispatchEvent({ type: 'click' });
+  if (hidingMenu.isOpen()) throw new Error('an onPick that hides the overlay should leave it closed');
 });
 
 // --- scenario 9b: ?difficulty=easy — less damage taken, more damage given --

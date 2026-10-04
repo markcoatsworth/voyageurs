@@ -1,10 +1,11 @@
 import { centerX, widthAt, braidAt, rapidsStrength, MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from '../world/river/path.js';
 import { FEATURE_ISLAND_RANGE } from '../world/river/islands.js';
-import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIXELS_PER_UNIT } from '../shared/config.js';
+import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIXELS_PER_UNIT, CANOE_HALF_LENGTH } from '../shared/config.js';
 import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
 import { drawRain } from '../world/weather.js';
 import { createCanoeSprites } from '../world/canoe.js';
+import { createCapsize } from '../world/capsize.js';
 import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
@@ -90,6 +91,55 @@ const DECEL_DRIFT = 1.8 * speedScale;
 const STEER_ACCEL = 20 * (isTouchPrimary() ? 0.5 : 1);
 const STEER_MAX = 7 * (isTouchPrimary() ? 0.5 : 1);
 const STEER_DAMPING = 6;
+
+// --- Heading -------------------------------------------------------------
+// The canoe holds a real heading, and that heading is what moves it: left/
+// right swing the bow, and the hull's own thrust (STEER_THRUST below) is the
+// only thing pushing you sideways. Before this the canoe crabbed downstream
+// bolt upright and `tilt` leaned the sprite over decoratively — and leaned it
+// the wrong way at that (it was -lateralVX, so going right tipped the bow
+// left, a motorcycle's banking lean rather than a turn). The same angle now
+// rotates the collision hull too, in obstacles.js's hullHit() and in the bank
+// clamp in update(), so a turned canoe is genuinely a wider target: the
+// turn is a mechanic, not a decoration.
+//
+// 0.6 rad ≈ 34°, at full lock. Big enough to read instantly on a 24px-wide
+// sprite at 16px/unit, and it buys ~0.4 units of extra hull reach to either
+// side (CANOE_HALF_LENGTH * sin) — a real cost to holding a hard turn
+// through a rock field. Deliberately well short of broadside: the canoe
+// should never look like it's lost the current.
+// Exported for test/smoke.mjs, which asserts the bow actually reaches
+// (nearly) full lock rather than re-hardcoding the angle.
+export const HEADING_MAX = 0.6;
+// How fast the bow swings toward that target, in 1/s. Stiff on purpose
+// (τ ≈ 0.08s): it sits in series with the lateral ramp below, so any slower
+// and the total input-to-dodge lag grows past what the telegraphed fights
+// (blockade shots, the Loup-garou's lunge) had their windows tuned against
+// back when steering drove lateral velocity directly.
+const HEADING_RESPONSE = 12;
+// Lateral thrust per unit of sin(heading). Derived from STEER_ACCEL, not
+// tuned on its own: at full lock sin(HEADING_MAX) * STEER_THRUST is exactly
+// the old steerInput * STEER_ACCEL, so the force the player commands is
+// unchanged and only its *source* moved to the heading. Keeps the touch
+// halving baked into STEER_ACCEL coming along for free, too.
+const STEER_THRUST = STEER_ACCEL / Math.sin(HEADING_MAX);
+// Heading held in the two arcade-dodge fights (Diable's arena, the Warship
+// chase), which assign lateralVX directly and bypass the thrust model
+// entirely. Without a heading of its own the canoe would dodge dead straight
+// in exactly the two fights where it's most on display. Short of HEADING_MAX
+// because those dodges are near-instant and full lock on every tap read as
+// twitchy.
+const FIGHT_HEADING = 0.35;
+// How much of the heading the bank keeps when you scrape it: striking the
+// shore knocks the bow back downstream, the same way the bounce already
+// bleeds lateral velocity. Without this, holding the turn that put you there
+// pinned the hull against the bank with its reach stuck at maximum.
+const BANK_HEADING_KICK = 0.3;
+// Ceiling on the *drawn* angle only (see the draw below). Flight multiplies
+// the heading up to 2.5x for a banked look, which at full lock would be
+// ~1.5 rad — broadside. 0.9 rad (~52°) is as far over as the canoe reads as
+// banking rather than capsizing.
+const MAX_DRAWN_BANK = 0.9;
 // Direct lateral speed during the British Warship's held chase (bypasses
 // the physics above — see the isChaseHolding() branch in update()).
 // Reported as "the boss is too much faster than me." The gunboat's own
@@ -171,7 +221,10 @@ const FROST_TINT = [96, 118, 148];
 // comment for why matching it matters (main.js's game loop then hits this
 // same trigger on the very first frame, no forced-on cheat needed).
 export const KINGSTON_APPROACH_LEAD = 150;
-const EDGE_MARGIN = 0.55;
+// Exported for test/smoke.mjs: checking that a turned hull grounds out
+// *before* the straight-canoe limit needs that limit, waterEdge, and this
+// is the half of it the test can't get from widthAt().
+export const EDGE_MARGIN = 0.55;
 const ISLAND_HIT_MARGIN = 0.35;
 const LOG_PENALTY_SPEED = 4;
 const BANK_PENALTY_SPEED = 2.6;
@@ -458,6 +511,9 @@ export class Game {
     this.ui = ui;
     this.music = music;
     this.canoeSprites = createCanoeSprites();
+    // The going-over animation. Holds its own clock, so it survives being
+    // asked to draw on a frozen river (see update()).
+    this.capsize = createCapsize();
     this.villageScene = createVillageScene();
     this.blockade = createBlockade();
     this.britishWarship = createBritishWarship();
@@ -560,7 +616,8 @@ export class Game {
     this.troisRivieresAnnounced = false;
     this.kingstonAnnounced = false;
     this.journeyComplete = false; // see the comment above leaveVillage()
-    this.tilt = 0;
+    this.heading = 0;
+    this.capsize.reset();
     this.paused = false;
     this.ui.pauseScreen?.classList.add('hidden');
     this.mode = 'river';
@@ -683,7 +740,8 @@ export class Game {
               : 'CAPSIZED';
     }
     this.ui.gameoverScreen.classList.remove('hidden');
-    playCapsizeHorn();
+    // No horn here any more — beginCapsize() sounds it as the canoe goes
+    // over, which is a second and a half earlier and on the right beat.
     this.music?.stop();
   }
 
@@ -917,7 +975,33 @@ export class Game {
     // The capsize horn (gameOver, below) already covers the fatal hit —
     // playing this too would just stack a second cue on top of it.
     if (this.health > 0) playDamageBoop();
-    if (this.health <= 0) this.gameOver();
+    if (this.health <= 0) this.beginCapsize();
+  }
+
+  // The hull is gone: roll it over, then put up the card. Splitting this out
+  // of gameOver() is what lets the capsize be seen at all — gameOver() hides
+  // the HUD and freezes the frame, so anything it triggered would have been
+  // drawn over by the game-over screen on the same tick.
+  beginCapsize() {
+    if (this.capsize.isActive()) return; // already going over
+    // It goes over the way it was already heeling. lateralVX first (the
+    // canoe's actual sideways motion), falling back to the heading for a
+    // boat that was turning but hadn't started moving yet, and to starboard
+    // for a dead-straight capsize so the roll is never a no-op.
+    const lean = this.lateralVX || this.heading || 1;
+    this.capsize.start(Math.sign(lean), this.heading);
+    // The invulnerability blink (update(), below) toggles canoeVisible every
+    // 42ms, and render() skips the canoe entirely when it's false. A fatal
+    // hit almost always lands with an invuln window already open from the
+    // hit before it, so without this the whole capsize could play out on a
+    // canoe that was switched off mid-blink — invisible roll, invisible
+    // hull, foam appearing over nothing. The frozen update below never
+    // reaches the blink again, so setting it true once here is enough.
+    this.canoeVisible = true;
+    // The horn belongs on the impact, not on the card a second and a half
+    // later — it's the cue that tells you the hull is lost, and it wants to
+    // land while the boat is actually going over.
+    playCapsizeHorn();
   }
 
   handleCollect() {
@@ -1072,10 +1156,26 @@ export class Game {
     this.time += dt;
 
     if (this.state !== 'playing') {
-      // Capsizing is a hard freeze — the last frame drawn before gameOver()
-      // fired (still inside the 'playing' branch below) stays on screen
-      // untouched. Nothing here advances the river clock or redraws, so the
-      // canoe and whatever it hit stop exactly where they were.
+      // Game over: a hard freeze. The last frame drawn — the end of the
+      // capsize animation below — stays on screen under the card. Nothing
+      // here advances the river clock or redraws.
+      return;
+    }
+
+    // Going over (world/capsize.js). The river is frozen for the duration:
+    // no input, no physics, no obstacles, no boss — nothing that could land
+    // a second hit on a hull that's already lost, or scroll the water out
+    // from under the wreck. The world holds exactly where it was, the way it
+    // always did at a capsize; what's new is that the canoe is animated on
+    // top of it instead of the last live frame simply sitting there until
+    // the card appeared. render() picks the overturned draw path off
+    // isActive(), and the HUD stays up (gameOver() is what hides it) so the
+    // empty hull bar is visible as the boat rolls.
+    if (this.capsize.isActive()) {
+      const done = this.capsize.update(dt);
+      this.render();
+      this.updateHud();
+      if (done) this.gameOver();
       return;
     }
 
@@ -1265,6 +1365,29 @@ export class Game {
     if (keys.left) steerInput -= 1;
     if (keys.right) steerInput += 1;
 
+    // Swing the bow first — the heading is integrated in every mode, including
+    // the two held fights below that drive lateralVX directly, because the
+    // canoe should still visibly come about when you dodge. In normal play
+    // this is also the *only* thing the steer keys touch: the lateral thrust
+    // underneath comes off the heading, not off the key.
+    //
+    // Fighting the current: whitewater limits how far over you can hold the
+    // bow, rather than scaling the sideways force directly the way it used
+    // to. Same net authority (sin is near-linear across this range, so the
+    // thrust still drops by about RAPIDS_STEER_PENALTY), and it's visible —
+    // the rapids straighten you out instead of invisibly sapping a number.
+    // Not in the air (Chasse-galerie), where the river below can't touch the
+    // canoe at all, only the steeples can.
+    const steerRapids = flying ? 0 : rapids;
+    const headingTarget = this.diable.isHolding() || this.britishWarship.isChaseHolding()
+      ? steerInput * FIGHT_HEADING
+      : steerInput * HEADING_MAX * (1 - steerRapids * RAPIDS_STEER_PENALTY);
+    // Exponential approach, scaled by dt so the swing rate doesn't depend on
+    // framerate. Capped at 1 so a long frame (a tab coming back, the smoke
+    // test's own coarse steps) snaps to the target instead of overshooting
+    // past it and ringing.
+    this.heading += (headingTarget - this.heading) * Math.min(1, HEADING_RESPONSE * dt);
+
     // Diable fight: direct lateral control for instant dodging, matching the
     // vertical responsiveness. No accel ramp, no damping, and — critically —
     // NOT run through the STEER_MAX clamp below, which is halved on touch
@@ -1275,11 +1398,10 @@ export class Game {
     } else if (this.britishWarship.isChaseHolding()) {
       this.lateralVX = steerInput * CHASE_LATERAL_SPEED;
     } else {
-      // Fighting the current: steering authority drops the harder the
-      // whitewater is pushing — but not in the air (Chasse-galerie), where the
-      // river below can't touch the canoe at all, only the steeples can.
-      const steerRapids = flying ? 0 : rapids;
-      this.lateralVX += steerInput * STEER_ACCEL * (1 - steerRapids * RAPIDS_STEER_PENALTY) * dt;
+      // You go where the bow points. The sideways force is the hull's own
+      // thrust resolved through the heading — press a key and nothing moves
+      // laterally until the bow has actually come round.
+      this.lateralVX += Math.sin(this.heading) * STEER_THRUST * dt;
       this.lateralVX -= this.lateralVX * STEER_DAMPING * dt;
 
       // Cross-current from blockade fight: pushes you away from the gap,
@@ -1309,17 +1431,28 @@ export class Game {
 
     // The navigable water: the canoe (flying or not) is held to this.
     const waterEdge = widthAt(this.flowDistance) / 2 - EDGE_MARGIN;
+    // How far the hull reaches across the channel beyond the canoe's own
+    // centre: zero pointed straight downstream, CANOE_HALF_LENGTH * sin at
+    // full lock. Every boundary below is pulled in by it, so running the
+    // shore with the bow swung out grounds you early — the same geometry
+    // obstacles.js's hullHit() uses, applied to the edge of the water. This
+    // is the difference between a turn and a lean: the boundary moves.
+    const hullReach = CANOE_HALF_LENGTH * Math.abs(Math.sin(this.heading));
     // In the air the hard clamp sits a hair past the water so there's no
     // invisible wall at the edge — but that shallow strip is the bank
     // treetops (see below), not free sky. The held Diable fight ignores the
     // channel entirely and uses its own wide arena (DIABLE_ARENA_HALF).
-    const half = this.diable.isHolding()
+    const channelHalf = this.diable.isHolding()
       ? DIABLE_ARENA_HALF
       : waterEdge + (flying ? this.chasseGalerie.lateralMargin() : 0);
+    // Never past 0 — a pathologically narrow channel shouldn't invert the
+    // clamp and fling the canoe to the far bank.
+    const half = Math.max(0, channelHalf - hullReach);
     const proposed = this.lateralOffset + this.lateralVX * dt;
     if (proposed > half || proposed < -half) {
       this.lateralOffset = clamp(proposed, -half, half);
       this.lateralVX *= -0.2;
+      this.heading *= BANK_HEADING_KICK;
       if (!flying) this.handleHit({ type: 'bank' });
     } else {
       this.lateralOffset = proposed;
@@ -1330,7 +1463,7 @@ export class Game {
     // every INVULN_TIME you're in there, plus a shove back toward the
     // channel — so the flight stays fenced to the water even though you're
     // airborne.
-    if (flying && !this.diable.isHolding() && Math.abs(this.lateralOffset) > waterEdge) {
+    if (flying && !this.diable.isHolding() && Math.abs(this.lateralOffset) + hullReach > waterEdge) {
       this.lateralVX -= Math.sign(this.lateralOffset) * TREE_PUSHBACK * dt;
       // Outside the held fight, the treetops still fence and bite (dodging
       // Diable's fire while he's holding is challenge enough — the arena is
@@ -1391,7 +1524,6 @@ export class Game {
       const onscreenOffset = clamp(this.canoeWorldX - this.cameraWorldX, -CAMERA_MAX_ONSCREEN_OFFSET, CAMERA_MAX_ONSCREEN_OFFSET);
       this.cameraWorldX = this.canoeWorldX - onscreenOffset;
     }
-    this.tilt = lerp(this.tilt, clamp(-this.lateralVX * 0.08, -0.5, 0.5), 0.15);
 
     // Diable fight: the river is locked, but up/down move the canoe
     // vertically within the arena so you can back off from the Devil (down
@@ -1597,6 +1729,7 @@ export class Game {
       (entry) => this.handleHit(entry),
       (entry) => this.handleCollect(entry),
       !airborne && !warshipHeld,
+      this.heading,
     );
 
     // Le Loup-garou — the night beast pacing the Beaupré shore, just before
@@ -2191,7 +2324,7 @@ export class Game {
         ctx.globalAlpha = 0.3 * lift;
         ctx.fillStyle = '#000';
         ctx.translate(canoeScreenX, CANOE_SCREEN_Y);
-        ctx.rotate(this.tilt || 0);
+        ctx.rotate(this.heading || 0);
         ctx.beginPath();
         ctx.ellipse(0, 0, sprite.width / 2, sprite.height / 4, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -2229,21 +2362,37 @@ export class Game {
         }
       }
 
-      // Draw canoe with flying effects
-      ctx.save();
-      ctx.translate(canoeScreenX, canoeScreenY);
-
-      // Banking tilt and nose-up pitch ease in with `lift`
-      const bankingMultiplier = 1 + 1.5 * lift;
-      const noseUpAngle = 0.15 * lift;
-      ctx.rotate((this.tilt || 0) * bankingMultiplier + noseUpAngle);
-
       // Grows a little as it climbs toward the camera, but never looms
       const scale = 1 + 0.5 * lift;
-      ctx.scale(scale, scale);
 
-      ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
-      ctx.restore();
+      if (this.capsize.isActive()) {
+        // Going over: capsize.js owns the canoe draw entirely — the roll,
+        // the overturned hull, the foam and the spilled kit. It takes the
+        // same `scale` so a capsize in the air (a steeple clip on the
+        // Chasse-galerie, the Devil's fire) rolls at the size the flight was
+        // already drawing the canoe at, with the hellfire trail above still
+        // running underneath it. The heading goes in too, so the hull starts
+        // over from the attitude it was actually holding.
+        this.capsize.draw(ctx, canoeScreenX, canoeScreenY, this.canoeSprites, scale);
+      } else {
+        // Draw canoe with flying effects
+        ctx.save();
+        ctx.translate(canoeScreenX, canoeScreenY);
+
+        // The drawn angle is the real heading — the same one the collision
+        // hull is built on, so what you see is what the river is testing
+        // against. In flight it's amplified into a proper bank, and the nose
+        // lifts. Clamped because HEADING_MAX * the full-lift multiplier would
+        // lay the canoe nearly broadside; MAX_DRAWN_BANK keeps it a bank, not
+        // a barrel roll, without touching the physical heading underneath.
+        const bankingMultiplier = 1 + 1.5 * lift;
+        const noseUpAngle = 0.15 * lift;
+        ctx.rotate(clamp((this.heading || 0) * bankingMultiplier, -MAX_DRAWN_BANK, MAX_DRAWN_BANK) + noseUpAngle);
+        ctx.scale(scale, scale);
+
+        ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
+        ctx.restore();
+      }
     }
 
     // Draw bullets

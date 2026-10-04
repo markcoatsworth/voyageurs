@@ -17,6 +17,7 @@
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
 } from '../shared/config.js';
+import { drawImpact, impactLife, impactTierFor } from '../world/impact.js';
 import { FLIGHT_END } from './chasseGalerie.js';
 import { isTouchPrimary } from '../core/touchControls.js';
 
@@ -198,6 +199,11 @@ export function createDiable() {
   let isFeint = false; // whether the current/last wind-up is a real throw
   let feintFlourish = 0; // counts down the "gotcha" flourish after a feint resolves
   let hitFlash = 0;   // white flash when shot
+  // Landed shots, in screen space: [{x, y, t, tier, seed}]. The blanch above
+  // says "he was hit"; these say *where*, and with what. Both, because the
+  // blanch alone was all the feedback this fight had and a hit on a black
+  // silhouette that briefly goes slightly less black is not legible mid-dodge.
+  let impacts = [];
   const fireballs = [];
   let justAppeared = false;
   let justDefeated = false;
@@ -220,6 +226,7 @@ export function createDiable() {
     isFeint = false;
     feintFlourish = 0;
     hitFlash = 0;
+    impacts = [];
     fireballs.length = 0;
     justAppeared = false;
     justDefeated = false;
@@ -243,6 +250,11 @@ export function createDiable() {
     debugCentreX() { return centreX(); },
     // Live fireballs, for the same "is this fair" checks.
     getFireballs() { return fireballs; },
+    // Live hit impacts (world/impact.js entries: {x, y, t, tier, seed}).
+    // Same reason as getFireballs above — the smoke test checks that a
+    // landed shot actually marks where it struck, which the hp number on
+    // its own says nothing about.
+    getImpacts() { return impacts; },
     // Whether he's mid-windup right now (the flame swelling in his hand) —
     // the one real dodge tell (TELEGRAPH_FULL/LOW's own comment). A shot's flight
     // time is short enough that reacting only once it's airborne doesn't
@@ -278,6 +290,12 @@ export function createDiable() {
       t += dt;
       sway += dt;
       if (hitFlash > 0) hitFlash = Math.max(0, hitFlash - dt);
+      // Impacts tick in every phase, not just 'fighting': the last shots of
+      // the fight land on the frame he drops to 0 hp and flips to 'dying',
+      // and cutting them off right there would swallow the flash on the
+      // kill shot of all things.
+      for (const im of impacts) im.t += dt;
+      impacts = impacts.filter((im) => im.t < impactLife(im.tier));
       if (feintFlourish > 0) feintFlourish = Math.max(0, feintFlourish - dt);
 
       if (phase === 'appearing') {
@@ -298,6 +316,13 @@ export function createDiable() {
           if (Math.abs(b.x - cx) < BODY_HALF_W && Math.abs(b.y - cy) < BODY_HALF_H) {
             hitBullets.push(b.ref);
             hp -= (b.ref.type === 'musket' ? MUSKET_DAMAGE : PISTOL_DAMAGE) * damageGivenScale;
+            // Where the shot struck, at the size of the gun that fired it
+            // (world/impact.js). Stored at the bullet's own position rather
+            // than his centre so a hit on his flank reads as a hit on his
+            // flank. Unlike the blanch below these do NOT coalesce — every
+            // landed shot gets its own flash, because "did that one connect?"
+            // during a held trigger is the exact question this answers.
+            impacts.push({ x: b.x, y: b.y, t: 0, tier: impactTierFor(b.ref.type), seed: Math.random() * 6.283 });
             // Only kick off a fresh blanch once the last one's spent, so a
             // fast stream of hits doesn't hold him permanently white.
             if (hitFlash <= 0) hitFlash = 0.08;
@@ -438,6 +463,11 @@ export function createDiable() {
 
       // His fireballs on top — thrown from the flame in his hand.
       for (const f of fireballs) drawFireball(ctx, f, time);
+
+      // Impacts last of all, over him and his fire both: they're the one
+      // thing here that's the player's, and against the hellfire wall
+      // anything drawn under it would be lost.
+      for (const im of impacts) drawImpact(ctx, im.x, im.y, im.t, im.tier, im.seed);
     },
   };
 }

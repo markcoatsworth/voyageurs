@@ -4,6 +4,7 @@ import { createWaterRenderer } from './world/waterGL.js';
 import { createMusic } from './audio/music.js';
 import { createMinimap } from './world/minimap.js';
 import { createTouchControls, isTouchPrimary } from './core/touchControls.js';
+import { createDebugMenu } from './core/debugMenu.js';
 import { Input } from './core/input.js';
 import { Game, MIN_SPEED, KINGSTON_APPROACH_LEAD } from './core/game.js';
 import { VILLAGES } from './world/river/route.js';
@@ -223,20 +224,25 @@ const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flow
 // render gate (world/villages.js's VISIBLE_Z_RANGE), not just past
 // whatever boss fight happens to sit in front of it. See "kingston"'s own
 // comment above for the bug this is guarding against.
-export const START_KEYWORDS = {
-  [normalizeStartName('wendigo')]: { flowDistance: WENDIGO_FROST_START_DISTANCE - 21, segment: 'fjord' },
-  [normalizeStartName('loup-garou')]: { flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
-  [normalizeStartName('british-blockade')]: { flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
-  [normalizeStartName('british-warship')]: { flowDistance: WARSHIP_FIRST_THUNDERCLAP_DISTANCE, segment: 'rideau' },
-  [normalizeStartName('chasse-galerie')]: { flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
-  [normalizeStartName('diable')]: { flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
-  [normalizeStartName('rideau')]: RIDEAU_START,
+// The keywords as a list first, carrying the `?start=` name alongside a
+// player-facing label. START_KEYWORDS below is derived from it, and so is
+// the ?debug overlay's waypoint list — so a new boss fight landing here
+// turns up in both without being named twice, which is exactly the kind of
+// thing that goes stale.
+export const START_KEYWORD_LIST = [
+  { name: 'wendigo', label: 'Le Wendigo', flowDistance: WENDIGO_FROST_START_DISTANCE - 21, segment: 'fjord' },
+  { name: 'loup-garou', label: 'Le Loup-garou', flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
+  { name: 'chasse-galerie', label: 'Chasse-galerie (take flight)', flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
+  { name: 'diable', label: 'Le Diable', flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
+  { name: 'rideau', label: 'Rideau leg (start)', ...RIDEAU_START },
+  { name: 'british-blockade', label: 'British Blockade', flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
+  { name: 'british-warship', label: 'British Warship', flowDistance: WARSHIP_FIRST_THUNDERCLAP_DISTANCE, segment: 'rideau' },
   // See the module comment above (six rounds of tuning) on why this one.
-  [normalizeStartName('kingston')]: {
-    flowDistance: KINGSTON_FLOW_DISTANCE - KINGSTON_APPROACH_LEAD,
-    segment: 'rideau',
-  },
-};
+  { name: 'kingston', label: 'Kingston (journey\'s end)', flowDistance: KINGSTON_FLOW_DISTANCE - KINGSTON_APPROACH_LEAD, segment: 'rideau' },
+];
+export const START_KEYWORDS = Object.fromEntries(
+  START_KEYWORD_LIST.map((k) => [normalizeStartName(k.name), { flowDistance: k.flowDistance, segment: k.segment }])
+);
 export function parseStartLocation() {
   const raw = new URLSearchParams(window.location.search).get('start');
   // No explicit ?start= — this is where the implicit checkpoint (this
@@ -259,6 +265,24 @@ export function parseStartLocation() {
 }
 const { flowDistance: startFlowDistance, segment: startSegment } = parseStartLocation();
 
+// Is this position the put-in — the very start of the journey, before the
+// first village? Only used to decide whether this run gets the pinned
+// opening track (audio/music.js's OPENING_TRACK): the put-in always opens
+// on Reel des Forêts, and every other starting point — a resumed
+// checkpoint, any ?start=, any ?debug jump — goes straight into the
+// ordinary shuffle.
+//
+// A threshold rather than `=== 0`, even though parseStartLocation() hands
+// back a literal 0 for the put-in today: the put-in is "the fjord before
+// anything", and a future start-of-segment nudge of a unit or two
+// shouldn't quietly stop counting as the beginning. Nothing else can fall
+// inside it — the earliest fjord village sits at ~299, and even with
+// START_APPROACH_BUFFER its ?start= lands near 274.
+const PUT_IN_EPSILON = 1;
+export function isPutIn(segment, flowDistance) {
+  return segment === 'fjord' && flowDistance <= PUT_IN_EPSILON;
+}
+
 // ?difficulty=easy — a debug-only knob for now ("for now it's just a debug
 // feature for me... we can add a UI toggle for non-gamers later"): less
 // damage taken in the boss fights, more damage dealt back, nothing else
@@ -270,6 +294,45 @@ const { flowDistance: startFlowDistance, segment: startSegment } = parseStartLoc
 // testability reason as parseStartLocation() above.
 export function isEasyMode() {
   return new URLSearchParams(window.location.search).get('difficulty')?.toLowerCase() === 'easy';
+}
+
+// ?debug — brings up the waypoint picker overlay (core/debugMenu.js) so any
+// point in the route can be jumped to without hand-editing ?start= in the
+// address bar, including the put-in itself. Asked for because the implicit
+// checkpoint (this file's own top comment) is the right thing for playing
+// and the wrong thing for testing: once you've reached Kingston, a plain
+// reload always resumes at Kingston, so there was no way back to early
+// gameplay short of clearing site data.
+//
+// Sticky in the URL for the same reason ?difficulty= is — it's a mode you
+// want to stay in across the reloads that testing involves, not a one-shot
+// like ?start=. Any value counts, including none: ?debug, ?debug=1 and
+// ?debug=yes all turn it on, and only a literal ?debug=0/false turns it
+// back off (so a stale link can be defused without editing it down).
+export function isDebugMode() {
+  const raw = new URLSearchParams(window.location.search).get('debug');
+  if (raw === null) return false;
+  const v = raw.toLowerCase();
+  return v !== '0' && v !== 'false' && v !== 'off' && v !== 'no';
+}
+
+// `?debug=play` — debug mode on, but the picker stays shut on load.
+//
+// This is what a jump navigates to (debugStartUrl below), because the point
+// of clicking a waypoint is to look at that part of the game: the first cut
+// opened the picker on every ?debug load, so picking one reloaded straight
+// back into a full-screen overlay covering the thing you just asked to see.
+// Reported as exactly that. A plain reload of ?debug=play also stays in the
+// game, which is the right default while testing one spot repeatedly —
+// backquote brings the picker back whenever you want to move.
+//
+// Deliberately a visible value in the URL rather than a sessionStorage flag
+// or a one-shot param: you can see which mode you're in from the address
+// bar, and typing ?debug by hand (the thing you'd naturally type) still
+// opens the picker.
+export function shouldOpenDebugMenuOnLoad() {
+  if (!isDebugMode()) return false;
+  return (new URLSearchParams(window.location.search).get('debug') || '').toLowerCase() !== 'play';
 }
 // Captured here, before the ?start=-stripping below runs — that code used
 // to wipe the entire query string (window.location.pathname with nothing
@@ -325,6 +388,71 @@ export function isFurtherAlong(a, b) {
   const rb = SEGMENT_RANK[b.segment] ?? 0;
   if (ra !== rb) return ra > rb;
   return a.flowDistance > b.flowDistance;
+}
+
+// Every place the ?debug overlay can drop you, in real route order. Built
+// from the same two sources the checkpoint list above uses — START_KEYWORD_LIST
+// and VILLAGES — plus the put-in, which is the one position that isn't in
+// either (VILLAGES starts at Sainte-Rose-du-Nord, well downstream of
+// flowDistance 0) and is the whole reason this exists: "start again from
+// the beginning to see how recent changes affect earlier gameplay".
+//
+// `startParam` is what goes in ?start=, or null for the put-in, which has
+// no name to pass — it's what you get from no ?start= at all once the
+// checkpoint is out of the way, which is exactly what picking it does.
+//
+// lawrenceEast's villages are included even though route.js no longer
+// treats that segment as a live destination (see SEGMENT_RANK above): the
+// ?start= cheat has always accepted those names, so the overlay would be
+// lying by omission if it hid them. The segment heading in the overlay says
+// what they are.
+export function debugWaypoints() {
+  const reached = [];
+  for (const k of START_KEYWORD_LIST) {
+    reached.push({ label: k.label, startParam: k.name, segment: k.segment, flowDistance: k.flowDistance, kind: 'boss' });
+  }
+  // Villages whose name is already a keyword are skipped, not listed twice.
+  // parseStartLocation() checks START_KEYWORDS *before* VILLAGES, so for
+  // such a name the keyword always wins — Kingston is the live case (the
+  // keyword puts you on its own tuned approach lead, the dock entry would
+  // have aimed START_APPROACH_BUFFER short of the dock). Listing both gave
+  // two buttons that do the same thing, one of them quietly going somewhere
+  // other than where it said. Caught by the smoke test's round-trip check,
+  // not by reading the code.
+  const keywordNames = new Set(START_KEYWORD_LIST.map((k) => normalizeStartName(k.name)));
+  for (const v of VILLAGES) {
+    if (keywordNames.has(normalizeStartName(v.name))) continue;
+    reached.push({ label: v.name, startParam: v.name, segment: v.segment, flowDistance: v.flowDistance, kind: 'village' });
+  }
+  reached.sort((a, b) => {
+    const ra = SEGMENT_RANK[a.segment] ?? 0;
+    const rb = SEGMENT_RANK[b.segment] ?? 0;
+    return ra === rb ? a.flowDistance - b.flowDistance : ra - rb;
+  });
+  return [
+    { label: 'The put-in — the very beginning', startParam: null, segment: 'fjord', flowDistance: 0, kind: 'put-in' },
+    ...reached,
+  ];
+}
+
+// The URL to load to start at `waypoint`. Keeps everything else already on
+// the address bar (notably ?difficulty=) and re-asserts ?debug so the tool
+// is still reachable on the other side — you're mid-testing, and losing it
+// on every jump would be the obvious annoyance — but as ?debug=play, so the
+// picker itself doesn't reopen over the game. A null
+// startParam deletes ?start= rather than setting it: combined with the
+// cleared checkpoint at the call site, no ?start= IS the put-in
+// (parseStartLocation's own fallback). Pure and exported so a test can
+// check it without a browser's navigation.
+export function debugStartUrl(search, hash, pathname, waypoint) {
+  const params = new URLSearchParams(search);
+  params.delete('start');
+  if (waypoint.startParam) params.set('start', waypoint.startParam);
+  // 'play', not '1': keeps the tool available (backquote) without throwing
+  // the picker back over the screen on arrival — see
+  // shouldOpenDebugMenuOnLoad()'s own comment.
+  params.set('debug', 'play');
+  return `${pathname}?${params.toString()}${hash || ''}`;
 }
 
 // In-memory mirror of whatever's actually in storage, so each check below
@@ -714,7 +842,12 @@ function syncMediaSession(track) {
 }
 // Background music — browsers block autoplay until a real user gesture, so
 // this starts on the player's first keypress or click rather than on load.
-const music = createMusic({ onTrack: showNowPlaying });
+// pinOpeningTrack: the put-in's own tune, and only there — see
+// isPutIn() above and audio/music.js's OPENING_TRACK.
+const music = createMusic({
+  onTrack: showNowPlaying,
+  pinOpeningTrack: isPutIn(startSegment, startFlowDistance),
+});
 if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
   try {
     navigator.mediaSession.setActionHandler('play', () => { music.resume(); navigator.mediaSession.playbackState = 'playing'; });
@@ -893,9 +1026,68 @@ function togglePause() {
   pauseBtn.title = paused ? 'Resume the game' : 'Pause the game';
 }
 
+// --- the ?debug waypoint picker (core/debugMenu.js) ----------------------
+// Only built when ?debug is on the URL: no overlay element, no listener,
+// nothing in the DOM for an ordinary player.
+const debugMenu = isDebugMode() ? createDebugMenu({
+  waypoints: debugWaypoints(),
+  describeCheckpoint: () => (savedCheckpoint
+    ? `${savedCheckpoint.segment} @ ${Math.round(savedCheckpoint.flowDistance)}`
+    : null),
+  onPick: (wp) => {
+    // Down it goes straight away. The navigation below is what really
+    // replaces the screen, but a browser can take a moment over it (and a
+    // blocked navigation never gets there at all), and leaving a
+    // full-screen overlay sitting over the game in the meantime is the
+    // thing this was reported for.
+    debugMenu.hide();
+    // Clearing first is what makes the picker mean what it says. ?start=
+    // already beats the checkpoint for a named waypoint, but the put-in has
+    // no ?start= to give (debugStartUrl's own comment) — without the clear,
+    // "the very beginning" would just resume at the saved checkpoint again,
+    // which is the exact problem this is here to solve. Clearing for every
+    // waypoint, not only the put-in, keeps it predictable: wherever you
+    // jump to is now where you are, and progress re-saves from there.
+    clearCheckpointStorage();
+    savedCheckpoint = null;
+    try {
+      window.location.assign(debugStartUrl(window.location.search, window.location.hash, window.location.pathname, wp));
+    } catch {
+      // Sandboxed contexts can forbid navigation — leave the overlay up
+      // rather than dying silently with no idea why nothing happened.
+      console.warn('?debug: navigation blocked, cannot jump to', wp.label);
+    }
+  },
+  onClearCheckpoint: () => {
+    clearCheckpointStorage();
+    savedCheckpoint = null;
+  },
+}) : null;
+if (debugMenu) {
+  document.body.appendChild(debugMenu.element);
+  // Open on a bare ?debug (you're here to choose a starting point), but not
+  // on the ?debug=play a jump navigates to — that one has already made its
+  // choice and wants the game on screen. Backquote either way.
+  if (shouldOpenDebugMenuOnLoad()) debugMenu.show();
+}
+
 window.addEventListener('keydown', (e) => {
+  // Backquote toggles the picker. Deliberately a key the game itself never
+  // reads (core/input.js is arrows/WASD plus Z/X/C) so this can't shadow a
+  // control, and it's where a debug console lives in most things.
+  if (debugMenu && e.code === 'Backquote') {
+    e.preventDefault();
+    debugMenu.toggle();
+    return;
+  }
   if (e.code === 'Escape') {
     e.preventDefault();
+    // Esc closes the picker if it's up, rather than pausing behind it —
+    // otherwise dismissing the overlay silently left the game paused.
+    if (debugMenu?.isOpen()) {
+      debugMenu.hide();
+      return;
+    }
     togglePause();
   }
 });

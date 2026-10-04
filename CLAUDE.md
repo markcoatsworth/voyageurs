@@ -52,14 +52,35 @@ src/
     game.js            (~1300 lines) game state, physics, HUD, per-frame draw, mode/segment machine
     input.js           keyboard state
     touchControls.js   on-screen steer pad; isTouchPrimary() gates the mobile speed scaling in game.js
+    debugMenu.js       the ?debug waypoint picker overlay (dev only; built in JS with inline
+                       styles, never in index.html/style.css, and not constructed at all
+                       without ?debug). Pure UI — main.js owns the list, the checkpoint and
+                       the navigation
     weapons.js         Z pistol / X musket / C blunderbuss (only pistol implemented). Fire cooldown on accumulated dt.
   world/
     terrain.js         redraws river/banks/trees every frame by sampling centerX/widthAt down the screen
     waterGL.js         GLSL water under the 2D layer; river shape is DUPLICATED in GLSL — keep in sync with path.js
-    obstacles.js       the one stateful system: pooled rocks/logs/islands/pelts with collision/collection
+    obstacles.js       the one stateful system: pooled rocks/logs/islands/pelts with collision/collection.
+                       hullHit() tests each one against the canoe's *turned* hull (see Key models)
     whales.js          stateless hash-placed belugas once the channel reads as open estuary
     weather.js         stateless hashed rain streaks (drawRain) — the Warship storm's only user so far
     sprites.js         (~1000 lines) hand-drawn pixel sprites
+    impact.js          shared bullet-hit feedback for the two shootable fights (diable.js,
+                       britishWarship.js): a core flash + radial shards, plus a ring and powder
+                       smoke from the medium tier up. Tiers ARE the weapons (weapons.js's own
+                       "Z = small / X = medium / C = large"), via impactTierFor(bullet.type) —
+                       not a damage calculation. Stateless draw; each fight keeps its own list
+                       and converts to screen space (diable is already there, warship goes
+                       through worldToScreen). Each fight MUST draw them last, over the boss —
+                       the first cut drew the warship's above drawChaseShip and the hull painted
+                       straight over every hit, which read as "no change at all". Guarded by a
+                       paint-order assertion in the smoke test for both fights. Position is the
+                       bullet's own, clamped onto the hull/body (the hit boxes are deliberately
+                       more generous than the art they stand for)
+    capsize.js         the canoe going over: a roll (width collapse 1 -> 0 -> -1, swapping to the
+                       overturned hull sprite at the zero crossing), then a sink, plus foam, two
+                       spreading rings and the spilled paddle/tuque. TOTAL_TIME is how long
+                       game.js holds the game-over card back
     villages.js        dock + buildings per waypoint; getDockHit detects the canoe touching a dock
     villageScene.js    on-foot scene at a dock; walk back onto the dock to re-board
     minimap.js         moving SVG locator map over the real three-way geography
@@ -141,7 +162,14 @@ src/
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging
                        fireballs. game.js clamps flowDistance while diable.isHolding(). DIABLE_FLOW_DISTANCE.
   audio/
-    music.js           shuffled playlist (PLAYLIST, 15 tracks) + reserved boss tracks, one per fight
+    music.js           shuffled playlist (PLAYLIST, 15 tracks). Slot 0 is pinned to OPENING_TRACK
+                       (Reel des Forêts) only when createMusic() is passed
+                       pinOpeningTrack (openingOrder()), which main.js sets from
+                       isPutIn(startSegment, startFlowDistance) — so the put-in always opens on
+                       it and every other start (resumed checkpoint, any ?start=, any ?debug
+                       jump) gets a plain shuffle. Defaults to off. Even when pinned it's only
+                       the first cycle, and the track stays in the shuffle and can recur,
+                       unlike a reserved cue; + reserved boss tracks, one per fight
                        that has a dedicated cue (Rule Britannia/blockade, a diable reel/diable, St.
                        Anne's Reel/wendigo) — each plays via playSpecial() the instant its fight
                        starts, replacing whatever's playing, and endBossTrack() drops back into the
@@ -176,6 +204,17 @@ src/
   at `KINGSTON_FLOW_DISTANCE`), no victory card. `journeyComplete` marks the
   arrival for main.js's checkpoint clearing. Game-over title varies by
   killer: Devil / beast / plain capsize.
+- **Dying**: hull at 0 calls `beginCapsize()`, not `gameOver()`. That starts
+  `world/capsize.js`'s roll-and-sink (`TOTAL_TIME`, ~1.4s) and sounds the
+  capsize horn on the impact rather than on the card. `update()` then runs a
+  frozen-river branch that only advances the animation and redraws — no
+  input, physics, obstacles or boss, so nothing can hit a hull that's
+  already lost and the water can't scroll out from under the wreck — and
+  calls `gameOver()` on the frame it finishes. `state` stays `playing` for
+  the whole roll, so anything keying off `state === 'gameover'` sees it ~41
+  frames later than it used to. The boss-kill titles survive the delay
+  because the fights are frozen too: their `isActive()` still reads true
+  when `gameOver()` finally asks.
 - **Boss fights, in route order**: Wendigo (lower fjord, before Tadoussac),
   Loup-garou (before Québec City, lawrenceWest), Chasse-galerie steeples + Le
   Diable (past Montréal, lawrenceWest), British Blockade (rideau, the frigate
@@ -191,6 +230,30 @@ src/
   `chasse-galerie`, `diable`, `rideau`.
   `?start=diable` also arms a checkpoint (hands over the pistol, respawn returns
   there); `enterRideau()` clears that checkpoint and moves it to the Rideau start.
+- **`?debug`** (main.js's `isDebugMode()`): brings up `core/debugMenu.js`'s
+  waypoint picker — the put-in plus every boss approach and village dock, in
+  route order — so any point can be jumped to without hand-editing `?start=`.
+  Backquote toggles, Esc closes (and is intercepted before the pause
+  handler). Sticky in the URL like `?difficulty=`, off only with an explicit
+  `?debug=0/false/off/no`. Two on-states, via
+  `shouldOpenDebugMenuOnLoad()`: a bare `?debug`/`?debug=1` opens the picker
+  on load (the "I want to choose" form, and what you type by hand), while
+  **`?debug=play`** is debug mode with the picker shut — which is what a
+  jump navigates to, because the first cut opened it on every `?debug` load
+  and so a pick reloaded straight back into a full-screen overlay covering
+  the thing you'd just asked to see. `onPick` also hides it immediately,
+  before navigating, since a browser can take a moment over that and a
+  blocked navigation never gets there at all. Picking a waypoint **clears
+  the saved checkpoint** and reloads with `?start=<name>&debug=play`; the put-in has no
+  `?start=` of its own, so it's "no `?start=` plus a cleared checkpoint" —
+  which is the whole reason the feature exists, since the implicit
+  checkpoint otherwise makes every reload resume at the furthest point
+  reached. `debugWaypoints()` and `debugStartUrl()` are pure and exported
+  for the smoke test, which round-trips every offered waypoint back through
+  `parseStartLocation()`. `START_KEYWORD_LIST` is the single source the
+  `?start=` keyword map and this list are both built from. Villages whose
+  name is already a keyword are dropped from the list (keywords win in
+  `parseStartLocation()`, so Kingston was two buttons with one destination).
 - **`?difficulty=easy`** (main.js's `isEasyMode()`, not stripped like `?start=` —
   stays in effect across a reload): debug-only for now, no UI toggle yet.
   Deliberately narrow — only less damage taken and more damage dealt in the
@@ -204,6 +267,22 @@ src/
   the two shootable hit-point fights (`britishWarship.js`, `diable.js`) have
   one, each scaled inline via a `damageGivenScale` argument threaded through
   their own `update()` calls.
+- **Heading / the canoe's hull**: left/right swing a real `heading`
+  (`game.js`, ±`HEADING_MAX` = 0.6 rad ≈ 34°) and the hull's own thrust
+  (`STEER_THRUST`, derived from `STEER_ACCEL` so the commanded force is
+  unchanged — only its source moved) is the only thing pushing the canoe
+  sideways in normal play: it goes where the bow points. The same angle
+  rotates the collision boundary — a `CANOE_HALF_LENGTH` (`shared/config.js`,
+  0.7) line through the canoe, tested as a slanted lane by `obstacles.js`'s
+  `hullHit()`, and subtracted from the navigable half-width at the bank
+  clamp. Pointed straight downstream `hullHit()` is bit-identical to the old
+  point-vs-box check it replaced (verified over a grid — see its comment, and
+  the note about why the obvious capsule version is wrong); at full lock the
+  lateral reach grows by `CANOE_HALF_LENGTH * sin(heading)`, ~0.4 units,
+  +72% on a rock. So a hard turn is a real cost, not a free dodge. The two
+  held fights (Diable, Warship chase) assign `lateralVX` directly and take
+  only `FIGHT_HEADING` for the look. Replaced `tilt`, which rotated the
+  sprite alone — and leaned it the wrong way.
 - **Mobile**: `isTouchPrimary()` (CSS `hover:none` + `pointer:coarse`) scales
   down forward speed/accel and halves steering authority. Lots of tuned
   constants at the top of `game.js` are touch-conditional.

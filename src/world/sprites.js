@@ -440,6 +440,25 @@ export function createWhaleSprite() {
   });
 }
 
+// The canoe's hull silhouette: a pointed bow and stern with the beam at the
+// waist. Factored out because the upright and overturned (capsized) sprites
+// have to share it exactly — world/capsize.js swaps one for the other
+// mid-roll, and any mismatch in the outline would read as a pop rather than
+// a boat turning over.
+const CANOE_HULL_OUTLINE = { top: 1, bot: 33, ctrl: 7.5, ctrlTopY: 9, ctrlBotY: 28, waist: 6.8, waistY: 17 };
+// The same shape inset a pixel or so, so the outline above stays visible as
+// a dark edge around the fill.
+const CANOE_HULL_INNER = { top: 2.6, bot: 31.6, ctrl: 6, ctrlTopY: 9.5, ctrlBotY: 27, waist: 5.4, waistY: 17 };
+function canoeHullPath(ctx, cx, s) {
+  ctx.beginPath();
+  ctx.moveTo(cx, s.top);
+  ctx.quadraticCurveTo(cx + s.ctrl, s.ctrlTopY, cx + s.waist, s.waistY);
+  ctx.quadraticCurveTo(cx + s.ctrl, s.ctrlBotY, cx, s.bot);
+  ctx.quadraticCurveTo(cx - s.ctrl, s.ctrlBotY, cx - s.waist, s.waistY);
+  ctx.quadraticCurveTo(cx - s.ctrl, s.ctrlTopY, cx, s.top);
+  ctx.closePath();
+}
+
 // Canoe faces up-screen (toward negative local z). `paddleSide` flips the
 // paddle left/right for a simple stroke animation.
 export function createCanoeSprite(paddleSide = 1) {
@@ -451,24 +470,12 @@ export function createCanoeSprite(paddleSide = 1) {
 
     // hull outline (drawn larger, behind)
     ctx.fillStyle = '#4a2f18';
-    ctx.beginPath();
-    ctx.moveTo(cx, 1);
-    ctx.quadraticCurveTo(cx + 7.5, 9, cx + 6.8, 17);
-    ctx.quadraticCurveTo(cx + 7.5, 28, cx, 33);
-    ctx.quadraticCurveTo(cx - 7.5, 28, cx - 6.8, 17);
-    ctx.quadraticCurveTo(cx - 7.5, 9, cx, 1);
-    ctx.closePath();
+    canoeHullPath(ctx, cx, CANOE_HULL_OUTLINE);
     ctx.fill();
 
     // hull base color, inset slightly to leave the outline visible
     ctx.fillStyle = '#a3672f';
-    ctx.beginPath();
-    ctx.moveTo(cx, 2.6);
-    ctx.quadraticCurveTo(cx + 6, 9.5, cx + 5.4, 17);
-    ctx.quadraticCurveTo(cx + 6, 27, cx, 31.6);
-    ctx.quadraticCurveTo(cx - 6, 27, cx - 5.4, 17);
-    ctx.quadraticCurveTo(cx - 6, 9.5, cx, 2.6);
-    ctx.closePath();
+    canoeHullPath(ctx, cx, CANOE_HULL_INNER);
     ctx.fill();
 
     // gunwale rim highlight along one side + bow highlight
@@ -513,6 +520,55 @@ export function createCanoeSprite(paddleSide = 1) {
     ctx.fillRect(px - 2.6, h / 2 - 13, 5.2, 4);
     ctx.fillStyle = '#8a5a34';
     ctx.fillRect(px - 1.8, h / 2 - 12.4, 3.6, 2.8);
+  });
+}
+
+// The same hull, overturned — what's left on the surface after a capsize
+// (drawn by world/capsize.js). From above you're looking at the *bottom* of
+// the boat, so: no paddler, no paddle, no gunwale rim or deck opening, and
+// the keel standing proud down the centreline where the interior used to be.
+// Darker and wetter than the upright sprite throughout, which is also what
+// keeps the two readable apart across the single frame where the roll swaps
+// one for the other.
+//
+// No baked-in waterRipple either: the upright sprite carries one as its
+// permanent bow wave, but a hull that's stopped dead and is going under
+// doesn't push water. capsize.js draws its own spreading rings instead.
+export function createCapsizedCanoeSprite() {
+  const w = 24, h = 34;
+  return makeSprite(w, h, (ctx) => {
+    const cx = w / 2;
+
+    // Same silhouette, so the mid-roll swap doesn't change the footprint.
+    ctx.fillStyle = '#2b1a0d';
+    canoeHullPath(ctx, cx, CANOE_HULL_OUTLINE);
+    ctx.fill();
+
+    // Wet underside — the upright hull's #a3672f knocked well down, as if
+    // it's streaming.
+    ctx.fillStyle = '#6b4320';
+    canoeHullPath(ctx, cx, CANOE_HULL_INNER);
+    ctx.fill();
+
+    // Planking: ribs running across the bottom, tapering toward bow and
+    // stern with the hull. Spaced to land on whole pixels at 1:1 so they
+    // don't shimmer when the sprite is scaled during the sink.
+    ctx.strokeStyle = '#4a2f18';
+    ctx.lineWidth = 1;
+    for (const [y, halfW] of [[8, 3.4], [12, 4.4], [16, 4.8], [20, 4.6], [24, 3.8], [28, 2.4]]) {
+      ctx.beginPath();
+      ctx.moveTo(cx - halfW, y);
+      ctx.lineTo(cx + halfW, y);
+      ctx.stroke();
+    }
+
+    // The keel, now the highest point — a pale strip down the spine with a
+    // wet highlight along one side of it, the one bit of this sprite that
+    // catches any light.
+    ctx.fillStyle = '#8a5a34';
+    ctx.fillRect(cx - 1, 5, 2, 24);
+    ctx.fillStyle = '#a8763f';
+    ctx.fillRect(cx - 1, 7, 1, 19);
   });
 }
 

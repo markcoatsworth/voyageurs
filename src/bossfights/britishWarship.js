@@ -39,6 +39,7 @@ import { centerX, widthAt } from '../world/river/path.js';
 import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../shared/config.js';
 import { VILLAGES } from '../world/villages.js';
 import { hashRange } from '../shared/hash.js';
+import { drawImpact, impactLife, impactTierFor } from '../world/impact.js';
 
 const KINGSTON = VILLAGES.find((v) => v.name === 'Kingston');
 const JONES_FALLS = VILLAGES.find((v) => v.name === 'Jones Falls');
@@ -319,7 +320,11 @@ const CHASE_INTRO_TIME = 1.1; // seconds the "closing in" opening beat takes
 const CHASE_INTRO_EXTRA_GAP = 10; // how much further behind it starts, easing to 0
 const CHASE_BANK_MARGIN = 3; // keep the hull's own half-width clear of the bank while orbiting
 const MUZZLE_FLASH_LIFETIME = 0.3;
-const SPARK_LIFETIME = 0.35;
+// Hit sparks are world/impact.js's job now — each one carries its own tier
+// (pistol = small, musket = medium) and so its own lifetime, which is why
+// there's no single SPARK_LIFETIME any more. The kill burst below still
+// wants a number of its own for staggering, though.
+const KILL_BURST_STAGGER = 0.05;
 
 // The ship's own hull dimensions — module-level (not local to
 // drawChaseShip) so update()'s hit-test below and the drawing use exactly
@@ -499,6 +504,11 @@ export function createBritishWarship() {
     },
     // Same convention as diable.js's debugCentreX() — test/autopilot support
     // for aiming at a moving target, not used by game.js's own rendering.
+    // Live hit impacts (world/impact.js entries: {x, d, t, tier, seed}).
+    // Exported for the smoke test, which checks a landed shot actually
+    // produces one and that the gun it was fired from picks the tier —
+    // neither of which is observable from the hull percentage alone.
+    getImpacts() { return sparks; },
     debugChaseShipPosition() {
       return { worldX: chaseShipWorldX, flowDistance: chaseShipD };
     },
@@ -611,7 +621,7 @@ export function createBritishWarship() {
       // Hit sparks: pure visual feedback for a landed shot, ticked the same
       // unconditional way as hazards above.
       for (const s of sparks) s.t += dt;
-      sparks = sparks.filter((s) => s.t < SPARK_LIFETIME);
+      sparks = sparks.filter((s) => s.t < impactLife(s.tier));
 
       if (chasePhase) {
         // Position is a direct function of the player's *current*
@@ -648,13 +658,44 @@ export function createBritishWarship() {
             hitBullets.push(b);
             if (chaseHullHP > 0) {
               chaseHullHP -= (b.type === 'musket' ? MUSKET_DAMAGE_TO_HULL : PISTOL_DAMAGE_TO_HULL) * damageGivenScale;
-              sparks.push({ x: b.worldX, d: chaseShipD, t: 0 });
+              // Sized by the gun that fired it (world/impact.js) and placed
+              // at the bullet's OWN position in both axes — asked for as
+              // "exactly at the point of impact". It used to take the ship's
+              // chaseShipD for the along-river axis, which could throw the
+              // explosion up to CHASE_HULL_D_TOLERANCE (3 units = 48px) from
+              // where the player actually watched their shot land.
+              //
+              // Clamped into the hull's real extent, though, because the hit
+              // box is deliberately more generous than the hull it stands
+              // for (the "+ 1.6" lateral slack just above, from the
+              // tone-down pass): without this, a shot that connects at the
+              // edge of that slack would explode in open water alongside the
+              // ship. Clamping keeps it as close to the bullet as possible
+              // while still reading as a strike on the hull. game.js draws
+              // this fight and the bullets against the same reference
+              // (flowDistance - _chaseHoldZ), so the bullet's own numbers
+              // land exactly where its sprite was.
+              sparks.push({
+                x: clamp(b.worldX, chaseShipWorldX - CHASE_SHIP_BEAM / 2, chaseShipWorldX + CHASE_SHIP_BEAM / 2),
+                d: clamp(b.flowDistance, chaseShipD - CHASE_SHIP_LENGTH_HALF, chaseShipD + CHASE_SHIP_LENGTH_HALF),
+                t: 0,
+                tier: impactTierFor(b.type),
+                seed: Math.random() * 6.283,
+              });
               if (chaseHullHP <= 0) {
                 chaseHullHP = 0;
-                // A small burst on top of the usual single spark — the kill
-                // shot should read as more than just another hit.
+                // A burst on top of the usual single impact — the kill shot
+                // should read as more than just another hit. Forced to the
+                // large tier regardless of the gun: this one is the ship
+                // coming apart, not another hole in it.
                 for (let i = 0; i < 5; i++) {
-                  sparks.push({ x: chaseShipWorldX + (Math.random() * 2 - 1) * CHASE_SHIP_BEAM, d: chaseShipD, t: -i * 0.05 });
+                  sparks.push({
+                    x: chaseShipWorldX + (Math.random() * 2 - 1) * CHASE_SHIP_BEAM,
+                    d: chaseShipD,
+                    t: -i * KILL_BURST_STAGGER,
+                    tier: 'large',
+                    seed: Math.random() * 6.283,
+                  });
                 }
               }
             }
@@ -736,12 +777,6 @@ export function createBritishWarship() {
         }
       }
 
-      // Hull hit sparks — a landed pistol shot
-      for (const s of sparks) {
-        const z = worldDistance - s.d;
-        if (Math.abs(z) < VISIBLE_Z_RANGE) drawSpark(ctx, s, z, cameraWorldX);
-      }
-
       if (chasePhase) {
         const chaseZ = worldDistance - chaseShipD;
         if (Math.abs(chaseZ) < VISIBLE_Z_RANGE) {
@@ -762,6 +797,32 @@ export function createBritishWarship() {
           const fz = worldDistance - f.d;
           if (Math.abs(fz) < VISIBLE_Z_RANGE) drawMuzzleFlash(ctx, f, fz, cameraWorldX);
         }
+      }
+
+      // Hull hit impacts — a landed shot, sized by the gun that landed it
+      // (world/impact.js). LAST, so they land on top of the ship.
+      //
+      // This is the whole reason the first version of this was reported as
+      // "looks exactly the same as before": both it and the single fixed
+      // spark it replaced were drawn *above* drawChaseShip in this method,
+      // which meant the hull — ~35px across and ~80px long on screen — was
+      // then painted straight over the top of them. Every hit lands inside
+      // that footprint by definition, so the entire effect was buried under
+      // the ship and all you ever actually saw was the bit of shadow glow
+      // bleeding past the gunwale. Nothing was wrong with the effect; it was
+      // being covered up. Deliberately outside the `if (chasePhase)` block
+      // above (and after it): the kill burst has to keep drawing for its own
+      // lifetime after the ship sinks and chasePhase goes false.
+      //
+      // Staggered kill-burst entries start on a negative clock, so skip the
+      // ones not yet due (drawImpact ignores a negative age anyway; this
+      // just saves the screen conversion).
+      for (const s of sparks) {
+        if (s.t < 0) continue;
+        const z = worldDistance - s.d;
+        if (Math.abs(z) >= VISIBLE_Z_RANGE) continue;
+        const p = worldToScreen(s.x, z, cameraWorldX);
+        drawImpact(ctx, p.x, p.y, s.t, s.tier, s.seed);
       }
     },
   };
@@ -1097,34 +1158,6 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
   ctx.fillStyle = '#C8102E';
   ctx.fillRect(flagX + flagW / 2 - flagW * 0.0625, flagY, flagW * 0.125, flagH);
   ctx.fillRect(flagX, flagY + flagH / 2 - flagH * 0.0625, flagW, flagH * 0.125);
-}
-
-// A landed pistol shot on the hull: a quick bright burst that fades over
-// SPARK_LIFETIME, no lingering mark — reads as gunfire striking wood, not a
-// persistent hole (there's no scarring the hull sprite for real).
-function drawSpark(ctx, s, z, cameraWorldX) {
-  const p = worldToScreen(s.x, z, cameraWorldX);
-  const k = clamp(1 - s.t / SPARK_LIFETIME, 0, 1);
-  ctx.save();
-  ctx.globalAlpha = k;
-  ctx.fillStyle = '#fff4c2';
-  ctx.shadowColor = '#ffb347';
-  ctx.shadowBlur = 6;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, 2 + (1 - k) * 3, 0, Math.PI * 2);
-  ctx.fill();
-  const spokes = 4;
-  ctx.strokeStyle = `rgba(255, 200, 110, ${k * 0.8})`;
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < spokes; i++) {
-    const ang = (i / spokes) * Math.PI * 2 + s.t * 6;
-    const len = 3 + (1 - k) * 6;
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x + Math.cos(ang) * len, p.y + Math.sin(ang) * len);
-    ctx.stroke();
-  }
-  ctx.restore();
 }
 
 // The instant a volley fires: a bright burst plus a puff of smoke at the
