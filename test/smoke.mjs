@@ -3013,6 +3013,33 @@ await step('checkpoint: isFurtherAlong ranks whole-journey progress, not just ra
   }
 });
 
+await step('minimap: every village name keeps LABEL_MARGIN clear of every other name and every other icon', async () => {
+  // Names used to be placed one at a time off each village's own labelPos
+  // and printed straight over each other through the fjord, Sept-Îles/
+  // Port-Cartier and Batiscan/Trois-Rivières. layoutLabels() now places them
+  // all together; this checks the real route's result, so a new village or
+  // a re-tuned labelPos can't quietly bring an overlap back.
+  const { LABEL_MARGIN } = await import('../src/world/minimap.js');
+  const labels = createMinimap().labelLayout;
+  if (labels.length < 30) throw new Error(`expected every waypoint labelled, got ${labels.length}`);
+  // Separation along whichever axis is clearest; negative means overlap.
+  const gap = (a, b) => Math.max(a.x0 - b.x1, b.x0 - a.x1, a.y0 - b.y1, b.y0 - a.y1);
+  const EPS = 1e-6;
+  for (let i = 0; i < labels.length; i++) {
+    for (let j = 0; j < labels.length; j++) {
+      if (i === j) continue;
+      const a = labels[i];
+      const b = labels[j];
+      if (j > i && gap(a.box, b.box) < LABEL_MARGIN - EPS) {
+        throw new Error(`"${a.name}" and "${b.name}" labels are ${gap(a.box, b.box).toFixed(2)} apart (min ${LABEL_MARGIN.toFixed(2)})`);
+      }
+      if (gap(a.box, b.icon) < LABEL_MARGIN - EPS) {
+        throw new Error(`"${a.name}" label is ${gap(a.box, b.icon).toFixed(2)} from ${b.name}'s icon (min ${LABEL_MARGIN.toFixed(2)})`);
+      }
+    }
+  }
+});
+
 // --- report ------------------------------------------------------------------
 
 restoreConsole();

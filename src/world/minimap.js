@@ -160,6 +160,138 @@ function shoreMarkerPoint(points, i) {
   return { x: p.x + normal.x * half * side, y: p.y + normal.y * half * side };
 }
 
+// --- Label layout --------------------------------------------------------
+// Village names used to go wherever each one's own labelPos (route.js) put
+// it, with no idea what its neighbours were doing — and the names are huge
+// at this scale. The face is Press Start 2P (style.css), where every glyph
+// is a full 1em wide, so at LABEL_FONT_SIZE "Sainte-Rose-du-Nord" alone is
+// ~68 of the window's 90 units. Through the fjord, Sept-Îles/Port-Cartier
+// and Batiscan/Trois-Rivières that left names printed straight over each
+// other, reported as unreadable. So placement is now one pass over every
+// label at once (layoutLabels, below): a label keeps its hand-set labelPos
+// when that spot is clear, and otherwise takes the nearest spot that keeps
+// LABEL_MARGIN from every other name and every house icon.
+const LABEL_FONT_SIZE = 3.6;
+// Measured, not guessed: Press Start 2P's advance is exactly 1em for every
+// glyph. The fallback `monospace` is ~0.6em, so before the web font loads
+// (or offline without it cached) the boxes are merely generous.
+const LABEL_CHAR_EM = 1;
+// The glyphs sit 7/8em above the baseline; descenders (g, p, y) drop ~1/4em.
+const LABEL_ASCENT_EM = 0.875;
+const LABEL_DESCENT_EM = 0.25;
+// The dark halo drawn under every name (stroke-width 0.6, so 0.3 beyond the
+// glyph edge) — part of what has to stay clear.
+const LABEL_HALO = 0.3;
+// The minimum clear gap between any two names, and between a name and any
+// village icon other than its own — in real screen pixels, like the icons,
+// so it reads the same whatever VIEW_SIZE is.
+export const LABEL_MARGIN = px(4);
+// A label pushed further than this from its icon gets a thin leader line
+// back to it; anything closer obviously belongs to the house it's beside.
+const LABEL_LEADER_MIN = px(10);
+// How far out the search goes before giving up and taking the least-bad
+// spot. The fjord is the worst cluster (five names inside ~50 units) and
+// settles well inside this.
+const LABEL_SEARCH_RINGS = 14;
+const LABEL_SEARCH_STEP = LABEL_FONT_SIZE * 0.5;
+
+function labelBox(x, y, anchor, text) {
+  const w = text.length * LABEL_FONT_SIZE * LABEL_CHAR_EM;
+  const left = anchor === 'middle' ? x - w / 2 : anchor === 'end' ? x - w : x;
+  return {
+    x0: left - LABEL_HALO,
+    y0: y - LABEL_FONT_SIZE * LABEL_ASCENT_EM - LABEL_HALO,
+    x1: left + w + LABEL_HALO,
+    y1: y + LABEL_FONT_SIZE * LABEL_DESCENT_EM + LABEL_HALO,
+  };
+}
+
+// Overlap area of two boxes once `a` is grown by `gap` on every side — zero
+// means they keep at least that much clear space between them.
+function overlapWithGap(a, b, gap) {
+  const w = Math.min(a.x1 + gap, b.x1) - Math.max(a.x0 - gap, b.x0);
+  const h = Math.min(a.y1 + gap, b.y1) - Math.max(a.y0 - gap, b.y0);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
+// Shortest distance from a point to a box (0 inside it).
+function pointBoxDistance(px0, py0, b) {
+  const dx = Math.max(b.x0 - px0, 0, px0 - b.x1);
+  const dy = Math.max(b.y0 - py0, 0, py0 - b.y1);
+  return Math.hypot(dx, dy);
+}
+
+// Greedy placement, in the order given (the caller puts the most important
+// names first, so they keep their hand-placed spots). Each item is
+// { text, x, y, icon: box, preferred: { dx, dy, anchor } } with (x, y) the
+// icon's anchor point. Candidates: the preferred spot first, then names to
+// the right/left of the icon and centred above/below it, stepped outward
+// ring by ring and tried nearest-first — so a displaced name moves only as
+// far as it has to. The first candidate clear of every placed name and every
+// other icon wins; if none is, the one with the least overlap does, so a
+// name is never dropped. Pure (no DOM) and exported for test/smoke.mjs.
+export function layoutLabels(items) {
+  const icons = items.map((it) => it.icon);
+  const placed = [];
+  return items.map((it, idx) => {
+    const { x, y, icon, text, preferred } = it;
+    const iconCx = (icon.x0 + icon.x1) / 2;
+    const iconCy = (icon.y0 + icon.y1) / 2;
+    const side = (icon.x1 - icon.x0) / 2 + LABEL_MARGIN * 0.5;
+    const baseline = LABEL_FONT_SIZE * LABEL_ASCENT_EM / 2; // vertically centres a name on a y
+    const candidates = [];
+    for (let k = 0; k <= LABEL_SEARCH_RINGS; k++) {
+      const s = k * LABEL_SEARCH_STEP;
+      for (const dy of k === 0 ? [0] : [-s, s]) {
+        candidates.push({ x: iconCx + side, y: iconCy + dy + baseline, anchor: 'start' });
+        candidates.push({ x: iconCx - side, y: iconCy + dy + baseline, anchor: 'end' });
+      }
+      for (const dx of k === 0 ? [0] : [-s, s]) {
+        candidates.push({ x: iconCx + dx, y: icon.y0 - LABEL_MARGIN * 0.5 - LABEL_FONT_SIZE * LABEL_DESCENT_EM, anchor: 'middle' });
+        candidates.push({ x: iconCx + dx, y: icon.y1 + LABEL_MARGIN * 0.5 + LABEL_FONT_SIZE * LABEL_ASCENT_EM, anchor: 'middle' });
+      }
+      // Further rings also lift/drop the above/below rows, for a cluster
+      // where the line directly over or under the icon is already taken.
+      if (k > 0) {
+        for (const dx of [0, -s, s]) {
+          candidates.push({ x: iconCx + dx, y: icon.y0 - s - LABEL_FONT_SIZE * LABEL_DESCENT_EM, anchor: 'middle' });
+          candidates.push({ x: iconCx + dx, y: icon.y1 + s + LABEL_FONT_SIZE * LABEL_ASCENT_EM, anchor: 'middle' });
+        }
+      }
+    }
+    for (const c of candidates) c.box = labelBox(c.x, c.y, c.anchor, text);
+    candidates.sort((a, b) => pointBoxDistance(iconCx, iconCy, a.box) - pointBoxDistance(iconCx, iconCy, b.box));
+    const pref = { x: x + preferred.dx, y: y + preferred.dy, anchor: preferred.anchor };
+    pref.box = labelBox(pref.x, pref.y, pref.anchor, text);
+    candidates.unshift(pref);
+
+    const cost = (c) => {
+      let total = 0;
+      for (const b of placed) total += overlapWithGap(c.box, b, LABEL_MARGIN);
+      icons.forEach((b, j) => { if (j !== idx) total += overlapWithGap(c.box, b, LABEL_MARGIN); });
+      return total;
+    };
+    let best = null;
+    let bestCost = Infinity;
+    for (const c of candidates) {
+      const cc = cost(c);
+      if (cc === 0) { best = c; break; }
+      if (cc < bestCost) { best = c; bestCost = cc; }
+    }
+    placed.push(best.box);
+    const gap = pointBoxDistance(iconCx, iconCy, best.box);
+    // Leader from the icon to the nearest point of the name's box.
+    const leader = gap > LABEL_LEADER_MIN
+      ? {
+        x1: iconCx, y1: iconCy,
+        x2: Math.min(Math.max(iconCx, best.box.x0), best.box.x1),
+        y2: Math.min(Math.max(iconCy, best.box.y0), best.box.y1),
+      }
+      : null;
+    return { x: best.x, y: best.y, anchor: best.anchor, box: best.box, leader };
+  });
+}
+
 // Splits a segment's point list into separate runs wherever a waypoint is
 // flagged mapSkipRibbon (route.js — currently just Charlemagne/Montreal,
 // where the minimap draws the real Island of Montreal channels instead of
@@ -407,11 +539,21 @@ export function createMinimap() {
   // close neighbours at this widget's zoom level, per this comment's own
   // earlier warning); halved to 16px for an ordinary village, 19px for the
   // three real cities.
+  function houseIconDims(big) {
+    return {
+      halfW: px(big ? 8 : 6.5),
+      bodyH: px(big ? 11 : 9),
+      overhang: px(1.5), // stone roofs oversail the wall less than a log cabin's does
+      roofH: px(big ? 8 : 7),
+    };
+  }
+  // The icon's full footprint (roof overhang included), for layoutLabels().
+  function houseIconBox(tipX, tipY, big) {
+    const { halfW, bodyH, overhang, roofH } = houseIconDims(big);
+    return { x0: tipX - halfW - overhang, y0: tipY - bodyH - roofH, x1: tipX + halfW + overhang, y1: tipY };
+  }
   function drawHouseIcon(tipX, tipY, big) {
-    const halfW = px(big ? 8 : 6.5);
-    const bodyH = px(big ? 11 : 9);
-    const overhang = px(1.5); // stone roofs oversail the wall less than a log cabin's does
-    const roofH = px(big ? 8 : 7);
+    const { halfW, bodyH, overhang, roofH } = houseIconDims(big);
     const strokeW = px(0.6);
     const wall = big ? '#b8b0a0' : '#a3672f';
     const wallStroke = big ? '#5c554a' : '#4a2f18';
@@ -469,20 +611,31 @@ export function createMinimap() {
       }));
     }
     drawHouseIcon(p.x, p.y, BIG_CITY_NAMES.has(p.name));
-    const label = p.label || p.name;
-    const pos = p.labelPos || { dx: 1.4, dy: -2.2, anchor: 'start' };
+  }
+  // The name itself, at wherever layoutLabels() put it. Drawn in a second
+  // pass after every icon, so a later village's house can never paint over
+  // an earlier one's name.
+  function drawWaypointLabel(p, at) {
+    if (at.leader) {
+      svg.appendChild(svgEl('line', {
+        x1: at.leader.x1.toFixed(2), y1: at.leader.y1.toFixed(2),
+        x2: at.leader.x2.toFixed(2), y2: at.leader.y2.toFixed(2),
+        stroke: '#f4ead2', 'stroke-width': px(0.5).toFixed(2), 'stroke-opacity': 0.5,
+        'stroke-dasharray': `${px(1.5).toFixed(2)} ${px(1.5).toFixed(2)}`,
+      }));
+    }
     const text = svgEl('text', {
-      x: p.x + pos.dx,
-      y: p.y + pos.dy,
+      x: at.x.toFixed(2),
+      y: at.y.toFixed(2),
       fill: p.label ? '#ffd23f' : '#f4ead2',
       stroke: p.label ? '#1a1208' : '#16240f',
-      'stroke-width': 0.6,
+      'stroke-width': LABEL_HALO * 2,
       'paint-order': 'stroke',
-      'font-size': 3.6,
+      'font-size': LABEL_FONT_SIZE,
       'font-weight': p.label ? 700 : 400,
-      'text-anchor': pos.anchor,
+      'text-anchor': at.anchor,
     });
-    text.textContent = label;
+    text.textContent = p.label || p.name;
     svg.appendChild(text);
   }
   // Tadoussac's own three identical-position occurrences (fjord end,
@@ -495,6 +648,7 @@ export function createMinimap() {
   // one icon — reported as the title appearing twice. Dedup by name
   // instead of trying to keep three copies' labelPos in sync by hand.
   const drawnNames = new Set();
+  const markers = [];
   for (const segment of Object.values(SEGMENTS)) {
     segment.points.forEach((raw, i) => {
       if (drawnNames.has(raw.name)) return;
@@ -502,8 +656,30 @@ export function createMinimap() {
       const skip = raw.name === 'Tadoussac' || raw.mapSkipRibbon;
       const p = skip ? raw : { ...raw, ...shoreMarkerPoint(segment.points, i) };
       drawWaypointMarker(p, skip ? null : raw);
+      markers.push(p);
     });
   }
+  // Names are laid out all together, once every icon's position is known
+  // (see layoutLabels()). Priority order, since the greedy pass lets earlier
+  // names keep their spots: the two gold, explicitly-labelled ones
+  // (Lac Saint-Jean, Tadoussac) first, then the three real cities, then
+  // everyone else in route order (the sort is stable).
+  const rank = (p) => (p.label ? 0 : BIG_CITY_NAMES.has(p.name) ? 1 : 2);
+  const ordered = [...markers].sort((a, b) => rank(a) - rank(b));
+  const placements = layoutLabels(ordered.map((p) => ({
+    text: p.label || p.name,
+    x: p.x,
+    y: p.y,
+    icon: houseIconBox(p.x, p.y, BIG_CITY_NAMES.has(p.name)),
+    preferred: p.labelPos || { dx: 1.4, dy: -2.2, anchor: 'start' },
+  })));
+  ordered.forEach((p, i) => drawWaypointLabel(p, placements[i]));
+  // Exposed for test/smoke.mjs's spacing assertion.
+  const labelLayout = ordered.map((p, i) => ({
+    name: p.name,
+    box: placements[i].box,
+    icon: houseIconBox(p.x, p.y, BIG_CITY_NAMES.has(p.name)),
+  }));
 
   const marker = svgEl('circle', { r: 3.2, fill: '#ffd23f', stroke: '#1a1208', 'stroke-width': 0.8 });
   marker.id = 'minimap-marker';
@@ -513,6 +689,7 @@ export function createMinimap() {
 
   return {
     el: wrap,
+    labelLayout,
     // segmentId + flowDistance, not a single flowDistance — flowDistance
     // alone no longer says where the canoe is on the *real* map now that
     // three segments share the same underlying shape-math number line (see
