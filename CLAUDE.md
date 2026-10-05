@@ -95,6 +95,11 @@ src/
                        MOUTH_DISTANCE=900 (Tadoussac). SEGMENT_SHAPE_OFFSET per segment. widthAt has
                        special branches: the Ottawa gorge (post-Montreal) and rideauWidthAt (the
                        Rideau leg — checked first, its offset is past everything else).
+      segments.js      MOUTH_DISTANCE / SEGMENT_SHAPE_OFFSET / RIDEAU_SPAN_DISTANCE, split out of path.js
+                       (which re-exports them) so route.js doesn't import path.js — path.js imports
+                       VILLAGES to keep sandbars (braid islands) off every dock and segment start
+                       (BRAID_SUPPRESSED_CYCLES, codegen'd into the shader too). Braid islands are a
+                       fixed hashed schedule, identical every run — not per-playthrough
       lawrenceWidth.js the real St. Lawrence width Tadoussac -> Montréal as eased keyframes (route.js's
                        riverWidthKm on a log scale: 48 off Tadoussac, 12 at the Québec City narrows,
                        ~37 into Lac Saint-Pierre; Montréal held at 40 so the Island of Montreal

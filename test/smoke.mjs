@@ -1206,6 +1206,29 @@ await step('tadoussac: casting off upriver starts in open water, not grounded on
   }
 });
 
+await step('docks: no sandbar (braid island) sits on or right off any village dock', () => {
+  // "At La Malbaie, there's a big sandbar that covers almost the entire
+  // dock" — and Trois-Rivières, Carillon and Smiths Falls had the same.
+  // The braid schedule knew nothing about docks; path.js's
+  // BRAID_SUPPRESSED_CYCLES now clears BRAID_DOCK_CLEARANCE around every
+  // village. Checked against each dock's real drawn z-span (dockSpanAt),
+  // plus 8 units of approach water either side.
+  const APPROACH = 8;
+  for (const v of VILLAGES) {
+    let zlo = Infinity, zhi = -Infinity;
+    for (let d = v.flowDistance - 15; d <= v.flowDistance + 15; d += 0.1) {
+      if (dockSpanAt(d)) { zlo = Math.min(zlo, d); zhi = Math.max(zhi, d); }
+    }
+    if (zlo === Infinity) continue;
+    for (let d = zlo - APPROACH; d <= zhi + APPROACH; d += 0.1) {
+      if (d >= FEATURE_ISLAND_RANGE[0] && d <= FEATURE_ISLAND_RANGE[1]) continue; // the Island of Montreal is the real landmark
+      if (braidAt(d)) {
+        throw new Error(`a sandbar sits ${(d - v.flowDistance).toFixed(1)} units from ${v.name}'s dock (dock spans ${(zlo - v.flowDistance).toFixed(1)}..${(zhi - v.flowDistance).toFixed(1)})`);
+      }
+    }
+  }
+});
+
 // --- scenario 4d: Kingston's dock is a real entrance into the town ---------
 
 await step('docks: no rock, log, island or pelt is ever drawn overlapping a dock', () => {

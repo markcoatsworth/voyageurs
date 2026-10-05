@@ -72,7 +72,7 @@
 //   Newboro               44°39′N   76°19′W       https://en.wikipedia.org/wiki/Newboro
 //   Jones Falls           44°33′N   76°14′W       https://en.wikipedia.org/wiki/Jones_Falls,_Ontario
 //   Kingston              44°14′N   76°29′W       https://en.wikipedia.org/wiki/Kingston,_Ontario
-import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './path.js';
+import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './segments.js';
 
 // labelPos hand-places each minimap label clear of the route line and the
 // widget's edges. Unused outside minimap.js. It's a *preference*: minimap.js's
