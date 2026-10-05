@@ -1204,10 +1204,15 @@ function repairShopFor(worldWidth) {
   return {
     isRepairShop: true,
     mirror: false,
-    anchorX: dockX0(worldWidth) - 25,
+    // -27 / 14 / 26 (were -25 / 12 / 22) since the sprite grew from 22x20
+    // walls to 26x24 (sprites.js's createRepairShopSprite): the footprint
+    // follows the walls, and the anchor steps 2px further from the dock so
+    // the wider roof keeps its old clearance from the dock lane rather than
+    // growing into it.
+    anchorX: dockX0(worldWidth) - 27,
     anchorY: WATER_TOP - 20,
-    footHalfW: 12,
-    footHeight: 22,
+    footHalfW: 14,
+    footHeight: 26,
   };
 }
 
@@ -1219,7 +1224,10 @@ function repairShopFor(worldWidth) {
 // proximity alone, so blocking movement would just make lining up with
 // them more fiddly for no benefit.
 function traderPosFor(repairShop) {
-  return { x: repairShop.anchorX + 19, y: repairShop.anchorY + 5 };
+  // +21 (was +19) to clear the bigger shop's roof by the same margin — and,
+  // with the shop's own 2px step away from the dock, the trader stands at
+  // exactly the same absolute spot as before.
+  return { x: repairShop.anchorX + 21, y: repairShop.anchorY + 5 };
 }
 const TRADER_TRIGGER_RADIUS = 16;
 

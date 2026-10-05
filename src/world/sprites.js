@@ -640,21 +640,34 @@ export function createCabinSprite(variant = 0) {
 }
 
 // The one building every village guarantees right beside its dock (see
-// villages.js) — where the canoe eventually gets repaired. Built from
-// the same log-cabin construction as createCabinSprite, but a warm rust
-// roof (every ordinary cabin uses browns) and a crossed-paddles sign over
-// the door are the two cues that mark it as different at a glance, from
-// across the water, before it does anything yet.
+// villages.js) — where the canoe gets repaired. Built from the same log-
+// cabin construction as createCabinSprite, but a warm rust roof (every
+// ordinary cabin uses browns) and a canoe on the sign over the door are the
+// cues that mark it as different at a glance, from across the water.
+//
+// A size up on an ordinary cabin (26x24 walls, was 22x20 — the same as
+// createCabinSprite's small cabin): it's the one building in every village
+// you actually need to find, and at the old size it read as just another
+// cabin. Grown about a fifth, not more, so it still sits in the cabin
+// family rather than reading as a hall. The sprite's bottom edge is still
+// the anchor everywhere it's drawn, so the extra height goes upward; the
+// on-foot footprint/trader spot (villageScene.js's repairShopFor/
+// traderPosFor) were widened with it.
+//
+// The sign was crossed paddles, which at 10x5px read as a generic "X" —
+// reported as exactly that. A side-on canoe silhouette instead: a crescent
+// hull with the upswept bow and stern that make a canoe a canoe rather than
+// any boat, which survives being a dozen pixels wide.
 const REPAIR_SHOP_PALETTE = { roof: '#8a3a2a', roofDark: '#5f2418', roofLight: '#b0563a', wall: '#8a6a45', wallDark: '#6b4f30', wallLight: '#a5825a' };
 
 export function createRepairShopSprite() {
-  const w = 34, h = 38;
+  const w = 40, h = 44;
   const pal = REPAIR_SHOP_PALETTE;
 
   return makeSprite(w, h, (ctx) => {
     const cx = w / 2;
-    const wallW = 22;
-    const wallH = 20;
+    const wallW = 26;
+    const wallH = 24;
     const wallTop = h - wallH - 4;
 
     groundShadow(ctx, cx, h - 4, wallW / 2 + 2, 4);
@@ -675,25 +688,59 @@ export function createRepairShopSprite() {
     ctx.fillRect(cx - wallW / 2, wallTop, 2, wallH);
 
     ctx.fillStyle = '#241a10';
-    ctx.fillRect(cx - 3, wallTop + wallH - 8, 6, 8);
+    ctx.fillRect(cx - 3.5, wallTop + wallH - 9, 7, 9);
 
-    // sign board over the door: crossed paddles, the universal "canoe
-    // business happens here" mark
+    // Sign board over the door, a canoe on it. Board first (dark frame, pale
+    // face), then the hull: the gunwale is a shallow line just below the
+    // tips, the keel a deeper curve under it, and the two ends sweep up past
+    // the gunwale into the bow and stern.
+    //
+    // The board sits in the strip of bare wall between the roof's front edge
+    // (which overhangs the top 6px of the wall — roofTop + roofH below is
+    // wallTop + 6) and the door. The old paddles sign started at wallTop + 5,
+    // so the roof drawn after it hid its top half and left two stubs of an
+    // "X"; a canoe would have lost its bow and stern the same way.
+    const signW = 20;
+    // 9 rows: exactly fills the wall from the roof edge down to the door's
+    // top (wallTop + 15), with room for the paddle blade under the hull.
+    const signH = 9;
+    const signTop = wallTop + 6;
     ctx.fillStyle = '#3f2b1a';
-    ctx.fillRect(cx - 6, wallTop + 5, 12, 7);
+    ctx.fillRect(cx - signW / 2, signTop, signW, signH);
     ctx.fillStyle = '#c9a86a';
-    ctx.fillRect(cx - 5, wallTop + 6, 10, 5);
-    ctx.strokeStyle = '#5a3d24';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(cx - 4, wallTop + 6.5);
-    ctx.lineTo(cx + 4, wallTop + 10.5);
-    ctx.moveTo(cx + 4, wallTop + 6.5);
-    ctx.lineTo(cx - 4, wallTop + 10.5);
-    ctx.stroke();
+    ctx.fillRect(cx - signW / 2 + 1, signTop + 1, signW - 2, signH - 2);
+    // Laid out pixel by pixel, not as a curved path: a first cut drew it
+    // with quadratic curves and, antialiased down to this size, it came out
+    // as a deep red bowl — a smile, not a canoe. What makes it a canoe is
+    // length and shallowness, with the bow and stern standing up clear of
+    // the gunwale; rows of [x0, x1] offsets from cx, top row first.
+    //
+    // A paddle angled across it, blade down past the hull, is the other
+    // half of the read — a hull alone this small still drifted toward
+    // "bowl"; a hull with a paddle in it can't be anything but a canoe.
+    // Drawn first, so the hull sits in front of the shaft.
+    const faceTop = signTop + 1;
+    ctx.fillStyle = '#4a3220';
+    for (let i = 0; i < 5; i++) ctx.fillRect(cx - 4 + i, faceTop + i, 1, 1); // shaft
+    ctx.fillRect(cx - 5, faceTop, 2, 1); // grip
+    const HULL_ROWS = [
+      [[-8, -8], [7, 7]], // bow/stern tips, standing up clear of the gunwale
+      [[-8, -7], [6, 7]],
+      [[-7, 6]], // gunwale
+      [[-6, 5]], // keel — two rows under the gunwale, no more: shallow is canoe
+    ];
+    const hullTop = faceTop + 2;
+    ctx.fillStyle = '#6b2a1a';
+    HULL_ROWS.forEach((spans, r) => {
+      for (const [x0, x1] of spans) ctx.fillRect(cx + x0, hullTop + r, x1 - x0 + 1, 1);
+    });
+    // The blade, hanging below the hull's waterline on the near side.
+    ctx.fillStyle = '#4a3220';
+    ctx.fillRect(cx + 1, hullTop + 3, 1, 1);
+    ctx.fillRect(cx + 1, hullTop + 4, 3, 1);
 
     const roofW = wallW + 8;
-    const roofH = 20;
+    const roofH = 22;
     const roofTop = wallTop - roofH + 6;
     triangle(ctx, cx, roofTop - 5, roofTop + 2, roofW / 2 - 2, pal.roofDark);
     ctx.fillStyle = pal.roofDark;
