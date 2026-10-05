@@ -3,15 +3,13 @@
 // River gorge up to the voyageurs' winter camp at Gatineau, through the
 // Devil's own weather — a black sky burning at the horizon (see game.js's
 // flight render). There's no landing along the way. Parish churches stand
-// along both banks with their ends reaching into the water — the middle of
-// the channel stays open, so mostly you just keep off the banks on the
-// bends, but every
-// so often a church reaches far enough across to force a dodge toward the
-// far bank, and those alternate sides. Clip a steeple (or "swear") and the
+// along both banks, and every one reaches out past the middle of the
+// channel, so each is a dodge toward the far bank — the "reaching" ones
+// leave a tighter thread, and come thicker as you near Le Diable. Clip a steeple (or "swear") and the
 // devil's pact breaks. A light crosswind nudges you off line; the river
 // current doesn't apply in the sky (see game.js's flight branch).
 
-import { centerX, widthAt } from '../world/river/path.js';
+import { centerX, widthAt, OTTAWA_EASE_START, OTTAWA_EASE_LEN } from '../world/river/path.js';
 import { VILLAGES } from '../world/river/route.js';
 import { worldToScreen, PIXELS_PER_UNIT } from '../shared/config.js';
 import { hashRange } from '../shared/hash.js';
@@ -107,10 +105,11 @@ export function flightWind(flowDistance, time, altFrac) {
 }
 
 // --- the churches along the gorge -------------------------------------
-// Every church stands on a bank and only nips into the water — the middle
-// of the channel stays open. Most still cost the careless who drift wide
-// on a bend; the ones that "reach" far enough to force a real dodge get
-// denser the closer you are to Le Diable — see STEEPLE_DEFS below.
+// Every church stands on a bank and reaches out past the centre line (see
+// PAST_CENTRE_NORMAL below — they used to stop short of it); the ones that
+// "reach" further leave a tighter thread, and get denser the closer you
+// are to Le Diable — see STEEPLE_DEFS below. History of the old reach
+// tuning, kept for the reasoning:
 const STEEPLE_HIT_Z = 1.9;     // half-depth of the collision box along the flow
 // How far a normal church reaches in from its bank. Was 2.7 — reported as
 // basically cosmetic, and the real numbers back that up: the gorge's own
@@ -127,13 +126,24 @@ const STEEPLE_HIT_Z = 1.9;     // half-depth of the collision box along the flow
 // escalation this creates (harmless early, a real threat late) matches
 // STEEPLE_DEFS' own authored reaching-frequency ramp instead of fighting
 // it — both levers now tighten toward the same climax together.
-const REACH_NORMAL = 3.3;
-const REACH_REACHING = 5;      // a "reaching" church crosses the centre line —
-                               // large so it always clamps to REACH_MIN_INNER
-const REACH_MIN_INNER = 0.15;   // how far past centre a reaching church's inner
-                               // edge sits — enough that a dead-centre line
-                               // clips it, not so far the far-side thread
-                               // brushes the bank treetops
+//
+// ...and then every church crosses it. 3.3 still left the centre line open
+// for most of the flight (the gorge only narrows past 6.6 units in its back
+// half), so ordinary churches stayed off on the shore and a straight
+// coast down the middle threaded nearly all of them — reported as "too many
+// of the steeples are just sitting off on the shore ... super easy to
+// avoid. All the steeples should extend into the water to a certain extent
+// so I have to actively dodge them." Reach is now measured from the centre
+// line, not the bank: an ordinary church's inner edge sits
+// PAST_CENTRE_NORMAL beyond it (a dead-centre line clips it, so every
+// church is a real dodge), a "reaching" one PAST_CENTRE_REACHING_FRACTION
+// of the half-width beyond it (a tighter thread, so the authored
+// reaching-frequency ramp toward Le Diable still escalates). At the
+// gorge's tightest (half-width 3.10) a reaching church leaves ~2.2 units
+// of water on the far side — the same "never brushes the far treetops"
+// limit the old REACH_MIN_INNER note was about.
+const PAST_CENTRE_NORMAL = 0.6;
+const PAST_CENTRE_REACHING_FRACTION = 0.3;
 const STEEPLE_VISUAL_H = 7;    // world-units tall; reaching churches stand a
                                // bit taller (see the map below) — deliberate,
                                // not hashed, so a taller silhouette really
@@ -185,22 +195,29 @@ const STEEPLE_DEFS = [
 // generation. Each entry is one church: `worldX`/`hx`/`hz` are its
 // collision box, `gapOffset` is the centre-relative lateral offset to aim
 // for to clear it, `side` is the bank.
-const STEEPLES = STEEPLE_DEFS.map(({ d: offset, side, reaching }) => {
+// Only once the gorge has fully closed in (OTTAWA_EASE_START + _LEN, path.js):
+// the first two authored churches (arena - 644 and - 622) fell in the
+// stretch where the river is still easing down from the St. Lawrence's
+// ~40 units, so they stood ~20 units off on a far bank — two of the
+// "sitting off on the shore" ones. A church crossing the centre line there
+// would have to be ~20 units long, so they're simply not built; the flight
+// opens on the gorge closing in, then the churches.
+const GORGE_ENGAGED_D = OTTAWA_EASE_START + OTTAWA_EASE_LEN;
+const STEEPLES = STEEPLE_DEFS.filter(({ d: offset }) => DIABLE_ARENA_D + offset >= GORGE_ENGAGED_D).map(({ d: offset, side, reaching }) => {
   const d = DIABLE_ARENA_D + offset;
   const waterHalf = widthAt(d) / 2;
   const cx = centerX(d);
-  const reach = reaching ? REACH_REACHING : REACH_NORMAL;
-  // Inner edge (facing the open channel): `reach` in from this church's own
-  // bank, but never more than REACH_MIN_INNER past the centre line.
-  const innerX = side * Math.max(waterHalf - reach, -REACH_MIN_INNER);
+  // Inner edge (facing the open channel), measured from the centre line:
+  // past it, toward the far bank, by PAST_CENTRE_* (see above).
+  const pastCentre = reaching ? Math.max(PAST_CENTRE_NORMAL, waterHalf * PAST_CENTRE_REACHING_FRACTION) : PAST_CENTRE_NORMAL;
+  const innerX = -side * pastCentre;
   const outerX = side * (waterHalf + STEEPLE_OVERHANG);
-  // Aim just clear of the inner edge, toward the open middle — but keep
-  // the thread inside the water (the bank treetops are a hazard now, see
-  // game.js), so never send it closer than ~0.7 units off the far bank.
+  // The thread: the middle of the water left between the church's inner
+  // edge and the far bank — keeping clear of the bank treetops (a hazard,
+  // see game.js), so never closer than ~1 unit off the far bank. Every
+  // church has one now, not just the reaching ones.
   const threadLimit = Math.max(0, waterHalf - 1.0);
-  const gapOffset = reaching
-    ? Math.max(-threadLimit, Math.min(threadLimit, innerX - side * 1.5))
-    : 0;
+  const gapOffset = -side * (pastCentre + threadLimit) / 2;
   return {
     flowDistance: d,
     side,
@@ -212,6 +229,10 @@ const STEEPLES = STEEPLE_DEFS.map(({ d: offset, side, reaching }) => {
     h: STEEPLE_VISUAL_H * (reaching ? 1.15 : 1.0),
   };
 });
+// Exposed for test/smoke.mjs, which checks every church really crosses the
+// centre line and none stands out in the pre-gorge water.
+export const STEEPLE_LAYOUT = STEEPLES;
+export { GORGE_ENGAGED_D };
 
 // --- lightning -------------------------------------------------------
 // A deterministic flicker in [0,1] for render() to flash the screen with.

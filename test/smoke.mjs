@@ -1258,7 +1258,7 @@ await step('rapids: upriver whitewater is a harder grind, never a boost (and nev
   const LW = SEGMENT_SHAPE_OFFSET.lawrenceWest;
   let peak = null;
   for (let d = LW + 40; d < LW + 900; d += 0.5) if (rapidsStrength(d) > 0.97) { peak = d; break; }
-  const g = newGame('lawrenceWest', peak - 60);
+  const g = newGame('lawrenceWest', peak - 80);
   g.game.health = 1e9; // obstacles aren't the point here
   let calm = null, rough = Infinity, seenRough = false, clearedAt = null, afterClear = null;
   for (let i = 0; i < 60 * 12; i++) {
@@ -1266,7 +1266,10 @@ await step('rapids: upriver whitewater is a harder grind, never a boost (and nev
     run(g, 1, 1 / 60, (s) => { s.up = true; });
     const v = (g.game.flowDistance - before) * 60;
     const r = rapidsStrength(before);
-    if (r === 0 && i > 120 && !seenRough) calm = v;
+    // Calm reference: the best headway reached before the whitewater. Not
+    // the last calm frame — upriver the paddle builds slowly
+    // (UPRIVER_ACCEL_SCALE), so that frame can still be mid-climb.
+    if (r === 0 && !seenRough) calm = Math.max(calm ?? 0, v);
     if (r > 0.95) { rough = Math.min(rough, v); seenRough = true; }
     // Half a second after the whitewater fully ends, still well short of
     // calm speed: "it should take me a few seconds just to get back to
@@ -1327,6 +1330,23 @@ await step('montreal: casting off from either pier, anywhere along it, takes no 
         throw new Error(`cast off from Montréal's pier at x=${(x - c).toFixed(1)} (${paddle ? 'paddling' : 'drifting'}) and lost ${hull - g.game.health} hull in 4s`);
       }
     }
+  }
+});
+
+await step('chasse-galerie: every steeple reaches past the centre line — no coasting down the middle', async () => {
+  // "Too many of the steeples are just sitting off on the shore ... All the
+  // steeples should extend into the water to a certain extent so I have to
+  // actively dodge them, instead of just coasting right down the middle."
+  const { STEEPLE_LAYOUT, GORGE_ENGAGED_D } = await import('../src/bossfights/chasseGalerie.js');
+  if (STEEPLE_LAYOUT.length < 20) throw new Error(`only ${STEEPLE_LAYOUT.length} steeples built`);
+  for (const s of STEEPLE_LAYOUT) {
+    if (s.flowDistance < GORGE_ENGAGED_D) throw new Error(`a steeple stands at ${s.flowDistance.toFixed(0)}, before the gorge has closed in (${GORGE_ENGAGED_D})`);
+    const c = centerX(s.flowDistance);
+    const inner = s.worldX - s.side * s.hx; // the edge facing the open water
+    const past = -s.side * (inner - c); // how far beyond the centre line, toward the far bank
+    if (!(past >= 0.5)) throw new Error(`steeple at ${s.flowDistance.toFixed(0)} only reaches ${past.toFixed(2)} past the centre line`);
+    const thread = widthAt(s.flowDistance) / 2 - past;
+    if (!(thread >= 1.8)) throw new Error(`steeple at ${s.flowDistance.toFixed(0)} leaves only ${thread.toFixed(2)} units of water to thread`);
   }
 });
 
