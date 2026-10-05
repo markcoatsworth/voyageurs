@@ -6,7 +6,7 @@ import { drawWhales } from '../world/whales.js';
 import { drawRain } from '../world/weather.js';
 import { createCanoeSprites } from '../world/canoe.js';
 import { createCapsize } from '../world/capsize.js';
-import { playCapsizeHorn, playPeltChime, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playRepairTrade, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import {
@@ -1027,6 +1027,7 @@ export class Game {
     const spend = Math.min(this.furs, needed);
     this.furs -= spend;
     this.health = Math.min(MAX_HEALTH, this.health + spend * REPAIR_HP_PER_FUR);
+    playRepairTrade();
     this.showBanner(`Traded ${spend} fur${spend === 1 ? '' : 's'} for repairs`);
   }
 

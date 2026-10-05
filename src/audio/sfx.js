@@ -73,6 +73,55 @@ export function playPeltChime() {
   ding(c, t0 + 0.07, 1975.5, 0.28);
 }
 
+// One mallet knock on a wooden hull — a very short band-passed noise click
+// for the strike, over a low triangle "tok" for the body of the plank.
+function knock(c, startTime) {
+  const len = 0.07;
+  const buffer = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * len)), c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  const noise = c.createBufferSource();
+  noise.buffer = buffer;
+  const band = c.createBiquadFilter();
+  band.type = 'bandpass';
+  band.frequency.value = 1400;
+  band.Q.value = 3;
+  const clickGain = c.createGain();
+  clickGain.gain.setValueAtTime(0.35, startTime);
+  clickGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.04);
+  noise.connect(band).connect(clickGain).connect(c.destination);
+  noise.start(startTime);
+  noise.stop(startTime + len);
+
+  const osc = c.createOscillator();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(190, startTime);
+  osc.frequency.exponentialRampToValueAtTime(120, startTime + 0.09);
+  const body = c.createGain();
+  body.gain.setValueAtTime(0.0001, startTime);
+  body.gain.exponentialRampToValueAtTime(0.4, startTime + 0.004);
+  body.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.11);
+  osc.connect(body).connect(c.destination);
+  osc.start(startTime);
+  osc.stop(startTime + 0.13);
+}
+
+// The fur trade at the repair shop (game.js's tryRepairTrade) — played with
+// the "Traded N furs for repairs" banner, only when a trade actually goes
+// through. Two mallet knocks (the hull being patched) then a rising C-E-G
+// chime (the deal done). The chime sits an octave-ish below the pelt pickup
+// (playPeltChime's E6/B6) and runs three notes, not two, so a repair never
+// sounds like just picking up another fur.
+export function playRepairTrade() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  knock(c, t0 + 0.00);
+  knock(c, t0 + 0.13);
+  ding(c, t0 + 0.32, 523.25, 0.22); // C5
+  ding(c, t0 + 0.41, 659.25, 0.22); // E5
+  ding(c, t0 + 0.50, 783.99, 0.45); // G5
+}
+
 // A short, dull downward blip for a glancing hit — a triangle wave through
 // a low-pass filter reads as duller/rounder than the horn's brassy
 // sawtooth, and two quick descending notes (rather than the horn's drawn-

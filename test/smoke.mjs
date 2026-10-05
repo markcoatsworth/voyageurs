@@ -2213,7 +2213,12 @@ await step('village: dock, walk, trade, cast off', () => {
   g.game.enterVillage(quebec);
   g.game.furs = 5;
   run(g, 400, 1 / 30, (s, i) => { s.up = i % 120 < 60; s.down = i % 120 >= 60; s.left = i % 80 < 40; });
+  // A damaged hull, so the trade actually goes through — at full health it
+  // stops at "Hull is already sound" and never reaches the trade itself (or
+  // its sound, sfx.js's playRepairTrade).
+  g.game.health = 40;
   g.game.tryRepairTrade();
+  if (!(g.game.health > 40 && g.game.furs < 5)) throw new Error(`the repair trade didn't go through: health ${g.game.health}, furs ${g.game.furs}`);
   g.game.leaveVillage();
   run(g, 200, 1 / 30, (s) => { s.up = true; });
   if (g.game.mode !== 'river') throw new Error(`still in "${g.game.mode}" mode after casting off`);
