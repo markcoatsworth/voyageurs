@@ -36,7 +36,6 @@
 //                                                https://en.wikipedia.org/wiki/La_Baie
 //   Sainte-Rose-du-Nord   48°23′N   70°35′W       https://en.wikipedia.org/wiki/Sainte-Rose-du-Nord,_Quebec
 //   Riviere-Eternite      48°15′20″N 70°24′50″W   https://en.wikipedia.org/wiki/Rivi%C3%A8re-%C3%89ternit%C3%A9
-//   L'Anse-Saint-Jean     48°14′N   70°12′W       https://en.wikipedia.org/wiki/L%27Anse-Saint-Jean,_Quebec
 //   Petit-Saguenay        48°13′N   70°04′W       https://en.wikipedia.org/wiki/Petit-Saguenay
 //   Tadoussac             48°09′N   69°43′W       https://en.wikipedia.org/wiki/Tadoussac
 //   Les Escoumins         48°21′05″N 69°24′27″W   https://en.wikipedia.org/wiki/Les_Escoumins
@@ -122,16 +121,13 @@ const FJORD_WAYPOINTS = [
   // South shore (Route 170) — in Fjord-du-Saguenay National Park's Baie
   // Éternité sector, a real wide bay off the main channel.
   { name: 'Riviere-Eternite', lat: 48.2556, lon: -70.4139, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 2.5 },
-  // 48.2330/-70.2000 (still visible below in git history) was Wikipedia's
-  // *municipality* centroid — the inland village core up the Rivière
-  // Saint-Jean valley, not on the Saguenay itself. A canoe on the fjord
-  // wouldn't pass that point at all; it'd pass the mouth of Saint-Jean Bay,
-  // where the Rivière Saint-Jean actually opens into the Saguenay's south
-  // shore — 48.24139/-70.19805, confirmed against the river's own Wikipedia
-  // entry ("Saint-Jean River (Saguenay River tributary)"). Real waypoint
-  // coordinates should be the point on the navigable fjord itself, not a
+  // L'Anse-Saint-Jean (south shore, Route 170, at the mouth of Saint-Jean
+  // Bay) used to sit here — removed from the game by request. It lay almost
+  // on the straight line from Riviere-Eternite to Petit-Saguenay, so dropping
+  // it barely moves anything downstream in the cumulative-distance model.
+  // Its entry's comment also carried a rule worth keeping: real waypoint
+  // coordinates should be the point on the navigable river itself, not a
   // settlement's administrative centre, whenever the two diverge.
-  { name: "L'Anse-Saint-Jean", lat: 48.2414, lon: -70.1981, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1, riverWidthKm: 2 }, // south shore, Route 170
   { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 2.2 }, // south shore, Route 170
   // North shore — reached via Route 172, not the Route 170/ferry side.
   // Still the fjord's own mouth here, just short of the dramatically wider
