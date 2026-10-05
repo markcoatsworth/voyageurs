@@ -68,9 +68,26 @@ const GENERIC_DOCK_HIT_Z_FRACTION = 0.06;
 // per an explicit request to make it "so big I cannot miss" after a more
 // modest oversizing still wasn't visible/findable enough), wide along the
 // shore to match, easy to spot from the moment Quebec City comes into view.
-const QUEBEC_CITY_DOCK_REACH = 32; // ~72% of the full ~44-unit channel width, vs. ~6 everywhere else
+//
+// The reach is a fraction of the channel, not a number: it was a flat 32,
+// "~72% of the full ~44-unit channel width" — until river/lawrenceWidth.js
+// gave Québec City its real narrows (~13 units), when the same 32 ran the
+// quay straight across the river and ~19 units into the far bank.
+const QUEBEC_CITY_DOCK_REACH_FRACTION = 0.72;
 const QUEBEC_CITY_DOCK_WIDTH_Z = 12; // vs. 2.2 everywhere else
 const QUEBEC_CITY_DOCK_HIT_Z = 7; // vs. 1.3 everywhere else
+
+// Sorel-Tracy's pier, sized by hand. Generic docks scale with the channel
+// (GENERIC_DOCK_*_FRACTION), so when lawrenceWidth.js narrowed Sorel's reach
+// of the river from ~52 to ~27 units its dock halved with it, to ~6.7 out by
+// ~6.4 along — reported as "much too small". These put it back at roughly
+// its old size (cf. La Malbaie/Trois-Rivières, ~10 x ~11). The reach is
+// still ~37% of the channel, well short of the centreline the
+// GENERIC_DOCK_REACH_FRACTION comment warns about (past that, a centred
+// course auto-docks).
+const SOREL_TRACY_DOCK_REACH = 10;
+const SOREL_TRACY_DOCK_WIDTH_Z = 12;
+const SOREL_TRACY_DOCK_HIT_Z = 2.5;
 
 // Montreal's dock — the great inland port, commercial heart of New France.
 // Sits in the south (main) channel now that the Island of Montreal splits
@@ -628,7 +645,8 @@ function inlandSign(v) {
 }
 
 function dockReach(v) {
-  if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_REACH;
+  if (v.name === 'Quebec City') return widthAt(v.flowDistance) * QUEBEC_CITY_DOCK_REACH_FRACTION;
+  if (v.name === 'Sorel-Tracy') return SOREL_TRACY_DOCK_REACH;
   if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_REACH : MONTREAL_NORTH_DOCK_REACH;
   if (v.name === 'Kingston') return KINGSTON_DOCK_REACH;
   return Math.max(DOCK_LENGTH * villageLayout(v.seed).dock.lengthScale, widthAt(v.flowDistance) * GENERIC_DOCK_REACH_FRACTION);
@@ -636,6 +654,7 @@ function dockReach(v) {
 
 function dockWidthZ(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_WIDTH_Z;
+  if (v.name === 'Sorel-Tracy') return SOREL_TRACY_DOCK_WIDTH_Z;
   if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_WIDTH_Z : MONTREAL_NORTH_DOCK_WIDTH_Z;
   if (v.name === 'Kingston') return KINGSTON_DOCK_WIDTH_Z;
   return Math.max(DOCK_WIDTH_Z, widthAt(v.flowDistance) * GENERIC_DOCK_WIDTH_Z_FRACTION);
@@ -650,6 +669,7 @@ function dockWidthZ(v) {
 // helpers treat the twin as "on the island" too.
 export function dockHitZ(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_HIT_Z;
+  if (v.name === 'Sorel-Tracy') return SOREL_TRACY_DOCK_HIT_Z;
   if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_HIT_Z : MONTREAL_NORTH_DOCK_HIT_Z;
   if (v.name === 'Kingston') return KINGSTON_DOCK_HIT_Z;
   return Math.max(DOCK_HIT_Z, widthAt(v.flowDistance) * GENERIC_DOCK_HIT_Z_FRACTION);

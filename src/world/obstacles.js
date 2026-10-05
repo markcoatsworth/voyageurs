@@ -1,5 +1,6 @@
 import { centerX, widthAt, braidAt, southIslandAt } from './river/path.js';
 import { dockSpanAt } from './villages.js';
+import { FEATURE_ISLAND_RANGE } from './river/islands.js';
 import { createRockSprite, createLogSprite, createIslandSprite, createPeltSprite } from './sprites.js';
 import { AHEAD_UNITS, BEHIND_UNITS, PIXELS_PER_UNIT, CANOE_HALF_LENGTH } from '../shared/config.js';
 
@@ -211,10 +212,30 @@ function gapFor(distance) {
   return Math.max(MIN_GAP, BASE_GAP + Math.random() * GAP_VARIANCE - shrink);
 }
 
+// No hazards around the Island of Montreal. Casting off from Montréal's
+// north pier put the canoe in a channel only ~7 units wide between the
+// island and the bank, and a rock there was waiting within seconds —
+// reported as "when I cast off from Montreal on the right shore ... I
+// immediately take a whole bunch of damage ... remove the logs and rocks
+// from this section of river so that I can get away from the city". From a
+// little before the island's east tip to just past Île-Perrot (the island's
+// west tip is ~12 units short of it, and the Chasse-galerie lifts off right
+// around there), every rock, log and small island is spawned hidden and
+// inert; pelts still come through at their usual rate, since they're
+// pickups, not hazards. The channels themselves were widened at the same
+// time (river/lawrenceWidth.js).
+export const HAZARD_FREE_RANGE = [FEATURE_ISLAND_RANGE[0] - 20, FEATURE_ISLAND_RANGE[1] + 20];
+function hazardFreeAt(d) {
+  return d >= HAZARD_FREE_RANGE[0] && d <= HAZARD_FREE_RANGE[1];
+}
+
 function place(world, z) {
   const d = world.distance - z;
   const hasBraid = braidAt(d) !== null;
   let type = pickType(hasBraid);
+  if (hazardFreeAt(d) && type !== PELT) {
+    return { type, x: centerX(d), z, active: false, hidden: true, spinPhase: 0 };
+  }
   let x = pickX(type, d);
   if (x === null) { type = ROCK; x = pickX(type, d); }
   if (x === null) {
@@ -227,7 +248,7 @@ function place(world, z) {
       x = (x - dock.lo < dock.hi - x) ? dock.lo : dock.hi;
     }
   }
-  return { type, x, z, active: true, spinPhase: Math.random() * Math.PI * 2 };
+  return { type, x, z, active: true, hidden: false, spinPhase: Math.random() * Math.PI * 2 };
 }
 
 export function createObstacleField(world) {
@@ -253,7 +274,8 @@ export function createObstacleField(world) {
     entry.type = fresh.type;
     entry.x = fresh.x;
     entry.z = fresh.z;
-    entry.active = true;
+    entry.active = fresh.active;
+    entry.hidden = fresh.hidden;
     entry.spinPhase = fresh.spinPhase;
   }
 
@@ -287,6 +309,7 @@ export function createObstacleField(world) {
         // rocks/logs are also inactive but stay drawn: you still paddle past
         // the rock you clipped.)
         if (entry.type === PELT && !entry.active) continue;
+        if (entry.hidden) continue; // see HAZARD_FREE_RANGE
         const { x: sx, y: sy } = worldToScreen(entry.x, entry.z, cameraWorldX);
         const sprite = sprites[entry.type];
         if (entry.type === PELT) {

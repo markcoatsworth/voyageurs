@@ -243,6 +243,10 @@ export const KINGSTON_APPROACH_LEAD = 150;
 // is the half of it the test can't get from widthAt().
 export const EDGE_MARGIN = 0.55;
 const ISLAND_HIT_MARGIN = 0.35;
+// How far ahead a cast-off checks for islands (castOffClearOfIslands). The
+// canoe launches at rest — upriver it can take seconds to build way — so the
+// island has to be clear for a good stretch, not just at the launch point.
+const CAST_OFF_ISLAND_LOOKAHEAD = 15;
 const LOG_PENALTY_SPEED = 4;
 const BANK_PENALTY_SPEED = 2.6;
 const INVULN_TIME = 1.2;
@@ -916,6 +920,31 @@ export class Game {
   // starts a fresh run rather than dropping back into a town you can't
   // leave.
 
+  // A world X near `x` that's clear of every island (braidAt — the Island of
+  // Montreal included) over the next CAST_OFF_ISLAND_LOOKAHEAD units from d,
+  // pushed out on whichever side of the island x already sits, then kept
+  // inside the banks. Clearance is the collision margin plus the hull's own
+  // half-length and a little water, so a canoe that sits still there doesn't
+  // scrape the island as it drifts. Used by leaveVillage().
+  castOffClearOfIslands(x, d) {
+    const pad = ISLAND_HIT_MARGIN + CANOE_HALF_LENGTH + 0.5;
+    for (let pass = 0; pass < 3; pass++) {
+      let moved = false;
+      for (let dd = d; dd <= d + CAST_OFF_ISLAND_LOOKAHEAD; dd += 0.5) {
+        const island = braidAt(dd);
+        if (!island) continue;
+        const reach = island.halfWidth + pad;
+        if (Math.abs(x - island.centerX) < reach) {
+          x = island.centerX + (x >= island.centerX ? 1 : -1) * reach;
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+    const edge = widthAt(d) / 2 - EDGE_MARGIN - CANOE_HALF_LENGTH;
+    return clamp(x, centerX(d) - edge, centerX(d) + edge);
+  }
+
   leaveVillage() {
     if (this.currentVillage.name === 'Kingston') return; // see the comment above — the end of the line
     this.mode = 'river';
@@ -946,6 +975,22 @@ export class Game {
       } else {
         this.flowDistance = this.currentVillage.flowDistance + past + 3;
       }
+      // ...and off any island. The cast-off keeps the canoe's own lateral
+      // position from the dock, which is fine against a riverbank but not
+      // against Montréal's piers: they're built on the Island of Montreal
+      // itself, and the island bulges outward just upstream of the city, so
+      // docking at the island end of the north pier and casting off put the
+      // canoe several units inside the island's hit zone — 64-96 hull lost
+      // grinding along it with no way to be clear of it in time. Reported as
+      // "when I cast off from Montreal on the right shore, I start on the
+      // sandbar and immediately take a whole bunch of damage." Scan the
+      // stretch just ahead and step the canoe out on whichever side of the
+      // island it already is.
+      this.lateralOffset = this.castOffClearOfIslands(
+        centerX(this.flowDistance) + this.lateralOffset, this.flowDistance,
+      ) - centerX(this.flowDistance);
+      this.canoeWorldX = centerX(this.flowDistance) + this.lateralOffset;
+      this.lateralVX = 0;
       this._castOffGraceVillage = this.currentVillage;
       this._castOffGrace = 3;
       this.world.distance = this.flowDistance;

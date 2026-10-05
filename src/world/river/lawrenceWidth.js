@@ -55,7 +55,22 @@ export const LAWRENCE_WEST_WIDTH_KEYFRAMES = [
   { d: LAWRENCE_WEST + 1533.91, width: 37, village: 'Trois-Rivieres' }, // 8km — into Lac Saint-Pierre
   { d: LAWRENCE_WEST + 1807.85, width: 25, village: 'Sorel-Tracy' }, // 3km
   { d: LAWRENCE_WEST + 2042.83, width: 34, village: 'Charlemagne' }, // see above
-  { d: LAWRENCE_WEST + 2169.32, width: 40, village: 'Montreal' }, // see above
+  // The Island of Montreal stretch (islands.js's MONTREAL_ISLAND_KEYFRAMES,
+  // 2102..2318) runs at 64, not 40. At 40 the island — offset 8 north,
+  // half-width 6 at its widest — left the north (Rivière-des-Prairies)
+  // channel only ~7 units wide, and Montréal's north pier filled most of
+  // it: casting off there landed on the island's shoulder and onto a rock
+  // within seconds, reported as "when I cast off from Montreal on the right
+  // shore, I start on the sandbar and immediately take a whole bunch of
+  // damage ... make the channels on either side of the island much wider."
+  // The island keeps its authored shape (featureIslandAt only shrinks it
+  // when the channel is too narrow), so all of the extra width goes into
+  // the two channels: north ~7 -> ~18, south ~23 -> ~34. Unlabelled points
+  // (no village) bracket the island so the widening is held across all of
+  // it, not just at the city.
+  { d: LAWRENCE_WEST + 2095, width: 60 }, // just before the island's east tip
+  { d: LAWRENCE_WEST + 2169.32, width: 64, village: 'Montreal' },
+  { d: LAWRENCE_WEST + 2300, width: 60 }, // the island's west tip tapering out
   { d: LAWRENCE_WEST + 2329.68, width: 40, village: 'Ile-Perrot' }, // see above
 ];
 

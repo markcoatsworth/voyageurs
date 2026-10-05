@@ -1172,6 +1172,7 @@ await step('river: lawrenceWest width follows the real river — narrows at Qué
   // narrows away from Québec City.
   const { LAWRENCE_WEST_WIDTH_KEYFRAMES, lawrenceWestWidthAt } = await import('../src/world/river/lawrenceWidth.js');
   for (const kf of LAWRENCE_WEST_WIDTH_KEYFRAMES) {
+    if (!kf.village) continue; // an unlabelled shaping point (the Island of Montreal stretch)
     const v = kf.village === 'Tadoussac'
       ? { flowDistance: SEGMENT_SHAPE_OFFSET.lawrenceWest }
       : VILLAGES.find((x) => x.segment === 'lawrenceWest' && x.name === kf.village);
@@ -1291,6 +1292,42 @@ await step('loup-garou: night only falls once you are clear of Beaupré', () => 
     if (loupGarouNightAt(d) > 0) throw new Error(`night is already ${loupGarouNightAt(d).toFixed(2)} at ${(d - beaupre).toFixed(1)} units from Beaupré`);
   }
   if (!(LOUP_GAROU_TRIGGER - beaupre >= 50)) throw new Error(`the Loup-garou appears only ${(LOUP_GAROU_TRIGGER - beaupre).toFixed(1)} units past Beaupré`);
+});
+
+await step('montreal: casting off from either pier, anywhere along it, takes no damage', () => {
+  // "When I cast off from Montreal on the right shore, I start on the
+  // sandbar and immediately take a whole bunch of damage." Both piers stand
+  // on the Island of Montreal, and the island bulges out just upstream, so a
+  // canoe docked at the island end of the north pier was cast off inside it
+  // (64-96 hull). game.js's castOffClearOfIslands now steps it out, and
+  // obstacles.js's HAZARD_FREE_RANGE keeps rocks and logs out of the
+  // island stretch.
+  const mtl = VILLAGES.find((v) => v.name === 'Montreal');
+  const c = centerX(mtl.flowDistance);
+  const xs = [];
+  for (let x = c - widthAt(mtl.flowDistance) / 2; x <= c + widthAt(mtl.flowDistance) / 2; x += 0.5) {
+    if (getDockHit(mtl.flowDistance, x)) xs.push(x);
+  }
+  if (xs.length < 4) throw new Error('could not find Montréal\'s piers');
+  for (const x of xs.filter((_, i) => i % 3 === 0)) {
+    for (const paddle of [false, true]) {
+      const g = newGame('lawrenceWest', mtl.flowDistance - 3);
+      let docked = false;
+      for (let i = 0; i < 300 && !docked; i++) {
+        g.input.state.up = true;
+        g.game.lateralOffset = x - centerX(g.game.flowDistance);
+        g.game.update(1 / 60);
+        docked = g.game.mode === 'village';
+      }
+      if (!docked) continue; // this x only touches the pier from the far side
+      g.game.leaveVillage();
+      const hull = g.game.health;
+      run(g, 240, 1 / 60, (s) => { s.up = paddle; });
+      if (g.game.health < hull) {
+        throw new Error(`cast off from Montréal's pier at x=${(x - c).toFixed(1)} (${paddle ? 'paddling' : 'drifting'}) and lost ${hull - g.game.health} hull in 4s`);
+      }
+    }
+  }
 });
 
 // --- scenario 4d: Kingston's dock is a real entrance into the town ---------
