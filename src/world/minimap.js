@@ -224,7 +224,8 @@ function pointBoxDistance(px0, py0, b) {
 // Greedy placement, in the order given (the caller puts the most important
 // names first, so they keep their hand-placed spots). Each item is
 // { text, x, y, icon: box, preferred: { dx, dy, anchor } } with (x, y) the
-// icon's anchor point. Candidates: the preferred spot first, then names to
+// icon's anchor point (a `pin: true` preferred spot is taken as-is — see
+// below). Candidates: the preferred spot first, then names to
 // the right/left of the icon and centred above/below it, stepped outward
 // ring by ring and tried nearest-first — so a displaced name moves only as
 // far as it has to. The first candidate clear of every placed name and every
@@ -271,9 +272,13 @@ export function layoutLabels(items) {
       icons.forEach((b, j) => { if (j !== idx) total += overlapWithGap(c.box, b, LABEL_MARGIN); });
       return total;
     };
-    let best = null;
+    // A pinned labelPos (`pin: true`, route.js) is a hand-tuned override, not
+    // a preference: it goes exactly there, collisions or not, and the search
+    // is skipped. Everyone else still routes around it, since the caller puts
+    // pinned names first and they land in `placed` like any other.
+    let best = preferred.pin ? pref : null;
     let bestCost = Infinity;
-    for (const c of candidates) {
+    for (const c of best ? [] : candidates) {
       const cc = cost(c);
       if (cc === 0) { best = c; break; }
       if (cc < bestCost) { best = c; bestCost = cc; }
@@ -288,7 +293,12 @@ export function layoutLabels(items) {
         y2: Math.min(Math.max(iconCy, best.box.y0), best.box.y1),
       }
       : null;
-    return { x: best.x, y: best.y, anchor: best.anchor, box: best.box, leader };
+    // dx/dy/anchor are the result in route.js's labelPos terms, so an
+    // auto-placed name can be copied out as the starting point for a pin.
+    return {
+      x: best.x, y: best.y, anchor: best.anchor, box: best.box, leader,
+      dx: best.x - x, dy: best.y - y, pinned: !!preferred.pin,
+    };
   });
 }
 
@@ -661,10 +671,12 @@ export function createMinimap() {
   }
   // Names are laid out all together, once every icon's position is known
   // (see layoutLabels()). Priority order, since the greedy pass lets earlier
-  // names keep their spots: the two gold, explicitly-labelled ones
-  // (Lac Saint-Jean, Tadoussac) first, then the three real cities, then
-  // everyone else in route order (the sort is stable).
-  const rank = (p) => (p.label ? 0 : BIG_CITY_NAMES.has(p.name) ? 1 : 2);
+  // names keep their spots: hand-pinned names (labelPos.pin) before
+  // anything, since they're going exactly where they were put regardless
+  // and everything else has to make room; then the two gold, explicitly-
+  // labelled ones (Lac Saint-Jean, Tadoussac), then the three real cities,
+  // then everyone else in route order (the sort is stable).
+  const rank = (p) => (p.labelPos?.pin ? -1 : p.label ? 0 : BIG_CITY_NAMES.has(p.name) ? 1 : 2);
   const ordered = [...markers].sort((a, b) => rank(a) - rank(b));
   const placements = layoutLabels(ordered.map((p) => ({
     text: p.label || p.name,
@@ -674,9 +686,15 @@ export function createMinimap() {
     preferred: p.labelPos || { dx: 1.4, dy: -2.2, anchor: 'start' },
   })));
   ordered.forEach((p, i) => drawWaypointLabel(p, placements[i]));
-  // Exposed for test/smoke.mjs's spacing assertion.
+  // Exposed for test/smoke.mjs's spacing assertion, and as the resolved
+  // { dx, dy, anchor } of every name — the numbers to start from when
+  // pinning one in route.js.
   const labelLayout = ordered.map((p, i) => ({
     name: p.name,
+    dx: placements[i].dx,
+    dy: placements[i].dy,
+    anchor: placements[i].anchor,
+    pinned: placements[i].pinned,
     box: placements[i].box,
     icon: houseIconBox(p.x, p.y, BIG_CITY_NAMES.has(p.name)),
   }));

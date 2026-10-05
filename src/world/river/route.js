@@ -75,7 +75,19 @@
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './path.js';
 
 // labelPos hand-places each minimap label clear of the route line and the
-// widget's edges. Unused outside minimap.js.
+// widget's edges. Unused outside minimap.js. It's a *preference*: minimap.js's
+// layoutLabels() keeps it only while it's clear of every other name and
+// icon, and otherwise moves the name to the nearest spot that is.
+//
+// To tune a name by hand, add `pin: true` — labelPos { dx, dy, anchor,
+// pin: true } is then used exactly as written, and every unpinned name lays
+// itself out around it. dx/dy are map units (90 across the minimap window,
+// ~2.1 screen px each) from the house icon's bottom-centre, +y downward; dy
+// is the text's baseline; anchor is SVG text-anchor ('start' = text runs
+// right of x, 'end' = left of it, 'middle' = centred). A pin is on you: the
+// smoke test's spacing check exempts pinned names, so it won't catch a pin
+// that lands on a neighbour. createMinimap().labelLayout reports every
+// name's resolved dx/dy/anchor, handy as a starting point.
 // Every fjord/St. Lawrence/Ottawa River village below has its `side` pinned
 // to its *real* bank now (1 = north/Route-172-side of the Saguenay, or north
 // shore of the St. Lawrence/Ottawa; -1 = south/Route-170-side, or south
@@ -128,7 +140,12 @@ const FJORD_WAYPOINTS = [
   // Its entry's comment also carried a rule worth keeping: real waypoint
   // coordinates should be the point on the navigable river itself, not a
   // settlement's administrative centre, whenever the two diverge.
-  { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 2.2 }, // south shore, Route 170
+  // Pinned (see labelPos above): left to the auto-layout it landed above its
+  // icon but reaching back left to within ~6px of Riviere-Eternite's house,
+  // reported as too close. Starting at its own icon's left edge and running
+  // right keeps it clearly this village's, ~17 units off Riviere-Eternite
+  // and ~7.6 short of Les Escoumins' icon.
+  { name: 'Petit-Saguenay', lat: 48.2170, lon: -70.0670, labelPos: { dx: -4, dy: -9.4, anchor: 'start', pin: true }, side: -1, riverWidthKm: 2.2 }, // south shore, Route 170
   // North shore — reached via Route 172, not the Route 170/ferry side.
   // Still the fjord's own mouth here, just short of the dramatically wider
   // St. Lawrence it opens into (see the two Saint Lawrence lists' own

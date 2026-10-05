@@ -3030,12 +3030,24 @@ await step('minimap: every village name keeps LABEL_MARGIN clear of every other 
       if (i === j) continue;
       const a = labels[i];
       const b = labels[j];
-      if (j > i && gap(a.box, b.box) < LABEL_MARGIN - EPS) {
+      // A pinned name (labelPos.pin, route.js) is hand-placed on purpose
+      // and exempt — but every unpinned name must still keep clear of it.
+      if (a.pinned) continue;
+      if (gap(a.box, b.box) < LABEL_MARGIN - EPS) {
         throw new Error(`"${a.name}" and "${b.name}" labels are ${gap(a.box, b.box).toFixed(2)} apart (min ${LABEL_MARGIN.toFixed(2)})`);
       }
       if (gap(a.box, b.icon) < LABEL_MARGIN - EPS) {
         throw new Error(`"${a.name}" label is ${gap(a.box, b.icon).toFixed(2)} from ${b.name}'s icon (min ${LABEL_MARGIN.toFixed(2)})`);
       }
+    }
+  }
+  // And a pin really is taken verbatim, not treated as one more preference.
+  const { SEGMENTS } = await import('../src/world/river/route.js');
+  const pins = Object.values(SEGMENTS).flatMap((s) => s.points).filter((p) => p.labelPos?.pin);
+  for (const p of pins) {
+    const got = labels.find((l) => l.name === p.name);
+    if (!got?.pinned || Math.abs(got.dx - p.labelPos.dx) > EPS || Math.abs(got.dy - p.labelPos.dy) > EPS || got.anchor !== p.labelPos.anchor) {
+      throw new Error(`${p.name}'s pinned labelPos wasn't used as written: got ${JSON.stringify(got && { dx: got.dx, dy: got.dy, anchor: got.anchor })}`);
     }
   }
 });

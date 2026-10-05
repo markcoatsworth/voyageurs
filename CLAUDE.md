@@ -86,7 +86,10 @@ src/
     minimap.js         moving SVG locator map over the real three-way geography. Village names are
                        placed together by layoutLabels() (route.js's labelPos is only the preferred
                        spot) so every name keeps LABEL_MARGIN off every other name and icon —
-                       asserted by the smoke test. Press Start 2P is 1em/char, so names are huge
+                       asserted by the smoke test. Press Start 2P is 1em/char, so names are huge.
+                       `labelPos: { …, pin: true }` overrides the layout for one name (placed
+                       verbatim, others route around it; exempt from the spacing check) — the
+                       knob for hand-tuning a label. How-to in route.js's labelPos comment
     river/
       path.js          centerX(d)/widthAt(d)/braidAt/rapidsStrength — pure fns of downstream distance.
                        MOUTH_DISTANCE=900 (Tadoussac). SEGMENT_SHAPE_OFFSET per segment. widthAt has
