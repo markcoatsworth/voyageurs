@@ -275,6 +275,34 @@ export function braidOffsetFraction(cycle) {
   return hashRange(cycle, 401, -0.85, 0.85);
 }
 
+// No island at a segment's launch point. Casting off from Tadoussac drops
+// the canoe at SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5, dead centre — and
+// cycle 545's island (span 59997..60013) sat right across that spot, so
+// every Tadoussac departure started grounded on a sandbar, with lawrenceWest's
+// upriver current (UPRIVER_CURRENT, game.js) holding the canoe against it:
+// reported as "I start on a sandbar and always immediately take damage"
+// (100 -> 36 hull in three seconds with no input). The Rideau's offset was
+// already hand-picked to avoid this (see SEGMENT_SHAPE_OFFSET); lawrenceWest's
+// was only checked for calm rapids. Rather than re-pick an offset (which
+// would move every shape on that leg), any cycle whose island span comes
+// within BRAID_LAUNCH_CLEARANCE of a segment start is simply skipped —
+// enough water for a canoe launching at rest to get up to speed and steer
+// before the first island can arrive. waterGL.js codegens this same list
+// so the shader doesn't draw water-coloured sand where the JS says there's
+// no island.
+const BRAID_LAUNCH_CLEARANCE = 30;
+export const BRAID_SUPPRESSED_CYCLES = Object.values(SEGMENT_SHAPE_OFFSET).flatMap((start) => {
+  const out = [];
+  const lo = Math.floor((start - BRAID_LAUNCH_CLEARANCE) / BRAID_PERIOD);
+  const hi = Math.floor((start + BRAID_LAUNCH_CLEARANCE) / BRAID_PERIOD);
+  for (let c = lo; c <= hi; c++) {
+    const spanStart = c * BRAID_PERIOD + (BRAID_PERIOD - BRAID_LENGTH) / 2;
+    if (spanStart < start + BRAID_LAUNCH_CLEARANCE && spanStart + BRAID_LENGTH > start - BRAID_LAUNCH_CLEARANCE) out.push(c);
+  }
+  return out;
+});
+const braidSuppressed = new Set(BRAID_SUPPRESSED_CYCLES);
+
 // Returns null where there's no island, or { centerX, halfWidth } (both in
 // the same world-X units as centerX(d)) describing the island's shape at
 // this exact d. halfWidth tapers from 0 up to BRAID_MAX_ISLAND_HALF and
@@ -296,6 +324,7 @@ export function braidAt(d) {
   }
 
   const cycle = Math.floor(d / BRAID_PERIOD);
+  if (braidSuppressed.has(cycle)) return null; // a segment's launch point — see BRAID_SUPPRESSED_CYCLES
   const spanStart = cycle * BRAID_PERIOD + (BRAID_PERIOD - BRAID_LENGTH) / 2;
   const t = (d - spanStart) / BRAID_LENGTH;
   if (t <= 0 || t >= 1) return null;

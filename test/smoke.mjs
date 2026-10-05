@@ -58,7 +58,8 @@ const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
 const { getDockHit, drawVillages, debugKingstonGreeterX, dockSpanAt } = await import('../src/world/villages.js');
 const { KINGSTON_CATARAQUI } = await import('../src/world/villageScene.js');
-const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
+const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt, braidAt } = await import('../src/world/river/path.js');
+const { FEATURE_ISLAND_RANGE } = await import('../src/world/river/islands.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
@@ -1179,6 +1180,30 @@ await step('river: lawrenceWest width follows the real river — narrows at Qué
     if (w < min) { min = w; minAt = d; }
   }
   if (min < 8) throw new Error(`lawrenceWest pinches to ${min.toFixed(2)} at local d=${(minAt - start).toFixed(0)} — narrower than the fjord`);
+});
+
+await step('tadoussac: casting off upriver starts in open water, not grounded on a sandbar', () => {
+  // "When I leave Tadoussac, I start on a sandbar and always immediately
+  // take damage": a braid island sat right on lawrenceWest's launch point,
+  // and the upriver current held the canoe against it (100 -> 36 hull in
+  // three seconds, hands off). path.js's BRAID_SUPPRESSED_CYCLES now keeps
+  // every segment start clear.
+  const tad = VILLAGES.find((v) => v.name === 'Tadoussac');
+  const g = newGame('fjord', tad.flowDistance);
+  g.game.currentVillage = tad;
+  g.game.mode = 'village';
+  g.game.leaveVillage();
+  if (g.game.segment !== 'lawrenceWest') throw new Error(`Tadoussac's cast-off should land on lawrenceWest, got ${g.game.segment}`);
+  const hull = g.game.health;
+  run(g, 180, 1 / 60); // three seconds, no input at all
+  if (g.game.health < hull) throw new Error(`took ${hull - g.game.health} damage in the first three seconds after leaving Tadoussac, with no input`);
+  for (const start of Object.values(SEGMENT_SHAPE_OFFSET)) {
+    for (let d = start - 30; d <= start + 30; d += 0.25) {
+      if (braidAt(d) && !(d >= FEATURE_ISLAND_RANGE[0] && d <= FEATURE_ISLAND_RANGE[1])) {
+        throw new Error(`a braid island sits ${(d - start).toFixed(1)} units from a segment start (${start})`);
+      }
+    }
+  }
 });
 
 // --- scenario 4d: Kingston's dock is a real entrance into the town ---------

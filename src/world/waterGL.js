@@ -13,7 +13,7 @@
 // JS function to the GPU — keep the two in sync if you retune the course.
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT, AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
-import { BRAID_PERIOD, BRAID_LENGTH, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE, OTTAWA_EASE_START, OTTAWA_EASE_LEN, KINGSTON_HARBOUR_SKEW } from './river/path.js';
+import { BRAID_PERIOD, BRAID_LENGTH, BRAID_SUPPRESSED_CYCLES, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE, OTTAWA_EASE_START, OTTAWA_EASE_LEN, KINGSTON_HARBOUR_SKEW } from './river/path.js';
 import {
   MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL,
   LACHINE_RAPIDS_KEYFRAMES, FEATURE_ISLAND_RANGE, LACHINE_RAPIDS_RANGE,
@@ -287,6 +287,9 @@ vec2 braidAt(float d) {
   }
 
   float cycle = floor(d / BRAID_PERIOD);
+  // No island at a segment's launch point — codegen'd from path.js's
+  // BRAID_SUPPRESSED_CYCLES, same list the JS braidAt() skips.
+  if (${BRAID_SUPPRESSED_CYCLES.length ? BRAID_SUPPRESSED_CYCLES.map((c) => `abs(cycle - ${c.toFixed(1)}) < 0.5`).join(' || ') : 'false'}) return vec2(0.0, -1.0);
   float spanStart = cycle * BRAID_PERIOD + (BRAID_PERIOD - BRAID_LENGTH) * 0.5;
   float t = (d - spanStart) / BRAID_LENGTH;
   if (t <= 0.0 || t >= 1.0) return vec2(0.0, -1.0);
