@@ -349,28 +349,34 @@ await step('loup-garou: the demon-wolf strikes, then Québec City checks it', ()
     throw new Error('loup-garou distances look wrong');
   }
 
-  // Sit still in the beast's reach and take the hits — the strike is led at
-  // your current speed, so a canoe that isn't changing pace or line is in
-  // the jaws every time (a fight where nothing can touch you isn't a fight).
-  // Hull pinned so obstacle damage doesn't muddy the "did the *maw* connect"
-  // read; paddle just enough to hold station against the upstream current.
-  const idle = newGame('lawrenceWest', LOUP_GAROU_TRIGGER + 8);
+  // Don't dodge and take the hits — the strike is led at your current speed,
+  // so a canoe that isn't changing pace or line is in the jaws every time (a
+  // fight where nothing can touch you isn't a fight). Hull pinned so obstacle
+  // damage doesn't muddy the "did the *maw* connect" read.
+  //
+  // "Not dodging" is a steady full paddle on a straight line. This used to
+  // hold station by tapping Up whenever the current pushed it back — fine
+  // while upriver paddling had full ACCEL, but with UPRIVER_ACCEL_SCALE and
+  // the harder UPRIVER_CURRENT that bang-bang control swings the speed
+  // up and down by several units a second, which is a (very effective)
+  // dodge in its own right, not holding still. The steady paddle is what a
+  // player who simply ignores the beast actually does.
+  const idle = newGame('lawrenceWest', LOUP_GAROU_TRIGGER - 15);
   let sawBeast = false;
   let idleHits = 0;
   idle.game.handleHit = ((orig) => (e) => {
     if (e && e.type === 'wolf') idleHits++;
     return orig(e);
   })(idle.game.handleHit.bind(idle.game));
-  for (let i = 0; i < 1400; i++) {
-    // nudge forward only when the current has pushed us back past the start,
-    // so net flow position barely moves and speed stays near zero
-    idle.input.state.up = idle.game.flowDistance < LOUP_GAROU_TRIGGER + 8;
+  for (let i = 0; i < 1400 && !(idle.game.flowDistance >= LOUP_GAROU_DELIVERANCE && sawBeast && !idle.game.loupGarou.isActive()); i++) {
+    idle.input.state.up = true;
     idle.game.health = 100;
     idle.game.update(1 / 30);
     if (idle.game.loupGarou.isActive()) sawBeast = true;
   }
   if (!sawBeast) throw new Error('the loup-garou never activated on the approach to Québec City');
-  if (idleHits < 2) throw new Error(`sitting in the beast's reach for ~45s took only ${idleHits} strikes — the maw barely connects`);
+  if (idleHits < 2) throw new Error(`paddling straight through the beast's reach without dodging took only ${idleHits} strikes — the maw barely connects`);
+  notes.push(`  note loup-garou: a straight, steady paddle through the fight took ${idleHits} strike(s)`);
 
   // The intended counter — steer clear of the marked spot when it rears
   // back — should shrug off almost every strike while keeping pace up the
@@ -383,13 +389,27 @@ await step('loup-garou: the demon-wolf strikes, then Québec City checks it', ()
     if (e && e.type === 'wolf') dodgeHits++;
     return orig(e);
   })(g.game.handleHit.bind(g.game));
+  // Picks a side the moment a strike is marked and holds it until the strike
+  // is over, the way a player commits to a dodge. It used to re-pick every
+  // frame (left if at-or-left of the mark, else right), which dithers back
+  // and forth across the mark and stays inside HIT_DX; that ate ~2 of 3
+  // strikes even before UPRIVER_MAX_SPEED stretched the fight (and with it
+  // the strike count), so the old bot was measuring itself, not the fight.
+  let dodgeDir = 0;
+  let prevStrikeX = null;
   for (let i = 0; i < 4000 && !delivered; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     const strikeX = g.game.loupGarou.strikeTargetX();
+    if (strikeX != null && prevStrikeX == null) {
+      const off = g.game.canoeWorldX - centerX(g.game.flowDistance);
+      // Away from the mark, unless that runs into the bank — then cross over.
+      dodgeDir = Math.abs(off) > 3 ? -Math.sign(off) : (g.game.canoeWorldX > strikeX ? 1 : -1);
+    }
+    prevStrikeX = strikeX;
     if (strikeX != null) {
-      g.input.state.left = g.game.canoeWorldX <= strikeX;
-      g.input.state.right = g.game.canoeWorldX > strikeX;
+      g.input.state.left = dodgeDir < 0;
+      g.input.state.right = dodgeDir > 0;
     } else {
       const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
       g.input.state.left = err > 0.6;

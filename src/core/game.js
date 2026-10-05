@@ -65,7 +65,9 @@ const MAX_REVERSE_SPEED = -6 * speedScale;
 // way you came, same magnitude as MIN_SPEED but flipped, so holding Up
 // here is a sustained, active effort the whole way, not an occasional
 // correction.
-const UPRIVER_CURRENT = -MIN_SPEED;
+// 1.6x MIN_SPEED (was exactly MIN_SPEED): "the river should push back
+// harder" — let go and you're carried back at ~4 units/s, not a 2.5 drift.
+const UPRIVER_CURRENT = -1.6 * MIN_SPEED;
 // this.speed carries over unchanged into lawrenceWest — a player crossing
 // into it mid-paddle keeps whatever forward speed they arrived with, same as
 // every other segment transition. Everywhere else that's fine (the
@@ -76,6 +78,21 @@ const UPRIVER_CURRENT = -MIN_SPEED;
 // not gradually, so lawrenceWest gets its own much quicker decay toward
 // UPRIVER_CURRENT instead of reusing DECEL_DRIFT's gentle one.
 const UPRIVER_DECEL = 6 * speedScale;
+// The current also works against you while you *are* paddling. Before this
+// only the no-paddle drift knew the leg ran upstream: holding Up still
+// climbed at full ACCEL to full MAX_SPEED, so a few seconds in it handled
+// exactly like running the Saguenay downstream — reported as "once I build
+// up just a bit of speed, it behaves like the downstream portion of the
+// Saguenay. The river should push back harder and it should take a lot
+// longer to build up speed." So upriver the paddle tops out at
+// UPRIVER_MAX_SPEED and gets there at ACCEL * UPRIVER_ACCEL_SCALE: 0 to
+// full in ~3.4s (vs ~2.3s to a much higher top speed downstream), more
+// from a standing start against the drift. Both scale off the ordinary
+// values so touch keeps the same proportions. RAPIDS_UPRIVER_PUSH/DRAG
+// below are fractions of UPRIVER_MAX_SPEED for the same reason — sized off
+// MAX_SPEED they'd now stall the canoe outright in peak whitewater.
+const UPRIVER_MAX_SPEED = 0.6 * MAX_SPEED;
+const UPRIVER_ACCEL_SCALE = 0.4;
 const BASE_SPEED = 8 * speedScale;
 const ACCEL = 7 * speedScale * FWD_ACCEL_SCALE;
 // Holding "down" (back on the steer pad / Down key) is a brake, not a lazy
@@ -415,7 +432,7 @@ const RAPIDS_BOOST = 7 * speedScale; // extra units/s the current adds at peak w
 // scaled down further than RAPIDS_BOOST is): full paddle through peak
 // whitewater keeps ~30% of top speed — a real grind, never a stall — and
 // letting go there gets you carried back fast.
-const RAPIDS_UPRIVER_PUSH = 0.7 * MAX_SPEED;
+const RAPIDS_UPRIVER_PUSH = 0.7 * UPRIVER_MAX_SPEED;
 // ...and it works on the canoe's own momentum (this.speed), not as a term
 // added to it. The first cut added -RAPIDS_UPRIVER_PUSH to effectiveSpeed
 // while this.speed sat at MAX_SPEED the whole way through, so the moment
@@ -430,7 +447,7 @@ const RAPIDS_UPRIVER_PUSH = 0.7 * MAX_SPEED;
 // amount. 1.5 * MAX_SPEED/s, not slower: at 0.9 the bleed lagged the
 // ceiling as the rapids built, so the canoe only grazed the intended low
 // point on its way through.
-const RAPIDS_UPRIVER_DRAG = 1.5 * MAX_SPEED;
+const RAPIDS_UPRIVER_DRAG = 1.5 * UPRIVER_MAX_SPEED;
 // Winded after upriver whitewater: on its own, ordinary ACCEL took you from
 // the rapids' low point back to full speed in ~1.5s — still more snap than
 // "a few seconds just to get back to regular speed." So the paddle's
@@ -1244,12 +1261,22 @@ export class Game {
     const ambientCurrent = (AMBIENT_CURRENT[this.segment] ?? MIN_SPEED) - upriverRapids * RAPIDS_UPRIVER_PUSH;
     // See WINDED_ACCEL_CUT: full while in the whitewater, easing off after.
     this.winded = upriverRapids > 0.1 ? 1 : Math.max(0, (this.winded ?? 0) - dt / WINDED_RECOVERY_TIME);
-    const paddleAccel = ACCEL * (1 - WINDED_ACCEL_CUT * this.winded);
+    // Upriver the paddle is slower to build and tops out lower (see
+    // UPRIVER_MAX_SPEED); everywhere else, the ordinary values.
+    const upriver = this.segment === 'lawrenceWest';
+    const topSpeed = upriver ? UPRIVER_MAX_SPEED : MAX_SPEED;
+    const paddleAccel = ACCEL * (upriver ? UPRIVER_ACCEL_SCALE : 1) * (1 - WINDED_ACCEL_CUT * this.winded);
     const ambientDecel = this.segment === 'lawrenceWest'
       ? UPRIVER_DECEL
       : DECEL_DRIFT * 0.3 * DRIFT_DECEL_TOUCH_MULT;
 
-    if (keys.up) this.speed = Math.min(MAX_SPEED, this.speed + paddleAccel * dt);
+    if (keys.up) {
+      // Above the top speed (crossing into lawrenceWest still carrying the
+      // fjord's pace) the current wins the canoe back down at its own
+      // ambientDecel rate rather than snapping it to the lower ceiling.
+      if (this.speed <= topSpeed) this.speed = Math.min(topSpeed, this.speed + paddleAccel * dt);
+      else this.speed = Math.max(topSpeed, this.speed - ambientDecel * dt);
+    }
     else if (keys.down) {
       // Brake hard toward a stop; only past ~0 does it slow to the gentler
       // ACCEL rate, so holding on still backs you up but the first thing
@@ -1272,7 +1299,7 @@ export class Game {
     // only way back up is ACCEL — so leaving the rapids is a climb back to
     // speed, not a surge.
     if (upriverRapids > 0) {
-      const ceiling = MAX_SPEED - upriverRapids * RAPIDS_UPRIVER_PUSH;
+      const ceiling = topSpeed - upriverRapids * RAPIDS_UPRIVER_PUSH;
       if (this.speed > ceiling) this.speed = Math.max(ceiling, this.speed - RAPIDS_UPRIVER_DRAG * dt);
     }
 
