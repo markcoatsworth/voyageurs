@@ -416,6 +416,31 @@ const RAPIDS_BOOST = 7 * speedScale; // extra units/s the current adds at peak w
 // whitewater keeps ~30% of top speed — a real grind, never a stall — and
 // letting go there gets you carried back fast.
 const RAPIDS_UPRIVER_PUSH = 0.7 * MAX_SPEED;
+// ...and it works on the canoe's own momentum (this.speed), not as a term
+// added to it. The first cut added -RAPIDS_UPRIVER_PUSH to effectiveSpeed
+// while this.speed sat at MAX_SPEED the whole way through, so the moment
+// the rapids faded the full speed came straight back — ~5 to 16 units/s in
+// about half a second, reported as "once I come out of the whitewater ...
+// my canoe gets shot forward really quickly ... it should take me a few
+// seconds just to get back to regular speed." Now the whitewater lowers
+// the paddling ceiling to MAX_SPEED - rapids * RAPIDS_UPRIVER_PUSH and
+// bleeds anything above it off at this rate (fast, so hitting whitewater
+// still bites at once; a fraction of MAX_SPEED for the same touch-parity
+// reason as above), and lowers the no-paddle drift target by the same
+// amount. 1.5 * MAX_SPEED/s, not slower: at 0.9 the bleed lagged the
+// ceiling as the rapids built, so the canoe only grazed the intended low
+// point on its way through.
+const RAPIDS_UPRIVER_DRAG = 1.5 * MAX_SPEED;
+// Winded after upriver whitewater: on its own, ordinary ACCEL took you from
+// the rapids' low point back to full speed in ~1.5s — still more snap than
+// "a few seconds just to get back to regular speed." So the paddle's
+// acceleration is cut by WINDED_ACCEL_CUT while you're in it and for a
+// moment after, easing back to normal over WINDED_RECOVERY_TIME seconds.
+// Tied to having just been in whitewater, not to lawrenceWest as a whole,
+// so ordinary upstream paddling (reported as already feeling right) keeps
+// its usual response.
+const WINDED_ACCEL_CUT = 0.6;
+const WINDED_RECOVERY_TIME = 3;
 const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 
 // lawrenceWest (world/river/route.js's third segment, toward Québec City) is the
@@ -622,6 +647,7 @@ export class Game {
     this.speed = BASE_SPEED;
     this.effectiveSpeed = BASE_SPEED;
     this.rapids = 0;
+    this.winded = 0; // see WINDED_ACCEL_CUT
     this.furs = 0;
     this.health = MAX_HEALTH;
     this.invulnTimer = SPAWN_INVULN_TIME;
@@ -1209,12 +1235,21 @@ export class Game {
     // — MIN_SPEED/a gentle decay everywhere except lawrenceWest, where the
     // target is negative and the decay is much quicker (see
     // UPRIVER_CURRENT/UPRIVER_DECEL/AMBIENT_CURRENT's comments).
-    const ambientCurrent = AMBIENT_CURRENT[this.segment] ?? MIN_SPEED;
+    // Upriver whitewater acts on the canoe's own speed, not as a push added
+    // on top of it (see RAPIDS_UPRIVER_DRAG). Read up front because it moves
+    // both the no-paddle drift target here and the paddling ceiling below.
+    const upriverRapids = this.segment === 'lawrenceWest' && !this.chasseGalerie.isActive()
+      ? rapidsStrength(this.flowDistance)
+      : 0;
+    const ambientCurrent = (AMBIENT_CURRENT[this.segment] ?? MIN_SPEED) - upriverRapids * RAPIDS_UPRIVER_PUSH;
+    // See WINDED_ACCEL_CUT: full while in the whitewater, easing off after.
+    this.winded = upriverRapids > 0.1 ? 1 : Math.max(0, (this.winded ?? 0) - dt / WINDED_RECOVERY_TIME);
+    const paddleAccel = ACCEL * (1 - WINDED_ACCEL_CUT * this.winded);
     const ambientDecel = this.segment === 'lawrenceWest'
       ? UPRIVER_DECEL
       : DECEL_DRIFT * 0.3 * DRIFT_DECEL_TOUCH_MULT;
 
-    if (keys.up) this.speed = Math.min(MAX_SPEED, this.speed + ACCEL * dt);
+    if (keys.up) this.speed = Math.min(MAX_SPEED, this.speed + paddleAccel * dt);
     else if (keys.down) {
       // Brake hard toward a stop; only past ~0 does it slow to the gentler
       // ACCEL rate, so holding on still backs you up but the first thing
@@ -1231,6 +1266,14 @@ export class Game {
     else if (!this.chasseGalerie.isActive()) {
       if (this.speed > ambientCurrent) this.speed = Math.max(ambientCurrent, this.speed - ambientDecel * dt);
       else this.speed = Math.min(ambientCurrent, this.speed + ambientDecel * dt);
+    }
+    // Upriver whitewater caps how fast you can paddle: anything above the
+    // ceiling bleeds off at RAPIDS_UPRIVER_DRAG, and once you're clear the
+    // only way back up is ACCEL — so leaving the rapids is a climb back to
+    // speed, not a surge.
+    if (upriverRapids > 0) {
+      const ceiling = MAX_SPEED - upriverRapids * RAPIDS_UPRIVER_PUSH;
+      if (this.speed > ceiling) this.speed = Math.max(ceiling, this.speed - RAPIDS_UPRIVER_DRAG * dt);
     }
 
     // Rapids strength at where the canoe currently is (i.e. before this
@@ -1268,9 +1311,11 @@ export class Game {
       && this.flowDistance > BLOCKADE_SHIP_FLOW_DISTANCE - BLOCKADE_APPROACH_RANGE
       && this.flowDistance < BLOCKADE_SHIP_FLOW_DISTANCE + 50;
     const rapids = nearBlockade ? 0 : rapidsStrength(this.flowDistance);
-    // Upriver the whitewater is a stronger current against you, not a boost
-    // (see RAPIDS_UPRIVER_PUSH).
-    const rapidsPush = this.segment === 'lawrenceWest' ? -RAPIDS_UPRIVER_PUSH : RAPIDS_BOOST;
+    // Downstream the whitewater is a boost added on top of your paddling.
+    // Upriver it's already in this.speed (see upriverRapids above), so
+    // nothing is added here — an additive term is exactly what snapped back
+    // to full speed the instant the rapids faded.
+    const rapidsPush = this.segment === 'lawrenceWest' ? 0 : RAPIDS_BOOST;
 
     // Chasse-galerie: once airborne the canoe holds a slow, steady glide,
     // fully independent of the river current below (which on this upstream

@@ -1239,19 +1239,27 @@ await step('rapids: upriver whitewater is a harder grind, never a boost (and nev
   for (let d = LW + 40; d < LW + 900; d += 0.5) if (rapidsStrength(d) > 0.97) { peak = d; break; }
   const g = newGame('lawrenceWest', peak - 60);
   g.game.health = 1e9; // obstacles aren't the point here
-  let calm = null, rough = Infinity;
+  let calm = null, rough = Infinity, seenRough = false, clearedAt = null, afterClear = null;
   for (let i = 0; i < 60 * 12; i++) {
     const before = g.game.flowDistance;
     run(g, 1, 1 / 60, (s) => { s.up = true; });
     const v = (g.game.flowDistance - before) * 60;
     const r = rapidsStrength(before);
-    if (r === 0 && i > 120) calm = v;
-    if (r > 0.95) rough = Math.min(rough, v);
-    if (g.game.flowDistance > peak + 40) break;
+    if (r === 0 && i > 120 && !seenRough) calm = v;
+    if (r > 0.95) { rough = Math.min(rough, v); seenRough = true; }
+    // Half a second after the whitewater fully ends, still well short of
+    // calm speed: "it should take me a few seconds just to get back to
+    // regular speed, not get propelled forward" (RAPIDS_UPRIVER_DRAG,
+    // WINDED_ACCEL_CUT). The additive version was back at ~full speed here.
+    if (seenRough && r === 0 && clearedAt === null) clearedAt = i;
+    if (clearedAt !== null && i === clearedAt + 30) afterClear = v;
+    if (afterClear !== null) break;
   }
   if (calm === null || rough === Infinity) throw new Error('never measured both calm water and peak whitewater');
   if (!(rough < calm * 0.4)) throw new Error(`peak upriver whitewater still makes ${rough.toFixed(2)} u/s vs ${calm.toFixed(2)} in calm water — not a grind`);
   if (!(rough > 0)) throw new Error(`full paddle stalls (${rough.toFixed(2)} u/s) in peak upriver whitewater — it should be hard, not impossible`);
+  if (afterClear === null) throw new Error('never got clear of the whitewater to measure the recovery');
+  if (!(afterClear < calm * 0.75)) throw new Error(`0.5s after the whitewater the canoe is already at ${afterClear.toFixed(2)} of ${calm.toFixed(2)} u/s — a surge, not a climb back`);
 });
 
 await step('loup-garou: night only falls once you are clear of Beaupré', () => {
