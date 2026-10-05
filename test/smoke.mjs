@@ -58,7 +58,8 @@ const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
 const { getDockHit, drawVillages, debugKingstonGreeterX, dockSpanAt } = await import('../src/world/villages.js');
 const { KINGSTON_CATARAQUI } = await import('../src/world/villageScene.js');
-const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt } = await import('../src/world/river/path.js');
+const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt, braidAt } = await import('../src/world/river/path.js');
+const { FEATURE_ISLAND_RANGE } = await import('../src/world/river/islands.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
@@ -1138,6 +1139,69 @@ await step('britishWarship: Up/Down keeps the ship on screen', () => {
     }
     if (minY < 0 || maxY > CANVAS_HEIGHT) {
       throw new Error(`holding ${label} put the ship off-screen: y ranged ${minY.toFixed(0)}..${maxY.toFixed(0)}, canvas is 0..${CANVAS_HEIGHT}`);
+    }
+  }
+});
+
+// --- scenario 4c': the Saint Lawrence's real width, Tadoussac -> Montréal ---
+
+await step('river: lawrenceWest width follows the real river — narrows at Québec City, wide off Tadoussac and in Lac Saint-Pierre', async () => {
+  // lawrenceWidth.js duplicates each village's flowDistance as a number
+  // (importing route.js there would be circular) — so check each keyframe
+  // still sits on its village, or a re-tuned route would quietly slide the
+  // narrows away from Québec City.
+  const { LAWRENCE_WEST_WIDTH_KEYFRAMES, lawrenceWestWidthAt } = await import('../src/world/river/lawrenceWidth.js');
+  for (const kf of LAWRENCE_WEST_WIDTH_KEYFRAMES) {
+    const v = kf.village === 'Tadoussac'
+      ? { flowDistance: SEGMENT_SHAPE_OFFSET.lawrenceWest }
+      : VILLAGES.find((x) => x.segment === 'lawrenceWest' && x.name === kf.village);
+    if (!v) throw new Error(`width keyframe names ${kf.village}, which isn't a lawrenceWest village any more`);
+    if (Math.abs(v.flowDistance - kf.d) > 1) {
+      throw new Error(`${kf.village}'s width keyframe sits at ${kf.d.toFixed(2)} but the village is at ${v.flowDistance.toFixed(2)} — update lawrenceWidth.js`);
+    }
+  }
+  // The shape itself, on the trend (no wobble) — the point of the change.
+  const at = (name) => lawrenceWestWidthAt(VILLAGES.find((x) => x.segment === 'lawrenceWest' && x.name === name).flowDistance);
+  const qc = at('Quebec City');
+  if (!(qc < at('Baie-Saint-Paul') / 2 && qc < at('Trois-Rivieres') / 2)) {
+    throw new Error(`Québec City (${qc}) should be well under half as wide as Baie-Saint-Paul (${at('Baie-Saint-Paul')}) and Trois-Rivières (${at('Trois-Rivieres')})`);
+  }
+  // Seamless at the segment start: Tadoussac's own estuary width, so
+  // crossing into lawrenceWest doesn't jump the banks.
+  const start = SEGMENT_SHAPE_OFFSET.lawrenceWest;
+  if (Math.abs(widthAt(start) - widthAt(start - 0.01)) > 0.5) {
+    throw new Error(`width jumps at the lawrenceWest start: ${widthAt(start - 0.01).toFixed(2)} -> ${widthAt(start).toFixed(2)}`);
+  }
+  // And never pinched shut: the real width plus wobble stays a navigable
+  // channel the whole leg, Québec City's narrows included.
+  let min = Infinity, minAt = 0;
+  for (let d = start; d < start + 2330; d += 0.5) {
+    const w = widthAt(d);
+    if (w < min) { min = w; minAt = d; }
+  }
+  if (min < 8) throw new Error(`lawrenceWest pinches to ${min.toFixed(2)} at local d=${(minAt - start).toFixed(0)} — narrower than the fjord`);
+});
+
+await step('tadoussac: casting off upriver starts in open water, not grounded on a sandbar', () => {
+  // "When I leave Tadoussac, I start on a sandbar and always immediately
+  // take damage": a braid island sat right on lawrenceWest's launch point,
+  // and the upriver current held the canoe against it (100 -> 36 hull in
+  // three seconds, hands off). path.js's BRAID_SUPPRESSED_CYCLES now keeps
+  // every segment start clear.
+  const tad = VILLAGES.find((v) => v.name === 'Tadoussac');
+  const g = newGame('fjord', tad.flowDistance);
+  g.game.currentVillage = tad;
+  g.game.mode = 'village';
+  g.game.leaveVillage();
+  if (g.game.segment !== 'lawrenceWest') throw new Error(`Tadoussac's cast-off should land on lawrenceWest, got ${g.game.segment}`);
+  const hull = g.game.health;
+  run(g, 180, 1 / 60); // three seconds, no input at all
+  if (g.game.health < hull) throw new Error(`took ${hull - g.game.health} damage in the first three seconds after leaving Tadoussac, with no input`);
+  for (const start of Object.values(SEGMENT_SHAPE_OFFSET)) {
+    for (let d = start - 30; d <= start + 30; d += 0.25) {
+      if (braidAt(d) && !(d >= FEATURE_ISLAND_RANGE[0] && d <= FEATURE_ISLAND_RANGE[1])) {
+        throw new Error(`a braid island sits ${(d - start).toFixed(1)} units from a segment start (${start})`);
+      }
     }
   }
 });

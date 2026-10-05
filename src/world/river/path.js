@@ -17,6 +17,7 @@ import {
   southIslandAt as southIslandAtBaked, SOUTH_ISLAND_RANGE,
 } from './islands.js';
 import { gorgeWidthAt, gorgeCenterXAt, GORGE_RANGE } from './gorge.js';
+import { lawrenceWestWidthAt } from './lawrenceWidth.js';
 
 export const FJORD_WIDTH = 8;
 // The real Saint Lawrence off Tadoussac dwarfs the fjord — this is what
@@ -91,6 +92,7 @@ export const SEGMENT_SHAPE_OFFSET = {
 // journey's denouement after Le Diable, not another full act.
 export const RIDEAU_SPAN_DISTANCE = 1700;
 const RIDEAU_OFFSET = SEGMENT_SHAPE_OFFSET.rideau;
+const LAWRENCE_WEST_OFFSET = SEGMENT_SHAPE_OFFSET.lawrenceWest;
 
 // Past this width the water reads as open estuary rather than fjord — used
 // to decide when belugas start showing up. Corresponds to roughly the last
@@ -223,11 +225,23 @@ export function widthAt(d) {
   // old ESTUARY_WIDTH would do exactly that.
   const t = estuaryProgress(d);
   const eased = t * t * t;
-  const trend = FJORD_WIDTH + (ESTUARY_WIDTH - FJORD_WIDTH) * eased;
+  let trend = FJORD_WIDTH + (ESTUARY_WIDTH - FJORD_WIDTH) * eased;
   // A slow, wide-swinging term for real wide-pool/narrow-rapids stretches,
   // layered under the finer wobble — this is what makes the width change
   // read as deliberate rather than a faint texture on top of the trend.
-  const ampScale = 1 + (ESTUARY_AMP_SCALE - 1) * eased;
+  let ampScale = 1 + (ESTUARY_AMP_SCALE - 1) * eased;
+  // Tadoussac -> Montréal follows the real river's width (lawrenceWidth.js)
+  // instead of the estuary curve's flat top, which held this whole leg at
+  // ~48. The swing scales with it — ESTUARY_AMP_SCALE at the full 48, down
+  // to the fjord's own 1x at the Québec City narrows — because the
+  // estuary-sized swing (pinch + wobble, ~±13) would otherwise pinch a
+  // 12-unit channel shut against MIN_WIDTH; at 1x it varies about as much
+  // relative to its width as the fjord does. At d = the segment start this
+  // is exactly the old trend/ampScale (48 and 2.8), so nothing jumps.
+  if (d >= LAWRENCE_WEST_OFFSET) {
+    trend = lawrenceWestWidthAt(d);
+    ampScale = Math.max(1, ESTUARY_AMP_SCALE * trend / ESTUARY_WIDTH);
+  }
   const pinch = Math.sin(d * 0.023 + 1.2) * 2.6 * ampScale;
   const wobble = (Math.sin(d * 0.05 + 4) * 1.6 + Math.sin(d * 0.12) * 0.6) * ampScale;
   const river = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + pinch + wobble));
@@ -261,6 +275,34 @@ export function braidOffsetFraction(cycle) {
   return hashRange(cycle, 401, -0.85, 0.85);
 }
 
+// No island at a segment's launch point. Casting off from Tadoussac drops
+// the canoe at SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5, dead centre — and
+// cycle 545's island (span 59997..60013) sat right across that spot, so
+// every Tadoussac departure started grounded on a sandbar, with lawrenceWest's
+// upriver current (UPRIVER_CURRENT, game.js) holding the canoe against it:
+// reported as "I start on a sandbar and always immediately take damage"
+// (100 -> 36 hull in three seconds with no input). The Rideau's offset was
+// already hand-picked to avoid this (see SEGMENT_SHAPE_OFFSET); lawrenceWest's
+// was only checked for calm rapids. Rather than re-pick an offset (which
+// would move every shape on that leg), any cycle whose island span comes
+// within BRAID_LAUNCH_CLEARANCE of a segment start is simply skipped —
+// enough water for a canoe launching at rest to get up to speed and steer
+// before the first island can arrive. waterGL.js codegens this same list
+// so the shader doesn't draw water-coloured sand where the JS says there's
+// no island.
+const BRAID_LAUNCH_CLEARANCE = 30;
+export const BRAID_SUPPRESSED_CYCLES = Object.values(SEGMENT_SHAPE_OFFSET).flatMap((start) => {
+  const out = [];
+  const lo = Math.floor((start - BRAID_LAUNCH_CLEARANCE) / BRAID_PERIOD);
+  const hi = Math.floor((start + BRAID_LAUNCH_CLEARANCE) / BRAID_PERIOD);
+  for (let c = lo; c <= hi; c++) {
+    const spanStart = c * BRAID_PERIOD + (BRAID_PERIOD - BRAID_LENGTH) / 2;
+    if (spanStart < start + BRAID_LAUNCH_CLEARANCE && spanStart + BRAID_LENGTH > start - BRAID_LAUNCH_CLEARANCE) out.push(c);
+  }
+  return out;
+});
+const braidSuppressed = new Set(BRAID_SUPPRESSED_CYCLES);
+
 // Returns null where there's no island, or { centerX, halfWidth } (both in
 // the same world-X units as centerX(d)) describing the island's shape at
 // this exact d. halfWidth tapers from 0 up to BRAID_MAX_ISLAND_HALF and
@@ -282,6 +324,7 @@ export function braidAt(d) {
   }
 
   const cycle = Math.floor(d / BRAID_PERIOD);
+  if (braidSuppressed.has(cycle)) return null; // a segment's launch point — see BRAID_SUPPRESSED_CYCLES
   const spanStart = cycle * BRAID_PERIOD + (BRAID_PERIOD - BRAID_LENGTH) / 2;
   const t = (d - spanStart) / BRAID_LENGTH;
   if (t <= 0 || t >= 1) return null;
