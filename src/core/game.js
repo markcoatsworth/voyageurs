@@ -403,6 +403,19 @@ const CAMERA_LATERAL_SMOOTH = 0.12;
 // then just holds the canoe at this offset instead of letting it go further.
 const CAMERA_MAX_ONSCREEN_OFFSET = 5;
 const RAPIDS_BOOST = 7 * speedScale; // extra units/s the current adds at peak whitewater
+// Upriver (lawrenceWest) the whitewater pushes *against* you, and harder
+// than RAPIDS_BOOST pushes you along downstream. It used to be RAPIDS_BOOST
+// with the sign flipped, which at full paddle still left ~56% of your
+// normal headway through peak whitewater — barely a dent — while the
+// streaks racing down the screen and the speed bar's boost glow (see
+// updateHud) said "flying along": reported as "when I hit the whitewater
+// sections, I suddenly get propelled forward quickly ... it should be even
+// tougher to paddle upriver in the white water." A fraction of MAX_SPEED,
+// not a fixed number, so it bites the same on touch (whose MAX_SPEED is
+// scaled down further than RAPIDS_BOOST is): full paddle through peak
+// whitewater keeps ~30% of top speed — a real grind, never a stall — and
+// letting go there gets you carried back fast.
+const RAPIDS_UPRIVER_PUSH = 0.7 * MAX_SPEED;
 const RAPIDS_STEER_PENALTY = 0.45; // up to 45% less steering authority there
 
 // lawrenceWest (world/river/route.js's third segment, toward Québec City) is the
@@ -1255,7 +1268,9 @@ export class Game {
       && this.flowDistance > BLOCKADE_SHIP_FLOW_DISTANCE - BLOCKADE_APPROACH_RANGE
       && this.flowDistance < BLOCKADE_SHIP_FLOW_DISTANCE + 50;
     const rapids = nearBlockade ? 0 : rapidsStrength(this.flowDistance);
-    const rapidsDirection = this.segment === 'lawrenceWest' ? -1 : 1;
+    // Upriver the whitewater is a stronger current against you, not a boost
+    // (see RAPIDS_UPRIVER_PUSH).
+    const rapidsPush = this.segment === 'lawrenceWest' ? -RAPIDS_UPRIVER_PUSH : RAPIDS_BOOST;
 
     // Chasse-galerie: once airborne the canoe holds a slow, steady glide,
     // fully independent of the river current below (which on this upstream
@@ -1270,7 +1285,7 @@ export class Game {
       const paddle = keys.up ? 1.5 : keys.down ? -1.5 : 0;
       effectiveSpeed = FLIGHT_CRUISE_SPEED + paddle;
     } else {
-      effectiveSpeed = this.speed + rapids * RAPIDS_BOOST * rapidsDirection;
+      effectiveSpeed = this.speed + rapids * rapidsPush;
     }
 
     // Advance the shared river clock using this frame's effective speed —
@@ -2474,7 +2489,14 @@ export class Game {
     // where there's no forward motion left to visibly lose.
     const braking = this.input.state.down && this.mode === 'river';
     this.ui.hudSpeedFill.style.width = `${braking ? Math.max(6, speedPct) : speedPct}%`;
-    this.ui.hudSpeedFill.classList.toggle('rapids', this.rapids > 0.15 && !braking);
+    // The pale "rapids" glow means the current is carrying you — wrong
+    // upriver, where whitewater is the current fighting you (see
+    // RAPIDS_UPRIVER_PUSH). There the bar goes amber instead: a struggle,
+    // not a boost.
+    const inRapids = this.rapids > 0.15 && !braking;
+    const upriver = this.segment === 'lawrenceWest';
+    this.ui.hudSpeedFill.classList.toggle('rapids', inRapids && !upriver);
+    this.ui.hudSpeedFill.classList.toggle('against', inRapids && upriver);
     this.ui.hudSpeedFill.classList.toggle('braking', braking);
 
     // flowDistance is the persistent world position that never resets on

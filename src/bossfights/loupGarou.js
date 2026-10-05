@@ -22,22 +22,38 @@ const QUEBEC_CITY = VILLAGES.find((v) => v.name === 'Quebec City');
 // city in view). Anchored to Québec City's flowDistance so it follows if the
 // capital ever moves; deliverance a short paddle short of the King's Wharf,
 // leaving calm water to steer onto the dock and go ashore for repairs.
-export const TRIGGER_DISTANCE = QUEBEC_CITY.flowDistance - 172; // a few units past Beaupré
+//
+// The start is anchored to Beaupré, not Québec City. It used to be
+// QUEBEC_CITY - 172 — only ~7 units past Beaupré's dock — with the nightfall
+// fading in over the 55 units before that, so the sky was already going dark
+// ~48 units *before* you reached Beaupré and the beast arrived as you cast
+// off: reported as "much too close to Beaupré ... the sky should only go
+// dark and Loup Garou appear when I'm comfortably past Beaupré." Now the
+// night only starts to fall NIGHT_CLEAR_OF_BEAUPRE past the village, over a
+// shorter NIGHT_FADE_IN, so Beaupré itself is in plain daylight and the
+// stretch after it reads as leaving the village behind before anything
+// turns. Deliverance is unchanged.
+const BEAUPRE = VILLAGES.find((v) => v.name === 'Beaupre');
+const NIGHT_CLEAR_OF_BEAUPRE = 30;
+// The cold-blue nightfall fades in over this many units before the trigger
+// and out after deliverance — same shape as chasseGalerie's stormIntensityAt,
+// gentler in game.js's render (this isn't the Devil). Fade-in was 55; at 30
+// the dusk still visibly gathers (~2s at full paddle) without eating most
+// of the now-later approach.
+const NIGHT_FADE_IN = 30;
+const NIGHT_FADE_OUT = 45;
+export const TRIGGER_DISTANCE = BEAUPRE.flowDistance + NIGHT_CLEAR_OF_BEAUPRE + NIGHT_FADE_IN;
 export const DELIVERANCE_DISTANCE = QUEBEC_CITY.flowDistance - 28;
 // Deliberately a short fight — this is early in the game and shouldn't be
-// punishing yet. ~145 units / ~13s vs. the blockade's ~340.
+// punishing yet. ~90 units now (was ~145 before the start moved off
+// Beaupré) vs. the blockade's ~340; the strike cadence/wind-up ease across
+// whatever this is, so it's a shorter fight, not a compressed one.
 const FIGHT_LENGTH = DELIVERANCE_DISTANCE - TRIGGER_DISTANCE;
 // How long with zero net forward progress before the stall failsafe below
 // mercy-delivers the player — generous, since it only needs to catch someone
 // genuinely stuck (see the failsafe's own comment by bestD/stallClock).
 const STALL_TIME_LIMIT = 10;
 const STALL_PROGRESS_EPS = 0.05; // world units — ignores noise, not real advance
-
-// The cold-blue nightfall fades in over this many units before the trigger
-// and out after deliverance — same shape as chasseGalerie's stormIntensityAt,
-// gentler in game.js's render (this isn't the Devil).
-const NIGHT_FADE_IN = 55;
-const NIGHT_FADE_OUT = 45;
 
 // It's a screen-space presence (like Le Diable), hanging over the middle of
 // the view against the moon — not pinned to a world point. It drifts a

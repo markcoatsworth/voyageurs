@@ -152,6 +152,13 @@ html, body {
   background: #bfe6f2;
 }
 
+/* Upriver whitewater (lawrenceWest): the current is fighting you, so the
+   bar goes amber — a struggle — rather than the pale "carried along" glow
+   above. Distinct from braking's red, which is your own input. */
+#hud-speed-fill.against {
+  background: #e0a040;
+}
+
 /* Actively braking / backing up (holding "down"): the bar goes red so the
    input reads as a deliberate action even when the canoe is already at a
    near-stop and there's little forward motion left to visibly lose. */

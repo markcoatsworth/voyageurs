@@ -118,7 +118,7 @@ src/
                        strikes (taught dry run). You outlast it to the mouth at Tadoussac.
                        Cold-white render (frostIntensityAt). Guarded by `segment === 'fjord'`.
     loupGarou.js       Le Loup-garou — the night beast just before Québec City (lawrenceWest,
-                       TRIGGER_DISTANCE = QC − 172 .. DELIVERANCE_DISTANCE = QC − 28). No projectiles:
+                       TRIGGER_DISTANCE = Beaupré + 60, night from Beaupré + 30 .. DELIVERANCE = QC − 28). No projectiles:
                        it paces the near bank and lunges (telegraphed, led like the blockade shots);
                        juke away / brake to dodge. You don't kill it — you reach the city, which
                        checks it. Cold-blue night render (nightIntensityAt). MVP — one phase.

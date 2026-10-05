@@ -58,7 +58,7 @@ const { createTouchControls } = await import('../src/core/touchControls.js');
 const { VILLAGES } = await import('../src/world/river/route.js');
 const { getDockHit, drawVillages, debugKingstonGreeterX, dockSpanAt } = await import('../src/world/villages.js');
 const { KINGSTON_CATARAQUI } = await import('../src/world/villageScene.js');
-const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt, braidAt } = await import('../src/world/river/path.js');
+const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt, braidAt, rapidsStrength } = await import('../src/world/river/path.js');
 const { FEATURE_ISLAND_RANGE } = await import('../src/world/river/islands.js');
 const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
@@ -73,7 +73,7 @@ const {
   stormGustAt: warshipStormGustAt,
 } = await import('../src/bossfights/britishWarship.js');
 const { PISTOL_DAMAGE_TO_HULL: BLOCKADE_PISTOL_DAMAGE, MUSKET_DAMAGE_TO_HULL: BLOCKADE_MUSKET_DAMAGE } = await import('../src/bossfights/blockade.js');
-const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE } = await import('../src/bossfights/loupGarou.js');
+const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE, nightIntensityAt: loupGarouNightAt } = await import('../src/bossfights/loupGarou.js');
 const { TRIGGER_DISTANCE: WENDIGO_TRIGGER, DELIVERANCE_DISTANCE: WENDIGO_DELIVERANCE } = await import('../src/bossfights/wendigo.js');
 
 function makeUi(minimap) {
@@ -1227,6 +1227,42 @@ await step('docks: no sandbar (braid island) sits on or right off any village do
       }
     }
   }
+});
+
+await step('rapids: upriver whitewater is a harder grind, never a boost (and never a dead stop)', () => {
+  // "When I hit the whitewater sections, I suddenly get propelled forward
+  // quickly ... it should be even tougher to paddle upriver." Full paddle
+  // through peak lawrenceWest whitewater must make well under half the calm
+  // headway, but still make some (RAPIDS_UPRIVER_PUSH, game.js).
+  const LW = SEGMENT_SHAPE_OFFSET.lawrenceWest;
+  let peak = null;
+  for (let d = LW + 40; d < LW + 900; d += 0.5) if (rapidsStrength(d) > 0.97) { peak = d; break; }
+  const g = newGame('lawrenceWest', peak - 60);
+  g.game.health = 1e9; // obstacles aren't the point here
+  let calm = null, rough = Infinity;
+  for (let i = 0; i < 60 * 12; i++) {
+    const before = g.game.flowDistance;
+    run(g, 1, 1 / 60, (s) => { s.up = true; });
+    const v = (g.game.flowDistance - before) * 60;
+    const r = rapidsStrength(before);
+    if (r === 0 && i > 120) calm = v;
+    if (r > 0.95) rough = Math.min(rough, v);
+    if (g.game.flowDistance > peak + 40) break;
+  }
+  if (calm === null || rough === Infinity) throw new Error('never measured both calm water and peak whitewater');
+  if (!(rough < calm * 0.4)) throw new Error(`peak upriver whitewater still makes ${rough.toFixed(2)} u/s vs ${calm.toFixed(2)} in calm water — not a grind`);
+  if (!(rough > 0)) throw new Error(`full paddle stalls (${rough.toFixed(2)} u/s) in peak upriver whitewater — it should be hard, not impossible`);
+});
+
+await step('loup-garou: night only falls once you are clear of Beaupré', () => {
+  // "Loup Garou is much too close to Beaupré. The sky should only go dark
+  // and Loup Garou appear when I'm comfortably past Beaupré." The dock in
+  // full daylight, the first dusk 20+ units past it, the beast later still.
+  const beaupre = VILLAGES.find((v) => v.name === 'Beaupre').flowDistance;
+  for (let d = beaupre - 60; d <= beaupre + 20; d += 0.5) {
+    if (loupGarouNightAt(d) > 0) throw new Error(`night is already ${loupGarouNightAt(d).toFixed(2)} at ${(d - beaupre).toFixed(1)} units from Beaupré`);
+  }
+  if (!(LOUP_GAROU_TRIGGER - beaupre >= 50)) throw new Error(`the Loup-garou appears only ${(LOUP_GAROU_TRIGGER - beaupre).toFixed(1)} units past Beaupré`);
 });
 
 // --- scenario 4d: Kingston's dock is a real entrance into the town ---------
