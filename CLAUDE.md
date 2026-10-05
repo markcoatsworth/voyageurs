@@ -89,6 +89,12 @@ src/
                        MOUTH_DISTANCE=900 (Tadoussac). SEGMENT_SHAPE_OFFSET per segment. widthAt has
                        special branches: the Ottawa gorge (post-Montreal) and rideauWidthAt (the
                        Rideau leg — checked first, its offset is past everything else).
+      lawrenceWidth.js the real St. Lawrence width Tadoussac -> Montréal as eased keyframes (route.js's
+                       riverWidthKm on a log scale: 48 off Tadoussac, 12 at the Québec City narrows,
+                       ~37 into Lac Saint-Pierre; Montréal held at 40 so the Island of Montreal
+                       keeps its shape). Replaces the estuary curve's flat ~48 for lawrenceWest in
+                       widthAt(); codegen'd into the GLSL like gorge.js. Keyframe d's duplicate
+                       village flowDistances (circular import otherwise) — smoke test checks them
       route.js         waypoints for 4 segments (fjord / lawrenceEast / lawrenceWest / rideau);
                        cumulative-distance model → each village's flowDistance. VILLAGES export.
                        rideau (Gatineau→Kingston) is a made-up leg — no real river there.

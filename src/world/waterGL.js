@@ -20,6 +20,7 @@ import {
   SAINTE_HELENE_KEYFRAMES, NUNS_ISLAND_KEYFRAMES, SOUTH_ISLAND_MIN_HALF, SOUTH_ISLAND_RANGE,
 } from './river/islands.js';
 import { GORGE_WIDTH_KEYFRAMES, GORGE_CENTERX_KEYFRAMES, GORGE_RANGE } from './river/gorge.js';
+import { LAWRENCE_WEST_WIDTH_KEYFRAMES } from './river/lawrenceWidth.js';
 
 // Generates a GLSL if/else-if chain doing the same linear-keyframe lookup
 // as river/islands.js's interpKeyframes(), straight from that file's own
@@ -27,7 +28,9 @@ import { GORGE_WIDTH_KEYFRAMES, GORGE_CENTERX_KEYFRAMES, GORGE_RANGE } from './r
 // Lachine Rapids) stay authored in exactly one place instead of being
 // hand-retyped into the shader too, unlike the rest of this file's
 // (formula-based, genuinely hand-mirrored) river shape.
-function glslKeyframeChain(d_expr, keyframes, fields, outVars) {
+// `ease` swaps the linear blend for smoothstep — for tables (lawrenceWidth.js)
+// whose JS side eases between keyframes too, so the two still match.
+function glslKeyframeChain(d_expr, keyframes, fields, outVars, ease = false) {
   const lines = [];
   for (let i = 1; i < keyframes.length; i++) {
     const a = keyframes[i - 1], b = keyframes[i];
@@ -35,6 +38,7 @@ function glslKeyframeChain(d_expr, keyframes, fields, outVars) {
     // >= d is the right one — no lower-bound check needed per branch.
     lines.push(`  ${i === 1 ? 'if' : 'else if'} (${d_expr} <= ${b.d.toFixed(2)}) {`);
     lines.push(`    float t = (${d_expr} - ${a.d.toFixed(2)}) / ${(b.d - a.d).toFixed(4)};`);
+    if (ease) lines.push('    t = t * t * (3.0 - 2.0 * t);');
     for (const f of fields) {
       lines.push(`    ${outVars[f]} = ${a[f].toFixed(4)} + (${(b[f] - a[f]).toFixed(4)}) * t;`);
     }
@@ -97,6 +101,9 @@ const float RAPIDS_LENGTH = ${RAPIDS_LENGTH.toFixed(2)};
 const float RIDEAU_OFFSET = ${SEGMENT_SHAPE_OFFSET.rideau.toFixed(2)};
 const float RIDEAU_SPAN = ${RIDEAU_SPAN_DISTANCE.toFixed(2)};
 const float KINGSTON_HARBOUR_SKEW = ${KINGSTON_HARBOUR_SKEW.toFixed(2)};
+const float LAWRENCE_WEST_OFFSET = ${SEGMENT_SHAPE_OFFSET.lawrenceWest.toFixed(2)};
+const float LW_WIDTH_D_MIN = ${LAWRENCE_WEST_WIDTH_KEYFRAMES[0].d.toFixed(2)};
+const float LW_WIDTH_D_MAX = ${LAWRENCE_WEST_WIDTH_KEYFRAMES[LAWRENCE_WEST_WIDTH_KEYFRAMES.length - 1].d.toFixed(2)};
 const float OTTAWA_EASE_START = ${OTTAWA_EASE_START.toFixed(2)};
 const float OTTAWA_EASE_LEN = ${OTTAWA_EASE_LEN.toFixed(2)};
 const float ISLAND_D_MIN = ${FEATURE_ISLAND_RANGE[0].toFixed(2)};
@@ -174,6 +181,16 @@ float gorgeWidthAt(float d) {
 ${glslKeyframeChain('d', GORGE_WIDTH_KEYFRAMES, ['width'], { width: 'w' })}
   return w;
 }
+// Mirrors world/river/lawrenceWidth.js's lawrenceWestWidthAt() — codegen'd
+// from its keyframe table, eased like the JS side; holds the end values
+// outside the table.
+float lawrenceWestWidthAt(float d) {
+  if (d <= LW_WIDTH_D_MIN) return ${LAWRENCE_WEST_WIDTH_KEYFRAMES[0].width.toFixed(4)};
+  if (d >= LW_WIDTH_D_MAX) return ${LAWRENCE_WEST_WIDTH_KEYFRAMES[LAWRENCE_WEST_WIDTH_KEYFRAMES.length - 1].width.toFixed(4)};
+  float w = ${LAWRENCE_WEST_WIDTH_KEYFRAMES[0].width.toFixed(4)};
+${glslKeyframeChain('d', LAWRENCE_WEST_WIDTH_KEYFRAMES, ['width'], { width: 'w' }, true)}
+  return w;
+}
 float widthAt(float d) {
   // The Rideau leg — checked first, same as the JS widthAt(), because its
   // offset sits past everything else on the shared number line.
@@ -184,6 +201,12 @@ float widthAt(float d) {
   float eased = t * t * t;
   float trend = 8.0 + (48.0 - 8.0) * eased;
   float ampScale = 1.0 + (2.8 - 1.0) * eased;
+  // Tadoussac -> Montréal: the real river's width, swing scaled with it —
+  // see path.js's widthAt().
+  if (d >= LAWRENCE_WEST_OFFSET) {
+    trend = lawrenceWestWidthAt(d);
+    ampScale = max(1.0, 2.8 * trend / 48.0);
+  }
   float pinch = sin(d * 0.023 + 1.2) * 2.6 * ampScale;
   float wobble = (sin(d * 0.05 + 4.0) * 1.6 + sin(d * 0.12) * 0.6) * ampScale;
   float river = clamp(trend + pinch + wobble, 6.5, 62.0);

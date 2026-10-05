@@ -17,6 +17,7 @@ import {
   southIslandAt as southIslandAtBaked, SOUTH_ISLAND_RANGE,
 } from './islands.js';
 import { gorgeWidthAt, gorgeCenterXAt, GORGE_RANGE } from './gorge.js';
+import { lawrenceWestWidthAt } from './lawrenceWidth.js';
 
 export const FJORD_WIDTH = 8;
 // The real Saint Lawrence off Tadoussac dwarfs the fjord — this is what
@@ -91,6 +92,7 @@ export const SEGMENT_SHAPE_OFFSET = {
 // journey's denouement after Le Diable, not another full act.
 export const RIDEAU_SPAN_DISTANCE = 1700;
 const RIDEAU_OFFSET = SEGMENT_SHAPE_OFFSET.rideau;
+const LAWRENCE_WEST_OFFSET = SEGMENT_SHAPE_OFFSET.lawrenceWest;
 
 // Past this width the water reads as open estuary rather than fjord — used
 // to decide when belugas start showing up. Corresponds to roughly the last
@@ -223,11 +225,23 @@ export function widthAt(d) {
   // old ESTUARY_WIDTH would do exactly that.
   const t = estuaryProgress(d);
   const eased = t * t * t;
-  const trend = FJORD_WIDTH + (ESTUARY_WIDTH - FJORD_WIDTH) * eased;
+  let trend = FJORD_WIDTH + (ESTUARY_WIDTH - FJORD_WIDTH) * eased;
   // A slow, wide-swinging term for real wide-pool/narrow-rapids stretches,
   // layered under the finer wobble — this is what makes the width change
   // read as deliberate rather than a faint texture on top of the trend.
-  const ampScale = 1 + (ESTUARY_AMP_SCALE - 1) * eased;
+  let ampScale = 1 + (ESTUARY_AMP_SCALE - 1) * eased;
+  // Tadoussac -> Montréal follows the real river's width (lawrenceWidth.js)
+  // instead of the estuary curve's flat top, which held this whole leg at
+  // ~48. The swing scales with it — ESTUARY_AMP_SCALE at the full 48, down
+  // to the fjord's own 1x at the Québec City narrows — because the
+  // estuary-sized swing (pinch + wobble, ~±13) would otherwise pinch a
+  // 12-unit channel shut against MIN_WIDTH; at 1x it varies about as much
+  // relative to its width as the fjord does. At d = the segment start this
+  // is exactly the old trend/ampScale (48 and 2.8), so nothing jumps.
+  if (d >= LAWRENCE_WEST_OFFSET) {
+    trend = lawrenceWestWidthAt(d);
+    ampScale = Math.max(1, ESTUARY_AMP_SCALE * trend / ESTUARY_WIDTH);
+  }
   const pinch = Math.sin(d * 0.023 + 1.2) * 2.6 * ampScale;
   const wobble = (Math.sin(d * 0.05 + 4) * 1.6 + Math.sin(d * 0.12) * 0.6) * ampScale;
   const river = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, trend + pinch + wobble));
