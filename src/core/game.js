@@ -6,7 +6,7 @@ import { drawWhales } from '../world/whales.js';
 import { drawRain } from '../world/weather.js';
 import { createCanoeSprites } from '../world/canoe.js';
 import { createCapsize } from '../world/capsize.js';
-import { playCapsizeHorn, playPeltChime, playRepairTrade, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playRepairTrade, playWeaponAcquired, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import {
@@ -1141,7 +1141,7 @@ export class Game {
     if (this.weapons.has('pistol')) return;
     this.weapons.unlock('pistol');
     this.syncWeaponControls();
-    playPeltChime();
+    playWeaponAcquired();
     this.showBanner('PISTOL ACQUIRED — Press Z to Fire!');
   }
 
@@ -1157,7 +1157,7 @@ export class Game {
     if (this.weapons.has('musket')) return;
     this.weapons.unlock('musket');
     this.syncWeaponControls();
-    playPeltChime();
+    playWeaponAcquired();
     this.showBanner('MUSKET ACQUIRED — Press X to Fire!');
   }
 

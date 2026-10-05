@@ -762,16 +762,36 @@ export function createRepairShopSprite() {
 // warm little timber shed: a squat coursed-stone armoury under a broad
 // blue-slate roof, with a forge chimney smoking up the left side and its
 // fire-mouth glowing at the base, a rack of muskets leaning by the
-// iron-banded door, and a musket branded on an iron plaque above it. Taller
-// and wider than the repair shop, and the only building in any village that
-// glows — so it reads as its own thing at a glance.
+// iron-banded door, and a pistol on a sign board above it. Taller and wider
+// than the repair shop, and the only building in any village that glows —
+// so it reads as its own thing at a glance.
+//
+// Drawn at GUN_SHOP_SCALE (1.2): "slightly larger than the other buildings
+// — 20% bigger, just like the canoe repair store". The art below is still
+// authored in its original 40x44 units; scaling the context rather than
+// re-deriving every coordinate keeps the design exactly as it was, just
+// larger (it's all vector fills, so it redraws crisply at the new size).
+// The bottom edge stays the anchor in villageScene.js, so the extra size
+// grows upward and outward; its footprint there was widened to match.
+//
+// The sign was described here from the start but never drawn — the door
+// had nothing over it. It's a pale board just under the eave with a
+// flintlock pistol on it, the thing you actually come here for, in the
+// same spirit as the repair shop's canoe.
+export const GUN_SHOP_SCALE = 1.2;
 export function createGunShopSprite() {
-  const w = 40, h = 44;
+  const baseW = 40, baseH = 44;
+  const w = Math.round(baseW * GUN_SHOP_SCALE), h = Math.round(baseH * GUN_SHOP_SCALE);
   const wall = '#6f6a62', wallDark = '#46423b', wallLight = '#8c867c';
   const roof = '#3a4250', roofDark = '#232934', roofLight = '#545d6e';
   const iron = '#3a3a40', wood = '#6a4a2c', woodDark = '#3f2b1a';
 
   return makeSprite(w, h, (ctx) => {
+    ctx.scale(w / baseW, h / baseH);
+    drawGunShop(ctx, baseW, baseH);
+  });
+
+  function drawGunShop(ctx, w, h) {
     // Stone block left-of-centre, a tall forge chimney off its left end, a
     // lean-to porch with a musket rack off its right end — a three-part
     // silhouette nothing like the repair shop's plain gable box.
@@ -905,7 +925,32 @@ export function createGunShopSprite() {
     ctx.fillRect(apex - 1, roofPeak, 2, wallTop + 2 - roofPeak);
     ctx.fillStyle = roofDark;
     ctx.fillRect(roofL, wallTop + 2, roofR - roofL, 1.3);
-  });
+
+    // --- sign board over the door, a flintlock pistol on it ---
+    // Hung just under the eave (the roof's bottom edge is wallTop + 3.3)
+    // and clear of the door's top (wallBot - 11 = wallTop + 11).
+    const signW = 13, signH = 7;
+    const signL = cx - signW / 2, signTop = wallTop + 3.6;
+    ctx.fillStyle = woodDark;
+    ctx.fillRect(signL, signTop, signW, signH);
+    ctx.fillStyle = '#d9c08a';
+    ctx.fillRect(signL + 0.8, signTop + 0.8, signW - 1.6, signH - 1.6);
+    // Pointing left: barrel, then the lock and hammer, then the grip
+    // dropping away to the right — the silhouette that says "pistol".
+    // Darker than the building's own iron/wood: on the pale board those
+    // read too faint to make out at this size.
+    const py = signTop + 1.8;
+    const gunIron = '#1e1e24', gunWood = '#4a2c16';
+    ctx.fillStyle = gunIron;
+    ctx.fillRect(signL + 1.5, py, 7, 1.7); // barrel
+    ctx.fillRect(signL + 7.4, py - 1, 1.3, 1.2); // hammer
+    ctx.fillStyle = gunWood;
+    ctx.fillRect(signL + 5, py + 1.5, 4, 1.2); // stock under the barrel
+    ctx.fillRect(signL + 7.8, py + 0.3, 2.4, 2.8); // lock / wrist
+    ctx.fillRect(signL + 8.9, py + 2.6, 2.5, 2); // grip, dropping away
+    ctx.fillStyle = gunIron;
+    ctx.fillRect(signL + 7, py + 2.6, 1.2, 1.1); // trigger guard
+  }
 }
 
 // The gunsmith — stands outside the Montréal gun shop; walk up to them and

@@ -106,6 +106,53 @@ function knock(c, startTime) {
   osc.stop(startTime + 0.13);
 }
 
+// One sharp metallic click — a flintlock's hammer coming back. A whisper of
+// high band-passed noise plus a short square-wave tick for the steel.
+function cockClick(c, startTime) {
+  const len = 0.03;
+  const buffer = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * len)), c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  const noise = c.createBufferSource();
+  noise.buffer = buffer;
+  const band = c.createBiquadFilter();
+  band.type = 'bandpass';
+  band.frequency.value = 3200;
+  band.Q.value = 4;
+  const g = c.createGain();
+  g.gain.setValueAtTime(1.0, startTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, startTime + len);
+  noise.connect(band).connect(g).connect(c.destination);
+  noise.start(startTime);
+  noise.stop(startTime + len);
+
+  const osc = c.createOscillator();
+  osc.type = 'square';
+  osc.frequency.value = 1900;
+  const tick = c.createGain();
+  tick.gain.setValueAtTime(0.16, startTime);
+  tick.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.025);
+  osc.connect(tick).connect(c.destination);
+  osc.start(startTime);
+  osc.stop(startTime + 0.04);
+}
+
+// A weapon in hand — game.js's acquirePistol (the Montréal gunsmith) and
+// acquireMusket (Gatineau). Both used to borrow playPeltChime, the fur
+// pickup's two-note ping, so getting a gun sounded exactly like picking up
+// another pelt — reported as "there should be a sound effect when I grab it
+// at the gun store." Two quick clicks (the hammer cocked back, half then
+// full), then a short brassy G4 -> C5 rise on the same muted-brass wah as
+// the capsize horn, played the other way up: a fanfare, not a fail.
+export function playWeaponAcquired() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  cockClick(c, t0 + 0.00);
+  cockClick(c, t0 + 0.09);
+  wah(c, t0 + 0.22, 392.0, 0.14); // G4
+  wah(c, t0 + 0.36, 523.25, 0.42); // C5
+}
+
 // The fur trade at the repair shop (game.js's tryRepairTrade) — played with
 // the "Traded N furs for repairs" banner, only when a trade actually goes
 // through. Two mallet knocks (the hull being patched) then a rising C-E-G

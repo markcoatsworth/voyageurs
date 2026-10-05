@@ -1101,8 +1101,8 @@ function buildingsForMontreal() {
     anchorX: b.x,
     anchorY: b.y,
     isGunShop: b.kind === 'gunshop',
-    footHalfW: b.kind === 'seminary' ? 24 : b.kind === 'windmill' ? 8 : b.kind === 'church' || b.kind === 'gunshop' ? 12 : 13,
-    footHeight: b.kind === 'seminary' ? 18 : b.kind === 'windmill' ? 14 : b.kind === 'church' ? 26 : b.kind === 'gunshop' ? 20 : 24,
+    footHalfW: b.kind === 'seminary' ? 24 : b.kind === 'windmill' ? 8 : b.kind === 'gunshop' ? 14 : b.kind === 'church' ? 12 : 13, // gunshop 14 (was 12): GUN_SHOP_SCALE, sprites.js
+    footHeight: b.kind === 'seminary' ? 18 : b.kind === 'windmill' ? 14 : b.kind === 'church' ? 26 : 24, // gunshop now the default 24 (was 20): GUN_SHOP_SCALE
   }));
 }
 
@@ -1236,7 +1236,10 @@ const TRADER_TRIGGER_RADIUS = 16;
 // musket rack (to his right) both stay visible past him. Walking this close
 // is the whole interaction — same "proximity alone, once per approach"
 // trigger as the repair trader.
-const GUNSMITH_OFFSET = { x: 4, y: 11 };
+// x 5 (was 4): the shop is drawn GUN_SHOP_SCALE (1.2x) bigger now, which
+// moves its door ~1px further left of the anchor; 5 keeps him the same
+// distance right of the door as before.
+const GUNSMITH_OFFSET = { x: 5, y: 11 };
 const GUNSMITH_TRIGGER_RADIUS = 20;
 
 // Gatineau only: the musket shop, mirrored off the repair shop's own
