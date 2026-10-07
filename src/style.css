@@ -280,6 +280,92 @@ html, body {
   opacity: 1;
 }
 
+/* The town-name banner (main.js's #town-banner), up while you're ashore
+   in a village's on-foot scene. At the top of the *game screen* (it lives
+   inside it, not in #ui), centred, a small gap below the top edge, in the
+   same dark panel / amber frame / hard shadow as the other banners at a
+   fraction of their size. Its first cut hung flush off the top edge with
+   no top border, 10px text and tight padding; asked for "slightly larger
+   text, more padding... and a slight margin" from the top, then for more
+   padding again (twice). One line, always — nowrap here, and core/townBanner.js
+   sizes the font so the line fits (the padding/border/top gap below are
+   mirrored there; keep them in step). */
+/* The name itself, 10% taller than the font draws it. Still read as
+   "stretched" with the letter-spacing gone, though measured it isn't —
+   each glyph is exactly 1em wide (12px at 12px), no transform — so this
+   answers "if they are not in fact being stretched horizontally, add 10%
+   of vertical stretching". On an inline-block span so only the glyphs
+   scale, not the panel, and from the centre so the padding stays even;
+   the 1.2px it gains is absorbed by the padding, the box doesn't grow. */
+#town-banner .town-name {
+  display: inline-block;
+  transform: scaleY(1.1);
+}
+
+#town-banner {
+  position: absolute;
+  top: 6px; /* main.js sets this inline from townBanner.js's TOWN_BANNER_GAP_PX */
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%; /* main.js narrows it further when the minimap's in the way */
+  padding: 14px 22px 13px;
+  border: 2px solid #e0a458;
+  background: rgba(10, 14, 20, 0.85);
+  box-shadow: 3px 3px 0 #000;
+  color: #f4ead2;
+  font-size: 12px;
+  line-height: 1;
+  /* No letter-spacing: an earlier 0.1em made the name read as stretched
+     next to the NOW PLAYING card's song title (.np-title), which is the
+     same face with none. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-shadow: 1px 1px 0 #000;
+  pointer-events: none;
+}
+
+/* The "Saving" indicator (core/saveIndicator.js): a little paddling canoe
+   over "SAVING", bottom-right of the game screen, for five seconds per
+   checkpoint write. The same small dark panel / amber frame as the town
+   banner so the two read as one family; fades in and out rather than
+   popping, since it comes up mid-play. main.js may move it left (inline
+   `right`) to keep clear of the desktop MOVE cue. */
+#save-indicator {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 11px;
+  border: 3px solid #e0a458;
+  background: rgba(10, 14, 20, 0.85);
+  box-shadow: 4px 4px 0 #000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+#save-indicator.show {
+  opacity: 1;
+}
+
+/* The canoe sprite at an exact 3x (44x22 -> 132x66), pixels kept square —
+   up from 2x by request ("make the Saving dialog bigger"). */
+#save-indicator canvas {
+  width: 132px;
+  height: 66px;
+  image-rendering: pixelated;
+}
+
+#save-indicator .save-label {
+  color: #f4ead2;
+  font-size: 12px;
+  line-height: 1;
+  text-shadow: 1px 1px 0 #000;
+}
+
 /* A big, dramatic title card for a set-piece encounter — bigger and
    punchier than #milestone-banner above (which stays in use for every
    other in-game callout). Currently just one moment uses it: the British
@@ -423,15 +509,6 @@ html, body {
   }
 }
 
-.screen.intro {
-  pointer-events: none;
-  transition: opacity 0.8s ease;
-}
-
-.screen.intro.intro-fade-out {
-  opacity: 0;
-}
-
 /* Each dialog centers itself, independent of any sibling — #ui used to
    center these via flexbox, but the title screen's intro-fade only sets
    opacity (never display:none), so it silently stayed in that flex layout
@@ -472,10 +549,10 @@ html, body {
   letter-spacing: 2px;
 }
 
-/* #title-screen and #pause-screen's h1 is each screen's only content (see
-   index.html — the subtitle/controls rundown were dropped from both, just
-   the headline) — bigger and with no trailing margin, since there's
-   nothing below it to space away from. */
+/* #title-screen and #pause-screen's h1 is each screen's headline (see
+   index.html — the subtitle/controls rundown were dropped from both) —
+   bigger and with no trailing margin; whatever sits below it (the title
+   menu, the offline line) brings its own top margin. */
 #title-screen h1,
 #pause-screen h1 {
   /* Fluid, not fixed — "Press Start 2P" is a wide, blocky font, and
@@ -485,6 +562,98 @@ html, body {
      narrow viewports, caps at the original 48px once there's room for it. */
   font-size: clamp(26px, 9vw, 48px);
   margin: 0;
+}
+
+/* While the title menu is up (main.js adds body.at-title until New Game /
+   Continue is picked) none of the in-game chrome means anything yet —
+   no music for MUSIC ON, no canoe for the steer pad or the minimap's dot.
+   visibility, not display, so nothing reflows when it comes back. */
+body.at-title #right-panel,
+body.at-title #touch-dpad,
+body.at-title #top-left-panel {
+  visibility: hidden;
+}
+
+/* The title menu's live-river backdrop (world/titleScene.js) — sized and
+   centred in JS at the game's own pixel scale, allowed to run a pixel or
+   two past the viewport rather than ever leave a gap (body's
+   overflow:hidden crops it). Fades out over 0.8s as the game comes up
+   underneath it. */
+#title-scene {
+  position: fixed;
+  left: 0;
+  top: 0;
+  image-rendering: pixelated;
+  opacity: 1;
+  transition: opacity 0.8s ease;
+}
+
+#title-scene.leaving {
+  opacity: 0;
+}
+
+/* Over the live river the title box is near-opaque — the backdrop is
+   busy (water shimmer, trees scrolling past) and VOYAGEURS has to read
+   cleanly over it. A first, painted backdrop used a 0.5 pane here and the
+   title all but vanished into the sunset behind it. */
+body.at-title #title-screen {
+  background: rgba(10, 14, 20, 0.9);
+}
+
+/* The title menu under VOYAGEURS (main.js's beginRun()): CONTINUE (when
+   there's a save) over NEW GAME, one full-width column so the two read as
+   a menu rather than a dialog's OK/Cancel pair. :focus-visible gets the
+   hover colour plus a ring — Up/Down move focus between them, and without
+   it a keyboard player can't tell which one Enter is about to press. */
+#title-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+/* Up from clamp(11px, 3.4vw, 14px), reported as too small to read; then
+   back down a step from a 20px cap that was "a bit too big". */
+#title-menu button {
+  font-size: clamp(13px, 4vw, 16px);
+  padding: 15px 22px;
+}
+
+#title-menu button:focus-visible {
+  background: #f4c07c;
+  outline: 3px solid #f4ead2;
+  outline-offset: 3px;
+}
+
+/* Where CONTINUE picks up, and the furs in the hold — "LE WENDIGO · 6 FURS"
+   on one line under the CONTINUE label. Was 8px at 75% opacity, reported
+   as "so small I can barely read it"; a 14px two-line version after that
+   was a bit too big. Now ~70% of the label's size, at full contrast. Each
+   part is a nowrap span (main.js), so a narrow phone can only wrap the
+   line at the dot. Empty (and so invisible) for a save that no longer
+   matches a named waypoint. */
+#continue-where {
+  display: block;
+  font-size: clamp(9px, 2.8vw, 11px);
+  line-height: 1.6;
+  margin-top: 9px;
+}
+
+#continue-where span {
+  white-space: nowrap;
+}
+
+/* Narrow phones: less side padding inside the buttons, so the longest
+   town name (SAINTE-ROSE-DU-NORD) stays on one line on a 320px screen
+   instead of breaking at a hyphen. */
+@media (max-width: 480px) {
+  #title-menu button {
+    padding: 14px 10px;
+  }
+}
+
+#continue-where:empty {
+  display: none;
 }
 
 #final-stats {
@@ -534,43 +703,57 @@ button:hover {
   gap: 10px;
 }
 
-/* Stacked, not side by side: word labels are wider than the old "♫"/"II"
-   glyphs, and a vertical pair sits in one button's width instead of two —
-   which keeps them clear of the score (top-left) on a phone's top row.
-   Both buttons take the wider one's width so it reads as a tidy stack. */
+/* Side by side again, now that they're icons (core/hudIcons.js) — the
+   word labels ("MUSIC ON"/"PAUSE") were stacked because two of them in a
+   row ran into the score on a phone's top row; two 40px icons don't.
+   Right-aligned over the minimap, same as before. */
 #right-buttons {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  flex-direction: row;
+  justify-content: flex-end;
   gap: 6px;
 }
 
-/* Word labels, not glyphs — "♫"/"II" left players guessing, and the rest
-   of the UI (HUD labels, TRY AGAIN, NOW PLAYING) is already all-text in
-   this font. Sized down from the base button to ~HUD-label scale so two of
-   them plus the score still fit across a phone's top row. */
+/* Bare white pixel icons — no panel, no amber frame. The SVG carries its
+   own hard black outline, which is all the separation it needs from the
+   river. 40px square is a comfortable tap target; the 32px icon inside it
+   is the 16-cell grid at an exact 2x, so its pixels stay crisp. The base
+   `button` rule's background/border/shadow are all cleared here. */
 #mute-btn,
 #pause-btn {
-  padding: 9px 11px;
-  font-size: 9px;
-  line-height: 1;
-  letter-spacing: 1px;
-  opacity: 0.8;
+  width: 40px;
+  height: 40px;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  opacity: 0.85;
 }
 
 #mute-btn:hover,
 #pause-btn:hover {
+  background: transparent;
   opacity: 1;
 }
 
-/* Music off: the label already says so ("MUSIC OFF"); this fades the
-   button so the lit "MUSIC ON" state is the one that draws the eye. */
-#mute-btn.muted {
-  opacity: 0.5;
+#mute-btn:focus-visible,
+#pause-btn:focus-visible {
+  outline: 2px solid #f4ead2;
+  outline-offset: 1px;
 }
 
-#mute-btn.muted:hover {
+/* The base button's :active nudge (style.css's button:active) would shift
+   a bare icon by its shadow offset; keep it still, just a touch dimmer. */
+#mute-btn:active,
+#pause-btn:active {
+  transform: none;
+  box-shadow: none;
   opacity: 0.7;
+}
+
+#mute-btn svg,
+#pause-btn svg {
+  display: block;
 }
 
 /* The steer pad — four direction keys in an inverted-T (↑ on top, ← ↓ →

@@ -117,6 +117,209 @@ await step('main.js loads', async () => {
   await import('../src/main.js');
 });
 
+// --- scenario 0a: the title menu (NEW GAME / CONTINUE) gates the run --------
+
+await step('title menu: nothing starts until a choice, CONTINUE names its checkpoint, NEW GAME wipes the save', async () => {
+  const mod = await import('../src/main.js');
+  // Every position the implicit checkpoint can ever save has to come back
+  // with a name for the CONTINUE button — a checkpoint candidate the label
+  // lookup can't find would show a bare "CONTINUE" with no idea where to.
+  for (const kw of mod.START_KEYWORD_LIST) {
+    const reached = mod.furthestCheckpointReached(kw.segment, kw.flowDistance);
+    if (!mod.checkpointLabel(reached)) throw new Error(`checkpoint at "${kw.name}" (${kw.segment} @ ${kw.flowDistance | 0}) has no CONTINUE label`);
+  }
+  for (const v of VILLAGES) {
+    const reached = mod.furthestCheckpointReached(v.segment, v.flowDistance);
+    if (!mod.checkpointLabel(reached)) throw new Error(`checkpoint at ${v.name} has no CONTINUE label`);
+  }
+  if (mod.checkpointLabel(null) !== null) throw new Error('no checkpoint, no label');
+
+  // NEW GAME clears every voyageurs-* key, and only those.
+  windowShim.localStorage.setItem(mod.CHECKPOINT_KEY, JSON.stringify({ segment: 'rideau', flowDistance: 1 }));
+  windowShim.localStorage.setItem('voyageurs-something-later', 'x');
+  windowShim.localStorage.setItem('not-ours', 'keep');
+  mod.clearSavedProgress();
+  if (mod.loadCheckpoint()) throw new Error('NEW GAME left the checkpoint behind');
+  if (windowShim.localStorage.getItem('voyageurs-something-later') !== null) throw new Error('NEW GAME left a voyageurs-* key behind');
+  if (windowShim.localStorage.getItem('not-ours') !== 'keep') throw new Error('NEW GAME cleared storage that isn\'t the game\'s');
+  windowShim.localStorage.removeItem('not-ours');
+
+  // The real startup path, as the menu drives it. main.js loaded above with
+  // no ?start=, so it must still be waiting on the menu — no Game yet.
+  if (window.__voyageursReady) throw new Error('a Game was built at load with no ?start= — the title menu is supposed to gate it');
+  const game = mod.beginRun({ segment: 'fjord', flowDistance: 0 });
+  if (!game || game.segment !== 'fjord') throw new Error('beginRun() did not build the Game at the put-in');
+  if (mod.beginRun({ segment: 'rideau', flowDistance: 1 }) !== game) throw new Error('a second beginRun() built another Game');
+  for (let i = 0; i < 60; i++) game.update(1 / 60);
+});
+
+await step('title backdrop: the tiled river covers every viewport shape, seams on the grass grid', async () => {
+  const { tileLayout, createTitleScene } = await import('../src/world/titleScene.js');
+  // Internal sizes main.js-style scaling produces for a phone in portrait,
+  // a laptop, a wide monitor, and a squat window.
+  for (const [W, H] of [[320, 656], [320, 694], [334, 234], [400, 225], [640, 360], [320, 220], [500, 120]]) {
+    const { tiles } = tileLayout(W, H);
+    // Every pixel covered: check a grid of sample points.
+    for (let y = 0; y < H; y += 7) {
+      for (let x = 0; x < W; x += 7) {
+        if (!tiles.some((t) => x >= t.x && x < t.x + 320 && y >= t.y && y < t.y + 220)) {
+          throw new Error(`${W}x${H}: (${x},${y}) isn't covered by any river tile`);
+        }
+      }
+    }
+    // Every tile origin on the same 16px phase as the centre one, or the
+    // grass pattern jumps at a seam (titleScene.js's TILE_STEP_Y comment).
+    const t0 = tiles.find((t) => t.dOffset === 0 && t.camOffset === 0);
+    if (!t0) throw new Error(`${W}x${H}: no centre tile`);
+    for (const t of tiles) {
+      if ((t.x - t0.x) % 16 || (t.y - t0.y) % 16) throw new Error(`${W}x${H}: tile at (${t.x},${t.y}) is off the 16px grass grid`);
+      // Screen offset and world offset have to agree, or the seam tears.
+      if (Math.abs((t.y - t0.y) / PIXELS_PER_UNIT + t.dOffset) > 1e-9) throw new Error(`${W}x${H}: tile at y=${t.y} is drawn at the wrong distance`);
+      if (Math.abs((t.x - t0.x) / PIXELS_PER_UNIT - t.camOffset) > 1e-9) throw new Error(`${W}x${H}: tile at x=${t.x} is drawn at the wrong camera`);
+    }
+  }
+  // The real thing, through the no-WebGL fallback the shim takes, across
+  // a full loop including the wrap fade.
+  const scene = createTitleScene();
+  const ctx = makeElement('canvas').getContext('2d');
+  for (let t = 0; t < 100; t += 0.9) scene.debugDrawFrame(ctx, t);
+});
+
+await step('continue: a saved fur count is restored on the first start, and a capsize still zeroes it', () => {
+  const g = newGame('fjord', 0, { startFurs: 12 });
+  if (g.game.furs !== 12) throw new Error(`CONTINUE should open with the saved 12 furs, got ${g.game.furs}`);
+  run(g, 30, 1 / 30);
+  if (g.game.furs < 12) throw new Error(`the restored furs were lost within a second of play (${g.game.furs})`);
+  // A capsize restarts through start() — back to 0, as it always was.
+  g.game.start();
+  if (g.game.furs !== 0) throw new Error(`a capsize restart should reset furs to 0, got ${g.game.furs}`);
+  if (newGame('fjord', 0).game.furs !== 0) throw new Error('a run with no startFurs should open with 0 furs');
+});
+
+await step('hud icons: speaker / muted speaker / pause / play are four distinct SVGs', async () => {
+  const { speakerIcon, pauseIcon, playIcon } = await import('../src/core/hudIcons.js');
+  const icons = [speakerIcon(false), speakerIcon(true), pauseIcon(), playIcon()];
+  for (const svg of icons) if (!svg.startsWith('<svg') || !svg.includes('<rect')) throw new Error('an icon is not an SVG of rects');
+  if (new Set(icons).size !== icons.length) throw new Error('two of the control icons came out identical');
+  // The muted icon is the same speaker with the slash added on top.
+  if (!speakerIcon(true).startsWith(speakerIcon(false).replace('</svg>', ''))) throw new Error('the muted icon should be the music-on speaker plus a slash');
+});
+
+await step('town banner: every village name fits on one line, readably, phone to desktop, and never under the minimap', async () => {
+  const mod = await import('../src/core/townBanner.js');
+  // Press Start 2P: 1em per glyph, plus any letter-spacing, plus the
+  // padding and border — style.css's #town-banner, mirrored in townBanner.js.
+  const lineWidth = (name, px) => name.length * (1 + mod.TOWN_BANNER_LETTER_SPACING_EM) * px + mod.TOWN_BANNER_CHROME_PX;
+  const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const names = [...VILLAGES.map((v) => v.name), 'Saint-Jean-de-la-Grande-Riviere-du-Loup'];
+  // 320 is the narrowest game screen main.js's resize() ever makes (its
+  // scale never drops below 1); 375/390 phones; 960/1600 desktop.
+  for (const width of [320, 375, 390, 960, 1600]) {
+    const screen = rect(0, 200, width, width * 220 / 320);
+    // Minimap well clear (desktop sidebar), and hanging over the screen's
+    // top-right corner (the short-phone case).
+    for (const minimap of [rect(width + 20, 0, 150, 150), rect(width - 160, 60, 150, 156)]) {
+      for (const name of names) {
+        const at = mod.townBannerLayout(name, screen, minimap);
+        if (at.fontPx > mod.TOWN_BANNER_MAX_PX) throw new Error(`${name}: ${at.fontPx}px is over the ${mod.TOWN_BANNER_MAX_PX}px cap`);
+        // Whole pixels only — at fractional sizes browsers round each glyph's
+        // advance up and the line no longer fits (townBanner.js's comment).
+        if (!Number.isInteger(at.fontPx)) throw new Error(`${name}: ${at.fontPx}px isn't a whole-pixel size`);
+        const w = lineWidth(name, at.fontPx);
+        if (w > at.room + 0.5) throw new Error(`${name} at ${width}px wide: a ${w.toFixed(1)}px line overflows its ${at.room.toFixed(1)}px of room`);
+        const l = screen.left + at.left - w / 2;
+        const r = screen.left + at.left + w / 2;
+        if (l < screen.left || r > screen.right) throw new Error(`${name} at ${width}px wide spills off the game screen`);
+        const t = screen.top + at.top;
+        const underMinimap = r > minimap.left && l < minimap.right && t < minimap.bottom && t + mod.TOWN_BANNER_HEIGHT_PX > minimap.top;
+        if (at.top < mod.TOWN_BANNER_GAP_PX) throw new Error(`${name} at ${width}px wide is flush against the top edge — it should keep its gap`);
+        if (underMinimap) throw new Error(`${name} at ${width}px wide sits under the minimap`);
+        // Real names have to stay readable; only the made-up one may shrink.
+        if (VILLAGES.some((v) => v.name === name) && at.fontPx < 8) throw new Error(`${name} at ${width}px wide shrank to an unreadable ${at.fontPx}px`);
+      }
+    }
+  }
+});
+
+await step('save indicator: shows on demand, animates every frame without throwing, and hides itself', async () => {
+  const { createSaveIndicator, drawSavingFrame, SHOW_MS } = await import('../src/core/saveIndicator.js');
+  if (SHOW_MS !== 5000) throw new Error(`the Saving indicator is meant to stay up 5s, not ${SHOW_MS}ms`);
+  const ctx = makeElement('canvas').getContext('2d');
+  for (let f = 0; f < 64; f++) drawSavingFrame(ctx, f);
+  const ind = createSaveIndicator();
+  if (ind.isShowing()) throw new Error('should start hidden');
+  ind.show();
+  if (!ind.isShowing()) throw new Error('show() should put it up');
+  await new Promise((r) => setTimeout(r, SHOW_MS + 100));
+  if (ind.isShowing()) throw new Error(`still up after ${SHOW_MS + 100}ms`);
+  await new Promise((r) => setTimeout(r, 450)); // let its animation timer wind down
+});
+
+await step('town saves: landing and passing save the same spot (never twice), and CONTINUE opens inside the town', async () => {
+  const mod = await import('../src/main.js');
+  for (const v of VILLAGES) {
+    const landing = mod.landingCheckpoint(v);
+    if (v.name === 'Kingston') {
+      if (landing) throw new Error('landing at Kingston should not save — arriving there clears the save');
+      continue;
+    }
+    // Passing the town on the river saves its waypoint...
+    const passing = mod.furthestCheckpointReached(v.segment, v.flowDistance);
+    if (!passing) throw new Error(`${v.name}: passing its dock saves nothing`);
+    // ...which has to be exactly the landing save, either way round, or
+    // land-then-pass (or pass-then-land) would save the same town twice.
+    if (mod.isFurtherAlong(passing, landing) || mod.isFurtherAlong(landing, passing)) {
+      throw new Error(`${v.name}: landing saves ${JSON.stringify(landing)} but passing saves ${JSON.stringify(passing)} — the second would save again`);
+    }
+    // And either save continues into the town itself.
+    for (const cp of [landing, passing]) {
+      const into = mod.villageAtCheckpoint({ ...cp, furs: 3 });
+      if (!into || into.name !== v.name || into.segment !== v.segment) {
+        throw new Error(`${v.name}: CONTINUE from ${JSON.stringify(cp)} would open ${into ? into.name : 'on the river'}, not inside ${v.name}`);
+      }
+    }
+  }
+  // The Wendigo and Loup-garou approaches are jump targets, not saves —
+  // each sat just past a town's dock and double-saved it.
+  for (const name of ['wendigo', 'loup-garou']) {
+    const k = mod.START_KEYWORD_LIST.find((x) => x.name === name);
+    const reached = mod.furthestCheckpointReached(k.segment, k.flowDistance);
+    if (reached && Math.abs(reached.flowDistance - k.flowDistance) < 0.5) throw new Error(`the ${name} approach is still a save point`);
+  }
+  // And no save point may sit right after a town's dock any more: passing
+  // it straight after landing reads as the same place saving twice. If a
+  // new boss checkpoint trips this, mark it checkpoint: false (main.js's
+  // START_KEYWORD_LIST) or move it.
+  for (const v of VILLAGES) {
+    for (const k of mod.START_KEYWORD_LIST) {
+      if (k.checkpoint === false || k.segment !== v.segment) continue;
+      const ahead = k.flowDistance - v.flowDistance;
+      if (ahead > 0 && ahead < 60) throw new Error(`the ${k.name} save point is only ${ahead.toFixed(1)} units past ${v.name} — passing it after landing there double-saves`);
+    }
+  }
+
+  // A boss-approach save isn't a town: CONTINUE stays on the river there.
+  for (const k of mod.START_KEYWORD_LIST) {
+    const into = mod.villageAtCheckpoint(k);
+    if (into && into.name !== 'Kingston' && Math.abs(into.flowDistance - k.flowDistance) > 0.5) throw new Error(`${k.name} matched ${into.name}`);
+  }
+  if (mod.villageAtCheckpoint(null) !== null) throw new Error('no save, no town');
+
+  // What CONTINUE then does with it: build the run at the dock and step
+  // ashore — then it has to cast off cleanly.
+  for (const name of ['La Malbaie', 'Quebec City', 'Tadoussac']) {
+    const v = VILLAGES.find((x) => x.name === name);
+    if (!v) continue;
+    const g = newGame(v.segment, v.flowDistance);
+    g.game.enterVillage(v);
+    if (g.game.mode !== 'village' || g.game.currentVillage !== v) throw new Error(`continuing into ${name} didn't open its town scene`);
+    run(g, 30, 1 / 30);
+    g.game.leaveVillage();
+    if (g.game.mode !== 'river') throw new Error(`couldn't cast off from ${name} after continuing into it`);
+    run(g, 90, 1 / 30, (st) => { st.up = true; });
+  }
+});
+
 // --- scenario 1: fjord paddling, long enough to cross the mouth ------------
 
 await step('fjord: paddle downstream 120s', () => {
@@ -3163,6 +3366,18 @@ await step('checkpoint: saves/loads through storage, and an explicit ?start= sti
     if (!loaded || loaded.segment !== 'rideau' || loaded.flowDistance !== 95500) {
       throw new Error(`checkpoint didn't round-trip through storage: ${JSON.stringify(loaded)}`);
     }
+
+    // Furs ride along with the save, and come back as a whole number; a
+    // save from before they were recorded (or a junk value) reads as 0
+    // rather than breaking the save.
+    if (loaded.furs !== 0) throw new Error(`a save with no furs given should load 0 furs, got ${loaded.furs}`);
+    mod.saveCheckpointToStorage('rideau', 95500, 17);
+    if (mod.loadCheckpoint()?.furs !== 17) throw new Error(`furs didn't round-trip through the checkpoint: ${JSON.stringify(mod.loadCheckpoint())}`);
+    windowShim.localStorage.setItem(mod.CHECKPOINT_KEY, JSON.stringify({ segment: 'rideau', flowDistance: 95500 }));
+    if (mod.loadCheckpoint()?.furs !== 0) throw new Error('an old save without furs should load as 0 furs');
+    windowShim.localStorage.setItem(mod.CHECKPOINT_KEY, JSON.stringify({ segment: 'rideau', flowDistance: 95500, furs: 'lots' }));
+    if (mod.loadCheckpoint()?.furs !== 0) throw new Error('a junk fur count should load as 0, not break the save');
+    mod.saveCheckpointToStorage('rideau', 95500);
 
     // No ?start= this time — resumes at the saved checkpoint instead of
     // the put-in.

@@ -5,6 +5,10 @@ import { createMusic } from './audio/music.js';
 import { createMinimap } from './world/minimap.js';
 import { createTouchControls, isTouchPrimary } from './core/touchControls.js';
 import { createDebugMenu } from './core/debugMenu.js';
+import { createTitleScene } from './world/titleScene.js';
+import { speakerIcon, pauseIcon, playIcon } from './core/hudIcons.js';
+import { townBannerLayout } from './core/townBanner.js';
+import { createSaveIndicator } from './core/saveIndicator.js';
 import { Input } from './core/input.js';
 import { Game, MIN_SPEED, KINGSTON_APPROACH_LEAD } from './core/game.js';
 import { VILLAGES } from './world/river/route.js';
@@ -22,10 +26,11 @@ const app = document.getElementById('app');
 // [save system]... don't make it explicit on screen but make it work":
 // silently remembers the furthest of this game's own ?start= waypoints
 // (START_KEYWORDS further down, plus every real village dock) the player
-// has actually reached, and resumes there on a plain reload with no
-// ?start= of its own — no "continue" prompt, no save/load button, nothing
-// on screen. Closing the tab and coming back just picks up close to where
-// you left off. The actual checkpoint list/save-on-progress logic lives
+// has actually reached. Saving is still silent, but resuming isn't
+// automatic any more: the title menu (beginRun() further down) offers
+// CONTINUE from it, or NEW GAME, which wipes it — asked for later as "a
+// Continue Game option, so that if the user has reached a waypoint which
+// is visible in the cache, they can start from that waypoint." The actual checkpoint list/save-on-progress logic lives
 // further down (after START_KEYWORDS/VILLAGES are both in scope); these
 // three are just the raw storage read/write/clear, kept together and
 // wrapped in try/catch so private browsing, disabled storage, or a quota
@@ -37,14 +42,23 @@ export function loadCheckpoint() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (typeof parsed.flowDistance !== 'number' || typeof parsed.segment !== 'string') return null;
-    return parsed;
+    // Furs ride along with the position (saveCheckpointToStorage below).
+    // A save from before they did has none — that's 0, not a broken save.
+    const furs = Number.isFinite(parsed.furs) && parsed.furs > 0 ? Math.floor(parsed.furs) : 0;
+    return { segment: parsed.segment, flowDistance: parsed.flowDistance, furs };
   } catch {
     return null;
   }
 }
-export function saveCheckpointToStorage(segment, flowDistance) {
+// `furs` is the count in the hold at the moment the waypoint was passed —
+// asked for as "if I pass a waypoint and then close my browser window, that
+// previous number of furs should get restored when I hit Continue Game."
+// Recorded only when a save happens (a *new*, further waypoint), never
+// rewritten in between: a capsize zeroes the live count, but the save
+// keeps what you had when you got there.
+export function saveCheckpointToStorage(segment, flowDistance, furs = 0) {
   try {
-    window.localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ segment, flowDistance }));
+    window.localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ segment, flowDistance, furs }));
   } catch {
     /* no save this time — nothing else to do about it */
   }
@@ -230,8 +244,14 @@ const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flow
 // turns up in both without being named twice, which is exactly the kind of
 // thing that goes stale.
 export const START_KEYWORD_LIST = [
-  { name: 'wendigo', label: 'Le Wendigo', flowDistance: WENDIGO_FROST_START_DISTANCE - 21, segment: 'fjord' },
-  { name: 'loup-garou', label: 'Le Loup-garou', flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest' },
+  // checkpoint: false — a ?start= / ?debug jump target, but not a save
+  // point (CHECKPOINT_CANDIDATES_BY_SEGMENT below). Each sat just past a
+  // town's dock (the Wendigo's 8.2 units past Petit-Saguenay, the
+  // Loup-garou's 30 past Beaupré), so passing it right after landing in
+  // that town saved again — reported as a double save, and removed by
+  // request. The town before each is the save for its fight now.
+  { name: 'wendigo', label: 'Le Wendigo', flowDistance: WENDIGO_FROST_START_DISTANCE - 21, segment: 'fjord', checkpoint: false },
+  { name: 'loup-garou', label: 'Le Loup-garou', flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest', checkpoint: false },
   { name: 'chasse-galerie', label: 'Chasse-galerie (take flight)', flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   { name: 'diable', label: 'Le Diable', flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   { name: 'rideau', label: 'Rideau leg (start)', ...RIDEAU_START },
@@ -263,7 +283,13 @@ export function parseStartLocation() {
   const flowDistance = Math.max(segmentStart, match.flowDistance - START_APPROACH_BUFFER);
   return { flowDistance, segment: match.segment };
 }
-const { flowDistance: startFlowDistance, segment: startSegment } = parseStartLocation();
+// Where this run begins isn't known at load any more unless the URL says
+// so: a plain load puts up the title menu (New Game / Continue — see
+// beginRun() below) and the choice decides it. An explicit ?start= is a
+// dev cheat that has already made its choice, so it skips the menu and is
+// resolved here, before the stripping further down removes it from the URL.
+const hasExplicitStart = !!(new URLSearchParams(window.location.search).get('start') || '').trim();
+const explicitStart = hasExplicitStart ? parseStartLocation() : null;
 
 // Is this position the put-in — the very start of the journey, before the
 // first village? Only used to decide whether this run gets the pinned
@@ -344,14 +370,15 @@ export function shouldOpenDebugMenuOnLoad() {
 const startedEasy = isEasyMode();
 
 // The checkpoint list itself — every position this file already treats as
-// a real waypoint: START_KEYWORDS' own boss-fight approaches plus every
-// real village dock (VILLAGES). Grouped and sorted per segment so
+// a real waypoint: START_KEYWORD_LIST's boss-fight approaches (minus the
+// ones marked `checkpoint: false`) plus every real village dock (VILLAGES). Grouped and sorted per segment so
 // furthestCheckpointReached() below can find "the latest one at or before
 // here" with a plain scan, no search structure needed for a couple-dozen
 // entries. Rebuilt once at load, not per-check — none of this moves after
 // the module finishes evaluating.
 const CHECKPOINT_CANDIDATES_BY_SEGMENT = {};
-for (const kw of Object.values(START_KEYWORDS)) {
+for (const kw of START_KEYWORD_LIST) {
+  if (kw.checkpoint === false) continue;
   (CHECKPOINT_CANDIDATES_BY_SEGMENT[kw.segment] ??= []).push(kw.flowDistance);
 }
 for (const v of VILLAGES) {
@@ -388,6 +415,34 @@ export function isFurtherAlong(a, b) {
   const rb = SEGMENT_RANK[b.segment] ?? 0;
   if (ra !== rb) return ra > rb;
   return a.flowDistance > b.flowDistance;
+}
+
+// The town a saved position belongs to, or null (a boss approach, say).
+// A town has exactly one save position — its own dock, village.flowDistance
+// — whether that save was made by landing there or by paddling past (the
+// two are the same checkpoint candidate; see landingCheckpoint() below), so
+// matching on position covers both, and covers saves made before landing
+// saved anything. CONTINUE uses this to start you *inside* the town rather
+// than on the river beside it: "that should always start from inside the
+// town, even if my game was saved at the waypoint outside the town."
+// Kingston is excluded: arriving there ends the journey and clears the save
+// (loop()), so a Kingston save can't be continued into anyway.
+export function villageAtCheckpoint(cp) {
+  if (!cp) return null;
+  return VILLAGES.find((v) => v.name !== 'Kingston' && v.segment === cp.segment && Math.abs(v.flowDistance - cp.flowDistance) < 0.5) ?? null;
+}
+
+// The checkpoint landing in `village` saves — deliberately the *same*
+// position passing its waypoint on the river saves (its dock, which is
+// already one of CHECKPOINT_CANDIDATES_BY_SEGMENT's entries). That's what
+// makes "don't save twice" fall out of the one rule both paths already
+// share, isFurtherAlong(): land first, and passing the waypoint afterwards
+// finds the save already there (equal, not further) and skips; pass first,
+// and landing finds the same. Null for Kingston, which clears the save
+// rather than making one.
+export function landingCheckpoint(village) {
+  if (!village || village.name === 'Kingston') return null;
+  return { segment: village.segment, flowDistance: village.flowDistance };
 }
 
 // Every place the ?debug overlay can drop you, in real route order. Built
@@ -479,7 +534,7 @@ const startedAtGatineau =
 // Fort Frontenac ahead" banner's own distance trigger, see START_KEYWORDS'
 // own comment on "kingston", and game.js's normal Game.update() fires the
 // banner and the arrival track itself on the very first tick.)
-const startedExplicitly = !!(new URLSearchParams(window.location.search).get('start') || '').trim();
+const startedExplicitly = hasExplicitStart;
 
 // A ?start= cheat is a one-shot for THIS page load. Strip it from the address
 // bar now that it's been read, so a reload, a restored tab, or a home-screen
@@ -522,6 +577,44 @@ const screen = document.createElement('div');
 screen.style.position = 'relative';
 app.appendChild(screen);
 
+// The town-name banner (style.css's #town-banner): "whenever I'm in a town,
+// a small banner at the top of the game window showing the name of the
+// town." A child of the game screen itself rather than of #ui, so "the top
+// of the game window" holds wherever the screen sits — on a phone that's
+// mid-viewport, nowhere near the top of the page. Driven from loop() off
+// game.mode/currentVillage (syncTownBanner below) rather than from each
+// of game.js's several enter/leave paths, so none of them can leave it
+// stuck up or missing. Appended after the canvases, so it's on top.
+const townBanner = document.createElement('div');
+townBanner.id = 'town-banner';
+townBanner.className = 'hidden';
+townBanner.setAttribute('aria-live', 'polite');
+
+let townBannerShows = null;
+function fitTownBanner() {
+  if (!townBannerShows) return;
+  const panel = document.getElementById('right-panel');
+  const at = townBannerLayout(townBannerShows, screen.getBoundingClientRect(), panel?.getBoundingClientRect?.());
+  townBanner.style.left = `${at.left}px`;
+  townBanner.style.top = `${at.top}px`;
+  townBanner.style.maxWidth = `${at.room}px`;
+  townBanner.style.fontSize = `${at.fontPx}px`;
+}
+function syncTownBanner() {
+  const name = game?.mode === 'village' ? game.currentVillage?.name ?? null : null;
+  if (name === townBannerShows) return;
+  townBannerShows = name;
+  townBanner.classList.toggle('hidden', !name);
+  if (name) {
+    // In its own span for style.css's vertical stretch (.town-name).
+    const text = document.createElement('span');
+    text.className = 'town-name';
+    text.textContent = name;
+    townBanner.replaceChildren(text);
+    fitTownBanner();
+  }
+}
+
 // <canvas> is a replaced element (like <img>) — `inset:0` alone doesn't
 // stretch a replaced element's auto width/height the way it would a <div>,
 // so width/height:100% has to be explicit or these stay at native 320x220.
@@ -544,6 +637,58 @@ canvas.width = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
 layerStyle(canvas);
 screen.appendChild(canvas);
+screen.appendChild(townBanner);
+
+// The "Saving" canoe (core/saveIndicator.js) — bottom-right of the game
+// screen, shown for five seconds on every real checkpoint write (loop()).
+// Same reason as the town banner for living inside the screen rather than
+// #ui: "the game window", wherever that sits.
+const saveIndicator = createSaveIndicator();
+screen.appendChild(saveIndicator.element);
+// Bottom-right, except where something fixed sits over that corner of the
+// screen: on a desktop window not much wider than the game, the MOVE keys
+// cue (#touch-dpad) hangs into the screen's bottom-right corner, and on a
+// wider one the BUILD badge (#build-version, index.html) can. Either would
+// cover it. For each one it collides with, it steps clear by whichever is
+// the shorter move — left of it, or up above it — then checks again
+// against the rest. Re-run on resize and on each show (the dpad is
+// positioned by resize() too).
+const SAVE_INDICATOR_EDGE = 6;
+// `above`: extra px to keep clear over the element's own box — the desktop
+// cue's "MOVE" caption is a #steer-pad::after hung above it (style.css),
+// outside the box getBoundingClientRect() reports, and the first cut of
+// this sat its bottom edge right on top of the caption.
+const SAVE_INDICATOR_AVOID = [{ id: 'touch-dpad', above: 20 }, { id: 'build-version', above: 0 }];
+function placeSaveIndicator() {
+  const el = saveIndicator.element;
+  let right = SAVE_INDICATOR_EDGE;
+  let bottom = SAVE_INDICATOR_EDGE;
+  el.style.right = `${right}px`;
+  el.style.bottom = `${bottom}px`;
+  const s = screen.getBoundingClientRect();
+  const obstacles = SAVE_INDICATOR_AVOID
+    .map(({ id, above }) => {
+      const r = document.getElementById(id)?.getBoundingClientRect?.();
+      return r && r.width && r.height ? { left: r.left, right: r.right, top: r.top - above, bottom: r.bottom } : null;
+    })
+    .filter(Boolean);
+  for (let pass = 0; pass < 3; pass++) {
+    const me = el.getBoundingClientRect();
+    if (!me.width) return;
+    const hit = obstacles.find((o) => o.left < me.right && o.right > me.left && o.top < me.bottom && o.bottom > me.top);
+    if (!hit) return;
+    const toLeft = s.right - hit.left + SAVE_INDICATOR_EDGE;
+    const toUp = s.bottom - hit.top + SAVE_INDICATOR_EDGE;
+    if (toLeft - right <= toUp - bottom) right = toLeft;
+    else bottom = toUp;
+    el.style.right = `${Math.round(right)}px`;
+    el.style.bottom = `${Math.round(bottom)}px`;
+  }
+}
+function showSaving() {
+  saveIndicator.show();
+  placeSaveIndicator();
+}
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
@@ -718,6 +863,8 @@ function resize() {
   }
 
   positionWeaponPad();
+  fitTownBanner();
+  placeSaveIndicator();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -842,12 +989,10 @@ function syncMediaSession(track) {
 }
 // Background music — browsers block autoplay until a real user gesture, so
 // this starts on the player's first keypress or click rather than on load.
-// pinOpeningTrack: the put-in's own tune, and only there — see
-// isPutIn() above and audio/music.js's OPENING_TRACK.
-const music = createMusic({
-  onTrack: showNowPlaying,
-  pinOpeningTrack: isPutIn(startSegment, startFlowDistance),
-});
+// The put-in's own tune, and only there (isPutIn() above and
+// audio/music.js's OPENING_TRACK) — dealt by beginRun() via
+// setOpeningPinned() once the start point is actually known.
+const music = createMusic({ onTrack: showNowPlaying });
 if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
   try {
     navigator.mediaSession.setActionHandler('play', () => { music.resume(); navigator.mediaSession.playbackState = 'playing'; });
@@ -875,65 +1020,190 @@ if (new URLSearchParams(window.location.search).get('musicdebug') === '1') {
   });
 }
 
-// Registered before Game is constructed so a startup throw can't strand the
-// title screen on forever — the caption still fades out on its own timer
-// regardless of whether the game behind it came up.
+// The title menu (index.html #title-screen). Asked for as "instead of just
+// saying VOYAGEURS, I want to see a menu": NEW GAME always, CONTINUE only
+// when there's a saved checkpoint to go back to — and nothing, not the
+// canoe and not the music, starts until one of them is picked. Replaces
+// the old intro, which was a caption fading out over a run that had
+// already launched underneath it. The checkpoint itself is still the
+// implicit one (this file's top comment) — saved silently as you go, this
+// is just the one place it's now surfaced.
 //
-// The canoe launches immediately — this intro caption is just a fading
-// overlay, not a gate, so it disappears on its own after a few seconds.
-setTimeout(() => ui.titleScreen.classList.add('intro-fade-out'), 4500);
-// opacity:0 alone leaves it fully interactive-transparent but still
-// occupying its layout box forever — harmless once every .screen
-// self-centers independently (see style.css), but there's no reason for
-// an invisible element to keep existing at all once its own fade
-// transition (0.8s) has actually finished.
-setTimeout(() => ui.titleScreen.classList.add('hidden'), 4500 + 900);
-
+// An explicit ?start= skips the menu: it's a dev cheat (or a ?debug jump)
+// that has already said where to go, and a menu in the way of every jump
+// would be the obvious annoyance.
 let game = null;
-try {
-  game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance, startSegment, easyMode: startedEasy });
-  // ?start=diable is a checkpoint, not just a spawn point — hand over the
-  // pistol and mark it so a capsize respawns at the fight.
-  if (startedAtDiable) game.armDiableCheckpoint();
-  // ?start=gatineau — open its on-foot scene directly, the same call the
-  // real dock-touch path uses (see startedAtGatineau's own comment).
-  if (startedAtGatineau) {
-    const gatineau = VILLAGES.find((v) => v.name === 'Gatineau' && v.segment === 'lawrenceWest');
-    if (gatineau) game.enterVillage(gatineau);
-  }
-  // Every ?start= cheat begins from a calm drift, not cruising speed. Set
-  // before game.js's first tick runs: a cheat otherwise begins at the same
-  // BASE_SPEED a normal playthrough carries into any segment — first
-  // reported for Kingston alone ("already screaming fast" for a cheat
-  // whose whole point is a slow, chill approach), then for all of them:
-  // "my canoe is already flying out of the gate when the game kicks in."
-  // MIN_SPEED is this game's own "actual chill slow speed, not just a mild
-  // step down from medium" (see its own comment, game.js) — holding Up
-  // still accelerates normally from there, same as a real approach, just
-  // starting from a drift instead of already at cruising speed. Harmless
-  // for the cheats that open a village scene directly (gatineau) — the
-  // speed only matters once you're back on the water.
-  // (?start=kingston used to need a second touch here too — priming Un
-  // Siècle d'Avance as the lead track. Gone: the Kingston playlist now
-  // always plays in fixed order from that track, cheat or not — see
-  // music.js's KINGSTON_TRACK/playKingstonTrack(); the arrival banner and
-  // track fire on their own the instant the update loop first ticks.)
-  if (startedExplicitly) {
-    game.speed = MIN_SPEED;
-  }
+// The painted dusk-on-the-fjord backdrop behind the menu
+// (world/titleScene.js) — null with an explicit ?start=, which never shows
+// the menu. Failing to build it is never allowed to take the menu down
+// with it: a black backdrop is the old look, not a broken game.
+let titleScene = null;
 
-  // Lets the index.html error handler word later crashes as "running the
-  // game" rather than "loading the game".
-  window.__voyageursReady = true;
-} catch (err) {
-  showFatalError(err, 'starting up');
+// Player-facing name for a saved checkpoint, for the CONTINUE button. Every
+// checkpoint is a START_KEYWORD_LIST position or a VILLAGES dock (the same
+// two sources CHECKPOINT_CANDIDATES_BY_SEGMENT is built from), so an exact
+// match is expected; anything else (an old save from before a waypoint
+// moved) just gets no subtitle. Not debugWaypoints(): that drops villages
+// whose name is also a keyword, and Kingston's *dock* is still a candidate.
+export function checkpointLabel(cp) {
+  if (!cp) return null;
+  const at = (w) => w.segment === cp.segment && Math.abs(w.flowDistance - cp.flowDistance) < 0.5;
+  const named = START_KEYWORD_LIST.find(at) ?? VILLAGES.find(at);
+  return named ? (named.label ?? named.name) : null;
+}
+
+// New Game "removes everything from the cache": every voyageurs-* key in
+// localStorage, not just the checkpoint, so anything saved later is
+// covered without having to remember this. Deliberately NOT the service
+// worker's offline audio cache — that's ~88 MB of music, not progress, and
+// wiping it would just make the next run re-download it all.
+export function clearSavedProgress() {
+  clearCheckpointStorage();
+  try {
+    const keys = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith('voyageurs-')) keys.push(k);
+    }
+    for (const k of keys) window.localStorage.removeItem(k);
+  } catch {
+    /* storage unavailable — nothing saved to clear */
+  }
+  savedCheckpoint = null;
+}
+
+// Build the Game at `start` ({ segment, flowDistance }) and get it going.
+// Called once: by the menu, or straight away for an explicit ?start=.
+// Exported so the smoke test can drive the real startup path without a
+// click.
+// `intoVillage`: open inside that town's on-foot scene, the way docking there
+// does (CONTINUE from a town save — see villageAtCheckpoint()).
+export function beginRun(start, { fromMenu = false, intoVillage = null } = {}) {
+  if (game) return game;
+  ui.titleScreen.classList.add('hidden');
+  document.body.classList.remove('at-title');
+  titleScene?.dismiss();
+  music.setOpeningPinned(isPutIn(start.segment, start.flowDistance));
+  try {
+    game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance: start.flowDistance, startSegment: start.segment, easyMode: startedEasy, startFurs: start.furs ?? 0 });
+    // ?start=diable is a checkpoint, not just a spawn point — hand over the
+    // pistol and mark it so a capsize respawns at the fight.
+    if (startedAtDiable) game.armDiableCheckpoint();
+    // ?start=gatineau — open its on-foot scene directly, the same call the
+    // real dock-touch path uses (see startedAtGatineau's own comment).
+    if (startedAtGatineau) {
+      const gatineau = VILLAGES.find((v) => v.name === 'Gatineau' && v.segment === 'lawrenceWest');
+      if (gatineau) game.enterVillage(gatineau);
+    }
+    // CONTINUE from a town save — same call, same reason.
+    if (intoVillage) game.enterVillage(intoVillage);
+    // Every ?start= cheat begins from a calm drift, not cruising speed. Set
+    // before game.js's first tick runs: a cheat otherwise begins at the same
+    // BASE_SPEED a normal playthrough carries into any segment — first
+    // reported for Kingston alone ("already screaming fast" for a cheat
+    // whose whole point is a slow, chill approach), then for all of them:
+    // "my canoe is already flying out of the gate when the game kicks in."
+    // MIN_SPEED is this game's own "actual chill slow speed, not just a mild
+    // step down from medium" (see its own comment, game.js) — holding Up
+    // still accelerates normally from there, same as a real approach, just
+    // starting from a drift instead of already at cruising speed. Harmless
+    // for the cheats that open a village scene directly (gatineau) — the
+    // speed only matters once you're back on the water.
+    // (?start=kingston used to need a second touch here too — priming Un
+    // Siècle d'Avance as the lead track. Gone: the Kingston playlist now
+    // always plays in fixed order from that track, cheat or not — see
+    // music.js's KINGSTON_TRACK/playKingstonTrack(); the arrival banner and
+    // track fire on their own the instant the update loop first ticks.)
+    if (startedExplicitly) {
+      game.speed = MIN_SPEED;
+    }
+
+    // Lets the index.html error handler word later crashes as "running the
+    // game" rather than "loading the game".
+    window.__voyageursReady = true;
+  } catch (err) {
+    showFatalError(err, 'starting up');
+  }
+  // The menu click is the user gesture browsers want before audio — start
+  // the music on it directly. (The window listeners below would catch a
+  // mouse click too, but a keyboard Enter's keydown has already gone by
+  // before we get here.) Not for an explicit ?start= at load: there's no
+  // gesture yet, and the first real one gets it through those listeners.
+  if (fromMenu) music.start();
+  return game;
+}
+
+const continueBtn = document.getElementById('continue-btn');
+const newGameBtn = document.getElementById('new-game-btn');
+const titleMenuBtns = [continueBtn, newGameBtn];
+if (explicitStart) {
+  beginRun(explicitStart);
+} else {
+  // Hides the in-game chrome (style.css's body.at-title) while the menu is
+  // up — a MUSIC ON button with no music and a steer pad with no canoe,
+  // floating around an empty screen, read as broken rather than waiting.
+  document.body.classList.add('at-title');
+  try {
+    titleScene = createTitleScene();
+    document.body.insertBefore(titleScene.element, document.getElementById('ui'));
+  } catch (err) {
+    console.warn('title backdrop failed to build — carrying on without it', err);
+    titleScene = null;
+  }
+  const label = checkpointLabel(savedCheckpoint);
+  if (savedCheckpoint) {
+    continueBtn.classList.remove('hidden');
+    const sub = document.getElementById('continue-where');
+    // Where, and what's in the hold — "LA MALBAIE · 12 FURS", one line.
+    // Each part is its own unbreakable span (style.css's #continue-where
+    // span), so on a phone too narrow for a long town name plus furs the
+    // line can only break at the dot, never mid-name. (A two-line version
+    // was tried and turned down: "I still want to see 'Le Wendigo' and
+    // '6 Furs' on the same line.")
+    const furs = savedCheckpoint.furs || 0;
+    const parts = [label && label.toUpperCase(), furs > 0 && `${furs} FUR${furs === 1 ? '' : 'S'}`].filter(Boolean);
+    const nodes = [];
+    parts.forEach((text, i) => {
+      if (i) nodes.push(document.createTextNode(' · '));
+      const part = document.createElement('span');
+      part.textContent = text;
+      nodes.push(part);
+    });
+    sub?.replaceChildren(...nodes);
+  }
+  continueBtn.addEventListener('click', () => {
+    if (savedCheckpoint) beginRun(savedCheckpoint, { fromMenu: true, intoVillage: villageAtCheckpoint(savedCheckpoint) });
+  });
+  newGameBtn.addEventListener('click', () => {
+    clearSavedProgress();
+    beginRun({ segment: 'fjord', flowDistance: 0 }, { fromMenu: true });
+  });
+  // Up/Down (or W/S) move between the two, Enter/Space press the focused
+  // one (a <button>'s own behaviour). CONTINUE gets the focus when it's
+  // there — picking up where you left off is the common case.
+  (savedCheckpoint ? continueBtn : newGameBtn).focus?.();
+  window.addEventListener('keydown', (e) => {
+    if (game || ui.titleScreen.classList.contains('hidden')) return;
+    const dir = e.code === 'ArrowDown' || e.code === 'KeyS' ? 1 : e.code === 'ArrowUp' || e.code === 'KeyW' ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    const shown = titleMenuBtns.filter((b) => !b.classList.contains('hidden'));
+    const at = shown.indexOf(document.activeElement);
+    shown[(at + dir + shown.length) % shown.length].focus?.();
+  });
 }
 
 const muteBtn = document.getElementById('mute-btn');
+// Icons, not words (core/hudIcons.js): the speaker, with a slash through
+// the same speaker while the music's off. The label moves to title +
+// aria-label, which is where a screen reader and a hovering mouse look.
 function syncMuteBtn(muted) {
   muteBtn.classList.toggle('muted', muted);
-  muteBtn.textContent = muted ? 'MUSIC OFF' : 'MUSIC ON';
-  muteBtn.title = muted ? 'Turn the music back on' : 'Turn the music off';
+  muteBtn.innerHTML = speakerIcon(muted);
+  const label = muted ? 'Turn the music back on' : 'Turn the music off';
+  muteBtn.title = label;
+  muteBtn.setAttribute('aria-label', label);
+  muteBtn.setAttribute('aria-pressed', String(muted));
 }
 syncMuteBtn(music.muted);
 muteBtn.addEventListener('click', () => {
@@ -952,6 +1222,9 @@ muteBtn.addEventListener('click', () => {
 // no-op, so leaving these listeners running permanently costs nothing.
 for (const evt of ['pointerdown', 'touchend', 'keydown', 'click']) {
   window.addEventListener(evt, () => {
+    // Not over the title menu — the music waits for New Game/Continue
+    // (beginRun() starts it on that same gesture).
+    if (!game) return;
     music.start();
     // Retry the screen wake lock on a real gesture too (defined further
     // down; hoisted) — for a browser that wants activation before
@@ -1016,14 +1289,27 @@ if (isProdBuild && typeof navigator !== 'undefined' && 'serviceWorker' in naviga
 
 // Escape has no touch equivalent, hence a visible button — shown for every
 // input type, not just touch, since a tappable/clickable pause control is
-// a reasonable thing to want on desktop too. The label flips to RESUME
-// while paused so it's obvious the same button gets you back.
+// a reasonable thing to want on desktop too. The icon flips from pause to
+// play while paused, so it's obvious the same button gets you back.
 const pauseBtn = document.getElementById('pause-btn');
+let pauseBtnShows = null;
+// Also called from loop(): game.js can unpause on its own (reset() on a
+// restart clears `paused`), and the word button used to keep saying
+// RESUME over a running game when that happened. Only touches the DOM on
+// an actual change.
+function syncPauseBtn() {
+  const paused = !!game?.paused;
+  if (paused === pauseBtnShows) return;
+  pauseBtnShows = paused;
+  pauseBtn.innerHTML = paused ? playIcon() : pauseIcon();
+  const label = paused ? 'Resume the game' : 'Pause the game';
+  pauseBtn.title = label;
+  pauseBtn.setAttribute('aria-label', label);
+}
+syncPauseBtn();
 function togglePause() {
   game?.togglePause();
-  const paused = !!game?.paused;
-  pauseBtn.textContent = paused ? 'RESUME' : 'PAUSE';
-  pauseBtn.title = paused ? 'Resume the game' : 'Pause the game';
+  syncPauseBtn();
 }
 
 // --- the ?debug waypoint picker (core/debugMenu.js) ----------------------
@@ -1134,6 +1420,22 @@ let loopBroken = false;
 // then) rather than firing a burst of saves on return.
 const CHECKPOINT_CHECK_INTERVAL = 2;
 let checkpointCheckTimer = 0;
+// The town loop() last saw you land in — see its landing check.
+let landedIn = null;
+
+// The one place a checkpoint is written, for both ways a save happens
+// (passing a waypoint, landing in a town): only if it's further along than
+// what's already saved — which is also what stops the same town saving
+// twice (landingCheckpoint()'s comment) — with the furs in the hold right
+// now, and the SAVING canoe to say so.
+function recordCheckpoint(cp) {
+  if (!cp || !game || !isFurtherAlong(cp, savedCheckpoint)) return false;
+  const furs = game.furs;
+  saveCheckpointToStorage(cp.segment, cp.flowDistance, furs);
+  savedCheckpoint = { segment: cp.segment, flowDistance: cp.flowDistance, furs };
+  showSaving();
+  return true;
+}
 // Screen Wake Lock: keep the phone's screen awake while a run is actually
 // live. Reported as "it goes to sleep pretty quickly" on a phone —
 // paddling is long stretches of small taps on the steer pad, or none at
@@ -1192,6 +1494,8 @@ function loop(now) {
   const dt = Math.max(0, Math.min((now - lastTime) / 1000, 1 / 20));
   lastTime = now;
   setWakeLockWanted(!!game && !loopBroken && game.state === 'playing' && !game.paused);
+  syncPauseBtn();
+  syncTownBanner();
   if (game && !loopBroken) {
     try {
       game.update(dt);
@@ -1201,6 +1505,19 @@ function loop(now) {
       // the error overlay.
       loopBroken = true;
       showFatalError(err, 'running the game');
+    }
+    // Landing in a town saves there and then, not on the next throttled
+    // check below — asked for as "if I land in a town, I want the game to
+    // get saved there, inside the town." Once per landing (landedIn tracks
+    // it, cleared on casting off), and through the same recordCheckpoint()
+    // as passing by, so the two can never both save the same town.
+    if (game.mode === 'village') {
+      if (game.currentVillage !== landedIn) {
+        landedIn = game.currentVillage;
+        if (!game.journeyComplete) recordCheckpoint(landingCheckpoint(landedIn));
+      }
+    } else {
+      landedIn = null;
     }
     checkpointCheckTimer += dt;
     if (checkpointCheckTimer >= CHECKPOINT_CHECK_INTERVAL) {
@@ -1217,11 +1534,7 @@ function loop(now) {
           savedCheckpoint = null;
         }
       } else {
-        const reached = furthestCheckpointReached(game.segment, game.flowDistance);
-        if (reached && isFurtherAlong(reached, savedCheckpoint)) {
-          saveCheckpointToStorage(reached.segment, reached.flowDistance);
-          savedCheckpoint = reached;
-        }
+        recordCheckpoint(furthestCheckpointReached(game.segment, game.flowDistance));
       }
     }
   }

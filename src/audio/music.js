@@ -654,6 +654,17 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
     get muted() {
       return muted;
     },
+    // Re-deal the opening order after construction — main.js builds this
+    // at load (the mute button and Media Session want it there), but only
+    // learns where the run begins once the title menu's New Game/Continue
+    // is picked, which is what decides the pin (isPutIn()). Only before
+    // anything has played: once a track is going, reshuffling under it
+    // would just make the *next* track jump, which is not what this is for.
+    setOpeningPinned(pin) {
+      if (started || current) return;
+      order = pin ? openingOrder() : shuffled(PLAYLIST);
+      index = 0;
+    },
     // The track playing right now ({ src, title, artist }), or null before
     // playback has started — main.js reads this to re-show the card on a
     // manual cue (e.g. unmuting).

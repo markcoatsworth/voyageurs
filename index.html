@@ -43,8 +43,9 @@
          them. -->
     <div id="right-panel">
       <div id="right-buttons">
-        <button id="mute-btn" title="Turn the music off">MUSIC ON</button>
-        <button id="pause-btn" title="Pause the game">PAUSE</button>
+        <!-- Icons filled in by main.js (core/hudIcons.js). -->
+        <button id="mute-btn" title="Turn the music off" aria-label="Turn the music off"></button>
+        <button id="pause-btn" title="Pause the game" aria-label="Pause the game"></button>
       </div>
     </div>
 
@@ -112,8 +113,15 @@
 
     <div id="damage-flash"></div>
 
-    <div id="title-screen" class="screen intro">
+    <!-- The title menu — main.js's beginRun() and its own comment. Nothing
+         (canoe or music) starts until one of these is picked; CONTINUE is
+         only un-hidden when there's a saved checkpoint, and names it. -->
+    <div id="title-screen" class="screen">
       <h1>VOYAGEURS</h1>
+      <div id="title-menu">
+        <button id="continue-btn" class="hidden">CONTINUE<span id="continue-where"></span></button>
+        <button id="new-game-btn">NEW GAME</button>
+      </div>
     </div>
 
     <div id="milestone-banner"></div>

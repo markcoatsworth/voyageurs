@@ -45,6 +45,17 @@ Source moved from the README's `src/twod/` to:
 ```
 src/
   main.js              wiring, pixel-scale sizing, game loop, ?start= cheat + diable checkpoint
+                       + the title menu: NEW GAME (clears every voyageurs-* localStorage key, not
+                       the SW audio cache) / CONTINUE (only shown with a saved checkpoint, labelled
+                       via checkpointLabel(); restores the fur count saved with the checkpoint via
+                       Game's startFurs — first start only, a capsize still zeroes it).
+                       Saves happen two ways, both through recordCheckpoint(): passing a waypoint
+                       (throttled check), and landing in a town (immediate, landingCheckpoint()).
+                       A town's landing save IS its passing waypoint (the dock's flowDistance), so
+                       isFurtherAlong() alone stops a town saving twice. CONTINUE from any town
+                       save opens inside that town (villageAtCheckpoint() -> enterVillage). The Game and the music aren't built/started until
+                       beginRun() is called from one of them; an explicit ?start= skips the menu.
+                       body.at-title hides the in-game chrome while it's up
   shared/
     config.js          320x220 internal res, PIXELS_PER_UNIT=16, worldToScreen, camera anchor
     hash.js            deterministic "distance bucket" pseudo-randomness for stateless scenery
@@ -56,6 +67,14 @@ src/
                        styles, never in index.html/style.css, and not constructed at all
                        without ?debug). Pure UI — main.js owns the list, the checkpoint and
                        the navigation
+    hudIcons.js        the top-right speaker/muted-speaker and pause/play icons, as pixel-grid SVG
+    townBanner.js      sizing/placement for main.js's #town-banner (the town name, up while ashore):
+                       one line always (Press Start 2P is 1em/char, so font = room / length), and
+                       steers clear of the minimap where it hangs over the game screen on short phones
+    saveIndicator.js   the "SAVING" canoe (two paddlers, side-on) shown bottom-right of the game
+                       screen for 5s on every real checkpoint write (main.js's loop -> showSaving()).
+                       main.js's placeSaveIndicator() steps it clear of the desktop MOVE cue and the
+                       BUILD badge where those hang over the screen's corner
     weapons.js         Z pistol / X musket / C blunderbuss (only pistol implemented). Fire cooldown on accumulated dt.
   world/
     terrain.js         redraws river/banks/trees every frame by sampling centerX/widthAt down the screen
@@ -81,6 +100,13 @@ src/
                        overturned hull sprite at the zero crossing), then a sink, plus foam, two
                        spreading rings and the spilled paddle/tuque. TOTAL_TIME is how long
                        game.js holds the game-over card back
+    titleScene.js      the title menu's backdrop: the game's own river (terrain.js + waterGL.js),
+                       live, no canoe, drifting down the fjord from the put-in. The renderers are
+                       fixed at 320x220, so it TILES them — a grid of 320x220 renders at offset
+                       (distance, camera) stitched into one full-viewport canvas, so in portrait
+                       the river runs through the whole screen above and below the menu. Rows
+                       step 208 (13*16), not 220, to keep the 16px grass pattern seamless.
+                       Dismissed by beginRun()
     villages.js        dock + buildings per waypoint; getDockHit detects the canoe touching a dock
     villageScene.js    on-foot scene at a dock; walk back onto the dock to re-board
     minimap.js         moving SVG locator map over the real three-way geography. Village names are

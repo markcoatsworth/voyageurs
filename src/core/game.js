@@ -561,7 +561,11 @@ export class Game {
   // everything downstream (village arrival banners, mouthAnnounced, the
   // camera's own curve tracking) behaves exactly as if the player had
   // actually paddled here from 0.
-  constructor({ ctx, water, input, obstacles, world, ui, music, startFlowDistance = 0, startSegment = 'fjord', easyMode = false }) {
+  //
+  // startFurs: the fur count to open with — a CONTINUE from the title menu
+  // restores the count saved with its checkpoint (main.js). The first start
+  // only: a capsize still resets furs to 0, same as it always has.
+  constructor({ ctx, water, input, obstacles, world, ui, music, startFlowDistance = 0, startSegment = 'fjord', easyMode = false, startFurs = 0 }) {
     this.ctx = ctx;
     this.water = water; // null falls back to a 2D-drawn water fill
     this.input = input;
@@ -652,6 +656,7 @@ export class Game {
     // ready; the intro caption (main.js) is a non-blocking overlay that
     // fades on its own timer instead of waiting for a click.
     this.start();
+    this.furs = Math.max(0, Math.floor(startFurs) || 0);
   }
 
   // A capsize used to leave flowDistance/segment/the camera exactly where
@@ -841,16 +846,11 @@ export class Game {
     // river if you never went into town (the MONTREAL_FLOW_DISTANCE check in
     // update()). Either way it's a given before the Diable fight.
 
-    // Tadoussac is the one place in the game where casting off isn't just
-    // resuming the same segment — leaving here jumps into lawrenceWest's
-    // entirely different numbering (see leaveVillage()) — so it gets its
-    // own arrival banner, though there's no choice to spell out any more:
-    // every departure from here continues the same way, upriver.
-    if (village.name === 'Tadoussac') {
-      this.showBanner('Arriving at Tadoussac — the Saguenay meets the Saint Lawrence');
-    } else {
-      this.showBanner(`Arriving at ${village.name}`);
-    }
+    // No "Arriving at <town>" banner any more — removed by request once the
+    // town-name banner (main.js's #town-banner) took over saying where you
+    // are, for as long as you're ashore rather than for a few seconds on
+    // arrival. That included Tadoussac's own longer "the Saguenay meets the
+    // Saint Lawrence" version.
   }
 
   // Resets everything that's meaningless carried over from one segment into
