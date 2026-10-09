@@ -75,7 +75,7 @@ export function createDebugMenu({ waypoints, describeCheckpoint, onPick, onClear
   panel.appendChild(el('div', `font-size: 8px; line-height: 1.7; color: ${DIM}; margin-bottom: 4px;`,
     'Pick a waypoint and this closes, the saved checkpoint is cleared, and the run reloads there — so it really starts from that point instead of resuming wherever you last got to.'));
   panel.appendChild(el('div', `font-size: 8px; line-height: 1.7; color: ${DIM}; margin-bottom: 12px;`,
-    'Backquote (`) brings this back any time. Esc closes it. A jump lands on ?debug=play, which keeps the key working without reopening this over the game; ?debug on its own opens it, ?debug=0 turns it off.'));
+    'Backquote (`) brings this back any time. Esc closes it. Any ?debug in the URL opens this on load, except the load right after a jump. ?debug=0 turns it off.'));
 
   // Live checkpoint readout — the thing you're usually here to get rid of,
   // so it's worth seeing before and after.

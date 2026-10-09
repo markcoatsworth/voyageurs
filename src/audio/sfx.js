@@ -324,6 +324,85 @@ export function playWolfHowl() {
   }
 }
 
+// La Corriveau (bossfights/corriveau.js). The tell for each reach: the
+// gibbet's chains rattling as the cage slides over the marked lane — a quick
+// run of small, uneven metallic clinks. Each clink is two inharmonic square
+// partials through a highpass with a very fast decay, which reads as iron
+// on iron rather than a bell or a note.
+export function playChainRattle() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  const clinks = 7;
+  for (let i = 0; i < clinks; i++) {
+    const t = t0 + i * 0.055 + Math.random() * 0.03;
+    const base = 1900 + Math.random() * 900;
+    for (const [mult, level] of [[1, 1], [2.76, 0.5]]) {
+      const osc = c.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(base * mult, t);
+      const hp = c.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 1400;
+      const g = c.createGain();
+      const peak = 0.05 * level * (1 - i / (clinks * 1.6));
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+      osc.connect(hp).connect(g).connect(c.destination);
+      osc.start(t);
+      osc.stop(t + 0.08);
+    }
+  }
+}
+
+// Her arrival: a thin, wavering, falling wail — a begging voice, not a
+// roar — over a creak of the cage swinging (a slow sawtooth through a narrow
+// band), then a rattle of chain.
+export function playCorriveauWail() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  const dur = 2.2;
+  const osc = c.createOscillator();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(820, t0);
+  osc.frequency.linearRampToValueAtTime(980, t0 + 0.5);
+  osc.frequency.exponentialRampToValueAtTime(430, t0 + dur);
+  const lfo = c.createOscillator();
+  lfo.frequency.value = 6.5;
+  const lfoGain = c.createGain();
+  lfoGain.gain.value = 22;
+  lfo.connect(lfoGain).connect(osc.frequency);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.11, t0 + 0.35);
+  g.gain.setValueAtTime(0.11, t0 + 1.2);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g).connect(c.destination);
+  osc.start(t0);
+  lfo.start(t0);
+  osc.stop(t0 + dur + 0.02);
+  lfo.stop(t0 + dur + 0.02);
+
+  const creak = c.createOscillator();
+  creak.type = 'sawtooth';
+  creak.frequency.setValueAtTime(70, t0);
+  creak.frequency.linearRampToValueAtTime(95, t0 + 0.6);
+  creak.frequency.linearRampToValueAtTime(64, t0 + 1.2);
+  const band = c.createBiquadFilter();
+  band.type = 'bandpass';
+  band.frequency.value = 600;
+  band.Q.value = 8;
+  const cg = c.createGain();
+  cg.gain.setValueAtTime(0.0001, t0);
+  cg.gain.exponentialRampToValueAtTime(0.09, t0 + 0.2);
+  cg.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.3);
+  creak.connect(band).connect(cg).connect(c.destination);
+  creak.start(t0);
+  creak.stop(t0 + 1.35);
+
+  setTimeout(playChainRattle, 1300);
+}
+
 // Le Wendigo (bossfights/wendigo.js). Its tell: a long, dry, rasping
 // inhale — filtered white noise swelling through a rising band, over a
 // barely-there sub drone. Nothing musical, nothing brassy; it should read

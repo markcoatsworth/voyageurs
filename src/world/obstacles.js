@@ -1,5 +1,5 @@
-import { centerX, widthAt, braidAt, southIslandAt } from './river/path.js';
-import { dockSpanAt } from './villages.js';
+import { centerX, widthAt, braidAt, southIslandAt, MOUTH_DISTANCE } from './river/path.js';
+import { dockSpanAt, VILLAGES } from './villages.js';
 import { FEATURE_ISLAND_RANGE } from './river/islands.js';
 import { createRockSprite, createLogSprite, createIslandSprite, createPeltSprite } from './sprites.js';
 import { AHEAD_UNITS, BEHIND_UNITS, PIXELS_PER_UNIT, CANOE_HALF_LENGTH } from '../shared/config.js';
@@ -229,11 +229,36 @@ function hazardFreeAt(d) {
   return d >= HAZARD_FREE_RANGE[0] && d <= HAZARD_FREE_RANGE[1];
 }
 
+// Lighter debris from Petit-Saguenay's dock down to the mouth at Tadoussac —
+// the Loup-garou's stretch, the first boss fight in the game: "There is too
+// much debris in the water for the Loup Garou fight ... I don't want it to
+// be too difficult, reduce the amount of rocks and logs in the water between
+// Petit-Saguenay and Tadoussac." Only LIGHT_HAZARD_KEEP of the rocks, logs
+// and small islands that would spawn here are real; the rest are spawned
+// hidden and inert the same way HAZARD_FREE_RANGE does it, so the spacing
+// between pickups is untouched and pelts come through at their usual rate.
+// Measured in the smoke test against the stretch just above Petit-Saguenay:
+// 0.25 comes out at roughly a third as much debris as that stretch, not a
+// quarter, because spawns get denser the further down the river you are
+// (gapFor's GAP_SHRINK_PER_METER) — a first cut at 0.35 only halved it.
+// The mid-river sandbars (braidAt, a fixed part of the river's shape) are
+// not debris and aren't touched.
+const PETIT_SAGUENAY_D = VILLAGES.find((v) => v.name === 'Petit-Saguenay').flowDistance;
+export const LIGHT_HAZARD_RANGE = [PETIT_SAGUENAY_D, MOUTH_DISTANCE];
+export const LIGHT_HAZARD_KEEP = 0.25;
+// The share of would-be hazards actually spawned at d — exported for the
+// smoke test.
+export function hazardKeepFractionAt(d) {
+  if (hazardFreeAt(d)) return 0;
+  if (d >= LIGHT_HAZARD_RANGE[0] && d <= LIGHT_HAZARD_RANGE[1]) return LIGHT_HAZARD_KEEP;
+  return 1;
+}
+
 function place(world, z) {
   const d = world.distance - z;
   const hasBraid = braidAt(d) !== null;
   let type = pickType(hasBraid);
-  if (hazardFreeAt(d) && type !== PELT) {
+  if (type !== PELT && Math.random() >= hazardKeepFractionAt(d)) {
     return { type, x: centerX(d), z, active: false, hidden: true, spinPhase: 0 };
   }
   let x = pickX(type, d);

@@ -24,7 +24,6 @@ export const PLAYLIST = [
   { src: '/audio/reel-des-montagnes.mp3', title: 'Reel des Montagnes', artist: 'Tommy Duchesne' },
   { src: '/audio/valse-des-laboureurs.mp3', title: 'Valse des Laboureurs', artist: 'Tommy Duchesne' },
   { src: '/audio/le-violon-en-discorde.mp3', title: 'Le Violon en Discorde', artist: 'Jean Carignan' },
-  { src: '/audio/reel-des-forets.mp3', title: 'Reel des Forêts', artist: 'Tommy Duchesne' },
   { src: '/audio/reel-canadienne.mp3', title: 'Reel Canadienne', artist: 'Jean Carignan' },
   // Same LP as the two Carignan tracks above (Songs and Dances of Quebec) —
   // full ensemble credit off that record's own ID3 tags, not just Carignan.
@@ -46,15 +45,18 @@ export const PLAYLIST = [
 // start the game... if I capsize later in the game and start again at a
 // random village, we should get back into the random rotation." A session
 // that begins anywhere else (a resumed checkpoint, any ?start=, any ?debug
-// jump) gets a plain shuffle, which is why the pin is a createMusic()
+// jump) never hears it at all, which is why the pin is a createMusic()
 // option rather than baked into the order itself.
 //
-// It is NOT reserved the way the boss cues below are: it stays in PLAYLIST
-// and can come up again on a later cycle even in a pinned run. All that's
-// ever pinned is slot 0 of the session's first order (openingOrder()).
+// Reserved, like the boss cues below — NOT in PLAYLIST. It used to stay in
+// the shuffle (only slot 0 of a pinned session's first order was fixed)
+// and so could come round again later in the same run; then: "I want
+// reel-des-forets to only play once, at the very beginning of the game.
+// After that it should not be used in the random playlist shuffle." So it
+// plays once, ahead of the first shuffle (openingOrder()), and never again.
 // Exported for test/smoke.mjs so the assertion reads the real entry
 // instead of re-hardcoding the title.
-export const OPENING_TRACK = PLAYLIST.find((t) => t.src === '/audio/reel-des-forets.mp3');
+export const OPENING_TRACK = { src: '/audio/reel-des-forets.mp3', title: 'Reel des Forêts', artist: 'Tommy Duchesne' };
 
 // Not part of the shuffle above — this only ever plays on cue, the moment
 // the Château Gauntlet (bossfights/blockade.js) is spotted, replacing whatever
@@ -78,6 +80,14 @@ const BOSS_TRACK = { src: '/audio/rule-britannia.mp3', title: 'Rule, Britannia!'
 // to move from this knob to the file itself (re-normalize the source to a
 // louder integrated target than the rest of the catalog's -21 LUFS, or
 // duck the fight's own SFX instead) rather than a bigger number here.
+//
+// ...and then "the music should be 10% louder" — with volume already at that
+// 1.0 ceiling, the boost went into the file: a louder source .wav, encoded
+// straight to mp3 WITHOUT normalize-audio.mjs (which would have pulled it
+// back to the catalog's -21 LUFS and undone the point). It sits at -18.5
+// LUFS integrated, ~2.5 dB over the rest of the catalog, true peak -3.6 dBFS
+// — no clipping. Re-encode the same way if the source changes:
+//   ffmpeg -i public/audio/src/le-reel-du-paradis-et-enfer.wav -c:a libmp3lame -q:a 2 public/audio/le-reel-du-paradis-et-enfer.mp3
 const DIABLE_TRACK = { src: '/audio/le-reel-du-paradis-et-enfer.mp3', title: 'Reel du Paradis et Enfer', artist: 'Les Chevaliers', volume: 1.0 };
 // The Wendigo's cue — reserved rather than left in the shuffle. It's the one
 // recording in this catalog that isn't a period Québécois source (an
@@ -90,6 +100,18 @@ const WENDIGO_TRACK = { src: '/audio/st-annes-reel.mp3', title: "St. Anne's Reel
 // was already in the catalog; its own title is the whole reason it's this
 // one and not some other reshuffled track.
 const LOUP_GAROU_TRACK = { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du Terreur', artist: 'Jos Bouchard' };
+// La Corriveau's cue (bossfights/corriveau.js) — "La Corriveau" by Le Rêve
+// du Caribou, a song about her by name: supplied directly
+// (public/audio/src/le-reve-du-caribou-la-corriveau.wav, normalized via
+// scripts/normalize-audio.mjs to the catalog's -21 LUFS like everything
+// else; see README.md's Music section for the rights caveat every
+// directly-supplied track carries). 3:19, longer than her 2.5-minute fight
+// (HAUNT_TIME), so it never runs out mid-fight. Replaced "Reel du Pendu"
+// (the Hanged Man's Reel), which held the role first, picked for the title,
+// and has gone back into the regular shuffle — the same as "Le Reel du
+// Diable" and "Reel du Gouvernement" did when their fights got new cues.
+// Exported for test/smoke.mjs, which checks it never lands in PLAYLIST.
+export const CORRIVEAU_TRACK = { src: '/audio/le-reve-du-caribou-la-corriveau.mp3', title: 'La Corriveau', artist: 'Le Rêve du Caribou' };
 // The Chasse-galerie flight's cue, cut in the instant the canoe lifts off
 // (game.js). The original pick here was Joseph Allard's "Reel du
 // Voyageur" — its own title ties straight to the legend, voyageurs flying
@@ -275,20 +297,12 @@ function shuffled(list) {
   return arr;
 }
 
-// The first play order for a run that starts at the put-in: an ordinary
-// shuffle with OPENING_TRACK swapped into slot 0, so it opens on that tune
-// while the other 14 stay random. A swap rather than filter-then-unshift:
-// whatever was drawn into slot 0 takes the opener's old slot, so the tail
-// is still a uniform shuffle of the remaining tracks and nothing can be
-// dropped.
+// The first play order for a run that starts at the put-in: OPENING_TRACK,
+// then an ordinary shuffle of PLAYLIST (which doesn't contain it). Only this
+// first order has it — the reshuffle in playCurrent()'s 'ended' handler is
+// plain shuffled(PLAYLIST) — so it plays exactly once per run.
 function openingOrder() {
-  const arr = shuffled(PLAYLIST);
-  const at = arr.indexOf(OPENING_TRACK);
-  // at === 0 is already right; -1 means the opener fell out of PLAYLIST
-  // (a renamed file, say) — leave the plain shuffle alone rather than
-  // swapping an undefined into slot 0 and blowing up playCurrent().
-  if (at > 0) [arr[0], arr[at]] = [arr[at], arr[0]];
-  return arr;
+  return [OPENING_TRACK, ...shuffled(PLAYLIST)];
 }
 
 // pinOpeningTrack: true only when this run begins at the put-in (main.js
@@ -327,9 +341,8 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
   // openingOrder() only for a run starting at the put-in (see
   // OPENING_TRACK and pinOpeningTrack above); everywhere else this is the
   // plain shuffle it always was. The reshuffle in playCurrent()'s 'ended'
-  // handler is plain shuffled() either way, so even in a pinned run the pin
-  // applies to the opening cycle alone and doesn't re-open on the same tune
-  // every 15 tracks.
+  // handler is plain shuffled(PLAYLIST) either way, and PLAYLIST doesn't
+  // hold the opener, so it never comes round a second time.
   let order = pinOpeningTrack ? openingOrder() : shuffled(PLAYLIST);
   let index = 0;
   // Kingston's own position in KINGSTON_PLAYLIST — entirely separate from
@@ -395,6 +408,9 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
   // above. The regular shuffle keeps the blob-prefetch optimization; it
   // isn't the one that's been breaking.
   for (const track of PLAYLIST) prefetch(track.src);
+  // The opener goes through playCurrent() like a shuffle track, so it wants
+  // the same head start — but only when this run will actually play it.
+  if (pinOpeningTrack) prefetch(OPENING_TRACK.src);
 
   // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
   // now, or null before the first successful play(). onTrack — passed by
@@ -664,6 +680,7 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
       if (started || current) return;
       order = pin ? openingOrder() : shuffled(PLAYLIST);
       index = 0;
+      if (pin) prefetch(OPENING_TRACK.src);
     },
     // The track playing right now ({ src, title, artist }), or null before
     // playback has started — main.js reads this to re-show the card on a
@@ -789,6 +806,9 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
     // it back into the shuffle same as every other fight.
     playLoupGarouTrack() {
       playSpecial(LOUP_GAROU_TRACK);
+    },
+    playCorriveauTrack() {
+      playSpecial(CORRIVEAU_TRACK);
     },
     // The Chasse-galerie flight's cue — same cut-in-now behaviour. Le
     // Diable's own track (playDiableTrack) cuts in over top of this one

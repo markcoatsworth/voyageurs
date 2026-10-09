@@ -80,7 +80,10 @@ src/
     terrain.js         redraws river/banks/trees every frame by sampling centerX/widthAt down the screen
     waterGL.js         GLSL water under the 2D layer; river shape is DUPLICATED in GLSL — keep in sync with path.js
     obstacles.js       the one stateful system: pooled rocks/logs/islands/pelts with collision/collection.
-                       hullHit() tests each one against the canoe's *turned* hull (see Key models)
+                       hullHit() tests each one against the canoe's *turned* hull (see Key models).
+                       hazardKeepFractionAt(d): none around the Island of Montreal (HAZARD_FREE_RANGE),
+                       a quarter from Petit-Saguenay to Tadoussac (LIGHT_HAZARD_RANGE — the first boss
+                       fight); thinned entries spawn hidden + inert, so pelts keep their usual rate
     whales.js          stateless hash-placed belugas once the channel reads as open estuary
     weather.js         stateless hashed rain streaks (drawRain) — the Warship storm's only user so far
     sprites.js         (~1000 lines) hand-drawn pixel sprites
@@ -107,7 +110,9 @@ src/
                        the river runs through the whole screen above and below the menu. Rows
                        step 208 (13*16), not 220, to keep the 16px grass pattern seamless.
                        Dismissed by beginRun()
-    villages.js        dock + buildings per waypoint; getDockHit detects the canoe touching a dock
+    villages.js        dock + buildings per waypoint; getDockHit detects the canoe touching a dock.
+                       dockHitZ() is never less than the drawn deck's half-depth — every visible plank
+                       docks you (smoke test walks each drawn deck)
     villageScene.js    on-foot scene at a dock; walk back onto the dock to re-board
     minimap.js         moving SVG locator map over the real three-way geography. Village names are
                        placed together by layoutLabels() (route.js's labelPos is only the preferred
@@ -136,18 +141,46 @@ src/
                        cumulative-distance model → each village's flowDistance. VILLAGES export.
                        rideau (Gatineau→Kingston) is a made-up leg — no real river there.
   bossfights/
-    wendigo.js         Le Wendigo — famine-spirit on the far shore of the lower fjord, the
-                       first fight in the game (fjord, TRIGGER_DISTANCE = MOUTH_DISTANCE − 170 ..
-                       DELIVERANCE_DISTANCE = MOUTH_DISTANCE − 50). No projectiles, freeze-or-flee:
-                       it PROWLs the bank, then stops to LISTEN (telegraphed) — release Up/Left/Right
-                       (Down/brake is allowed) and go still until it moves on. First LISTEN never
-                       strikes (taught dry run). You outlast it to the mouth at Tadoussac.
-                       Cold-white render (frostIntensityAt). Guarded by `segment === 'fjord'`.
-    loupGarou.js       Le Loup-garou — the night beast just before Québec City (lawrenceWest,
-                       TRIGGER_DISTANCE = Beaupré + 60, night from Beaupré + 30 .. DELIVERANCE = QC − 28). No projectiles:
-                       it paces the near bank and lunges (telegraphed, led like the blockade shots);
-                       juke away / brake to dodge. You don't kill it — you reach the city, which
-                       checks it. Cold-blue night render (nightIntensityAt). MVP — one phase.
+    The first three fights each export SEGMENT (the segment their distances are numbers on);
+    game.js/main.js guard on that, never on a hard-coded segment name — they were reshuffled
+    once (Loup-garou -> Corriveau -> Wendigo, from Wendigo -> Loup-garou -> Corriveau).
+    loupGarou.js       Le Loup-garou — the FIRST fight, on the lower fjord (fjord, TRIGGER_DISTANCE =
+                       Petit-Saguenay + 50, night from + 25 .. DELIVERANCE = MOUTH − 35; the night lifts
+                       by MOUTH − 5, before the mouth crossing changes segment). No projectiles: it
+                       hangs over the water and strikes (telegraphed, led at your current speed like the
+                       blockade shots); juke away / change pace to dodge. Downstream it's a ~9.5s fight,
+                       hence the tight strike cadence. You outlast it to the mouth. Cold-blue night
+                       render (nightIntensityAt) + moon. MVP — one phase. Was the second fight, Beaupré
+                       to Québec City, before the reshuffle.
+    corriveau.js       La Corriveau — the hanged woman in her iron gibbet cage, the SECOND fight, on the
+                       run from Beaupré into Québec City (lawrenceWest, TRIGGER_DISTANCE = Beaupré + 50,
+                       mist from + 20 .. DELIVERANCE = QC − 15). PACED: HAUNT_TIME = 150s — while she's
+                       on, game.js caps the canoe's speed at paceLimit() (on schedule ~0.77 u/s, more
+                       to catch up if behind, never ahead), "she clings to the canoe", and the rapids
+                       are calmed (sideways dodging dies in whitewater at that pace). Escalation runs
+                       on her clock. No stall exit (stopping would be a free win) — only an overtime
+                       failsafe. Damage scaled for the long fight (10 reach / 5 wisp). Dodge-only,
+                       and purely SIDEWAYS (the counterpart to the Loup-garou, whose led strike pace
+                       also beats): the cage hangs on a chain from off-screen, slides over a lane
+                       marked on the water, and drops down it (the reach); from 30% in she casts
+                       feux follets (wisps) that weave down at the canoe at a fixed closing speed
+                       relative to it, in volleys of 1-2. Both are locked as offsets from the
+                       river's centreline, not world X — a canoe left alone rides the bends, and a
+                       world-fixed lane slid off anyone just holding their line. Wind-ups are long
+                       (1.7 -> 1.3s) because sideways is slow in rough water. Grey-green mist render
+                       (mistIntensityAt). Hit types 'corriveau' / 'feu-follet', no speed knock.
+    wendigo.js         Le Wendigo — famine-spirit, the THIRD fight, on Lac Saint-Pierre (lawrenceWest,
+                       TRIGGER_DISTANCE = Trois-Rivières + 66, frost from + 40, DELIVERANCE = trigger +
+                       95). No projectiles, freeze-or-flee: it PROWLs the far shore, then stops to LISTEN
+                       (telegraphed) — release Up/Left/Right (Down/brake is allowed) and go still until
+                       it moves on. First LISTEN never strikes (taught dry run). Upstream-specific: while
+                       it listens a canoe left alone glides to a stop instead of drifting back on the
+                       current (game.js — without that, obeying it lost ground every cycle and the fight
+                       was unwinnable); a landed blow stops the canoe dead; and it lets go only after
+                       MIN_LISTENS (3) even past DELIVERANCE (else a full-speed paddler got through
+                       untouched), capped at HARD_STOP_DISTANCE (Sorel − 40). Stall failsafe like the
+                       others. Cold-white render (frostIntensityAt; the instance frostIntensity() holds
+                       full while it's still hunting). Was the first fight, on the lower fjord.
     blockade.js        "Château Gauntlet"/"the River Styx" (the latter a small fun detail kept in
                        the comments only — the player-facing banner just says "BRITISH BLOCKADE",
                        shown big via #boss-banner, not the small milestone one): Royal Navy frigate
@@ -201,20 +234,21 @@ src/
                        track lands at full. One banner as the sky first turns
                        (consumeJustStormArrived).
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
-                       TRIGGER_DISTANCE, FLIGHT_END.
+                       TRIGGER_DISTANCE, FLIGHT_END. Every church is drawn across exactly its collision
+                       box (churchDrawSpan) — ordinary ones used to be drawn a fixed 26px off the bank
+                       while their box reached past the centre line; smoke test reads the nave back
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging
                        fireballs. game.js clamps flowDistance while diable.isHolding(). DIABLE_FLOW_DISTANCE.
   audio/
-    music.js           shuffled playlist (PLAYLIST, 15 tracks). Slot 0 is pinned to OPENING_TRACK
-                       (Reel des Forêts) only when createMusic() is passed
-                       pinOpeningTrack (openingOrder()), which main.js sets from
-                       isPutIn(startSegment, startFlowDistance) — so the put-in always opens on
-                       it and every other start (resumed checkpoint, any ?start=, any ?debug
-                       jump) gets a plain shuffle. Defaults to off. Even when pinned it's only
-                       the first cycle, and the track stays in the shuffle and can recur,
-                       unlike a reserved cue; + reserved boss tracks, one per fight
+    music.js           shuffled playlist (PLAYLIST, 14 tracks). OPENING_TRACK (Reel des Forêts) is
+                       reserved, NOT in PLAYLIST: it plays once, ahead of the first shuffle,
+                       only when createMusic() is passed pinOpeningTrack (openingOrder()), which
+                       main.js sets from isPutIn(startSegment, startFlowDistance) — so the
+                       put-in always opens on it, it never recurs, and every other start
+                       (resumed checkpoint, any ?start=, any ?debug jump) never hears it.
+                       Defaults to off; + reserved boss tracks, one per fight
                        that has a dedicated cue (Rule Britannia/blockade, a diable reel/diable, St.
-                       Anne's Reel/wendigo) — each plays via playSpecial() the instant its fight
+                       Anne's Reel/wendigo, La Corriveau by Le Rêve du Caribou/corriveau) — each plays via playSpecial() the instant its fight
                        starts, replacing whatever's playing, and endBossTrack() drops back into the
                        shuffle once it resolves. KINGSTON_PLAYLIST is its own isolated track set
                        (never mixed into PLAYLIST) for the Kingston arrival/on-foot visit —
@@ -246,7 +280,7 @@ src/
   (`leaveVillage()` is a silent no-op there; on the water the canoe is held
   at `KINGSTON_FLOW_DISTANCE`), no victory card. `journeyComplete` marks the
   arrival for main.js's checkpoint clearing. Game-over title varies by
-  killer: Devil / beast / plain capsize.
+  killer: Devil / beast / La Corriveau / Wendigo / plain capsize.
 - **Dying**: hull at 0 calls `beginCapsize()`, not `gameOver()`. That starts
   `world/capsize.js`'s roll-and-sink (`TOTAL_TIME`, ~1.4s) and sounds the
   capsize horn on the impact rather than on the card. `update()` then runs a
@@ -258,18 +292,19 @@ src/
   frames later than it used to. The boss-kill titles survive the delay
   because the fights are frozen too: their `isActive()` still reads true
   when `gameOver()` finally asks.
-- **Boss fights, in route order**: Wendigo (lower fjord, before Tadoussac),
-  Loup-garou (before Québec City, lawrenceWest), Chasse-galerie steeples + Le
+- **Boss fights, in route order**: Loup-garou (lower fjord, before
+  Tadoussac), La Corriveau (Beaupré to Québec City, lawrenceWest), Wendigo
+  (Lac Saint-Pierre, past Trois-Rivières, lawrenceWest), Chasse-galerie steeples + Le
   Diable (past Montréal, lawrenceWest), British Blockade (rideau, the frigate
   gauntlet), British Warship (rideau, further downstream near where Kingston
   Mills sat — the last fight before Kingston). The Blockade and Warship used
   to be one continuous two-phase encounter; they're separate fights now, with
   ordinary paddling (Newboro, Jones Falls) between them. Each is
-  `segment ===`-gated and distance-triggered off MOUTH_DISTANCE or a
-  village's flowDistance.
+  `segment ===`-gated (the first three via their own exported SEGMENT) and
+  distance-triggered off MOUTH_DISTANCE or a village's flowDistance.
 - **`?start=<name>`** (main.js): dev cheat, one-shot (stripped from URL after
   use). Real village names (accent/hyphen-insensitive, incl. `kingston`) plus
-  keywords `wendigo`, `loup-garou`, `british-blockade`, `british-warship`,
+  keywords `wendigo`, `loup-garou`, `corriveau`, `british-blockade`, `british-warship`,
   `chasse-galerie`, `diable`, `rideau`.
   `?start=diable` also arms a checkpoint (hands over the pistol, respawn returns
   there); `enterRideau()` clears that checkpoint and moves it to the Rideau start.
@@ -278,16 +313,19 @@ src/
   route order — so any point can be jumped to without hand-editing `?start=`.
   Backquote toggles, Esc closes (and is intercepted before the pause
   handler). Sticky in the URL like `?difficulty=`, off only with an explicit
-  `?debug=0/false/off/no`. Two on-states, via
-  `shouldOpenDebugMenuOnLoad()`: a bare `?debug`/`?debug=1` opens the picker
-  on load (the "I want to choose" form, and what you type by hand), while
-  **`?debug=play`** is debug mode with the picker shut — which is what a
-  jump navigates to, because the first cut opened it on every `?debug` load
-  and so a pick reloaded straight back into a full-screen overlay covering
-  the thing you'd just asked to see. `onPick` also hides it immediately,
-  before navigating, since a browser can take a moment over that and a
-  blocked navigation never gets there at all. Picking a waypoint **clears
-  the saved checkpoint** and reloads with `?start=<name>&debug=play`; the put-in has no
+  `?debug=0/false/off/no`. Any other `?debug` — bare, `=1`, `=play`, anything
+  — opens the picker on load (`shouldOpenDebugMenuOnLoad()`), except the one
+  load a waypoint jump causes: `onPick` sets a one-shot sessionStorage flag
+  (`markDebugJump()`), the next load consumes it (`consumeDebugJump()`) and
+  stays shut, and a reload after that opens it again. That flag replaced
+  `?debug=play`, which was the jump's landing URL and the "picker shut" form
+  — the first cut opened the picker on every `?debug` load, so a pick
+  reloaded straight back into a full-screen overlay over the thing you'd
+  just asked to see; then `?debug=play` links/reloads silently skipped the
+  picker, reported as "the game just starts normally". `onPick` also hides
+  it immediately, before navigating, since a browser can take a moment over
+  that and a blocked navigation never gets there at all. Picking a waypoint
+  **clears the saved checkpoint** and reloads with `?start=<name>&debug`; the put-in has no
   `?start=` of its own, so it's "no `?start=` plus a cleared checkpoint" —
   which is the whole reason the feature exists, since the implicit
   checkpoint otherwise makes every reload resume at the furthest point
@@ -305,7 +343,8 @@ src/
   `this.damageTakenScale`/`this.damageGivenScale` (0.5/2, `game.js`'s
   `EASY_DAMAGE_TAKEN_SCALE`/`EASY_DAMAGE_GIVEN_SCALE`) once at construction.
   Damage taken scales at `handleHit()`'s single choke point (its boss
-  branches only — cannon/shiphull/steeple/diable/wolf/wendigo — not the
+  branches only — cannon/shiphull/steeple/diable/wolf/corriveau/feu-follet/
+  wendigo — not the
   generic river hazards). Damage given has no equivalent choke point — only
   the two shootable hit-point fights (`britishWarship.js`, `diable.js`) have
   one, each scaled inline via a `damageGivenScale` argument threaded through

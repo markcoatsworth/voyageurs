@@ -17,6 +17,9 @@ it's not the same running order every session:
   (Starr Records, 1931), sourced from Internet Archive's Great 78 Project
   ([1](https://archive.org/details/78_grande-gigue-simple_isidore-soucy_gbia0016274b),
   [2](https://archive.org/details/78_reel-du-pendu_isidore-soucy_gbia0016274a)).
+  "Reel du Pendu" ("the Hanged Man's Reel") was La Corriveau's fight music
+  for a while — she was hanged at Québec in 1763 — and is back in the regular
+  shuffle now that she has her own song (below).
 - "Reel des Laurentides," "Reel des Montagnes," and "Valse des Laboureurs,"
   performed by Tommy Duchesne, sourced from Library and Archives Canada's
   [Virtual Gramophone](https://www.bac-lac.gc.ca/eng/discover/films-videos-sound-recordings/virtual-gramophone/Pages/introduction.aspx)
@@ -30,8 +33,8 @@ it's not the same running order every session:
 - "Le Reel du Diable," performed by Jos Bouchard; "Avec les Ruine-Babine"
   and "Les Batteux," performed by Louis « Pitou » Boudreault.
 - "St. Anne's Reel," performed by Joe Dobbs with The 1937 Flood — reserved
-  for the Wendigo encounter (the first fight in the game, on the lower
-  fjord), not in the regular shuffle. It's a genuine French-Canadian
+  for the Wendigo encounter (on Lac Saint-Pierre, past Trois-Rivières),
+  not in the regular shuffle. It's a genuine French-Canadian
   standard (also played as "Reel de Sainte-Anne"), but this particular
   recording is an Appalachian old-time string band's 2009 jam session
   ([source](https://www.1937flood.com/audio/podcasts/floodcast34.mp3)), not
@@ -48,8 +51,14 @@ it's not the same running order every session:
   in the regular shuffle instead. Supplied directly rather than sourced from
   Internet Archive/LAC like the rest of this catalog — provenance and rights
   status not independently verified.
+- "La Corriveau," performed by Le Rêve du Caribou — reserved for the La
+  Corriveau encounter on the run into Québec City, not in the regular
+  shuffle. A song about her by name. Supplied directly rather than sourced
+  from Internet Archive/LAC like the rest of this catalog — provenance and
+  rights status not independently verified.
 - "La Reel du Terreur," performed by Jos Bouchard — reserved for the
-  Loup-garou encounter (just before Québec City), not in the regular
+  Loup-garou encounter (the first fight, on the lower fjord before
+  Tadoussac), not in the regular
   shuffle. Picked for the title alone ("Reel of Terror") once that fight
   needed its own cue.
 - "La Mer de la Folie," performed by Les Chevaliers — reserved for the
@@ -149,13 +158,17 @@ few seconds while the run is already underway.
 ## The journey
 
 The full route runs Lac Saint-Jean → the Saguenay Fjord — where, on the
-lonely lower reach before the mouth, a **wendigo** paces the far cliff and
-stops to listen: go dead still in the water each time it does (stop
-paddling — braking is fine) and you outlast it to open water → Tadoussac →
-up the Saint Lawrence: on the Beaupré shore at nightfall a **loup-garou**
-paces the canoe and lunges from the water until the lights of Québec City
-check it (dodge it, then dock at the King's Wharf and trade furs for hull
-repairs) → on past Montréal → the Chasse-galerie flight up the Ottawa
+lonely lower reach before the mouth, night falls and a **loup-garou**
+hangs over the water and strikes at the canoe until the mouth checks it
+(dodge it by changing your line or your pace) → Tadoussac → up the Saint
+Lawrence: on the run from Beaupré into Québec City, in the mist, **La
+Corriveau** swings over the river in her iron gibbet cage, dropping down
+lanes marked on the water and casting will-o'-the-wisps (steer sideways
+out of both; then dock at the King's Wharf and trade furs for hull
+repairs) → on Lac Saint-Pierre past Trois-Rivières a **wendigo** paces the
+far shore and stops to listen: go dead still in the water each time it
+does (stop paddling — braking is fine) until it gives up the hunt → on
+past Sorel-Tracy and Montréal → the Chasse-galerie flight up the Ottawa
 gorge to Gatineau, breaking Le Diable's pact at the head of it → and then
 a made-up final leg: **the Rideau**, standing in for
 the Rideau Lakes canoe corridor, from Gatineau south to **Kingston** on
@@ -171,8 +184,9 @@ into Kingston harbour.
 Reaching Kingston — by its wharf or just by crossing into it — **wins the
 run** ("Journey's End"), the game's only actual ending.
 
-`?start=wendigo` drops you on the lower fjord just before the famine-spirit;
-`?start=loup-garou` drops you on the Beaupré shore just before the beast;
+`?start=loup-garou` drops you on the lower fjord just before the beast;
+`?start=corriveau` past Beaupré just before the gibbet cage;
+`?start=wendigo` on Lac Saint-Pierre just before the famine-spirit;
 `?start=rideau` at the head of the final leg; `?start=british-blockade` at
 the frigate; `?start=british-warship` at the gunboat further downstream;
 `?start=kingston` a short paddle from the finish.

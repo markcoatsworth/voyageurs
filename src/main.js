@@ -17,8 +17,9 @@ import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
 import { TRIGGER_DISTANCE as WARSHIP_FLOW_DISTANCE, FIRST_THUNDERCLAP_DISTANCE as WARSHIP_FIRST_THUNDERCLAP_DISTANCE } from './bossfights/britishWarship.js';
 import { TRIGGER_DISTANCE as CHASSE_GALERIE_FLOW_DISTANCE } from './bossfights/chasseGalerie.js';
 import { DIABLE_FLOW_DISTANCE } from './bossfights/diable.js';
-import { TRIGGER_DISTANCE as LOUP_GAROU_FLOW_DISTANCE } from './bossfights/loupGarou.js';
-import { FROST_START_DISTANCE as WENDIGO_FROST_START_DISTANCE } from './bossfights/wendigo.js';
+import { TRIGGER_DISTANCE as LOUP_GAROU_FLOW_DISTANCE, SEGMENT as LOUP_GAROU_SEGMENT } from './bossfights/loupGarou.js';
+import { TRIGGER_DISTANCE as CORRIVEAU_FLOW_DISTANCE, SEGMENT as CORRIVEAU_SEGMENT } from './bossfights/corriveau.js';
+import { FROST_START_DISTANCE as WENDIGO_FROST_START_DISTANCE, SEGMENT as WENDIGO_SEGMENT } from './bossfights/wendigo.js';
 
 const app = document.getElementById('app');
 
@@ -245,13 +246,16 @@ const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flow
 // thing that goes stale.
 export const START_KEYWORD_LIST = [
   // checkpoint: false — a ?start= / ?debug jump target, but not a save
-  // point (CHECKPOINT_CANDIDATES_BY_SEGMENT below). Each sat just past a
-  // town's dock (the Wendigo's 8.2 units past Petit-Saguenay, the
-  // Loup-garou's 30 past Beaupré), so passing it right after landing in
-  // that town saved again — reported as a double save, and removed by
-  // request. The town before each is the save for its fight now.
-  { name: 'wendigo', label: 'Le Wendigo', flowDistance: WENDIGO_FROST_START_DISTANCE - 21, segment: 'fjord', checkpoint: false },
-  { name: 'loup-garou', label: 'Le Loup-garou', flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: 'lawrenceWest', checkpoint: false },
+  // point (CHECKPOINT_CANDIDATES_BY_SEGMENT below). Each sits just past the
+  // dock of the town before its fight (the Loup-garou's 30 past
+  // Petit-Saguenay, La Corriveau's 30 past Beaupré, the Wendigo's ~19 past
+  // Trois-Rivières), so passing it right after landing in that town saved
+  // again — reported as a double save, and removed by request. The town
+  // before each is the save for its fight. In route order; each fight's
+  // segment comes from its own module.
+  { name: 'loup-garou', label: 'Le Loup-garou', flowDistance: LOUP_GAROU_FLOW_DISTANCE - 30, segment: LOUP_GAROU_SEGMENT, checkpoint: false },
+  { name: 'corriveau', label: 'La Corriveau', flowDistance: CORRIVEAU_FLOW_DISTANCE - 30, segment: CORRIVEAU_SEGMENT, checkpoint: false },
+  { name: 'wendigo', label: 'Le Wendigo', flowDistance: WENDIGO_FROST_START_DISTANCE - 21, segment: WENDIGO_SEGMENT, checkpoint: false },
   { name: 'chasse-galerie', label: 'Chasse-galerie (take flight)', flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   { name: 'diable', label: 'Le Diable', flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   { name: 'rideau', label: 'Rideau leg (start)', ...RIDEAU_START },
@@ -281,7 +285,27 @@ export function parseStartLocation() {
   }
   const segmentStart = SEGMENT_SHAPE_OFFSET[match.segment];
   const flowDistance = Math.max(segmentStart, match.flowDistance - START_APPROACH_BUFFER);
-  return { flowDistance, segment: match.segment };
+  // saveAs: the town itself, which startCheckpointFor() makes the save —
+  // the canoe starts START_APPROACH_BUFFER short of the dock, so its own
+  // position would otherwise resolve to the town *before* this one.
+  // (Not for a noSave town — route.js — which falls back to the last real
+  // save point behind it, as a keyword start does.)
+  return { flowDistance, segment: match.segment, saveAs: match.noSave ? undefined : { segment: match.segment, flowDistance: match.flowDistance } };
+}
+
+// The save a ?start= run begins with. "If I start the game in
+// Petit-Saguenay, I want you to make Petit-Saguenay the current savepoint" —
+// so a town start is saved as that town, the moment the run begins. Before
+// this, a debug jump cleared the save and the canoe (25 units short of the
+// dock) passed nothing for a couple of seconds, until the 2s check found
+// "the furthest save point at or behind the canoe": the town *before*
+// Petit-Saguenay. That saved (a Saving dialog for a town you'd never been
+// to), and then Petit-Saguenay counted as new on arrival and saved again.
+// A keyword start (a boss approach, Kingston) is saved as the last save
+// point at or behind where it puts you, the way passing it would have.
+export function startCheckpointFor(start) {
+  if (!start) return null;
+  return start.saveAs ?? furthestCheckpointReached(start.segment, start.flowDistance);
 }
 // Where this run begins isn't known at load any more unless the URL says
 // so: a plain load puts up the title menu (New Game / Continue — see
@@ -342,23 +366,44 @@ export function isDebugMode() {
   return v !== '0' && v !== 'false' && v !== 'off' && v !== 'no';
 }
 
-// `?debug=play` — debug mode on, but the picker stays shut on load.
+// Whether the picker opens on load: on any ?debug at all, with a value or
+// without — "I want any appearance of ?debug in the url string, with a value
+// or no value, to bring up the debug menu" — except straight after a jump.
 //
-// This is what a jump navigates to (debugStartUrl below), because the point
-// of clicking a waypoint is to look at that part of the game: the first cut
-// opened the picker on every ?debug load, so picking one reloaded straight
-// back into a full-screen overlay covering the thing you just asked to see.
-// Reported as exactly that. A plain reload of ?debug=play also stays in the
-// game, which is the right default while testing one spot repeatedly —
-// backquote brings the picker back whenever you want to move.
-//
-// Deliberately a visible value in the URL rather than a sessionStorage flag
-// or a one-shot param: you can see which mode you're in from the address
-// bar, and typing ?debug by hand (the thing you'd naturally type) still
-// opens the picker.
-export function shouldOpenDebugMenuOnLoad() {
-  if (!isDebugMode()) return false;
-  return (new URLSearchParams(window.location.search).get('debug') || '').toLowerCase() !== 'play';
+// That exception is the reason ?debug=play used to exist: the first cut
+// opened the picker on every ?debug load, so clicking a waypoint reloaded
+// straight back into a full-screen overlay covering the thing you'd just
+// asked to see. A jump then landed on ?debug=play, which stayed shut — but
+// that made the URL mean two things, and loading a ?debug=play link (or
+// reloading after a jump) quietly skipped the picker. Now the URL only
+// ever means "open it", and the jump marks itself instead: onPick sets a
+// one-shot sessionStorage flag (markDebugJump) that the very next load
+// consumes (consumeDebugJump), so only the load a pick caused stays shut.
+// Reload after that and the picker is back, like any other ?debug load.
+// sessionStorage, not localStorage: per tab, so a flag left behind by a
+// navigation that never happened can't leak into another tab, and NEW
+// GAME's clearSavedProgress() never has to know about it.
+const DEBUG_JUMP_FLAG = 'voyageurs-debug-jumped';
+export function markDebugJump() {
+  try { window.sessionStorage.setItem(DEBUG_JUMP_FLAG, '1'); } catch { /* storage blocked: the picker just reopens */ }
+}
+export function consumeDebugJump() {
+  try {
+    const v = window.sessionStorage.getItem(DEBUG_JUMP_FLAG);
+    window.sessionStorage.removeItem(DEBUG_JUMP_FLAG);
+    return v === '1';
+  } catch {
+    return false;
+  }
+}
+// URLSearchParams writes an empty value as "debug="; drop the "=" so the
+// address bar shows the bare ?debug you'd type by hand, both on a jump's
+// URL and after stripStartParam() rewrites the bar on arrival.
+function bareDebug(query) {
+  return query.replace(/(^|&)debug=(?=&|$)/, '$1debug');
+}
+export function shouldOpenDebugMenuOnLoad({ justJumped = false } = {}) {
+  return isDebugMode() && !justJumped;
 }
 // Captured here, before the ?start=-stripping below runs — that code used
 // to wipe the entire query string (window.location.pathname with nothing
@@ -382,6 +427,7 @@ for (const kw of START_KEYWORD_LIST) {
   (CHECKPOINT_CANDIDATES_BY_SEGMENT[kw.segment] ??= []).push(kw.flowDistance);
 }
 for (const v of VILLAGES) {
+  if (v.noSave) continue; // on the map, not a save point — route.js's noSave
   (CHECKPOINT_CANDIDATES_BY_SEGMENT[v.segment] ??= []).push(v.flowDistance);
 }
 for (const list of Object.values(CHECKPOINT_CANDIDATES_BY_SEGMENT)) list.sort((a, b) => a - b);
@@ -429,7 +475,7 @@ export function isFurtherAlong(a, b) {
 // (loop()), so a Kingston save can't be continued into anyway.
 export function villageAtCheckpoint(cp) {
   if (!cp) return null;
-  return VILLAGES.find((v) => v.name !== 'Kingston' && v.segment === cp.segment && Math.abs(v.flowDistance - cp.flowDistance) < 0.5) ?? null;
+  return VILLAGES.find((v) => v.name !== 'Kingston' && !v.noSave && v.segment === cp.segment && Math.abs(v.flowDistance - cp.flowDistance) < 0.5) ?? null;
 }
 
 // The checkpoint landing in `village` saves — deliberately the *same*
@@ -441,7 +487,7 @@ export function villageAtCheckpoint(cp) {
 // and landing finds the same. Null for Kingston, which clears the save
 // rather than making one.
 export function landingCheckpoint(village) {
-  if (!village || village.name === 'Kingston') return null;
+  if (!village || village.name === 'Kingston' || village.noSave) return null;
   return { segment: village.segment, flowDistance: village.flowDistance };
 }
 
@@ -493,8 +539,9 @@ export function debugWaypoints() {
 // The URL to load to start at `waypoint`. Keeps everything else already on
 // the address bar (notably ?difficulty=) and re-asserts ?debug so the tool
 // is still reachable on the other side — you're mid-testing, and losing it
-// on every jump would be the obvious annoyance — but as ?debug=play, so the
-// picker itself doesn't reopen over the game. A null
+// on every jump would be the obvious annoyance. As a bare ?debug: the picker
+// staying shut on arrival is markDebugJump()'s job now, not the URL's (see
+// shouldOpenDebugMenuOnLoad). A null
 // startParam deletes ?start= rather than setting it: combined with the
 // cleared checkpoint at the call site, no ?start= IS the put-in
 // (parseStartLocation's own fallback). Pure and exported so a test can
@@ -503,11 +550,9 @@ export function debugStartUrl(search, hash, pathname, waypoint) {
   const params = new URLSearchParams(search);
   params.delete('start');
   if (waypoint.startParam) params.set('start', waypoint.startParam);
-  // 'play', not '1': keeps the tool available (backquote) without throwing
-  // the picker back over the screen on arrival — see
-  // shouldOpenDebugMenuOnLoad()'s own comment.
-  params.set('debug', 'play');
-  return `${pathname}?${params.toString()}${hash || ''}`;
+  params.set('debug', '');
+  const query = bareDebug(params.toString());
+  return `${pathname}?${query}${hash || ''}`;
 }
 
 // In-memory mirror of whatever's actually in storage, so each check below
@@ -557,7 +602,7 @@ const startedExplicitly = hasExplicitStart;
 export function stripStartParam(search) {
   const params = new URLSearchParams(search);
   params.delete('start');
-  const rest = params.toString();
+  const rest = bareDebug(params.toString());
   return rest ? `?${rest}` : '';
 }
 if (window.location.search) {
@@ -1137,6 +1182,14 @@ const continueBtn = document.getElementById('continue-btn');
 const newGameBtn = document.getElementById('new-game-btn');
 const titleMenuBtns = [continueBtn, newGameBtn];
 if (explicitStart) {
+  // The town (or the last save point) this run starts at becomes the save
+  // straight away, silently — see startCheckpointFor(). The 2s check and
+  // the dock landing then see it already stored and stay quiet there.
+  const startCp = startCheckpointFor(explicitStart);
+  if (startCp) {
+    saveCheckpointToStorage(startCp.segment, startCp.flowDistance, 0);
+    savedCheckpoint = { segment: startCp.segment, flowDistance: startCp.flowDistance, furs: 0 };
+  }
   beginRun(explicitStart);
 } else {
   // Hides the in-game chrome (style.css's body.at-title) while the menu is
@@ -1336,6 +1389,7 @@ const debugMenu = isDebugMode() ? createDebugMenu({
     // jump to is now where you are, and progress re-saves from there.
     clearCheckpointStorage();
     savedCheckpoint = null;
+    markDebugJump(); // the load this causes keeps the picker shut
     try {
       window.location.assign(debugStartUrl(window.location.search, window.location.hash, window.location.pathname, wp));
     } catch {
@@ -1351,10 +1405,10 @@ const debugMenu = isDebugMode() ? createDebugMenu({
 }) : null;
 if (debugMenu) {
   document.body.appendChild(debugMenu.element);
-  // Open on a bare ?debug (you're here to choose a starting point), but not
-  // on the ?debug=play a jump navigates to — that one has already made its
-  // choice and wants the game on screen. Backquote either way.
-  if (shouldOpenDebugMenuOnLoad()) debugMenu.show();
+  // Open on any ?debug (you're here to choose a starting point), except the
+  // load a jump just caused — that one has already made its choice and
+  // wants the game on screen. Backquote either way.
+  if (shouldOpenDebugMenuOnLoad({ justJumped: consumeDebugJump() })) debugMenu.show();
 }
 
 window.addEventListener('keydown', (e) => {
@@ -1428,8 +1482,17 @@ let landedIn = null;
 // what's already saved — which is also what stops the same town saving
 // twice (landingCheckpoint()'s comment) — with the furs in the hold right
 // now, and the SAVING canoe to say so.
+//
+// Compared against what's actually in storage, read fresh every time, not
+// an in-memory copy: "I want you to check what's in the browser cache, and
+// if it's the same save point, I don't want you to save again." The same
+// save point (or one behind it) is never written twice and never shows the
+// SAVING canoe.
+export function isNewSave(cp, stored = loadCheckpoint()) {
+  return !!cp && isFurtherAlong(cp, stored);
+}
 function recordCheckpoint(cp) {
-  if (!cp || !game || !isFurtherAlong(cp, savedCheckpoint)) return false;
+  if (!game || !isNewSave(cp)) return false;
   const furs = game.furs;
   saveCheckpointToStorage(cp.segment, cp.flowDistance, furs);
   savedCheckpoint = { segment: cp.segment, flowDistance: cp.flowDistance, furs };

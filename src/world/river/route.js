@@ -260,10 +260,17 @@ const LAWRENCE_WEST_WAYPOINTS = [
   // lake-sized widening of the river; Carillon and Gatineau are both on
   // the north shore, same side as Montréal, past a real historic narrows
   // (Long-Sault/Carillon, canalized and dammed today).
-  { name: 'Ile-Perrot', lat: 45.3800, lon: -73.9500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 4 },
-  { name: 'Hudson', lat: 45.4500, lon: -74.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1, riverWidthKm: 6 },
-  { name: 'Rigaud', lat: 45.4800, lon: -74.3000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 5 },
-  { name: 'Carillon', lat: 45.5600, lon: -74.3700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 1 },
+  //
+  // noSave: on the map and the river for the look, but not save points.
+  // The Chasse-galerie flight passes over all four (Île-Perrot ~11 units
+  // after liftoff), and the save check (main.js) counted each as a town
+  // passed — a SAVING canoe mid-flight, and a save CONTINUE would open on
+  // foot inside a town you'd flown over. Liftoff itself (main.js's
+  // 'chasse-galerie' keyword) and Le Diable's approach stay save points.
+  { name: 'Ile-Perrot', lat: 45.3800, lon: -73.9500, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 4, noSave: true },
+  { name: 'Hudson', lat: 45.4500, lon: -74.1500, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1, riverWidthKm: 6, noSave: true },
+  { name: 'Rigaud', lat: 45.4800, lon: -74.3000, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, side: -1, riverWidthKm: 5, noSave: true },
+  { name: 'Carillon', lat: 45.5600, lon: -74.3700, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: 1, riverWidthKm: 1, noSave: true },
   { name: 'Gatineau', lat: 45.4300, lon: -75.7000, label: 'Gatineau', labelPos: { dx: 1.6, dy: 3.4, anchor: 'start' }, side: 1, riverWidthKm: 1.5 },
 ];
 
@@ -399,6 +406,9 @@ function makeSegment(id, waypoints, spanDistance) {
     // one's pinned. Also why inserting a new stop earlier in an unpinned
     // list would silently flip every later village's bank.
     side: w.side ?? (i % 2 === 0 ? -1 : 1),
+    // On the map but not a save point (main.js skips it) — see the noSave
+    // comment above Île-Perrot in LAWRENCE_WEST_WAYPOINTS.
+    ...(w.noSave ? { noSave: true } : {}),
   }));
 
   return {

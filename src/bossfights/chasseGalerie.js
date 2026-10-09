@@ -187,7 +187,9 @@ const STEEPLE_DEFS = [
   { d: -155, side: -1, reaching: true }, { d: -135.5, side: 1, reaching: false },
   { d: -113, side: 1, reaching: true }, { d: -91, side: -1, reaching: true },
   { d: -66, side: 1, reaching: false }, { d: -46, side: -1, reaching: true },
-  { d: -20, side: -1, reaching: true }, { d: -1, side: 1, reaching: false },
+  // (A church at d: -1 stood right in the middle of Le Diable's arena —
+  // removed; see ARENA_CLEAR below.)
+  { d: -20, side: -1, reaching: true },
   { d: 22, side: -1, reaching: false }, { d: 40, side: 1, reaching: false },
 ];
 
@@ -203,6 +205,13 @@ const STEEPLE_DEFS = [
 // would have to be ~20 units long, so they're simply not built; the flight
 // opens on the gorge closing in, then the churches.
 const GORGE_ENGAGED_D = OTTAWA_EASE_START + OTTAWA_EASE_LEN;
+// No church may stand anywhere it'd be on screen while the canoe is held in
+// Le Diable's arena: from the top of the frame (~10 units ahead) to a spire
+// still poking up from below the bottom edge (~11.5 behind). "There's a
+// steeple right in the middle of the fight scene" — the one at d: -1. Their
+// hits are already suspended for the fight (game.js); this is the look.
+// Exported for the smoke test.
+export const ARENA_CLEAR = { behind: 12, ahead: 11 };
 const STEEPLES = STEEPLE_DEFS.filter(({ d: offset }) => DIABLE_ARENA_D + offset >= GORGE_ENGAGED_D).map(({ d: offset, side, reaching }) => {
   const d = DIABLE_ARENA_D + offset;
   const waterHalf = widthAt(d) / 2;
@@ -399,27 +408,39 @@ export function createChasseGalerie() {
   };
 }
 
-// A stone parish church standing on a bank, only its end reaching into the
-// water. Anchored at the bank-side collision edge and drawn toward the
-// channel: a "reaching" church is drawn the full width of its box (so you
-// see it cross the centre line); a normal one hugs its bank.
-function drawChurch(ctx, s, z, cameraWorldX) {
-  const screen = worldToScreen(s.worldX, z, cameraWorldX);
+// The screen-x span a church is drawn across: exactly its collision box
+// (worldX ± hx), for every church. It used to be only the "reaching" ones —
+// an ordinary church was drawn at most 26px (~1.6 units) out from its bank,
+// left over from when ordinary churches really did hug the shore. Once every
+// church's box was pushed past the centre line (PAST_CENTRE_NORMAL), the
+// box ran several units further into the channel than the stone did, and a
+// canoe flying straight down the middle got hit by empty air beside a
+// church that looked to be sitting on the bank — reported as "the images
+// need to match the collision area". Exported so the smoke test can hold
+// the two together.
+export function churchDrawSpan(s, cameraWorldX) {
+  const cx = worldToScreen(s.worldX, 0, cameraWorldX).x;
   const halfPx = s.hx * PIXELS_PER_UNIT;
+  return { left: cx - halfPx, right: cx + halfPx };
+}
+
+// A stone parish church standing on a bank, its nave running out across the
+// water as far as its collision box reaches (churchDrawSpan above), the
+// bell tower and spire at the channel end — so the tip of the danger is
+// also the tallest, most visible part of it. Exported for the smoke test,
+// which draws each one and checks the stone covers the box.
+export function drawChurch(ctx, s, z, cameraWorldX) {
+  const screen = worldToScreen(s.worldX, z, cameraWorldX);
   const waterY = screen.y;
   const bodyH = s.h * 0.4 * PIXELS_PER_UNIT;
   const spireH = s.h * PIXELS_PER_UNIT;
 
-  const bankEdge = screen.x + s.side * halfPx;
-  const naveW = s.reaching ? halfPx * 2 : Math.min(halfPx * 2 * 0.7, 26);
-  const x0 = bankEdge;                    // over the bank
-  const x1 = bankEdge - s.side * naveW;   // toward the channel
-  const left = Math.min(x0, x1);
-  const right = Math.max(x0, x1);
+  const { left, right } = churchDrawSpan(s, cameraWorldX);
+  const naveW = right - left;
   const mid = (left + right) / 2;
 
   // Tower/steeple on the river side (channel edge), not the bank side
-  const channelEdge = bankEdge - s.side * naveW;
+  const channelEdge = s.side > 0 ? left : right;
   const towerX = channelEdge + s.side * Math.min(naveW * 0.32, 13);
   const towerW = 8;
 

@@ -6,7 +6,7 @@ import { drawWhales } from '../world/whales.js';
 import { drawRain } from '../world/weather.js';
 import { createCanoeSprites } from '../world/canoe.js';
 import { createCapsize } from '../world/capsize.js';
-import { playCapsizeHorn, playPeltChime, playRepairTrade, playWeaponAcquired, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playRepairTrade, playWeaponAcquired, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playChainRattle, playCorriveauWail, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import {
@@ -17,8 +17,12 @@ import {
 import { createBritishWarship, TRIGGER_DISTANCE as WARSHIP_FLOW_DISTANCE } from '../bossfights/britishWarship.js';
 import { createChasseGalerie, lightningFlash, BOSS_HOVER_HEIGHT } from '../bossfights/chasseGalerie.js';
 import { createDiable, DIABLE_FLOW_DISTANCE } from '../bossfights/diable.js';
-import { createLoupGarou } from '../bossfights/loupGarou.js';
-import { createWendigo } from '../bossfights/wendigo.js';
+// Each of the first three fights names its own segment (SEGMENT) — its
+// distances are numbers on that segment's flowDistance line, so every guard
+// below is on the fight's own constant rather than a segment named here.
+import { createLoupGarou, SEGMENT as LOUP_GAROU_SEGMENT } from '../bossfights/loupGarou.js';
+import { createCorriveau, SEGMENT as CORRIVEAU_SEGMENT } from '../bossfights/corriveau.js';
+import { createWendigo, SEGMENT as WENDIGO_SEGMENT } from '../bossfights/wendigo.js';
 import { createWeapons } from './weapons.js';
 import { isTouchPrimary } from './touchControls.js';
 
@@ -293,13 +297,29 @@ const TREE_PUSHBACK = 26; // lateral accel back toward mid-channel, units/sec^2
 // Le Loup-garou's lunge (bossfights/loupGarou.js). Deliberately light — this
 // is the first encounter, well before the pistol, and shouldn't be
 // punishing. ~6 clean hits to sink, so a player who eats three or four and
-// still makes Québec City can trade furs for repairs and carry on. Nudged up
-// from 13 once the fight read as a touch too easy — still not brutal.
+// still makes Tadoussac can trade furs for repairs and carry on. Nudged up
+// from 13 once the fight read as a touch too easy — still not brutal. (It
+// was the second fight when that was tuned; it's the first again since the
+// reshuffle, which is what "light" was always aimed at.)
 const WOLF_DAMAGE = 16;
+// La Corriveau (bossfights/corriveau.js). The reach — the cage dropping onto
+// the canoe — and a feu follet, a glancing burn about half that. Was 16/8,
+// matching the Loup-garou's lunge, while hers was a ~25s fight; at 2.5
+// minutes (HAUNT_TIME) a player who dodged well still took ~110 hull from
+// the sheer number of attacks. Each attack plays exactly as it did — the
+// part reported as "balanced nicely" — it just costs less, so the long
+// fight stays survivable for someone reading it.
+const CORRIVEAU_DAMAGE = 10;
+const FEU_FOLLET_DAMAGE = 5;
+// How fast her weight bleeds the canoe's speed down to her pace limit,
+// units/s² — about two seconds from full upstream paddle to her pace.
+const CORRIVEAU_DRAG_DECEL = 4.5;
 // Le Wendigo's raking blow (bossfights/wendigo.js) when it catches you still
-// working the paddle as it listens. The very first encounter in the game and
-// a freeze-or-flee beat — lighter than the loup-garou, and the first listen
-// never strikes at all. ~8 clean hits to sink; a player who reads the tell
+// working the paddle as it listens. Tuned as the very first encounter (it's
+// the third since the reshuffle, left as it was) and a freeze-or-flee beat —
+// lighter than the loup-garou, and the first listen never strikes at all.
+// The blow also stops the canoe dead (handleHit), which is most of its
+// sting upstream. ~8 clean hits to sink; a player who reads the tell
 // eats one or two at most. Nudged 11 -> 12 with the cadence, to put it a
 // little more on the attack.
 const WENDIGO_DAMAGE = 12;
@@ -584,8 +604,9 @@ export class Game {
     this.chasseGalerie = createChasseGalerie();
     this.diable = createDiable();
     this.diablePct = null; // null hides the HUD bar; his HP% while the fight runs
-    this.loupGarou = createLoupGarou(); // the night beast just before Québec City
-    this.wendigo = createWendigo(); // the famine-spirit on the far fjord shore, before Tadoussac
+    this.loupGarou = createLoupGarou(); // the night beast on the lower fjord, before Tadoussac
+    this.corriveau = createCorriveau(); // the gibbet ghost on the run into Québec City
+    this.wendigo = createWendigo(); // the famine-spirit on Lac Saint-Pierre, before Sorel-Tracy
     // Set once the Devil looms up (or by ?start=diable): a capsize then
     // respawns just before the fight with the pistol, not all the way back
     // at Montréal — see start() and update()'s consumeJustAppeared branch.
@@ -748,6 +769,7 @@ export class Game {
     this.britishWarship.reset();
     this.warshipPct = null;
     this.loupGarou.reset();
+    this.corriveau.reset();
     this.wendigo.reset();
     this.chasseGalerie.reset();
     this.diable.reset();
@@ -795,12 +817,15 @@ export class Game {
     // drags you under.
     const byDiable = !!this.diable?.isActive();
     const byWolf = !byDiable && !!this.loupGarou?.isActive();
+    // She wanted a ride to the sabbath on Île d'Orléans, and now she has one.
+    const byCorriveau = !byDiable && !byWolf && !!this.corriveau?.isActive();
     // Losing on the ice to the Wendigo isn't drowning — it's being caught.
-    const byWendigo = !byDiable && !byWolf && !!this.wendigo?.isActive();
+    const byWendigo = !byDiable && !byWolf && !byCorriveau && !!this.wendigo?.isActive();
     if (this.ui.gameoverTitle) {
       this.ui.gameoverTitle.textContent =
         byDiable ? 'THE DEVIL COLLECTS'
           : byWolf ? 'THE BEAST TAKES YOU'
+            : byCorriveau ? 'CARRIED TO THE SABBATH'
             : byWendigo ? 'THE WENDIGO TAKES YOU'
               : 'CAPSIZED';
     }
@@ -1048,11 +1073,25 @@ export class Game {
       this.speed = Math.max(MAX_REVERSE_SPEED, this.speed - 3.5);
       this.takeDamage(WOLF_DAMAGE * this.damageTakenScale);
       this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'corriveau') {
+      // Hull damage only — no knock back the way the Loup-garou's lunge
+      // has. Her dodge is purely sideways, and lateral authority is weakest
+      // when the canoe is slow and fighting the water, so a slowdown on
+      // every hit snowballed into the next one landing too.
+      this.takeDamage(CORRIVEAU_DAMAGE * this.damageTakenScale);
+      this.invulnTimer = INVULN_TIME;
+    } else if (entry.type === 'feu-follet') {
+      this.takeDamage(FEU_FOLLET_DAMAGE * this.damageTakenScale);
+      this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'wendigo') {
       // Caught still working the paddle as it listened — a cold raking blow
-      // out of the trees that dumps your way and bleeds some hull. Meant to
-      // teach the freeze, not to end the run.
-      this.speed = Math.max(MIN_SPEED - 1, this.speed - 3);
+      // out of the trees that stops the canoe dead and bleeds some hull.
+      // Meant to teach the freeze, not to end the run. Used to take 3 off
+      // your speed, which on the fjord's downstream current hardly
+      // registered; up Lac Saint-Pierre a player who ignored every listen
+      // still paddled clear before it could listen twice more. Dead in the
+      // water, the next listen catches them too.
+      this.speed = Math.min(this.speed, 0);
       this.takeDamage(WENDIGO_DAMAGE * this.damageTakenScale);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'tree') {
@@ -1300,7 +1339,14 @@ export class Game {
     // Upriver whitewater acts on the canoe's own speed, not as a push added
     // on top of it (see RAPIDS_UPRIVER_DRAG). Read up front because it moves
     // both the no-paddle drift target here and the paddling ceiling below.
-    const upriverRapids = this.segment === 'lawrenceWest' && !this.chasseGalerie.isActive()
+    // Calm water under La Corriveau too (corriveauCalm): her fight is all
+    // sideways dodging, paced at well under a unit a second (HAUNT_TIME), and
+    // whitewater caps how far the bow comes round (RAPIDS_STEER_PENALTY).
+    // A patch of rapids two-thirds of the way to Québec City, crossed in ~2s
+    // at an ordinary pace, held the canoe for ~40s at hers — a dodging run
+    // took 22 hits, nearly all of them in there.
+    const corriveauCalm = this.segment === CORRIVEAU_SEGMENT && this.corriveau.isActive();
+    const upriverRapids = this.segment === 'lawrenceWest' && !this.chasseGalerie.isActive() && !corriveauCalm
       ? rapidsStrength(this.flowDistance)
       : 0;
     const ambientCurrent = (AMBIENT_CURRENT[this.segment] ?? MIN_SPEED) - upriverRapids * RAPIDS_UPRIVER_PUSH;
@@ -1336,8 +1382,18 @@ export class Game {
     // lawrenceWest, backward — same drift, aimed the other way).
     // EXCEPT when flying (Chasse-galerie) - no current in the sky!
     else if (!this.chasseGalerie.isActive()) {
-      if (this.speed > ambientCurrent) this.speed = Math.max(ambientCurrent, this.speed - ambientDecel * dt);
-      else this.speed = Math.min(ambientCurrent, this.speed + ambientDecel * dt);
+      // While the Wendigo listens the water goes glass-still under its cold:
+      // a canoe left alone glides to a stop instead of being carried back
+      // down the lake. Without this its freeze-or-flee was unwinnable once
+      // it moved up onto lawrenceWest — obeying a listen meant ~4s drifting
+      // backward on the upriver current, more ground than the paddle
+      // between listens could win back (measured: net *negative* progress
+      // per cycle, the stall failsafe the only way out). Down still backs
+      // you up if you want it to; this only stops the current doing it.
+      const stillWater = this.segment === WENDIGO_SEGMENT && this.wendigo.isListening();
+      const target = stillWater ? Math.max(0, ambientCurrent) : ambientCurrent;
+      if (this.speed > target) this.speed = Math.max(target, this.speed - ambientDecel * dt);
+      else this.speed = Math.min(target, this.speed + ambientDecel * dt);
     }
     // Upriver whitewater caps how fast you can paddle: anything above the
     // ceiling bleeds off at RAPIDS_UPRIVER_DRAG, and once you're clear the
@@ -1346,6 +1402,17 @@ export class Game {
     if (upriverRapids > 0) {
       const ceiling = topSpeed - upriverRapids * RAPIDS_UPRIVER_PUSH;
       if (this.speed > ceiling) this.speed = Math.max(ceiling, this.speed - RAPIDS_UPRIVER_DRAG * dt);
+    }
+    // La Corriveau's weight on the canoe: while she's on it, it can't get
+    // ahead of her 2.5-minute schedule up to Québec City (corriveau.js's
+    // HAUNT_TIME / paceLimit). Bled down to the limit at
+    // CORRIVEAU_DRAG_DECEL rather than snapped, so it reads as the canoe
+    // dragging, not hitting a wall.
+    if (this.segment === CORRIVEAU_SEGMENT) {
+      const limit = this.corriveau.paceLimit(this.flowDistance);
+      if (limit !== null && this.speed > limit) {
+        this.speed = Math.max(limit, this.speed - CORRIVEAU_DRAG_DECEL * dt);
+      }
     }
 
     // Rapids strength at where the canoe currently is (i.e. before this
@@ -1382,7 +1449,7 @@ export class Game {
     const nearBlockade = this.segment === 'rideau'
       && this.flowDistance > BLOCKADE_SHIP_FLOW_DISTANCE - BLOCKADE_APPROACH_RANGE
       && this.flowDistance < BLOCKADE_SHIP_FLOW_DISTANCE + 50;
-    const rapids = nearBlockade ? 0 : rapidsStrength(this.flowDistance);
+    const rapids = nearBlockade || corriveauCalm ? 0 : rapidsStrength(this.flowDistance);
     // Downstream the whitewater is a boost added on top of your paddling.
     // Upriver it's already in this.speed (see upriverRapids above), so
     // nothing is added here — an additive term is exactly what snapped back
@@ -1865,29 +1932,53 @@ export class Game {
       this.heading,
     );
 
-    // Le Loup-garou — the night beast pacing the Beaupré shore, just before
-    // Québec City. lawrenceWest only, same reasoning as the blockade below:
-    // TRIGGER_DISTANCE is a number on this segment's own line.
-    if (this.segment === 'lawrenceWest') {
+    // Le Loup-garou — the night beast over the lower fjord, the first fight,
+    // on the run down to Tadoussac. Guarded on its own segment, same
+    // reasoning as the blockade below: TRIGGER_DISTANCE is a number on that
+    // segment's own line.
+    if (this.segment === LOUP_GAROU_SEGMENT) {
       this.loupGarou.update(dt, this.flowDistance, this.canoeWorldX, effectiveSpeed, (entry) => this.handleHit(entry));
       if (this.loupGarou.consumeJustSpotted()) {
-        this.showBanner('LOUP-GAROU');
+        // The big title card (#boss-banner) — the game's first boss fight
+        // earns real fanfare, the treatment the Wendigo had when it was
+        // first (the Loup-garou used to get the small milestone banner).
+        this.showBossBanner('LOUP-GAROU');
         playWolfHowl();
         this.music?.start(); // safe even if ?start=loup-garou drops in before a gesture
         this.music?.playLoupGarouTrack();
       }
       if (this.loupGarou.consumeJustDelivered()) {
-        this.showBanner('The lights of Québec City — the beast falls back');
+        this.showBanner('The mouth opens ahead — the beast falls back');
         this.music?.endBossTrack();
       }
     }
 
-    // Le Wendigo — the famine-spirit on the far shore of the lower fjord, on
-    // the lonely reach down to Tadoussac. Fjord only: TRIGGER_DISTANCE is a
-    // number on this segment's own line (same reasoning as the loup-garou /
-    // blockade). Down (brake) is a legal way to go still; it's Up/Left/Right
-    // — actively working the canoe — that it hears.
-    if (this.segment === 'fjord') {
+    // La Corriveau — the hanged woman in her gibbet cage, in the mist on
+    // the run from Beaupré into Québec City. Takes the camera so the wisps
+    // she casts leave from where the cage is actually drawn.
+    if (this.segment === CORRIVEAU_SEGMENT) {
+      this.corriveau.update(dt, this.flowDistance, this.canoeWorldX, this.cameraWorldX, (entry) => this.handleHit(entry));
+      if (this.corriveau.consumeJustSpotted()) {
+        this.showBossBanner('LA CORRIVEAU');
+        // Says why the canoe is suddenly crawling (paceLimit above).
+        this.showBanner('She clings to the canoe — it drags under her weight');
+        playCorriveauWail();
+        this.music?.start(); // safe even if ?start=corriveau drops in before a gesture
+        this.music?.playCorriveauTrack();
+      }
+      if (this.corriveau.consumeJustReached()) playChainRattle();
+      if (this.corriveau.consumeJustDelivered()) {
+        this.showBanner('The lights of Québec City — La Corriveau sinks back into the mist');
+        this.music?.endBossTrack();
+      }
+    }
+
+    // Le Wendigo — the famine-spirit on the far shore of Lac Saint-Pierre,
+    // on the lonely reach up to Sorel-Tracy. Guarded on its own segment
+    // (same reasoning as the loup-garou / blockade). Down (brake) is a legal
+    // way to go still; it's Up/Left/Right — actively working the canoe —
+    // that it hears.
+    if (this.segment === WENDIGO_SEGMENT) {
       const s = this.input.state;
       const stirring = !!(s.up || s.left || s.right);
       this.wendigo.update(dt, this.flowDistance, stirring, (entry) => this.handleHit(entry));
@@ -1895,8 +1986,7 @@ export class Game {
       // eyes flare, the drawn breath) and the first listen never strikes.
       if (this.wendigo.consumeJustSpotted()) {
         // The big title card (#boss-banner), not the small milestone one —
-        // same treatment the British Blockade gets: this is the game's
-        // first boss fight, it earns real fanfare, not a routine callout.
+        // same treatment the British Blockade gets.
         this.showBossBanner('WENDIGO');
         playWendigoBreath();
         this.music?.start(); // safe even if ?start=wendigo drops in before a gesture
@@ -1905,7 +1995,7 @@ export class Game {
       if (this.wendigo.consumeJustListening()) playWendigoBreath();
       if (this.wendigo.consumeJustLunged()) playWendigoShriek();
       if (this.wendigo.consumeJustDelivered()) {
-        this.showBanner('The mouth opens ahead — the Wendigo turns back');
+        this.showBanner('The cold lifts — the Wendigo turns back into the bush');
         this.music?.endBossTrack();
       }
     }
@@ -2078,15 +2168,21 @@ export class Game {
     // The Diable fight sits at full storm regardless of where along the fade
     // curve its flowDistance happens to land — his darkness, held.
     const storm = this.diable.isActive() ? 1 : this.chasseGalerie.stormIntensityAt(this.flowDistance);
-    // Cold-blue nightfall for the Loup-garou stretch before Québec City —
+    // Cold-blue nightfall for the Loup-garou's stretch of the lower fjord —
     // its own thing, gentler than the Devil's hellstorm (this is early). Only
-    // ever non-zero on lawrenceWest; a pure function of position.
-    const night = this.segment === 'lawrenceWest'
+    // ever non-zero on its own segment; a pure function of position.
+    const night = this.segment === LOUP_GAROU_SEGMENT
       ? this.loupGarou.nightIntensity(this.flowDistance) : 0;
-    // Bloodless cold for the Wendigo's reach on the lower fjord — the far end
-    // of the palette from the hellstorm. Only ever non-zero on the fjord; a
-    // pure function of position, plus an extra glare while it listens.
-    const frost = this.segment === 'fjord'
+    // La Corriveau's mist below Québec City — a dim, grey-green night with
+    // fog lying on the water, not the Loup-garou's clear moonlit black. Its
+    // own stretch, never overlapping the night above or the frost below.
+    const mist = this.segment === CORRIVEAU_SEGMENT
+      ? this.corriveau.mistIntensity(this.flowDistance) : 0;
+    // Bloodless cold for the Wendigo's reach of Lac Saint-Pierre — the far
+    // end of the palette from the hellstorm. Only ever non-zero on its own
+    // segment; a pure function of position, plus an extra glare while it
+    // listens.
+    const frost = this.segment === WENDIGO_SEGMENT
       ? this.wendigo.frostIntensity(this.flowDistance) : 0;
     // The weather closing in ahead of the British Warship, and staying
     // through the fight itself — only ever non-zero on the Rideau. Held at
@@ -2236,6 +2332,43 @@ export class Game {
       if (!warshipHeldDraw) this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
     }
 
+    // La Corriveau's mist: the land and sky sink into a dim grey-green night,
+    // then fog banks drift across the water over the rocks and logs, so the
+    // lake reads as murky and close — and her ghost-light (drawn later, on
+    // top of all of it) is the brightest thing on screen.
+    if (mist > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.62 * mist;
+      ctx.fillStyle = '#060c0a';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.globalAlpha = 0.2 * mist;
+      ctx.fillStyle = '#2c4a3c';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      // Fog banks: big soft ellipses drifting slowly down the lake and
+      // across it, each a radial gradient so there's no edge to read. (A
+      // first cut stacked translucent rectangles, which came out as hard
+      // horizontal stripes — scanlines, not mist.)
+      for (let i = 0; i < 5; i++) {
+        const span = CANVAS_HEIGHT + 120;
+        const y = ((i * 67 + this.time * 4) % span) - 60;
+        const x = CANVAS_WIDTH / 2 + Math.sin(this.time * 0.09 + i * 2.4) * 130;
+        const rx = 120 + (i % 3) * 40;
+        const fog = ctx.createRadialGradient(x, y, 0, x, y, rx);
+        fog.addColorStop(0, 'rgba(176, 200, 188, 0.3)');
+        fog.addColorStop(0.6, 'rgba(176, 200, 188, 0.12)');
+        fog.addColorStop(1, 'rgba(176, 200, 188, 0)');
+        ctx.globalAlpha = mist;
+        ctx.fillStyle = fog;
+        ctx.save(); // flatten into a bank about its own centre
+        ctx.translate(x, y);
+        ctx.scale(1, 0.35);
+        ctx.translate(-x, -y);
+        ctx.fillRect(x - rx, y - rx, rx * 2, rx * 2);
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
     // Loup-garou night: a final wash over the obstacles/whales too, so
     // nothing on the water stays lit — the frame is the dark and the ghost.
     if (night > 0) {
@@ -2315,7 +2448,7 @@ export class Game {
       this.blockade.draw(ctx, this.flowDistance, cameraWorldX, this.time);
       this.britishWarship.draw(ctx, this.flowDistance - this._chaseHoldZ, cameraWorldX);
     }
-    if (this.segment === 'lawrenceWest') {
+    if (this.segment === LOUP_GAROU_SEGMENT) {
       // The moon for the Loup-garou night — hung high and mostly off the top
       // of the frame (the far distance up-river reads as the horizon/sky), so
       // it's a light in the sky, not a disc sitting on the river. Its glow
@@ -2359,10 +2492,11 @@ export class Game {
       }
       this.loupGarou.draw(ctx, this.flowDistance, cameraWorldX, this.time);
     }
+    if (this.segment === CORRIVEAU_SEGMENT) this.corriveau.draw(ctx, this.flowDistance, cameraWorldX);
     // Draw the Chasse-galerie churches cutting into the gorge
     if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX);
 
-    // The Wendigo's cold over the lower fjord. Asked for as "actually
+    // The Wendigo's cold over Lac Saint-Pierre. Asked for as "actually
     // darker on the color palette, not just dimmer" — the first cut was
     // the opposite, a pale bleaching wash (#e3eff5 at low alpha) plus an
     // icy rim, which read as haze, and an alpha wash to black would only

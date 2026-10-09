@@ -182,6 +182,7 @@ const windowShim = {
   AudioContext: audioCtxShim,
   webkitAudioContext: audioCtxShim,
   localStorage: makeLocalStorage(),
+  sessionStorage: makeLocalStorage(),
 };
 
 function install() {

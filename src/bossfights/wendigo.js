@@ -1,11 +1,15 @@
 // Le Wendigo — the famine-spirit of the deep bush (an Algonquian terror the
 // coureurs de bois picked up and never shook): a starved giant, ribs like a
 // ship's frames, antlers of bare branch, that hunts by sound and movement
-// and is never, ever full. It has come down onto the cold water of the lower
-// Saguenay and paces the far cliff on the long lonely reach between
-// Petit-Saguenay and the mouth at Tadoussac.
+// and is never, ever full. It has come down out of the bush onto Lac
+// Saint-Pierre, the wide, lonely widening of the St. Lawrence between
+// Trois-Rivières and Sorel-Tracy, and paces the far shore.
 //
-// The first "fight" in the game, and deliberately gentle. No projectiles,
+// It was the first fight in the game, on the lower Saguenay between
+// Petit-Saguenay and Tadoussac, until the first three fights were
+// reshuffled ("put Loup-garou before Tadoussac, and then put Le Wendigo
+// before Sorel-Tracy") — it's the third now, after the Loup-garou and La
+// Corriveau. Still deliberately gentle. No projectiles,
 // nothing to kill it with, no killing it anyway. It paces the shore (PROWL)
 // and every so often rears up and stops dead to LISTEN — and in that window
 // you take your hands off the paddle and go still in the water. Down (brake
@@ -13,35 +17,55 @@
 // — actively working the canoe — that it hears. There's no on-screen prompt:
 // the tell is the telegraph (it rears, the eyes flare, a long drawn breath)
 // and the very first LISTEN never strikes, a free dry run. Ride it out a
-// couple of times and you drift to the Saint Lawrence, where it won't
-// follow.
+// couple of times and it gives up the hunt and turns back into the bush,
+// well short of Sorel.
 //
-// Cold-white render (frostIntensityAt) — the fjord going bloodless and
+// Cold-white render (frostIntensityAt) — the lake going bloodless and
 // silent, the far end of the palette from Le Diable's hellstorm.
 import { CANVAS_WIDTH } from '../shared/config.js';
-import { MOUTH_DISTANCE } from '../world/river/path.js';
+import { VILLAGES } from '../world/villages.js';
 
-// Anchored to the mouth (Tadoussac), the way the loup-garou is anchored to
-// Québec City: it stalks the last long reach before open water and falls
-// back as that water comes into view. Petit-Saguenay sits around
-// MOUTH_DISTANCE - 225, so the trigger still leaves a calm ~55-unit paddle
-// out of the last village before the cold comes down.
-export const TRIGGER_DISTANCE = MOUTH_DISTANCE - 170;
-export const DELIVERANCE_DISTANCE = MOUTH_DISTANCE - 50;
+// Which segment's flowDistance line the distances below are on — game.js
+// and main.js guard on this rather than naming a segment themselves, so a
+// fight moving stretch (as all three of the first fights did at once) is a
+// change to its own module.
+export const SEGMENT = 'lawrenceWest';
 
-// The cold fades in over this many units before the trigger and lifts after
-// deliverance — same shape as the loup-garou's nightIntensityAt.
-// FADE_IN was 58, which started the cold at MOUTH - 228 — three units
-// *before* Petit-Saguenay's dock (route.js puts it at MOUTH - 225), so the
-// palette was already turning as you passed the town. 26 starts it at
-// MOUTH - 196, a clear ~30 units past the dock: the town is behind you
-// and off the bottom of the screen before anything changes. That's also
-// what lets ?start=wendigo (main.js) sit a few seconds short of the dark
-// without landing before the dock — "I don't want to pass a town dock
-// before Wendigo." A brisker ramp (~3s at cruising speed) than before,
-// which suits it: the cold should come down, not seep.
+const TROIS_RIVIERES = VILLAGES.find((v) => v.name === 'Trois-Rivieres');
+const SOREL = VILLAGES.find((v) => v.name === 'Sorel-Tracy');
+// lawrenceWest runs upstream with flowDistance increasing, so Trois-Rivières
+// (~61534) comes first and Sorel-Tracy (~61808) ~274 units on; the fight
+// sits in the first part of that. The cold only
+// starts FROST_CLEAR_OF_TOWN past Trois-Rivières' dock, so the town is
+// behind you before anything changes — the lesson from its old fjord spot,
+// where the cold began three units *before* Petit-Saguenay's dock and the
+// palette was already turning as you passed the town. That's also what
+// lets ?start=wendigo (main.js) sit a few seconds short of the dark without
+// landing on the dock — "I don't want to pass a town dock before Wendigo."
+// Deliverance is a fixed FIGHT_LENGTH on from the trigger, well short of
+// Sorel: the lake beyond is open, cold-free water up to the town.
+const FROST_CLEAR_OF_TOWN = 40;
+// ~95 units, about what the Loup-garou had on the run into Québec City.
+// Upstream a freeze-or-flee fight is slow going — every listen stops you
+// dead, and the upriver paddle takes seconds to build back up — so the
+// ~160 units to Sorel-50 measured at well over a minute.
+const FIGHT_LENGTH = 95;
+// A brisk ramp (~3-4s up the current): the cold should come down, not seep.
 const FROST_FADE_IN = 26;
-const FROST_FADE_OUT = 42;  // clear again just before the mouth
+const FROST_FADE_OUT = 42;
+export const TRIGGER_DISTANCE = TROIS_RIVIERES.flowDistance + FROST_CLEAR_OF_TOWN + FROST_FADE_IN;
+export const DELIVERANCE_DISTANCE = TRIGGER_DISTANCE + FIGHT_LENGTH;
+// Reaching DELIVERANCE_DISTANCE isn't enough on its own: it lets go only
+// once it has listened MIN_LISTENS times (the free one plus two that can
+// strike). Otherwise a player who ignores it entirely and keeps paddling
+// at full speed covers the ~95 units before its second listen, and since
+// the first never strikes, gets through untouched — true on the fjord
+// too, where the current carried you down the reach (the smoke test hid
+// it by pinning the canoe in place). It goes on hunting past the mark
+// until it's had its listens, up to HARD_STOP_DISTANCE, clear of Sorel's
+// dock, where it lets go regardless.
+const MIN_LISTENS = 3;
+export const HARD_STOP_DISTANCE = SOREL.flowDistance - 40;
 // Where the cold first becomes visible — exported for main.js's
 // ?start=wendigo, which lands a few seconds short of it (see there).
 export const FROST_START_DISTANCE = TRIGGER_DISTANCE - FROST_FADE_IN;
@@ -49,16 +73,28 @@ export const FROST_START_DISTANCE = TRIGGER_DISTANCE - FROST_FADE_IN;
 // PROWL: safe, it paces. LISTEN: a telegraph (it rears up, eyes flare, a
 // drawn breath — react, no punishment yet), then the hot window (be off the
 // paddle), then it turns away. No on-screen instruction — the tell is the
-// telegraph and the first listen is a free dry run. One cycle ~6.6s, so the
-// ~17s fight is three or so listens, the first free. Tightened once from
-// 3.1/1.5/1.9 to put it a little more on the attack.
-const PROWL_TIME = 2.6;
+// telegraph and the first listen is a free dry run. Tightened once from
+// 3.1/1.5/1.9 to put it a little more on the attack — on the fjord, where
+// the current carried you down the reach between listens. Upstream on Lac
+// Saint-Pierre a listen stops you dead and the paddle takes a few seconds
+// to build back up, so PROWL_TIME went 2.6 -> 4.0: at 2.6 you barely got
+// moving before the next listen, a few units of headway a cycle. (4.4 was
+// a shade too long the other way: a player ignoring every listen could
+// reach HARD_STOP_DISTANCE before its third, and got off with one blow.)
+const PROWL_TIME = 4.0;
 const LISTEN_TELEGRAPH = 1.3;
 const LISTEN_HOT = 2.0;
 const LISTEN_RECOVER = 0.8;
-// A failsafe end for a capped/edge case where the player never reaches the
-// mouth (mirrors the loup-garou's clock > 42) — it can't hound them forever.
-const MAX_CLOCK = 40;
+// Stall failsafe, the same as the Loup-garou's and La Corriveau's: let go
+// of a player who's made no headway for this long, rather than hounding
+// them forever. Replaced a flat MAX_CLOCK of 40s, which was fine on the
+// fjord (the current carried you down ~120 units in ~17s) but not on Lac
+// Saint-Pierre: upstream, every listen means going still and losing ground
+// to the current, so the ~140-unit fight runs far longer, and a flat clock
+// let a player go mid-lake for no reason but time. A listen is ~4s of no
+// progress, so this never trips on someone simply obeying it.
+const STALL_TIME_LIMIT = 10;
+const STALL_PROGRESS_EPS = 0.05;
 
 // It used to just pop onto the screen at full opacity the instant it was
 // spotted — jarring for the very first encounter in the game. Now it
@@ -66,8 +102,12 @@ const MAX_CLOCK = 40;
 // the first PROWL runs long enough (PROWL_TIME + FIRST_PROWL_EXTRA) that it's
 // fully solid *before* it first rears up to listen, instead of telegraphing
 // while still half a ghost.
+// FIRST_PROWL_EXTRA came down 2.6 -> 1.2 when PROWL_TIME went up to 4.0:
+// the first listen still waits until it's fully solid (5.2s > SPAWN_FADE),
+// without a 7s opening that let a fast paddler most of the way through
+// before anything happened.
 const SPAWN_FADE = 5.0;
-const FIRST_PROWL_EXTRA = 2.6;
+const FIRST_PROWL_EXTRA = 1.2;
 
 const SWAY_PX = 62;        // how far it ranges along the far shore
 const SWAY_PERIOD = 7.4;
@@ -105,6 +145,8 @@ export function createWendigo() {
   let lunge = 0;             // 0..1, decays — the strike animation
   let sway = 0;              // screen-space position along the far shore
   let retreatT = 0;          // 0..1 once delivered, sliding back into the cliff
+  let bestD = 0;             // stall failsafe: furthest point reached...
+  let stallClock = 0;        // ...and how long since it last advanced
 
   function reset() {
     phase = 'idle';
@@ -119,6 +161,8 @@ export function createWendigo() {
     lunge = 0;
     sway = 0;
     retreatT = 0;
+    bestD = 0;
+    stallClock = 0;
   }
 
   // 0 while prowling, ramps to 1 across the telegraph, holds through the hot
@@ -137,7 +181,14 @@ export function createWendigo() {
     isActive() { return active; },
     isListening() { return phase === 'stalking' && sub === 'listen'; },
     listenGlare,
-    frostIntensity(flowDistance) { return frostIntensityAt(flowDistance); },
+    // The distance curve, but held at full while it's still hunting — it can
+    // follow you past DELIVERANCE_DISTANCE (MIN_LISTENS), and game.js draws
+    // the Wendigo itself inside the frost pass — then eased out with its
+    // retreat rather than snapping off.
+    frostIntensity(flowDistance) {
+      const held = active ? 1 : phase === 'delivered' ? 1 - retreatT : 0;
+      return Math.max(frostIntensityAt(flowDistance), held);
+    },
 
     consumeJustSpotted() { const v = justSpotted; justSpotted = false; return v; },
     consumeJustListening() { const v = justListening; justListening = false; return v; },
@@ -160,13 +211,26 @@ export function createWendigo() {
         clock = 0;
         sub = 'prowl';
         subT = 0;
+        bestD = playerFlowDistance;
+        stallClock = 0;
       }
       if (!spotted) return { active, spotted };
 
       clock += dt;
 
+      if (phase === 'stalking') {
+        if (playerFlowDistance > bestD + STALL_PROGRESS_EPS) {
+          bestD = playerFlowDistance;
+          stallClock = 0;
+        } else {
+          stallClock += dt;
+        }
+      }
+      const hadItsListens = listenCount >= MIN_LISTENS && sub === 'prowl';
       if (phase === 'stalking'
-        && (playerFlowDistance >= DELIVERANCE_DISTANCE || clock > MAX_CLOCK)) {
+        && ((playerFlowDistance >= DELIVERANCE_DISTANCE && hadItsListens)
+          || playerFlowDistance >= HARD_STOP_DISTANCE
+          || stallClock > STALL_TIME_LIMIT)) {
         phase = 'delivered';
         justDelivered = true;
         active = false;

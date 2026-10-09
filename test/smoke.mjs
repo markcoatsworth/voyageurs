@@ -73,8 +73,9 @@ const {
   stormGustAt: warshipStormGustAt,
 } = await import('../src/bossfights/britishWarship.js');
 const { PISTOL_DAMAGE_TO_HULL: BLOCKADE_PISTOL_DAMAGE, MUSKET_DAMAGE_TO_HULL: BLOCKADE_MUSKET_DAMAGE } = await import('../src/bossfights/blockade.js');
-const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE, nightIntensityAt: loupGarouNightAt } = await import('../src/bossfights/loupGarou.js');
-const { TRIGGER_DISTANCE: WENDIGO_TRIGGER, DELIVERANCE_DISTANCE: WENDIGO_DELIVERANCE } = await import('../src/bossfights/wendigo.js');
+const { TRIGGER_DISTANCE: LOUP_GAROU_TRIGGER, DELIVERANCE_DISTANCE: LOUP_GAROU_DELIVERANCE, nightIntensityAt: loupGarouNightAt, SEGMENT: LOUP_GAROU_SEGMENT } = await import('../src/bossfights/loupGarou.js');
+const { TRIGGER_DISTANCE: CORRIVEAU_TRIGGER, DELIVERANCE_DISTANCE: CORRIVEAU_DELIVERANCE, mistIntensityAt: corriveauMistAt, SEGMENT: CORRIVEAU_SEGMENT } = await import('../src/bossfights/corriveau.js');
+const { TRIGGER_DISTANCE: WENDIGO_TRIGGER, DELIVERANCE_DISTANCE: WENDIGO_DELIVERANCE, frostIntensityAt: wendigoFrostAt, SEGMENT: WENDIGO_SEGMENT } = await import('../src/bossfights/wendigo.js');
 
 function makeUi(minimap) {
   const el = (id) => makeElement(id);
@@ -255,9 +256,111 @@ await step('save indicator: shows on demand, animates every frame without throwi
   await new Promise((r) => setTimeout(r, 450)); // let its animation timer wind down
 });
 
+await step('town saves: Île-Perrot, Hudson, Rigaud and Carillon are on the map but never save', async () => {
+  // "Just remove all save points at Hudson, Rigaud and Carillon ... leave
+  // them on the map purely for cosmetic effect" (then "Do the same for
+  // Île-Perrot") — the Chasse-galerie flight passes over all four, and each
+  // one saved mid-flight. Le Diable's
+  // approach save is left exactly as it was ("don't touch anything there").
+  const mod = await import('../src/main.js');
+  const names = ['Ile-Perrot', 'Hudson', 'Rigaud', 'Carillon'];
+  for (const name of names) {
+    const v = VILLAGES.find((x) => x.name === name);
+    if (!v) throw new Error(`${name} is gone from VILLAGES — it should stay on the map`);
+    if (!v.noSave) throw new Error(`${name} isn't flagged noSave`);
+    if (mod.landingCheckpoint(v) !== null) throw new Error(`landing at ${name} would still save`);
+    const reached = mod.furthestCheckpointReached(v.segment, v.flowDistance + 0.01);
+    if (reached && Math.abs(reached.flowDistance - v.flowDistance) < 0.5) throw new Error(`passing ${name} would still save`);
+    if (mod.villageAtCheckpoint({ segment: v.segment, flowDistance: v.flowDistance })) throw new Error(`a save at ${name} would still CONTINUE inside it`);
+  }
+  // Every position across the flight resolves to a save point that isn't
+  // one of them, and the Diable approach is still one.
+  for (let d = CHASSE_GALERIE_FLOW_DISTANCE; d < DIABLE_FLOW_DISTANCE; d += 1) {
+    const cp = mod.furthestCheckpointReached('lawrenceWest', d);
+    const at = cp && VILLAGES.find((v) => v.segment === 'lawrenceWest' && Math.abs(v.flowDistance - cp.flowDistance) < 0.5);
+    if (at && names.includes(at.name)) throw new Error(`mid-flight at ${d} the save point is ${at.name}`);
+  }
+  const diable = mod.START_KEYWORD_LIST.find((k) => k.name === 'diable');
+  const atDiable = mod.furthestCheckpointReached(diable.segment, diable.flowDistance);
+  if (!atDiable || Math.abs(atDiable.flowDistance - diable.flowDistance) > 1e-6) throw new Error('the Diable approach is no longer a save point');
+});
+
+await step('town saves: starting at a town makes it the save, and reaching its dock never saves it again', async () => {
+  // "If I start the game in Petit-Saguenay, I want you to make
+  // Petit-Saguenay the current savepoint ... If I run into another save
+  // point for Petit-Saguenay, I want you to check what's in the browser
+  // cache, and if it's the same save point, I don't want you to save
+  // again." Reported as two SAVING canoes after a debug jump there: the
+  // first for Rivière-Éternité (the town *behind* the start, found by the
+  // 2s check), the second for Petit-Saguenay itself on arrival.
+  //
+  // Drives the real pieces main.js's loop uses: the start's save
+  // (startCheckpointFor, written to storage as main.js does), then a real
+  // Game paddled from the ?start= spot into the dock, asking isNewSave() —
+  // the check recordCheckpoint() makes against storage — at every position
+  // the 2s check or a landing could save.
+  const mod = await import('../src/main.js');
+  try {
+    for (const name of ['Petit-Saguenay', 'Trois-Rivieres', 'Baie-Saint-Paul']) {
+      const v = VILLAGES.find((x) => x.name === name);
+      windowShim.location.search = `?start=${encodeURIComponent(name)}&debug`;
+      mod.clearCheckpointStorage(); // what a debug pick does first
+      const start = mod.parseStartLocation();
+      const cp = mod.startCheckpointFor(start);
+      if (!cp || cp.segment !== v.segment || Math.abs(cp.flowDistance - v.flowDistance) > 1e-6) {
+        throw new Error(`starting at ${name} would save ${JSON.stringify(cp)}, not ${name} itself`);
+      }
+      mod.saveCheckpointToStorage(cp.segment, cp.flowDistance, 0);
+      const stored = mod.loadCheckpoint();
+      if (Math.abs(stored.flowDistance - v.flowDistance) > 1e-6) throw new Error(`the stored save after starting at ${name} isn't ${name}`);
+
+      const g = newGame(start.segment, start.flowDistance);
+      let landed = false;
+      // Steer for the dock and hold back short of it until lined up with
+      // its planks — the river at Trois-Rivières is ~42 units wide, too far
+      // to cross in the 25-unit approach at full paddle.
+      const span = dockSpanAt(v.flowDistance);
+      const toward = v.side > 0;
+      for (let i = 0; i < 3000 && !landed; i++) {
+        const x = g.game.canoeWorldX;
+        const lined = x != null && x > span.lo + 0.3 && x < span.hi - 0.3;
+        const short = g.game.flowDistance < v.flowDistance - 6;
+        g.input.state.up = lined || short;
+        g.input.state.down = !lined && !short;
+        g.input.state.right = !lined && toward;
+        g.input.state.left = !lined && !toward;
+        g.game.health = 100;
+        g.game.update(1 / 30);
+        const passing = mod.furthestCheckpointReached(g.game.segment, g.game.flowDistance);
+        if (mod.isNewSave(passing)) {
+          throw new Error(`after starting at ${name}, the canoe at ${(g.game.flowDistance - v.flowDistance).toFixed(1)} units from its dock would save ${JSON.stringify(passing)} — a Saving dialog for a save point that's already stored (or behind it)`);
+        }
+        if (g.game.mode === 'village') {
+          landed = true;
+          if (g.game.currentVillage?.name !== name) throw new Error(`steering for ${name}'s dock landed at ${g.game.currentVillage?.name}`);
+          if (mod.isNewSave(mod.landingCheckpoint(g.game.currentVillage))) {
+            throw new Error(`landing at ${name} right after starting there would save it again`);
+          }
+        }
+      }
+      if (!landed) throw new Error(`never reached ${name}'s dock from its ?start= spot`);
+    }
+    // And the next town on is still a new save — this mustn't just switch
+    // saving off.
+    const petit = VILLAGES.find((x) => x.name === 'Petit-Saguenay');
+    const next = VILLAGES.filter((x) => x.segment === petit.segment && x.flowDistance > petit.flowDistance).sort((a, b) => a.flowDistance - b.flowDistance)[0];
+    mod.saveCheckpointToStorage(petit.segment, petit.flowDistance, 0);
+    if (!mod.isNewSave(mod.landingCheckpoint(next))) throw new Error(`${next.name}, past Petit-Saguenay, no longer counts as a new save`);
+  } finally {
+    windowShim.location.search = '';
+    mod.clearCheckpointStorage();
+  }
+});
+
 await step('town saves: landing and passing save the same spot (never twice), and CONTINUE opens inside the town', async () => {
   const mod = await import('../src/main.js');
   for (const v of VILLAGES) {
+    if (v.noSave) continue; // not save points at all — see 'Île-Perrot, Hudson, Rigaud and Carillon are on the map but never save'
     const landing = mod.landingCheckpoint(v);
     if (v.name === 'Kingston') {
       if (landing) throw new Error('landing at Kingston should not save — arriving there clears the save');
@@ -281,7 +384,7 @@ await step('town saves: landing and passing save the same spot (never twice), an
   }
   // The Wendigo and Loup-garou approaches are jump targets, not saves —
   // each sat just past a town's dock and double-saved it.
-  for (const name of ['wendigo', 'loup-garou']) {
+  for (const name of ['wendigo', 'loup-garou', 'corriveau']) {
     const k = mod.START_KEYWORD_LIST.find((x) => x.name === name);
     const reached = mod.furthestCheckpointReached(k.segment, k.flowDistance);
     if (reached && Math.abs(reached.flowDistance - k.flowDistance) < 0.5) throw new Error(`the ${name} approach is still a save point`);
@@ -485,41 +588,56 @@ await step('lawrenceWest: fight the current 90s', () => {
 
 // --- scenario 3a: the Wendigo, freeze-or-flee on the lower fjord ----------
 
-await step('wendigo: it listens, you go still, the mouth checks it', () => {
-  if (WENDIGO_TRIGGER < 0 || WENDIGO_DELIVERANCE <= WENDIGO_TRIGGER
-    || WENDIGO_DELIVERANCE >= MOUTH_DISTANCE) {
-    throw new Error('wendigo distances look wrong');
+await step('wendigo: it listens, you go still, Sorel checks it', () => {
+  // "...put Le Wendigo before Sorel-Tracy": the whole fight, cold included,
+  // between Trois-Rivières' dock and Sorel-Tracy's, on lawrenceWest.
+  const tr = VILLAGES.find((v) => v.name === 'Trois-Rivieres');
+  const sorel = VILLAGES.find((v) => v.name === 'Sorel-Tracy');
+  if (WENDIGO_SEGMENT !== 'lawrenceWest' || tr.segment !== WENDIGO_SEGMENT || sorel.segment !== WENDIGO_SEGMENT) {
+    throw new Error(`the Wendigo is on ${WENDIGO_SEGMENT}, Trois-Rivières/Sorel on ${tr.segment}/${sorel.segment}`);
   }
+  if (!(WENDIGO_TRIGGER > tr.flowDistance && WENDIGO_DELIVERANCE < sorel.flowDistance && WENDIGO_DELIVERANCE > WENDIGO_TRIGGER)) {
+    throw new Error(`wendigo distances look wrong: ${WENDIGO_TRIGGER}..${WENDIGO_DELIVERANCE} vs Trois-Rivières ${tr.flowDistance} / Sorel ${sorel.flowDistance}`);
+  }
+  if (wendigoFrostAt(tr.flowDistance + 20) > 0) throw new Error('the cold is already down within 20 units of Trois-Rivières');
+  if (wendigoFrostAt(sorel.flowDistance) > 0) throw new Error('the cold still hangs over Sorel-Tracy\'s dock');
 
   // A: keep working the paddle through every LISTEN and the raking blows
-  // land. Position pinned in its reach (the fjord current would otherwise
-  // carry a paddling canoe out to the mouth before a second listen) and
-  // hull pinned so bank scrapes don't muddy the "did the *lunge* connect"
-  // read — same idea as the loup-garou scenario's held-station player.
-  const caught = newGame('fjord', WENDIGO_TRIGGER + 6);
+  // land. Hull pinned so bank scrapes don't muddy the "did the *lunge*
+  // connect" read. Not pinned in place any more (it used to be, on the
+  // fjord, where the current would have carried a paddling canoe out to the
+  // mouth before a second listen): upstream the fight is long enough on its
+  // own, and a pinned canoe makes no headway, which the stall failsafe
+  // rightly reads as stuck and lets go.
+  const caught = newGame(WENDIGO_SEGMENT, WENDIGO_TRIGGER + 6);
   let sawBeast = false;
   let caughtHits = 0;
   caught.game.handleHit = ((orig) => (e) => {
     if (e && e.type === 'wendigo') caughtHits++;
     return orig(e);
   })(caught.game.handleHit.bind(caught.game));
-  for (let i = 0; i < 1500; i++) {
+  for (let i = 0; i < 6000 && !(sawBeast && !caught.game.wendigo.isActive()); i++) {
     caught.input.state.up = true; // never lets off — "stirring" every frame
     caught.game.health = 100;
     caught.game.update(1 / 30);
     if (caught.game.wendigo.isActive()) sawBeast = true;
-    if (caught.game.flowDistance > WENDIGO_TRIGGER + 16) caught.game.flowDistance = WENDIGO_TRIGGER + 16;
   }
-  if (!sawBeast) throw new Error('the wendigo never activated on the lower fjord');
+  if (!sawBeast) throw new Error('the wendigo never activated on Lac Saint-Pierre');
   // First listen is a free dry run, so >=2 real listens must have connected.
-  if (caughtHits < 2) throw new Error(`caught working the paddle through every listen for ~50s and it only struck ${caughtHits}x`);
+  if (caughtHits < 2) throw new Error(`caught working the paddle through every listen all the way up the lake and it only struck ${caughtHits}x`);
 
   // B: go still (release everything) whenever it's listening, paddle between
-  // — the intended play should take zero blows and still reach the mouth.
-  const g = newGame('fjord', WENDIGO_TRIGGER - 12);
+  // — the intended play should take zero blows and still reach Sorel.
+  // Upstream now, so every listen loses ground to the current; it still has
+  // to be let go *at Sorel*, by distance, not by the stall failsafe giving
+  // up on a player who's doing exactly what it asks (deliveredAt).
+  const g = newGame(WENDIGO_SEGMENT, WENDIGO_TRIGGER - 12);
   let dodgeHits = 0;
   let delivered = false;
   let sawDeliverBanner = false;
+  let wasActive = false;
+  let deliveredAt = null;
+  let fightSecs = 0;
   g.game.handleHit = ((orig) => (e) => {
     if (e && e.type === 'wendigo') dodgeHits++;
     return orig(e);
@@ -531,26 +649,91 @@ await step('wendigo: it listens, you go still, the mouth checks it', () => {
     g.input.state.left = false;
     g.input.state.right = false;
     g.game.update(1 / 30);
+    const active = g.game.wendigo.isActive();
+    if (active) fightSecs += 1 / 30;
+    if (wasActive && !active && deliveredAt === null) deliveredAt = g.game.flowDistance;
+    wasActive = active;
     if (g.game.ui.milestoneBanner.textContent.includes('turns back')) sawDeliverBanner = true;
-    if (g.game.flowDistance >= WENDIGO_DELIVERANCE && !g.game.wendigo.isActive()) delivered = true;
+    if (g.game.flowDistance >= WENDIGO_DELIVERANCE && !active) delivered = true;
   }
-  if (!delivered) throw new Error('going still for the wendigo never got past it to the mouth');
-  if (!sawDeliverBanner) throw new Error('no deliverance banner as the mouth opened');
+  if (!delivered) throw new Error('going still for the wendigo never got past it to Sorel');
+  if (!sawDeliverBanner) throw new Error('no deliverance banner at Sorel');
   if (dodgeHits > 0) throw new Error(`held still through every listen and still took ${dodgeHits} blow(s)`);
+  if (deliveredAt !== null && deliveredAt < WENDIGO_DELIVERANCE - 1) {
+    throw new Error(`the wendigo let go at ${deliveredAt.toFixed(1)}, ${(WENDIGO_DELIVERANCE - deliveredAt).toFixed(1)} units short of Sorel — the stall failsafe fired on a player obeying every listen`);
+  }
+  notes.push(`  note wendigo: going still through every listen, the fight up Lac Saint-Pierre took ${fightSecs.toFixed(0)}s`);
 
-  // C: inert on another segment (its trigger is a fjord number).
-  const elsewhere = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 4);
+  // C: inert on another segment (its trigger is a lawrenceWest number).
+  const elsewhere = newGame('fjord', 0);
   run(elsewhere, 300, 1 / 30, (s) => { s.up = true; });
-  if (elsewhere.game.wendigo.isActive()) throw new Error('the wendigo activated on lawrenceWest');
+  if (elsewhere.game.wendigo.isActive()) throw new Error('the wendigo activated on the fjord');
 });
 
-// --- scenario 3b: the Loup-garou, on the run into Québec City -------------
-
-await step('loup-garou: the demon-wolf strikes, then Québec City checks it', () => {
-  if (LOUP_GAROU_TRIGGER < SEGMENT_SHAPE_OFFSET.lawrenceWest
-    || LOUP_GAROU_DELIVERANCE <= LOUP_GAROU_TRIGGER) {
-    throw new Error('loup-garou distances look wrong');
+await step('loup-garou: lighter debris from Petit-Saguenay to Tadoussac, pelts unchanged', async () => {
+  // "There is too much debris in the water for the Loup Garou fight ...
+  // reduce the amount of rocks and logs in the water between Petit-Saguenay
+  // and Tadoussac." Counts what the real obstacle field actually spawns as
+  // a canoe paddles the fjord, in the stretch from Petit-Saguenay's dock to
+  // the mouth vs. the same length of river just above the dock.
+  const { LIGHT_HAZARD_RANGE, hazardKeepFractionAt } = await import('../src/world/obstacles.js');
+  const [lo, hi] = LIGHT_HAZARD_RANGE;
+  if (Math.abs(lo - VILLAGES.find((v) => v.name === 'Petit-Saguenay').flowDistance) > 1e-6 || hi !== MOUTH_DISTANCE) {
+    throw new Error(`the light-debris stretch is ${lo}..${hi}, not Petit-Saguenay..the mouth`);
   }
+  if (!(hazardKeepFractionAt((lo + hi) / 2) < 0.5)) throw new Error('debris is not thinned between Petit-Saguenay and Tadoussac');
+  if (hazardKeepFractionAt(lo - 30) !== 1 || hazardKeepFractionAt(SEGMENT_SHAPE_OFFSET.lawrenceWest + 50) !== 1) {
+    throw new Error('debris is thinned outside Petit-Saguenay..Tadoussac too');
+  }
+  const len = hi - lo;
+  const count = { inside: { hazard: 0, pelt: 0 }, before: { hazard: 0, pelt: 0 } };
+  for (let run = 0; run < 10; run++) {
+    const g = newGame('fjord', lo - len - 30);
+    const lastZ = new Map();
+    // Hold a line 2 units off centre, on the far side from Petit-Saguenay's
+    // dock, so the canoe doesn't dock there and stop the count.
+    const petitSide = VILLAGES.find((v) => v.name === 'Petit-Saguenay').side;
+    for (let i = 0; i < 4000 && g.game.segment === 'fjord' && g.world.distance < hi - 5; i++) {
+      g.input.state.up = true;
+      g.game.health = 100;
+      const err = g.game.canoeWorldX - (centerX(g.game.flowDistance) - petitSide * 2);
+      g.input.state.left = err > 0.4;
+      g.input.state.right = err < -0.4;
+      g.game.update(1 / 30);
+      if (g.game.mode === 'village') g.game.leaveVillage();
+      for (const e of g.obstacles.pool) {
+        const prev = lastZ.get(e);
+        lastZ.set(e, e.z);
+        if (prev === undefined || e.z >= prev) continue; // not a fresh spawn
+        const d = g.world.distance - e.z;
+        const where = d >= lo && d <= hi ? 'inside' : d >= lo - len && d < lo ? 'before' : null;
+        if (!where) continue;
+        if (e.type === 'pelt') count[where].pelt++;
+        else if (e.active && !e.hidden) count[where].hazard++;
+      }
+    }
+  }
+  const ratio = count.inside.hazard / Math.max(1, count.before.hazard);
+  // LIGHT_HAZARD_KEEP is 0.25; this comes out ~0.35-0.45 against the
+  // stretch above (denser further down), with run-to-run noise.
+  if (!(ratio < 0.5)) throw new Error(`${count.inside.hazard} rocks/logs spawned from Petit-Saguenay to Tadoussac vs ${count.before.hazard} on the same length above it — barely thinned`);
+  const peltRatio = count.inside.pelt / Math.max(1, count.before.pelt);
+  if (!(peltRatio > 0.6)) throw new Error(`pelts thinned too: ${count.inside.pelt} vs ${count.before.pelt}`);
+  notes.push(`  note debris: Petit-Saguenay..Tadoussac spawned ${count.inside.hazard} rocks/logs vs ${count.before.hazard} on the stretch above (${(ratio * 100).toFixed(0)}%); pelts ${count.inside.pelt} vs ${count.before.pelt}`);
+});
+
+// --- scenario 3b: the Loup-garou, on the run down to Tadoussac -----------
+
+await step('loup-garou: the demon-wolf strikes, then the mouth at Tadoussac checks it', () => {
+  // "Let's put Loup-garou before Tadoussac": the lower fjord, between
+  // Petit-Saguenay's dock and the mouth, finished (night and all) before
+  // the mouth crossing hands the canoe to lawrenceWest.
+  const petit = VILLAGES.find((v) => v.name === 'Petit-Saguenay');
+  if (LOUP_GAROU_SEGMENT !== 'fjord' || petit.segment !== 'fjord') throw new Error(`the Loup-garou is on ${LOUP_GAROU_SEGMENT}, not the fjord`);
+  if (!(LOUP_GAROU_TRIGGER > petit.flowDistance && LOUP_GAROU_DELIVERANCE > LOUP_GAROU_TRIGGER && LOUP_GAROU_DELIVERANCE < MOUTH_DISTANCE)) {
+    throw new Error(`loup-garou distances look wrong: ${LOUP_GAROU_TRIGGER}..${LOUP_GAROU_DELIVERANCE} vs Petit-Saguenay ${petit.flowDistance} / mouth ${MOUTH_DISTANCE}`);
+  }
+  if (loupGarouNightAt(MOUTH_DISTANCE - 0.5) > 0) throw new Error('the Loup-garou night is still down at the mouth crossing');
 
   // Don't dodge and take the hits — the strike is led at your current speed,
   // so a canoe that isn't changing pace or line is in the jaws every time (a
@@ -564,7 +747,7 @@ await step('loup-garou: the demon-wolf strikes, then Québec City checks it', ()
   // up and down by several units a second, which is a (very effective)
   // dodge in its own right, not holding still. The steady paddle is what a
   // player who simply ignores the beast actually does.
-  const idle = newGame('lawrenceWest', LOUP_GAROU_TRIGGER - 15);
+  const idle = newGame(LOUP_GAROU_SEGMENT, LOUP_GAROU_TRIGGER - 15);
   let sawBeast = false;
   let idleHits = 0;
   idle.game.handleHit = ((orig) => (e) => {
@@ -577,14 +760,14 @@ await step('loup-garou: the demon-wolf strikes, then Québec City checks it', ()
     idle.game.update(1 / 30);
     if (idle.game.loupGarou.isActive()) sawBeast = true;
   }
-  if (!sawBeast) throw new Error('the loup-garou never activated on the approach to Québec City');
+  if (!sawBeast) throw new Error('the loup-garou never activated on the run down to Tadoussac');
   if (idleHits < 2) throw new Error(`paddling straight through the beast's reach without dodging took only ${idleHits} strikes — the maw barely connects`);
   notes.push(`  note loup-garou: a straight, steady paddle through the fight took ${idleHits} strike(s)`);
 
   // The intended counter — steer clear of the marked spot when it rears
   // back — should shrug off almost every strike while keeping pace up the
   // current. Hull pinned: this checks "is it dodgeable", not obstacle luck.
-  const g = newGame('lawrenceWest', LOUP_GAROU_TRIGGER - 15);
+  const g = newGame(LOUP_GAROU_SEGMENT, LOUP_GAROU_TRIGGER - 15);
   let dodgeHits = 0;
   let delivered = false;
   let sawDeliverBanner = false;
@@ -622,18 +805,156 @@ await step('loup-garou: the demon-wolf strikes, then Québec City checks it', ()
     if (g.game.ui.milestoneBanner.textContent.includes('beast falls back')) sawDeliverBanner = true;
     if (g.game.flowDistance >= LOUP_GAROU_DELIVERANCE && !g.game.loupGarou.isActive()) delivered = true;
   }
-  if (!delivered) throw new Error('a steer-away dodge never got past the loup-garou to Québec City');
-  if (!sawDeliverBanner) throw new Error('no deliverance banner at Québec City');
+  if (!delivered) throw new Error('a steer-away dodge never got past the loup-garou to the mouth');
+  if (!sawDeliverBanner) throw new Error('no deliverance banner at the mouth');
   // A few grazes across a ~2-minute run with this crude every-frame
   // bang-bang steerer is fine — the jitter itself nudges the canoe into the
   // odd ring. The real guarantee is that a steer-away dodge isn't getting
   // mauled (5+), and that it still reaches the city.
   if (dodgeHits > 3) throw new Error(`steering clear of the marked spot still ate ${dodgeHits} strikes — not dodgeable enough for the first encounter`);
 
-  // And the wolf is inert everywhere else (its trigger is a lawrenceWest number).
+  // And the wolf is inert everywhere else (its trigger is a fjord number).
+  const elsewhere = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 4);
+  run(elsewhere, 200, 1 / 30, (s) => { s.up = true; });
+  if (elsewhere.game.loupGarou.isActive()) throw new Error('the loup-garou activated on lawrenceWest');
+});
+
+// --- scenario 3b2: La Corriveau, on Lac Saint-Pierre ----------------------
+
+await step('corriveau: the gibbet cage reaches and casts wisps, then Québec City checks her', () => {
+  const beaupre = VILLAGES.find((v) => v.name === 'Beaupre');
+  const qc = VILLAGES.find((v) => v.name === 'Quebec City');
+  // "put La Corriveau just before Quebec City, where Le Loup-garou is now"
+  // — the whole fight, mist included, strictly between Beaupré's dock and
+  // Québec City's, with each town in clear daylight.
+  if (CORRIVEAU_SEGMENT !== 'lawrenceWest' || qc.segment !== CORRIVEAU_SEGMENT) throw new Error(`La Corriveau is on ${CORRIVEAU_SEGMENT}, Québec City on ${qc.segment}`);
+  if (!(CORRIVEAU_TRIGGER > beaupre.flowDistance && CORRIVEAU_DELIVERANCE < qc.flowDistance && CORRIVEAU_DELIVERANCE > CORRIVEAU_TRIGGER)) {
+    throw new Error(`corriveau distances look wrong: ${CORRIVEAU_TRIGGER}..${CORRIVEAU_DELIVERANCE} vs Beaupré ${beaupre.flowDistance} / Québec City ${qc.flowDistance}`);
+  }
+  if (corriveauMistAt(beaupre.flowDistance + 20) > 0) throw new Error('the mist is already down within 20 units of Beaupré');
+  if (corriveauMistAt(qc.flowDistance) > 0) throw new Error('the mist still hangs over Québec City\'s dock');
+  if (!(corriveauMistAt(CORRIVEAU_TRIGGER + 20) > 0.99)) throw new Error('no full mist through the fight');
+
+  const countHits = (g) => {
+    const hits = { corriveau: 0, 'feu-follet': 0 };
+    g.game.handleHit = ((orig) => (e) => {
+      if (e && e.type in hits) hits[e.type]++;
+      return orig(e);
+    })(g.game.handleHit.bind(g.game));
+    return hits;
+  };
+
+  // A: a straight paddle up the lake gets caught — by the reach
+  // (the lane is locked on the canoe) and by the wisps (aimed at it).
+  const idle = newGame(CORRIVEAU_SEGMENT, CORRIVEAU_TRIGGER - 15);
+  const idleHits = countHits(idle);
+  let saw = false;
+  for (let i = 0; i < 9000 && !(saw && !idle.game.corriveau.isActive()); i++) {
+    // A plain straight paddle, no steering at all — even a gentle
+    // bang-bang hold on the centre line jitters sideways enough to slip
+    // the odd lane by accident over the long wind-up.
+    idle.input.state.up = true;
+    idle.game.health = 100;
+    idle.game.update(1 / 30);
+    if (idle.game.corriveau.isActive()) saw = true;
+  }
+  if (!saw) throw new Error('La Corriveau never appeared between Beaupré and Québec City');
+  if (idleHits.corriveau < 2) throw new Error(`a straight paddle took only ${idleHits.corriveau} reach(es) — the cage barely connects`);
+  if (idleHits['feu-follet'] < 1) throw new Error('no feu follet ever touched a canoe that never dodged');
+  if (!(idle.game.flowDistance >= CORRIVEAU_DELIVERANCE)) throw new Error(`the undodging run was let go short of Québec City (${idle.game.flowDistance.toFixed(1)} < ${CORRIVEAU_DELIVERANCE.toFixed(1)}) — the stall failsafe fired on a canoe that was making headway`);
+  notes.push(`  note corriveau: a straight paddle took ${idleHits.corriveau} reach(es) and ${idleHits['feu-follet']} wisp(s)`);
+
+  // B: the intended counter — move sideways out of the marked lane, and
+  // out of the line of oncoming wisps — should get through almost clean.
+  // The bot looks at every live threat (the lane, and wisps within ~1.5s)
+  // and steers toward whichever side leaves the most room from all of
+  // them, staying off the banks; it only changes its mind when the other
+  // side is clearly better, the way a player commits to a dodge. (A
+  // simpler "away from the nearest threat" bot sidestepped one wisp of a
+  // volley straight into the next, or turned back off a bank across one.)
+  const g = newGame(CORRIVEAU_SEGMENT, CORRIVEAU_TRIGGER - 15);
+  const hits = countHits(g);
+  let delivered = false;
+  let sawBanner = false;
+  let dir = 0;
+  let dodgeDir = 0;
+  let fightSecs = 0;
+  let deliveredAt = null;
+  for (let i = 0; i < 9000 && !delivered; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    const c = g.game.corriveau;
+    const x = g.game.canoeWorldX;
+    const mid = centerX(g.game.flowDistance);
+    const half = widthAt(g.game.flowDistance) / 2 - 2;
+    // A wisp is judged by where it's homing (aimX), seen from as soon as
+    // it's cast — judging it by where it is now only spotted it as it swung
+    // in from the side, too late to clear it.
+    const inFlight = c.wispPositions().filter((w) => w.rel > -0.3);
+    const threats = inFlight.map((w) => w.aimX);
+    if (c.reachLaneX() != null) threats.push(c.reachLaneX());
+    const close = threats.filter((tx) => Math.abs(tx - x) < 2);
+    const room = (d) => {
+      const p = x + d * 2;
+      if (Math.abs(p - mid) > half) return -Infinity;
+      return Math.min(...threats.map((tx) => Math.abs(p - tx)));
+    };
+    // Commit to a side when a threat first comes close, and only switch if
+    // that side runs out of river. Re-scoring every frame dithered left and
+    // right near a bank and slid straight back into the lane — over a
+    // 2.5-minute fight that was most of the hits.
+    if (close.length) {
+      if (dodgeDir === 0 || room(dodgeDir) === -Infinity) dodgeDir = room(1) >= room(-1) ? 1 : -1;
+      dir = dodgeDir;
+    } else {
+      dodgeDir = 0;
+      // Between threats, drift back toward mid-channel, so the long, slow
+      // fight doesn't leave the canoe parked against a bank — but not while
+      // a wisp is still in the air, or it steers back under it.
+      dir = !inFlight.length && Math.abs(x - mid) > 3 ? (x > mid ? -1 : 1) : 0;
+    }
+    g.input.state.left = dir < 0;
+    g.input.state.right = dir > 0;
+    g.game.update(1 / 30);
+    if (c.isActive()) fightSecs += 1 / 30;
+    else if (fightSecs > 0 && deliveredAt === null) deliveredAt = g.game.flowDistance;
+    if (g.game.ui.milestoneBanner.textContent.includes('sinks back into the mist')) sawBanner = true;
+    if (g.game.flowDistance >= CORRIVEAU_DELIVERANCE && !c.isActive()) delivered = true;
+  }
+  // "It should take us almost all the way to Quebec City and last for 2-3
+  // minutes" — for a player paddling the whole way.
+  const qcD = VILLAGES.find((v) => v.name === 'Quebec City').flowDistance;
+  if (!(fightSecs >= 120 && fightSecs <= 180)) throw new Error(`the fight lasted ${fightSecs.toFixed(0)}s — wanted 2-3 minutes`);
+  if (!(deliveredAt !== null && qcD - deliveredAt <= 20)) throw new Error(`she let go ${deliveredAt === null ? '(never)' : (qcD - deliveredAt).toFixed(1) + ' units'} short of Québec City — wanted almost all the way there`);
+  if (!(CORRIVEAU_TRIGGER - VILLAGES.find((v) => v.name === 'Beaupre').flowDistance <= 60)) throw new Error('the fight starts well past Beaupré — it should cover as much of the stretch to Québec City as it can');
+  if (!delivered) throw new Error('a sideways dodge never got past La Corriveau to Québec City');
+  if (!sawBanner) throw new Error('no deliverance banner at Québec City');
+  // Measured as hull, not hits: over 2.5 minutes the question is whether a
+  // player who dodges well comes out with a canoe — 70 of the 100 hull at
+  // most (10 a reach, 5 a wisp, as game.js prices them; this crude bot
+  // lands 30-55, the odd unlucky run 65 — a 60 line failed on that), and far less than
+  // a player who doesn't dodge at all.
+  const dodged = hits.corriveau + hits['feu-follet'];
+  const dodgedHull = hits.corriveau * 10 + hits['feu-follet'] * 5;
+  if (dodgedHull > 70 || dodged * 3 >= idleHits.corriveau + idleHits['feu-follet']) throw new Error(`dodging sideways still took ${hits.corriveau} reach(es) and ${hits['feu-follet']} wisp(s) — not dodgeable enough`);
+  notes.push(`  note corriveau: a sideways-dodging run took ${hits.corriveau} reach(es) and ${hits['feu-follet']} wisp(s) over ${fightSecs.toFixed(0)}s, let go ${(qcD - deliveredAt).toFixed(1)} units short of Québec City`);
+
+  // C: losing to her has its own card.
+  const lost = newGame(CORRIVEAU_SEGMENT, CORRIVEAU_TRIGGER + 5);
+  for (let i = 0; i < 9000 && lost.game.state !== 'gameover'; i++) {
+    lost.input.state.up = true;
+    lost.game.update(1 / 30);
+    if (lost.game.corriveau.isActive() && lost.game.health > 0) lost.game.health = Math.min(lost.game.health, 10);
+  }
+  if (lost.game.state !== 'gameover') throw new Error('never lost to La Corriveau with the hull at 10');
+  if (lost.game.ui.gameoverTitle.textContent !== 'CARRIED TO THE SABBATH') {
+    throw new Error(`losing to La Corriveau showed "${lost.game.ui.gameoverTitle.textContent}"`);
+  }
+
+  // D: inert elsewhere.
   const elsewhere = newGame('fjord', 0);
   run(elsewhere, 200, 1 / 30, (s) => { s.up = true; });
-  if (elsewhere.game.loupGarou.isActive()) throw new Error('the loup-garou activated on the fjord');
+  if (elsewhere.game.corriveau.isActive()) throw new Error('La Corriveau activated on the fjord');
 });
 
 // --- scenario 3c: hit feedback on the two shootable bosses ---------------
@@ -1279,39 +1600,37 @@ await step('britishWarship: the ?start= cheat gives at least 3s of lead, not a h
   if (triggerTime < 2.9) throw new Error(`the fight triggered only ${triggerTime.toFixed(2)}s after ?start=british-warship — short of the requested 3s of lead`);
 });
 
-await step('wendigo: the ?start= cheat lands past Petit-Saguenay\'s dock, a couple of seconds before the cold shows', async () => {
+await step('wendigo: the ?start= cheat lands past Trois-Rivières\' dock, a couple of seconds before the cold shows', async () => {
   // "About 2-3 seconds before the screen goes dark" and "I don't want to
-  // pass a town dock before Wendigo" — both at once. The frost fade-in
-  // (wendigo.js's FROST_FADE_IN) had to move later for that, since it used
-  // to start three units *before* the dock; this pins the whole
-  // arrangement so neither number drifts back.
+  // pass a town dock before Wendigo" — both at once, now that the town
+  // before it is Trois-Rivières. Pins the arrangement so neither number
+  // drifts back onto the dock.
   const { START_KEYWORDS } = await import('../src/main.js');
   const { FROST_START_DISTANCE, frostIntensityAt } = await import('../src/bossfights/wendigo.js');
   const { dockHitZ } = await import('../src/world/villages.js');
   const start = START_KEYWORDS['wendigo'];
-  if (!start || start.segment !== 'fjord') throw new Error('no fjord "wendigo" entry in START_KEYWORDS');
-  const petit = VILLAGES.find((v) => v.name === 'Petit-Saguenay');
-  if (!petit) throw new Error('no "Petit-Saguenay" in VILLAGES — a name/lookup drifted');
+  if (!start || start.segment !== WENDIGO_SEGMENT) throw new Error(`no ${WENDIGO_SEGMENT} "wendigo" entry in START_KEYWORDS`);
+  const town = VILLAGES.find((v) => v.name === 'Trois-Rivieres');
+  if (!town) throw new Error('no "Trois-Rivieres" in VILLAGES — a name/lookup drifted');
   // Past the dock: clear of its hit zone, and the dock itself already off
   // the bottom of the screen (CANVAS_HEIGHT - CANOE_SCREEN_Y px below the
   // canoe is all that's visible behind it).
   const behindVisible = (CANVAS_HEIGHT - CANOE_SCREEN_Y) / PIXELS_PER_UNIT;
-  if (start.flowDistance <= petit.flowDistance + dockHitZ(petit)) throw new Error(`?start=wendigo (${start.flowDistance.toFixed(1)}) lands on or before Petit-Saguenay's dock (${petit.flowDistance.toFixed(1)})`);
-  if (start.flowDistance < petit.flowDistance + behindVisible) throw new Error(`?start=wendigo (${start.flowDistance.toFixed(1)}) still has Petit-Saguenay's dock on screen behind it`);
-  // Not yet dark on the first frame, and the cold starts within ~2-3s at
-  // a cheat start's BASE_SPEED (8) — i.e. 16..24 units ahead. Also the
-  // cold must not start before the dock either.
+  if (start.flowDistance <= town.flowDistance + dockHitZ(town)) throw new Error(`?start=wendigo (${start.flowDistance.toFixed(1)}) lands on or before Trois-Rivières' dock (${town.flowDistance.toFixed(1)})`);
+  if (start.flowDistance < town.flowDistance + behindVisible) throw new Error(`?start=wendigo (${start.flowDistance.toFixed(1)}) still has Trois-Rivières' dock on screen behind it`);
   if (frostIntensityAt(start.flowDistance) !== 0) throw new Error('?start=wendigo already has the cold showing on its first frame');
   const lead = FROST_START_DISTANCE - start.flowDistance;
-  if (lead < 16 || lead > 24) throw new Error(`the cold starts ${lead.toFixed(1)} units after ?start=wendigo — wanted ~2-3s worth (16..24 at BASE_SPEED)`);
-  if (FROST_START_DISTANCE <= petit.flowDistance + dockHitZ(petit)) throw new Error('the cold starts before Petit-Saguenay\'s dock');
-  // Lived: from the cheat's spot, coasting, nothing is dark for ~2s and
-  // the cold is fully in well before the trigger.
-  const g = newGame('fjord', start.flowDistance);
+  if (lead < 16 || lead > 24) throw new Error(`the cold starts ${lead.toFixed(1)} units after ?start=wendigo — wanted ~2-3s worth (16..24)`);
+  if (FROST_START_DISTANCE <= town.flowDistance + dockHitZ(town)) throw new Error('the cold starts before Trois-Rivières\' dock');
+  // Lived: from the cheat's spot, paddling (upstream, a canoe that coasts
+  // drifts back toward the town), nothing is dark for the first ~1.5s and
+  // it never docks on the way in.
+  const g = newGame(WENDIGO_SEGMENT, start.flowDistance);
   let t = 0;
   let firstDarkT = null;
-  for (let i = 0; i < 900 && frostIntensityAt(g.game.flowDistance) < 1; i++) {
+  for (let i = 0; i < 1800 && frostIntensityAt(g.game.flowDistance) < 1; i++) {
     g.game.health = 100;
+    g.input.state.up = true;
     g.game.update(1 / 30);
     t += 1 / 30;
     if (firstDarkT === null && frostIntensityAt(g.game.flowDistance) > 0) firstDarkT = t;
@@ -1319,7 +1638,7 @@ await step('wendigo: the ?start= cheat lands past Petit-Saguenay\'s dock, a coup
   }
   if (firstDarkT === null) throw new Error('the cold never showed after ?start=wendigo');
   if (firstDarkT < 1.5) throw new Error(`the cold showed only ${firstDarkT.toFixed(2)}s after ?start=wendigo — too soon`);
-  notes.push(`  note wendigo: ?start=wendigo lands ${(start.flowDistance - petit.flowDistance).toFixed(1)} units past Petit-Saguenay, the cold shows ${firstDarkT.toFixed(1)}s in`);
+  notes.push(`  note wendigo: ?start=wendigo lands ${(start.flowDistance - town.flowDistance).toFixed(1)} units past Trois-Rivières, the cold shows ${firstDarkT.toFixed(1)}s in`);
 });
 
 // --- scenario 4c: the ship's fore/aft hold never renders off-screen --------
@@ -1489,15 +1808,27 @@ await step('rapids: upriver whitewater is a harder grind, never a boost (and nev
   if (!(afterClear < calm * 0.75)) throw new Error(`0.5s after the whitewater the canoe is already at ${afterClear.toFixed(2)} of ${calm.toFixed(2)} u/s — a surge, not a climb back`);
 });
 
-await step('loup-garou: night only falls once you are clear of Beaupré', () => {
+await step('the first three fights: the dark only falls once you are clear of the town before each', () => {
   // "Loup Garou is much too close to Beaupré. The sky should only go dark
-  // and Loup Garou appear when I'm comfortably past Beaupré." The dock in
-  // full daylight, the first dusk 20+ units past it, the beast later still.
-  const beaupre = VILLAGES.find((v) => v.name === 'Beaupre').flowDistance;
-  for (let d = beaupre - 60; d <= beaupre + 20; d += 0.5) {
-    if (loupGarouNightAt(d) > 0) throw new Error(`night is already ${loupGarouNightAt(d).toFixed(2)} at ${(d - beaupre).toFixed(1)} units from Beaupré`);
+  // and Loup Garou appear when I'm comfortably past Beaupré." Kept for all
+  // three fights through the reshuffle: the town before each in full
+  // daylight, the first dusk 20+ units past its dock, the fight later still.
+  const town = (name) => VILLAGES.find((v) => v.name === name).flowDistance;
+  for (const [fight, before, darkAt, trigger] of [
+    ['Loup-garou', 'Petit-Saguenay', loupGarouNightAt, LOUP_GAROU_TRIGGER],
+    ['La Corriveau', 'Beaupre', corriveauMistAt, CORRIVEAU_TRIGGER],
+    ['Wendigo', 'Trois-Rivieres', wendigoFrostAt, WENDIGO_TRIGGER],
+  ]) {
+    const d0 = town(before);
+    for (let d = d0 - 60; d <= d0 + 20; d += 0.5) {
+      if (darkAt(d) > 0) throw new Error(`the ${fight}'s dark is already ${darkAt(d).toFixed(2)} at ${(d - d0).toFixed(1)} units from ${before}`);
+    }
+    if (!(trigger - d0 >= 50)) throw new Error(`the ${fight} appears only ${(trigger - d0).toFixed(1)} units past ${before}`);
   }
-  if (!(LOUP_GAROU_TRIGGER - beaupre >= 50)) throw new Error(`the Loup-garou appears only ${(LOUP_GAROU_TRIGGER - beaupre).toFixed(1)} units past Beaupré`);
+  // And the two on lawrenceWest never share a stretch.
+  for (let d = CORRIVEAU_TRIGGER - 80; d < WENDIGO_DELIVERANCE + 80; d += 1) {
+    if (corriveauMistAt(d) > 0 && wendigoFrostAt(d) > 0) throw new Error(`La Corriveau's mist and the Wendigo's cold overlap at ${d}`);
+  }
 });
 
 await step('montreal: casting off from either pier, anywhere along it, takes no damage', () => {
@@ -1553,7 +1884,84 @@ await step('chasse-galerie: every steeple reaches past the centre line — no co
   }
 });
 
+await step('chasse-galerie: no steeple stands in Le Diable\'s arena', async () => {
+  // "There's a steeple right in the middle of the fight scene." Nothing may
+  // be on screen while the canoe is held at DIABLE_FLOW_DISTANCE.
+  const { STEEPLE_LAYOUT, ARENA_CLEAR } = await import('../src/bossfights/chasseGalerie.js');
+  for (const s of STEEPLE_LAYOUT) {
+    const off = s.flowDistance - DIABLE_FLOW_DISTANCE;
+    if (off > -ARENA_CLEAR.behind && off < ARENA_CLEAR.ahead) {
+      throw new Error(`a steeple stands ${off.toFixed(1)} units from Le Diable's arena — on screen through the whole fight`);
+    }
+  }
+  // The drawn reach: a spire behind the canoe (positive z) still pokes up
+  // into the frame for as many units as it is tall.
+  const tallestPx = Math.max(...STEEPLE_LAYOUT.map((s) => s.h)) * PIXELS_PER_UNIT;
+  if (ARENA_CLEAR.behind * PIXELS_PER_UNIT < (CANVAS_HEIGHT - CANOE_SCREEN_Y) + tallestPx) {
+    throw new Error('ARENA_CLEAR.behind is shorter than the tallest spire reaching up from below the frame');
+  }
+  if (ARENA_CLEAR.ahead * PIXELS_PER_UNIT < CANOE_SCREEN_Y) throw new Error('ARENA_CLEAR.ahead doesn\'t reach the top of the frame');
+});
+
+await step('chasse-galerie: every steeple is drawn as far into the channel as it can hit', async () => {
+  // "the collision area extends further into the river, but many of the
+  // steeple images do not ... if I fly my canoe directly down the middle of
+  // the river, I get hit despite not being visually close to them. The
+  // images need to match the collision area." Ordinary churches were drawn
+  // at most 26px out from their bank while their box ran past the centre
+  // line. Draws each church for real and reads the nave's own fill back.
+  const { STEEPLE_LAYOUT, drawChurch } = await import('../src/bossfights/chasseGalerie.js');
+  const NAVE_FILL = '#5b5854';
+  for (const s of STEEPLE_LAYOUT) {
+    const rects = [];
+    let fill = null;
+    const ctx = new Proxy({}, {
+      get(_t, prop) {
+        if (prop === 'fillRect') return (x, y, w, h) => rects.push({ fill, x, y, w, h });
+        return () => {};
+      },
+      set(_t, prop, value) { if (prop === 'fillStyle') fill = value; return true; },
+    });
+    const cam = centerX(s.flowDistance);
+    drawChurch(ctx, s, 0, cam);
+    const nave = rects.find((r) => r.fill === NAVE_FILL);
+    if (!nave) throw new Error(`steeple at ${s.flowDistance.toFixed(0)} drew no nave`);
+    const left = Math.min(nave.x, nave.x + nave.w);
+    const right = Math.max(nave.x, nave.x + nave.w);
+    const boxLeft = CANOE_SCREEN_X + (s.worldX - s.hx - cam) * PIXELS_PER_UNIT;
+    const boxRight = CANOE_SCREEN_X + (s.worldX + s.hx - cam) * PIXELS_PER_UNIT;
+    if (Math.abs(left - boxLeft) > 1 || Math.abs(right - boxRight) > 1) {
+      throw new Error(`steeple at ${s.flowDistance.toFixed(0)} (${s.reaching ? 'reaching' : 'ordinary'}) is drawn ${left.toFixed(0)}..${right.toFixed(0)}px but hits across ${boxLeft.toFixed(0)}..${boxRight.toFixed(0)}px`);
+    }
+  }
+});
+
 // --- scenario 4d: Kingston's dock is a real entrance into the town ---------
+
+await step('docks: touching any drawn plank of a dock docks you', () => {
+  // "In Sorel-Tracy, the size of the dock image on screen is much bigger
+  // than the actual collision area. I need to ride my boat well into the
+  // dock before I actually collide." Sorel's deck was drawn ±6 along the
+  // river but triggered at ±2.5, and every generic dock on a wide stretch
+  // triggered at about half its drawn length. Walks each dock's real drawn
+  // rectangle (dockSpanAt, the same corners drawDockStructure() paints) and
+  // asserts every point of it is a hit.
+  let checked = 0;
+  for (const v of VILLAGES) {
+    for (let d = v.flowDistance - 20; d <= v.flowDistance + 20; d += 0.1) {
+      const span = dockSpanAt(d);
+      if (!span) continue;
+      for (const f of [0.02, 0.5, 0.98]) {
+        const x = span.lo + (span.hi - span.lo) * f;
+        checked++;
+        if (!getDockHit(d, x)) {
+          throw new Error(`a canoe on ${v.name}'s drawn dock (${(d - v.flowDistance).toFixed(1)} units along it, ${(f * 100).toFixed(0)}% out) doesn't dock`);
+        }
+      }
+    }
+  }
+  if (checked < 100) throw new Error(`only checked ${checked} points on the docks`);
+});
 
 await step('docks: no rock, log, island or pelt is ever drawn overlapping a dock', () => {
   // "The rocks and logs obstacles often overlap the docks. This doesn't
@@ -1568,6 +1976,11 @@ await step('docks: no rock, log, island or pelt is ever drawn overlapping a dock
   const HALF_W = { rock: 18 / 32, log: 30 / 32, island: 40 / 32, pelt: 15 / 32 };
   const check = (g, where) => {
     for (const e of g.obstacles.pool) {
+      // Hidden entries (HAZARD_FREE_RANGE, and the thinned debris from
+      // Petit-Saguenay to Tadoussac) are never drawn, so they can't be seen
+      // on a dock — they're parked at mid-channel, which Tadoussac's dock
+      // reaches across.
+      if (e.hidden) continue;
       const d = g.world.distance - e.z;
       const span = dockSpanAt(d);
       if (!span) continue;
@@ -2684,6 +3097,26 @@ await step('music: playlist metadata + onTrack fires a well-formed track', async
   if (music.nowPlaying == null) throw new Error('music.nowPlaying still null after playback started');
 });
 
+await step('music: La Corriveau has her own song, kept out of the shuffle', async () => {
+  // "Make this the boss fight music for the fight with La Corriveau. As
+  // with other boss fight songs, it should not play anywhere else in the
+  // random shuffle playlist."
+  const mod = await import('../src/audio/music.js');
+  if (mod.CORRIVEAU_TRACK.title !== 'La Corriveau' || mod.CORRIVEAU_TRACK.artist !== 'Le Rêve du Caribou') {
+    throw new Error(`La Corriveau's fight plays "${mod.CORRIVEAU_TRACK.title}" by ${mod.CORRIVEAU_TRACK.artist}`);
+  }
+  if (mod.PLAYLIST.some((t) => t.src === mod.CORRIVEAU_TRACK.src)) throw new Error('La Corriveau\'s song is in the shuffle');
+  // And the fight really cues it.
+  const g = newGame(CORRIVEAU_SEGMENT, CORRIVEAU_TRIGGER - 3);
+  for (let i = 0; i < 300 && !g.game.corriveau.isActive(); i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  await new Promise((r) => setTimeout(r, 2300)); // playSpecial's canplay fallback
+  if (g.game.music.nowPlaying?.title !== 'La Corriveau') throw new Error(`La Corriveau's fight is playing "${g.game.music.nowPlaying?.title}"`);
+  g.game.music.stop();
+});
+
 await step('music: a run from the put-in opens on Reel des Forêts; one starting anywhere else does not', async () => {
   // "seed the shuffle so it opens with Reel des Forêts" — music.js's
   // openingOrder() — but then narrowed: "I only want reel-des-forets pinned
@@ -2692,13 +3125,13 @@ await step('music: a run from the put-in opens on Reel des Forêts; one starting
   // rotation." So the pin is createMusic()'s pinOpeningTrack option, which
   // main.js sets from isPutIn(), and it is OFF by default.
   //
-  // Unlike the reserved boss cues the opener is NOT pulled out of the
-  // ambient shuffle: it stays in PLAYLIST and can recur later. Only slot 0
-  // of a pinned session's first order is fixed.
+  // Then: "I want reel-des-forets to only play once, at the very beginning
+  // of the game. After that it should not be used in the random playlist
+  // shuffle" — so it's reserved like the boss cues, out of PLAYLIST.
   const mod = await import('../src/audio/music.js');
-  if (mod.OPENING_TRACK == null) throw new Error('OPENING_TRACK no longer resolves — its src fell out of PLAYLIST');
-  if (!mod.PLAYLIST.includes(mod.OPENING_TRACK)) {
-    throw new Error(`the opener ("${mod.OPENING_TRACK.title}") left the ambient shuffle — it's meant to stay in rotation, not become a reserved cue`);
+  if (mod.OPENING_TRACK == null) throw new Error('OPENING_TRACK is gone');
+  if (mod.PLAYLIST.some((t) => t.src === mod.OPENING_TRACK.src)) {
+    throw new Error(`the opener ("${mod.OPENING_TRACK.title}") is back in the ambient shuffle — it should play once at the put-in and never again`);
   }
 
   // Many sessions, because a single one passing proves nothing about a
@@ -2716,6 +3149,15 @@ await step('music: a run from the put-in opens on Reel des Forêts; one starting
     music.debugAudioElement().dispatchEvent({ type: 'ended' });
     await new Promise((r) => setTimeout(r, 20));
     if (music.nowPlaying?.title) seconds.add(music.nowPlaying.title);
+    // Played once — never again, through the whole first shuffle and well
+    // into the reshuffles after it.
+    for (let k = 0; k < mod.PLAYLIST.length * 2 + 3; k++) {
+      if (music.nowPlaying?.src === mod.OPENING_TRACK.src) {
+        throw new Error(`session ${i + 1} played "${mod.OPENING_TRACK.title}" a second time, ${k + 1} tracks after the opening`);
+      }
+      music.debugAudioElement().dispatchEvent({ type: 'ended' });
+      await new Promise((r) => setTimeout(r, 5));
+    }
     music.stop();
   }
   // Catches the fix overreaching into a fully fixed order (and it can't
@@ -2727,7 +3169,7 @@ await step('music: a run from the put-in opens on Reel des Forêts; one starting
   // And the other half of the request: NOT pinned anywhere else. Default
   // (no option at all) and an explicit false both have to land back in the
   // plain rotation. Many sessions, because one landing on a different track
-  // proves nothing — the opener is 1 of 15 and would come up by luck.
+  // proves nothing about a shuffle.
   const firsts = new Set();
   for (let i = 0; i < SESSIONS; i++) {
     const music = mod.createMusic(i % 2 ? { pinOpeningTrack: false } : {});
@@ -2739,8 +3181,8 @@ await step('music: a run from the put-in opens on Reel des Forêts; one starting
   if (firsts.size < 2) {
     throw new Error(`an unpinned run opened on "${[...firsts][0]}" in all ${SESSIONS} sessions — that is still a pin, not a shuffle`);
   }
-  if (firsts.size === 1 && firsts.has(mod.OPENING_TRACK.title)) {
-    throw new Error('an unpinned run still always opens on the put-in track');
+  if (firsts.has(mod.OPENING_TRACK.title)) {
+    throw new Error('an unpinned run opened on the put-in track — it is reserved for the put-in');
   }
   notes.push(`  note music: opener pinned to ${mod.OPENING_TRACK.title} across ${SESSIONS} put-in sessions (${seconds.size} distinct second tracks); ${firsts.size} distinct openers across ${SESSIONS} unpinned ones`);
 });
@@ -2996,23 +3438,24 @@ await step('debug: isDebugMode() reads ?debug and stays off by default', async (
       if (mod.isDebugMode() !== false) throw new Error(`"${q}" should turn debug off`);
     }
 
-    // ?debug=play is debug mode with the picker shut — what a jump
-    // navigates to. Reported bug: the picker used to open on every ?debug
-    // load, so clicking a waypoint reloaded straight back into a
-    // full-screen overlay covering the part of the game you'd just asked
-    // to see.
-    windowShim.location.search = '?debug=play';
-    if (mod.isDebugMode() !== true) throw new Error('?debug=play is still debug mode — backquote has to work');
-    if (mod.shouldOpenDebugMenuOnLoad() !== false) throw new Error('?debug=play must NOT open the picker on load — that is the whole point of it');
-    windowShim.location.search = '?start=diable&debug=PLAY';
-    if (mod.shouldOpenDebugMenuOnLoad() !== false) throw new Error('?debug=play should be case-insensitive like the rest');
-
-    // A bare ?debug (or =1) does open it — that's the "I want to choose"
-    // form, and it's what you type by hand.
-    for (const q of ['?debug', '?debug=', '?debug=1', '?debug=yes']) {
+    // Any ?debug opens the picker on load, with a value or without —
+    // including ?debug=play, which used to be the "picker shut" form and was
+    // reported as "the game just starts normally".
+    for (const q of ['?debug', '?debug=', '?debug=1', '?debug=yes', '?debug=play', '?start=diable&debug=PLAY', '?start=diable&debug']) {
       windowShim.location.search = q;
       if (mod.shouldOpenDebugMenuOnLoad() !== true) throw new Error(`"${q}" should open the picker on load`);
     }
+    // ...except the one load a waypoint jump causes: onPick marks it, the
+    // next load consumes the mark and stays shut, and the load after that
+    // (a reload) opens again.
+    windowShim.location.search = '?start=diable&debug';
+    mod.markDebugJump();
+    const jumped = mod.consumeDebugJump();
+    if (!jumped) throw new Error('a jump mark should be read back on the next load');
+    if (mod.shouldOpenDebugMenuOnLoad({ justJumped: jumped }) !== false) throw new Error('the load right after a jump should keep the picker shut');
+    if (mod.consumeDebugJump() !== false) throw new Error('the jump mark is one-shot — a reload after it should open the picker again');
+    if (mod.shouldOpenDebugMenuOnLoad({ justJumped: false }) !== true) throw new Error('a reload after a jump should open the picker');
+
     // Off means off — no picker, even on load.
     windowShim.location.search = '?debug=0';
     if (mod.shouldOpenDebugMenuOnLoad() !== false) throw new Error('?debug=0 should not open the picker');
@@ -3091,17 +3534,19 @@ await step('debug: debugStartUrl keeps the tool and the difficulty, drops the ol
   const url = (search, wp) => mod.debugStartUrl(search, '', '/', wp);
   const toParams = (u) => new URLSearchParams(u.slice(u.indexOf('?')));
 
-  // Jumping somewhere named. debug=play, so the tool stays reachable but
-  // the picker doesn't reopen over the game on arrival.
+  // Jumping somewhere named: a bare ?debug, so the tool stays reachable
+  // (keeping the picker shut on arrival is the jump mark's job, not the URL's).
   let p = toParams(url('?debug=1', { startParam: 'diable' }));
   if (p.get('start') !== 'diable') throw new Error('picking a waypoint should set ?start= to its name');
-  if (p.get('debug') !== 'play') throw new Error(`a jump should land on ?debug=play, got ?debug=${p.get('debug')}`);
+  if (p.get('debug') !== '') throw new Error(`a jump should land on a bare ?debug, got ?debug=${p.get('debug')}`);
+  if (!/[?&]debug(&|$)/.test(url('?debug=play', { startParam: 'diable' }))) throw new Error('the jump URL should read ?debug, not ?debug=');
+  if (mod.stripStartParam('?start=diable&debug=') !== '?debug') throw new Error(`arriving from a jump should leave a bare ?debug in the address bar, got ${mod.stripStartParam('?start=diable&debug=')}`);
 
   // The put-in: no ?start= at all, which is what the cleared checkpoint
   // then resolves to.
   p = toParams(url('?debug=1&start=kingston', { startParam: null }));
   if (p.has('start')) throw new Error('the put-in must REMOVE ?start=, not set it — otherwise it jumps to the old waypoint again');
-  if (p.get('debug') !== 'play') throw new Error('picking the put-in should land on ?debug=play too, not reopen the picker');
+  if (p.get('debug') !== '') throw new Error('picking the put-in should keep ?debug too');
 
   // An old ?start= is always replaced, never stacked.
   p = toParams(url('?start=kingston&debug=1', { startParam: 'wendigo' }));
@@ -3116,17 +3561,18 @@ await step('debug: debugStartUrl keeps the tool and the difficulty, drops the ol
   // Jumping from a URL that had debug explicitly off re-asserts it rather
   // than leaving it off.
   p = toParams(url('?debug=0', { startParam: 'diable' }));
-  if (p.get('debug') !== 'play') throw new Error('a jump should leave debug on');
+  if (p.get('debug') !== '') throw new Error('a jump should leave debug on');
 
-  // And the round trip holds: every jump target lands on a URL that does
-  // not reopen the picker. Checked through the real predicate rather than
-  // by eyeballing the string.
+  // And the round trip holds: every jump target lands on a URL that keeps
+  // debug mode, and whose load — carrying the jump mark — doesn't reopen
+  // the picker. Checked through the real predicate rather than by
+  // eyeballing the string.
   const mod2 = await import('../src/main.js');
   try {
     for (const wp of mod2.debugWaypoints()) {
       const jumped = mod2.debugStartUrl('?debug=1', '', '/', wp);
       windowShim.location.search = jumped.slice(jumped.indexOf('?'));
-      if (mod2.shouldOpenDebugMenuOnLoad()) {
+      if (mod2.shouldOpenDebugMenuOnLoad({ justJumped: true })) {
         throw new Error(`jumping to "${wp.label}" lands on ${jumped}, which reopens the picker over the game`);
       }
       if (!mod2.isDebugMode()) throw new Error(`jumping to "${wp.label}" lost debug mode entirely`);

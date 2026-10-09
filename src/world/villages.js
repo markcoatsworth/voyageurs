@@ -667,7 +667,19 @@ function dockWidthZ(v) {
 // (the synthetic north twin, see montrealNorthTwin() above) — not by name,
 // since both share the name 'Montreal' so the rest of the island-geometry
 // helpers treat the twin as "on the island" too.
+//
+// Never less than the drawn deck's own half-depth (dockWidthZ / 2): the
+// trigger has to reach every plank you can see. Sorel-Tracy's was drawn
+// ±6 along the river but triggered at ±2.5, and every generic dock on a
+// wide stretch triggered at about half its drawn length (HIT_Z_FRACTION
+// 0.06 vs WIDTH_Z_FRACTION 0.24 / 2) — reported as having to "ride my boat
+// well into the dock before I actually collide". Only the along-the-flow
+// depth was short; across the river the trigger already runs bank edge to
+// dock tip, exactly as drawn.
 export function dockHitZ(v) {
+  return Math.max(dockHitZOwn(v), dockWidthZ(v) / 2);
+}
+function dockHitZOwn(v) {
   if (v.name === 'Quebec City') return QUEBEC_CITY_DOCK_HIT_Z;
   if (v.name === 'Sorel-Tracy') return SOREL_TRACY_DOCK_HIT_Z;
   if (v.name === 'Montreal') return v.side < 0 ? MONTREAL_DOCK_HIT_Z : MONTREAL_NORTH_DOCK_HIT_Z;
