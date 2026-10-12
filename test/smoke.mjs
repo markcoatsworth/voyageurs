@@ -997,11 +997,22 @@ await step('rideau: past Gatineau, a big "ENTERING UPPER CANADA" title card', as
   if (!(secs >= 0.5 && secs <= 1.6)) throw new Error(`the Union Jacks come into view ${secs.toFixed(2)}s after the Upper Canada card, not ~1s`);
   notes.push(`  note flags: the Union Jacks come into view ${secs.toFixed(1)}s after the Upper Canada card (paddling)`);
   // Held 4s ("make it last longer. Let's try 4 seconds") — up past the
-  // boss titles' 2.4s, gone by 4.5s.
-  const el = castOff.game.ui.bossBanner;
-  await new Promise((r) => setTimeout(r, 3600));
+  // boss titles' 2.4s, gone by 4.5s. Timed from a fresh crossing, against
+  // the clock at the moment the card went up: timing it off the cast-off
+  // above, after the seam and flag checks had each simulated seconds of
+  // play, failed on Cloud Build's slower machine — those checks alone ate
+  // enough real time to push past 4s before the wait even began.
+  const hold = newGame('lawrenceWest', RIDEAU_BORDER_DISTANCE - 0.5);
+  for (let i = 0; i < 60 && hold.game.segment !== 'rideau'; i++) {
+    hold.input.state.up = true;
+    hold.game.update(1 / 30);
+  }
+  const shownAt = Date.now();
+  const el = hold.game.ui.bossBanner;
+  if (hold.game.segment !== 'rideau' || !el.classList.contains('show')) throw new Error('no Upper Canada card on a fresh crossing');
+  await new Promise((r) => setTimeout(r, Math.max(0, 3600 - (Date.now() - shownAt))));
   if (!el.classList.contains('show')) throw new Error('the Upper Canada card was gone before 4 seconds');
-  await new Promise((r) => setTimeout(r, 900));
+  await new Promise((r) => setTimeout(r, Math.max(0, 4500 - (Date.now() - shownAt))));
   if (el.classList.contains('show')) throw new Error('the Upper Canada card was still up after 4.5 seconds');
 });
 
