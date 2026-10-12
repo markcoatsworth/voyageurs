@@ -694,6 +694,7 @@ export class Game {
     this.speed = BASE_SPEED;
     this.effectiveSpeed = BASE_SPEED;
     this.rapids = 0;
+    this.waterDrift = 0; // how far the water itself has moved — see drawCurrentEffects
     this.winded = 0; // see WINDED_ACCEL_CUT
     this.furs = 0;
     this.health = MAX_HEALTH;
@@ -1531,6 +1532,14 @@ export class Game {
     }
 
     this.flowDistance = proposedFlowDistance;
+    // The water's own movement along the river, for the current streaks
+    // (terrain.js's drawCurrentEffects): the ambient current — downstream
+    // MIN_SPEED on the Saguenay and the Rideau, UPRIVER_CURRENT on the St.
+    // Lawrence, already including the upriver whitewater push — plus the
+    // downstream whitewater's own push (rapidsPush). Integrated rather than
+    // `current * time` so the whitewater's changing strength can't make the
+    // streaks jump.
+    this.waterDrift += (ambientCurrent + rapids * rapidsPush) * dt;
     this.world.distance = this.flowDistance;
 
     // Guaranteed pistol past Montréal — whether or not you stopped in town
@@ -2276,7 +2285,7 @@ export class Game {
       // likewise (u_frost — the water sinking to ink under the Wendigo's
       // cold, since the 2D frost pass below can't reach this layer); 0
       // everywhere but the lower fjord.
-      this.water.render(this.time, this.flowDistance, cameraWorldX, warshipStorm, frost);
+      this.water.render(this.time, this.flowDistance, cameraWorldX, warshipStorm, frost, this.waterDrift);
     } else {
       drawWaterFallback(ctx, this.flowDistance, cameraWorldX);
     }
@@ -2322,14 +2331,17 @@ export class Game {
     // fight is holding in place.
     const warshipHeldDraw = this.segment === 'rideau' && this.britishWarship.isChaseHolding();
     if (!isFlying) {
-      drawCurrentEffects(ctx, this.time, this.flowDistance, this.rapids);
+      drawCurrentEffects(ctx, this.time, this.flowDistance, this.rapids, this.waterDrift);
       // Belugas are a Tadoussac-estuary sight — the wide Rideau Lake reaches
       // and Kingston harbour are inland fresh water, so no whales there even
       // where the channel opens past the beluga width threshold.
       if (this.segment !== 'rideau') {
         drawWhales(ctx, this.time, this.flowDistance, cameraWorldX, worldToScreen);
       }
-      if (!warshipHeldDraw) this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen);
+      // Wakes on the rocks and logs point the way the water runs: down the
+      // screen on the upstream St. Lawrence, up it everywhere else.
+      const flow = { dir: this.segment === 'lawrenceWest' ? 1 : -1, drift: this.waterDrift };
+      if (!warshipHeldDraw) this.obstacles.draw(ctx, this.time, cameraWorldX, worldToScreen, flow);
     }
 
     // La Corriveau's mist: the land and sky sink into a dim grey-green night,

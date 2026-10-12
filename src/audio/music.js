@@ -20,19 +20,25 @@
 export const PLAYLIST = [
   { src: '/audio/grande-gigue-simple.mp3', title: 'Grande Gigue Simple', artist: 'Isidore Soucy' },
   { src: '/audio/reel-du-pendu.mp3', title: 'Reel du Pendu', artist: 'Isidore Soucy' },
+  { src: '/audio/reel-du-chapeau-de-paille.mp3', title: 'Reel du Chapeau de Paille', artist: 'Isidore Soucy' },
   { src: '/audio/reel-des-laurentides.mp3', title: 'Reel des Laurentides', artist: 'Tommy Duchesne' },
   { src: '/audio/reel-des-montagnes.mp3', title: 'Reel des Montagnes', artist: 'Tommy Duchesne' },
   { src: '/audio/valse-des-laboureurs.mp3', title: 'Valse des Laboureurs', artist: 'Tommy Duchesne' },
   { src: '/audio/le-violon-en-discorde.mp3', title: 'Le Violon en Discorde', artist: 'Jean Carignan' },
   { src: '/audio/reel-canadienne.mp3', title: 'Reel Canadienne', artist: 'Jean Carignan' },
+  { src: '/audio/la-bastringue.mp3', title: 'La Bastringue', artist: 'Jean Carignan' },
   // Same LP as the two Carignan tracks above (Songs and Dances of Quebec) —
   // full ensemble credit off that record's own ID3 tags, not just Carignan.
   { src: '/audio/le-reel-de-l-harmonica.mp3', title: 'Le Reel de l\'Harmonica', artist: 'Jean Carignan, Aldor Morin & Edgar Morin' },
   { src: '/audio/gigue-du-poteau-blanc.mp3', title: 'Gigue du Poteau Blanc', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-acadien.mp3', title: 'Quadrille Acadien', artist: 'Joseph Allard' },
   { src: '/audio/quadrille-francais.mp3', title: 'Quadrille Français', artist: 'Joseph Allard' },
+  { src: '/audio/gigue-de-barnabe.mp3', title: 'Gigue de Barnabé', artist: 'Joseph Allard' },
   { src: '/audio/avec-les-ruine-babine.mp3', title: 'Avec les Ruine-Babine', artist: 'Louis « Pitou » Boudreault' },
   { src: '/audio/les-batteux.mp3', title: 'Les Batteux', artist: 'Louis « Pitou » Boudreault' },
+  // Formerly the Chasse-galerie flight's cue (CHASSE_GALERIE_TRACK below),
+  // freed up when it got a dedicated track of its own.
+  { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' },
   // Formerly the Chasse-galerie boss cue (CHASSE_GALERIE_TRACK below) —
   // freed up when "Le Reel du Diable" took over that role. A fine tune on
   // its own merits, kept in the catalog rather than dropped.
@@ -113,24 +119,22 @@ const LOUP_GAROU_TRACK = { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du
 // Exported for test/smoke.mjs, which checks it never lands in PLAYLIST.
 export const CORRIVEAU_TRACK = { src: '/audio/le-reve-du-caribou-la-corriveau.mp3', title: 'La Corriveau', artist: 'Le Rêve du Caribou' };
 // The Chasse-galerie flight's cue, cut in the instant the canoe lifts off
-// (game.js). The original pick here was Joseph Allard's "Reel du
-// Voyageur" — its own title ties straight to the legend, voyageurs flying
-// home by canoe — but that recording lives only on Library and Archives
-// Canada's Virtual Gramophone, which this dev environment can't reach
-// (and it isn't in Internet Archive's Great 78 Project — confirmed via
-// their search API, not just a missed guess). Swapped for "Reel du
-// Gouvernement," a fine tune but not the right fit — flying to a pact with
-// the Devil calls for something that actually says so. "Le Reel du
-// Diable" was sitting unused in the regular shuffle (freed up once
-// DIABLE_TRACK below got its own newer, dedicated reel) — using it here
-// instead means the flight's own cue names the devil you're flying
-// toward, then the fight itself cuts to a *different* track (Reel du
-// Paradis et Enfer), not a repeat of the same one. Reserved like the
-// other three; endBossTrack() drops it (or Le Diable's own real fight
-// track, which cuts in over top of it the same way once his fight starts)
-// back into the shuffle. Reel du Gouvernement moves back into the regular
-// shuffle instead of sitting unused.
-const CHASSE_GALERIE_TRACK = { src: '/audio/reel-du-diable.mp3', title: 'Le Reel du Diable', artist: 'Jos Bouchard' };
+// (game.js): "Reel du gaucher" by Les Frères Brunet (from 1,2,3). Supplied
+// directly (public/audio/src/, normalized via scripts/normalize-audio.mjs
+// from -14.2 LUFS down to the catalog's -21; see README.md's Music section
+// for the rights caveat every directly-supplied track carries). 4:23,
+// longer than the ~3.5-minute flight, so it never runs out on the way.
+// Reserved like the other boss cues; endBossTrack() drops it (or Le
+// Diable's own fight track, which cuts in over it once his fight starts)
+// back into the shuffle.
+//
+// History: Joseph Allard's "Reel du Voyageur" was the first pick (out of
+// reach on LAC's Virtual Gramophone), then "Reel du Gouvernement", then
+// "Le Reel du Diable" (Jos Bouchard) — both of those back in the regular
+// shuffle — then briefly "Entre ciel et terre" (Le Vent du Nord), dropped
+// from the game entirely.
+// Exported for test/smoke.mjs, which checks it never lands in PLAYLIST.
+export const CHASSE_GALERIE_TRACK = { src: '/audio/les-freres-brunet-reel-du-gaucher.mp3', title: 'Reel du gaucher', artist: 'Les Frères Brunet' };
 // Reserved for the Pursuit chase phase of the British Blockade fight
 // (bossfights/blockade.js) — cuts in the instant the frigate itself is
 // cleared (game.js's consumeJustCleared()), replacing BOSS_TRACK ("Rule,

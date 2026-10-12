@@ -30,8 +30,12 @@ it's not the same running order every session:
   Quebec*, sourced from [Internet Archive](https://archive.org/details/lp_songs-and-dances-of-quebec_jean-carignan-aldor-morin-edgar-morin-b).
 - "Gigue du Poteau Blanc," "Quadrille Acadien," and "Quadrille Français,"
   performed by Joseph Allard, sourced from Library and Archives Canada.
-- "Le Reel du Diable," performed by Jos Bouchard; "Avec les Ruine-Babine"
-  and "Les Batteux," performed by Louis « Pitou » Boudreault.
+- "Reel du Chapeau de Paille," performed by Isidore Soucy; "La Bastringue,"
+  performed by Jean Carignan; and "Gigue de Barnabé," performed by Joseph
+  Allard. Supplied directly as .wav files and normalized like everything
+  else — provenance and rights status not independently verified.
+- "Avec les Ruine-Babine" and "Les Batteux," performed by Louis « Pitou »
+  Boudreault.
 - "St. Anne's Reel," performed by Joe Dobbs with The 1937 Flood — reserved
   for the Wendigo encounter (on Lac Saint-Pierre, past Trois-Rivières),
   not in the regular shuffle. It's a genuine French-Canadian
@@ -41,14 +45,22 @@ it's not the same running order every session:
   a period Québécois recording like everything else here — the mismatch is
   exactly why it reads as "something's different" the moment it cuts in.
 - "Reel du Gouvernement," performed by Les Chevaliers du Folklore
-  (accordion, violin, guitar — Starr Records, 1937) — reserved for the
-  Chasse-galerie flight, not in the regular shuffle, sourced from Internet
+  (accordion, violin, guitar — Starr Records, 1937), sourced from Internet
   Archive's Great 78 Project
   ([source](https://archive.org/details/78_reel-du-gouvernement_les-chevaliers-du-folklore-t-duchene-a-allard-c-ouellette_gbia0277397a)).
+  In the regular shuffle; it was the Chasse-galerie flight's cue until "Le
+  Reel du Diable" took that over.
+- "Le Reel du Diable," performed by Jos Bouchard — in the regular shuffle.
+  It was the Chasse-galerie flight's cue until "Reel du gaucher" took that
+  over.
+- "Reel du gaucher," performed by Les Frères Brunet (from *1,2,3*) —
+  reserved for the Chasse-galerie flight (it cuts in at liftoff), not in
+  the regular shuffle. Supplied directly rather than sourced from Internet
+  Archive/LAC like the rest of this catalog — provenance and rights status
+  not independently verified.
 - "Reel du Paradis et Enfer," performed by Les Chevaliers — reserved for the
   Diable boss fight (the Devil is a fiddler, so his fight gets a reel),
-  replacing "Le Reel du Diable" in that role; the Bouchard track now plays
-  in the regular shuffle instead. Supplied directly rather than sourced from
+  replacing "Le Reel du Diable" in that role. Supplied directly rather than sourced from
   Internet Archive/LAC like the rest of this catalog — provenance and rights
   status not independently verified.
 - "La Corriveau," performed by Le Rêve du Caribou — reserved for the La

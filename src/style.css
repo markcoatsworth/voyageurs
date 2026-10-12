@@ -366,6 +366,29 @@ html, body {
   text-shadow: 1px 1px 0 #000;
 }
 
+/* Desktop only, 25% larger all round — "make the Saving dialog 25% larger,
+   but only on the desktop version. On mobile it looks just fine." Same
+   desktop test as the rest of this file (and the inverse of
+   touchControls.js's isTouchPrimary()). Real sizes rather than a
+   transform, so placeSaveIndicator()'s rect maths sees the true box. The
+   sprite lands at 3.75x (165x83), not a whole multiple — 4x would have
+   been 33% larger. */
+@media (hover: hover) and (pointer: fine) {
+  #save-indicator {
+    gap: 10px;
+    padding: 15px 20px 14px;
+    border-width: 4px;
+    box-shadow: 5px 5px 0 #000;
+  }
+  #save-indicator canvas {
+    width: 165px;
+    height: 83px;
+  }
+  #save-indicator .save-label {
+    font-size: 15px;
+  }
+}
+
 /* A big, dramatic title card for a set-piece encounter — bigger and
    punchier than #milestone-banner above (which stays in use for every
    other in-game callout). Currently just one moment uses it: the British

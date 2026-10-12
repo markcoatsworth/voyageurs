@@ -11,8 +11,10 @@
 // top-down, and a paddling stroke only reads side-on. Animates only while
 // it's showing — nothing runs for the 99% of the time it's hidden.
 
-// 5s — first cut was the 2s originally asked for; lengthened by request.
-export const SHOW_MS = 5000;
+// 4s — first cut was the 2s originally asked for, lengthened to 5s by
+// request, then brought back to 4s ("reduce the time of the Saving dialog
+// from 5 seconds to 4 seconds").
+export const SHOW_MS = 4000;
 const FPS = 8;
 export const SPRITE_W = 44;
 export const SPRITE_H = 22;

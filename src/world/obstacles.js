@@ -276,6 +276,79 @@ function place(world, z) {
   return { type, x, z, active: true, hidden: false, spinPhase: Math.random() * Math.PI * 2 };
 }
 
+// --- wakes ------------------------------------------------------------
+// The current breaking around every rock and log: a little white water
+// piled up on the face it hits, a V of foam trailing away downstream, and
+// ripples sliding down that V at the water's own speed. Points down the
+// screen on the St. Lawrence (the current coming at you) and up it on the
+// Saguenay (running with you) — the second half of "make down-river and
+// up-river visually different ... subtle but still obvious", after the
+// water surface itself (waterGL.js's u_waterDistance). Pickups (pelts) get
+// none — they ride the water, nothing breaks around them — and neither do
+// the small islands, which weren't asked for.
+// Bolder than a first cut (1px arms at 0.42, 26/30 long), which read as
+// hairlines and all but vanished in the busier St. Lawrence water.
+const WAKE_SIZE = {
+  [ROCK]: { halfW: 9, halfH: 7, len: 32 },
+  [LOG]: { halfW: 15, halfH: 6, len: 38 },
+};
+const WAKE_RIPPLE_SPACING = 9; // px between the chevrons sliding down a wake
+const FOAM = (a) => `rgba(226, 240, 248, ${a})`;
+
+// flow.dir: +1 when the water runs down the screen (upstream travel),
+// -1 when it runs up it (downstream travel). flow.drift: game.js's
+// waterDrift, in units — how far the water has moved, which slides the
+// ripples down the wake at the current's own speed.
+export function drawWake(ctx, sx, sy, type, flow, seed = 0) {
+  const size = WAKE_SIZE[type];
+  if (!size || !flow) return;
+  const { halfW, halfH, len } = size;
+  const dir = flow.dir;
+  const x0 = Math.round(sx);
+  ctx.save();
+
+  // Pile-up on the upstream face: two short rows of foam, the nearer one
+  // brighter, narrowing to the middle of the face.
+  const faceY = Math.round(sy - dir * (halfH + 1));
+  ctx.fillStyle = FOAM(0.8);
+  ctx.fillRect(x0 - Math.round(halfW * 0.7), faceY, Math.round(halfW * 1.4), 1);
+  ctx.fillStyle = FOAM(0.5);
+  ctx.fillRect(x0 - Math.round(halfW * 0.45), faceY - dir, Math.round(halfW * 0.9), 1);
+
+  // The V: two arms from the obstacle's downstream shoulders, spreading
+  // outward as they run away with the current, fading out.
+  const startY = sy + dir * halfH * 0.5;
+  for (let i = 0; i <= len; i += 1) {
+    const f = i / len;
+    const a = 0.7 * (1 - f);
+    if (a < 0.03) break;
+    ctx.fillStyle = FOAM(a);
+    const y = Math.round(startY + dir * i);
+    const spread = halfW * 0.75 + i * 0.4;
+    ctx.fillRect(Math.round(x0 - spread) - 1, y, 2, 1);
+    ctx.fillRect(Math.round(x0 + spread), y, 2, 1);
+  }
+
+  // Ripples: shallow chevrons inside the V, sliding down it as the water
+  // moves (flow.drift), so the wake visibly streams the right way.
+  const travel = Math.abs(flow.drift) * PIXELS_PER_UNIT + seed * 3.7;
+  const phase = ((travel % WAKE_RIPPLE_SPACING) + WAKE_RIPPLE_SPACING) % WAKE_RIPPLE_SPACING;
+  for (let p = phase + halfH * 0.5; p < len; p += WAKE_RIPPLE_SPACING) {
+    const f = p / len;
+    const a = 0.5 * (1 - f);
+    if (a < 0.03) continue;
+    ctx.fillStyle = FOAM(a);
+    const y = Math.round(sy + dir * p);
+    const w = Math.round(halfW * 0.45 + p * 0.3);
+    for (let k = 0; k <= w; k += 1) {
+      const yy = y - dir * Math.round(k * 0.35); // arms lean back upstream
+      ctx.fillRect(x0 - k, yy, 1, 1);
+      ctx.fillRect(x0 + k, yy, 1, 1);
+    }
+  }
+  ctx.restore();
+}
+
 export function createObstacleField(world) {
   let pool = [];
 
@@ -327,7 +400,17 @@ export function createObstacleField(world) {
         if (entry.z > RECYCLE_Z) respawn(entry);
       }
     },
-    draw(ctx, time, cameraWorldX, worldToScreen) {
+    // flow (optional): { dir, drift } for the wakes — see drawWake(). Drawn
+    // in a pass of their own first, so a wake never paints over a
+    // neighbouring rock or log.
+    draw(ctx, time, cameraWorldX, worldToScreen, flow = null) {
+      if (flow) {
+        for (const entry of pool) {
+          if (entry.hidden || !WAKE_SIZE[entry.type]) continue;
+          const { x: sx, y: sy } = worldToScreen(entry.x, entry.z, cameraWorldX);
+          drawWake(ctx, sx, sy, entry.type, flow, entry.spinPhase);
+        }
+      }
       for (const entry of pool) {
         // A collected pelt is gone — hide it immediately rather than letting
         // it keep bobbing in the water until it recycles offscreen. (Hit

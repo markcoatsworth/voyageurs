@@ -409,37 +409,6 @@ export function createPeltSprite() {
   });
 }
 
-export function createWhaleSprite() {
-  const w = 32, h = 15;
-  return makeSprite(w, h, (ctx) => {
-    const cx = w / 2, cy = h / 2;
-    waterRipple(ctx, cx, cy + 3, 15, 4);
-    ctx.fillStyle = '#8a897e';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, 14, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#c9c7ba';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy - 0.5, 13, 5.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#eeece2';
-    ctx.beginPath();
-    ctx.ellipse(cx + 1.5, cy - 1.4, 10.5, 3.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#8a897e';
-    ctx.beginPath();
-    ctx.moveTo(cx - 1, cy - 5.5);
-    ctx.lineTo(cx + 3, cy - 5.5);
-    ctx.lineTo(cx + 1, cy - 9);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#2a2a26';
-    ctx.beginPath();
-    ctx.arc(cx + 9, cy - 1.5, 0.9, 0, Math.PI * 2);
-    ctx.fill();
-  });
-}
-
 // The canoe's hull silhouette: a pointed bow and stern with the beam at the
 // waist. Factored out because the upright and overturned (capsized) sprites
 // have to share it exactly — world/capsize.js swaps one for the other

@@ -1078,6 +1078,10 @@ if (new URLSearchParams(window.location.search).get('musicdebug') === '1') {
 // that has already said where to go, and a menu in the way of every jump
 // would be the obvious annoyance.
 let game = null;
+// Dev server only (stripped from production builds): the live Game, for
+// poking at from the console or a browser script — e.g. reading
+// flowDistance/waterDrift to measure how the water moves on screen.
+if (import.meta.env?.DEV) window.__voyageursGame = () => game;
 // The painted dusk-on-the-fjord backdrop behind the menu
 // (world/titleScene.js) — null with an explicit ?start=, which never shows
 // the menu. Failing to build it is never allowed to take the menu down

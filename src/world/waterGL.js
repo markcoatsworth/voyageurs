@@ -60,6 +60,10 @@ precision highp float;
 uniform vec2 u_resolution;
 uniform float u_time;
 uniform float u_worldDistance;
+// u_worldDistance minus how far the water itself has moved (game.js's
+// waterDrift): the wave/glint/chop pattern is drawn on the moving water,
+// not the riverbed. See dw below.
+uniform float u_waterDistance;
 uniform float u_cameraWorldX;
 
 // The braid island's x-offset (see world/river/path.js's braidOffsetFraction) is
@@ -342,6 +346,24 @@ void main() {
   float x = gl_FragCoord.x;
 
   float d = u_worldDistance - (y - CANOE_SCREEN_Y) / PPU;
+  // The same row, measured on the water rather than the riverbed. Two
+  // layers, deliberately:
+  //   - on the water (dw): the broad wave shading, the whitewater and the
+  //     storm chop — so the surface travels with the current: down the
+  //     Saguenay drifting down the screen slower than the shore, up the
+  //     St. Lawrence faster. Asked for as "no visual difference ...
+  //     between down-river and up-river".
+  //   - on the riverbed (d): the sun glints, the brightest marks on the
+  //     water, so they always show your true movement over the ground.
+  //     They rode the water too in the first cut, and in open water with no
+  //     bank in view (past Tadoussac, ~50 units wide against a 20-unit
+  //     screen) the water was the only thing to judge by: paddling up the
+  //     current looked like racing forward, and drifting back with it
+  //     looked like standing still — reported as "my boat is still getting
+  //     pushed forward even though I'm going against the current".
+  // Banks, islands and where the rapids are stay on d. With no drift
+  // dw == d and the frame is unchanged.
+  float dw = u_waterDistance - (y - CANOE_SCREEN_Y) / PPU;
   float worldX = (x - CANOE_SCREEN_X) / PPU + u_cameraWorldX;
 
   float cx = centerX(d);
@@ -362,21 +384,21 @@ void main() {
   float rapids = rapidsStrength(d);
 
   // Rolling body waves — a few sine terms at different spatial/temporal
-  // frequencies so the surface doesn't tile obviously. Phase depends on d
-  // (downstream distance), so as the world flows past, the waves visibly
-  // travel with the current instead of just sitting there shimmering.
+  // frequencies so the surface doesn't tile obviously. Phase depends on dw
+  // (the water's own position — see above), so the waves travel with the
+  // current instead of just sitting there shimmering.
   float t = u_time;
   float wave =
-      sin(worldX * 1.6 + d * 0.55) * 0.45 +
-      sin(worldX * 3.1 - d * 0.9 + t * 0.6) * 0.28 +
-      sin(worldX * 0.7 + d * 0.22 - t * 0.3) * 0.27;
+      sin(worldX * 1.6 + dw * 0.55) * 0.45 +
+      sin(worldX * 3.1 - dw * 0.9 + t * 0.6) * 0.28 +
+      sin(worldX * 0.7 + dw * 0.22 - t * 0.3) * 0.27;
 
   // Whitewater turbulence — a higher-frequency, faster-moving chop layered
   // on top of the calm-water waves, scaled by how deep into a rapids
   // stretch this pixel is so it fades in/out with the current rather than
   // switching on abruptly.
   float turbulence =
-      sin(worldX * 9.0 - d * 3.5 + t * 4.0) * sin(worldX * 4.7 + d * 2.1 - t * 3.1);
+      sin(worldX * 9.0 - dw * 3.5 + t * 4.0) * sin(worldX * 4.7 + dw * 2.1 - t * 3.1);
   wave += turbulence * rapids * 0.7;
 
   // Storm chop — wind across the surface: a second turbulence term running
@@ -384,7 +406,7 @@ void main() {
   // rapids' own, so the water reads as whipped by wind, not as whitewater.
   // Scaled by u_storm, so it comes up with the sky.
   float chop =
-      sin(worldX * 11.0 + d * 1.3 + t * 5.2) * sin(worldX * 6.3 - d * 0.8 + t * 3.7);
+      sin(worldX * 11.0 + dw * 1.3 + t * 5.2) * sin(worldX * 6.3 - dw * 0.8 + t * 3.7);
   wave += chop * u_storm * 0.5;
 
   // A second, higher-frequency layer drives sparkle highlights — sparse,
@@ -395,6 +417,7 @@ void main() {
   // speed the glint animation up and add a third, choppier term so
   // whitewater sparkles read as churning rather than gently glinting.
   float glintSpeed = 1.0 + rapids * 1.8;
+  // On d, the riverbed — see dw's comment above.
   float g1 = sin(worldX * 5.3 + d * 2.3 + t * 1.3 * glintSpeed);
   float g2 = sin(worldX * 8.7 - d * 1.4 + t * 0.8 * glintSpeed);
   float g3 = sin(worldX * 2.1 + d * 3.9 - t * 1.1 * glintSpeed);
@@ -501,6 +524,7 @@ export function createWaterRenderer(canvas) {
     resolution: gl.getUniformLocation(program, 'u_resolution'),
     time: gl.getUniformLocation(program, 'u_time'),
     worldDistance: gl.getUniformLocation(program, 'u_worldDistance'),
+    waterDistance: gl.getUniformLocation(program, 'u_waterDistance'),
     cameraWorldX: gl.getUniformLocation(program, 'u_cameraWorldX'),
     braidCycleA: gl.getUniformLocation(program, 'u_braidCycleA'),
     braidOffsetA: gl.getUniformLocation(program, 'u_braidOffsetA'),
@@ -514,8 +538,9 @@ export function createWaterRenderer(canvas) {
     ok: true,
     // storm/frost: 0..1, see u_storm/u_frost above — both default to clear
     // weather so every other caller (the smoke test drives this too) needs
-    // no change.
-    render(time, worldDistance, cameraWorldX, storm = 0, frost = 0) {
+    // no change. waterDrift: how far the water has moved (game.js), default
+    // 0 — the title backdrop passes none and draws exactly as before.
+    render(time, worldDistance, cameraWorldX, storm = 0, frost = 0, waterDrift = 0) {
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -528,6 +553,8 @@ export function createWaterRenderer(canvas) {
       gl.uniform2f(uniforms.resolution, canvas.width, canvas.height);
       gl.uniform1f(uniforms.time, time);
       gl.uniform1f(uniforms.worldDistance, worldDistance);
+      // Subtracted here in double precision, not in the shader.
+      gl.uniform1f(uniforms.waterDistance, worldDistance - waterDrift);
       gl.uniform1f(uniforms.cameraWorldX, cameraWorldX);
       gl.uniform1f(uniforms.storm, storm);
       gl.uniform1f(uniforms.frost, frost);

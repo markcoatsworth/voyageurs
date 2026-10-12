@@ -407,13 +407,26 @@ export function drawWaterFallback(ctx, worldDistance, cameraWorldX) {
   ctx.fill('evenodd');
 }
 
-// Visual current flow effects - animated streaks showing St. Lawrence currents
-export function drawCurrentEffects(ctx, time, worldDistance, rapids) {
+// Visual current flow effects — streaks riding on the water itself.
+//
+// waterDrift (game.js) is how far, in flowDistance units, the water has
+// moved since the run began: it grows on a downstream river (the Saguenay,
+// the Rideau) and shrinks on the upstream St. Lawrence. A streak is a mark
+// on the water, so its screen row is the banks' own scroll (worldDistance)
+// minus the water's movement (waterDrift): going down the Saguenay it drifts
+// down the screen *slower* than the shore — the river carrying you, and
+// holding still if you just float — and going up the St. Lawrence it slides
+// past *faster* than the shore, the current running at you. The same marks
+// at the same brightness either way; only how they move tells the rivers
+// apart. Asked for as "no visual difference ... between down-river and
+// up-river ... something subtle but still obvious". They used to slide down
+// the screen at a flat 60px/s (+80 in rapids) on every river, tied to
+// neither the shore nor the current.
+export function drawCurrentEffects(ctx, time, worldDistance, rapids, waterDrift = 0) {
   ctx.save();
 
   // Current intensity varies with rapids and natural river flow
   const baseIntensity = 0.25 + rapids * 0.4; // stronger in rapids
-  const flowSpeed = 60 + rapids * 80; // pixels per second
 
   // Flowing streaks moving downstream
   const streakCount = Math.floor(15 + rapids * 25);
@@ -421,9 +434,11 @@ export function drawCurrentEffects(ctx, time, worldDistance, rapids) {
 
   ctx.globalAlpha = baseIntensity;
 
+  // How far the water's own marks have travelled down the screen (see above).
+  const phase = (((worldDistance - waterDrift) * PIXELS_PER_UNIT) % streakSpacing + streakSpacing) % streakSpacing;
+
   for (let i = 0; i < streakCount; i++) {
-    // Vertical movement down the screen (flowing toward player)
-    const baseY = (i * streakSpacing + (time * flowSpeed) % streakSpacing) % CANVAS_HEIGHT;
+    const baseY = (i * streakSpacing + phase) % CANVAS_HEIGHT;
 
     // Horizontal wobble simulating turbulent currents
     const wobbleFreq = 0.8 + (i % 3) * 0.3;

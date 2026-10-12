@@ -72,7 +72,7 @@ src/
                        one line always (Press Start 2P is 1em/char, so font = room / length), and
                        steers clear of the minimap where it hangs over the game screen on short phones
     saveIndicator.js   the "SAVING" canoe (two paddlers, side-on) shown bottom-right of the game
-                       screen for 5s on every real checkpoint write (main.js's loop -> showSaving()).
+                       screen for 4s on every real checkpoint write (main.js's loop -> showSaving()).
                        main.js's placeSaveIndicator() steps it clear of the desktop MOVE cue and the
                        BUILD badge where those hang over the screen's corner
     weapons.js         Z pistol / X musket / C blunderbuss (only pistol implemented). Fire cooldown on accumulated dt.
@@ -84,7 +84,12 @@ src/
                        hazardKeepFractionAt(d): none around the Island of Montreal (HAZARD_FREE_RANGE),
                        a quarter from Petit-Saguenay to Tadoussac (LIGHT_HAZARD_RANGE — the first boss
                        fight); thinned entries spawn hidden + inert, so pelts keep their usual rate
-    whales.js          stateless hash-placed belugas once the channel reads as open estuary
+    whales.js          stateless hash-placed belugas, scenery only (no collision). Estuary only
+                       (whalesAllowedAt: the Tadoussac crossing up to Baie-Saint-Paul, + lawrenceEast),
+                       within WHALE_REACH of mid-river so they're on screen. Drawn, not a sprite: each runs
+                       an 11s breathing cycle — ripple, back breaks the surface, blowhole spout, rolls under,
+                       tail flukes lift clear, long stretch under. Height out of the water goes up-screen.
+                       Every ellipse radius is clamped >0 (a negative one throws on a real canvas)
     weather.js         stateless hashed rain streaks (drawRain) — the Warship storm's only user so far
     sprites.js         (~1000 lines) hand-drawn pixel sprites
     impact.js          shared bullet-hit feedback for the two shootable fights (diable.js,
@@ -240,7 +245,7 @@ src/
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging
                        fireballs. game.js clamps flowDistance while diable.isHolding(). DIABLE_FLOW_DISTANCE.
   audio/
-    music.js           shuffled playlist (PLAYLIST, 14 tracks). OPENING_TRACK (Reel des Forêts) is
+    music.js           shuffled playlist (PLAYLIST, 18 tracks). OPENING_TRACK (Reel des Forêts) is
                        reserved, NOT in PLAYLIST: it plays once, ahead of the first shuffle,
                        only when createMusic() is passed pinOpeningTrack (openingOrder()), which
                        main.js sets from isPutIn(startSegment, startFlowDistance) — so the
@@ -248,7 +253,8 @@ src/
                        (resumed checkpoint, any ?start=, any ?debug jump) never hears it.
                        Defaults to off; + reserved boss tracks, one per fight
                        that has a dedicated cue (Rule Britannia/blockade, a diable reel/diable, St.
-                       Anne's Reel/wendigo, La Corriveau by Le Rêve du Caribou/corriveau) — each plays via playSpecial() the instant its fight
+                       Anne's Reel/wendigo, La Corriveau by Le Rêve du Caribou/corriveau, Reel du gaucher
+                       by Les Frères Brunet/chasse-galerie) — each plays via playSpecial() the instant its fight
                        starts, replacing whatever's playing, and endBossTrack() drops back into the
                        shuffle once it resolves. KINGSTON_PLAYLIST is its own isolated track set
                        (never mixed into PLAYLIST) for the Kingston arrival/on-foot visit —
@@ -379,7 +385,8 @@ app shell is precached at install; the ~88 MB of audio is pulled right
 after, automatically — `main.js` posts `cache-audio` as soon as the worker
 is ready (skipped only under Data Saver; tracks also cache as played).
 No button, by request; the pause screen shows a passive
-"N/26 TRACKS SAVED" line. Audio cache is versioned by
+"N/M TRACKS SAVED" line (M is sw.js's AUDIO list, filled at build from
+every mp3 in dist/audio). Audio cache is versioned by
 hand (`voyageurs-audio-v1`) and survives deploys; the shell cache is per
 build. Range requests are answered by slicing the cached file (Safari
 needs this for `<audio>`).
