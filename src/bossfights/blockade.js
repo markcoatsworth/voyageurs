@@ -13,16 +13,18 @@
 // the gap was cleared — split out into its own standalone encounter,
 // bossfights/britishWarship.js, triggered much further downstream. The two
 // used to run back-to-back as one continuous fight with no breathing room
-// between them; now there's a real stretch of ordinary paddling (Newboro,
-// Jones Falls) between clearing this frigate and meeting the Warship.
+// between them; now there's a long stretch of ordinary paddling
+// (Merrickville, Smiths Falls, Newboro, Jones Falls) between clearing this
+// frigate and meeting the Warship.
 //
-// It used to sit just past Québec City; it was moved onto the run into
-// Kingston (a British naval station in this era — the frigate fits the
-// harbour approach better than the St. Lawrence capital). Québec City will
-// get its own encounter later. Positioned relative to Kingston's own
-// flowDistance rather than a fixed number, so it follows if that village's
-// position (or the Rideau segment's shape offset) ever changes — one lookup
-// at module load, not duplicated geography.
+// It used to sit just past Québec City; it was moved onto the Rideau (the
+// British held the waterway — Kingston was their naval station), first
+// between Smiths Falls and Newboro, then back between Kars and Merrickville
+// ("move the British Blockade back between Kars and Merrickville"), early
+// on the leg, well clear of the Warship further down. Positioned relative
+// to Merrickville's own flowDistance rather than a fixed number, so it
+// follows if that village (or the Rideau segment's shape offset) ever
+// moves — one lookup at module load, not duplicated geography.
 //
 // "The River Styx" — a small fun detail, a nickname for this exact stretch
 // kept here in the comments rather than shown to the player (game.js's
@@ -32,15 +34,16 @@ import { centerX, widthAt } from '../world/river/path.js';
 import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../shared/config.js';
 import { VILLAGES } from '../world/villages.js';
 
-const KINGSTON = VILLAGES.find((v) => v.name === 'Kingston');
-// How far before Kingston the frigate sits. Tuned so the gauntlet
-// (APPROACH_RANGE of cannon fire) falls in the open Rideau Lake water
-// *between* two riverbank towns — a village dock landing inside the
-// approach corridor would let the player walk ashore mid-fight — with a
-// real stretch of clear channel left before the harbour narrows toward the
-// arrival.
-const SHIP_D_OFFSET = 700;
-export const SHIP_FLOW_DISTANCE = KINGSTON.flowDistance - SHIP_D_OFFSET;
+const MERRICKVILLE = VILLAGES.find((v) => v.name === 'Merrickville');
+// How far short of Merrickville's dock the frigate sits. The whole gauntlet
+// (APPROACH_RANGE of cannon fire, the ship, CLEAR_MARGIN past it) has to
+// fall in the open water *between* two towns — a village dock landing inside
+// the approach corridor would let the player walk ashore mid-fight. Kars to
+// Merrickville is ~291 units: at 60 short of Merrickville the cannon fire
+// starts ~40 units past Kars's dock, and you're clear of the ship ~50 short
+// of Merrickville's. (The smoke test checks both docks stay outside it.)
+const SHIP_SHORT_OF_MERRICKVILLE = 60;
+export const SHIP_FLOW_DISTANCE = MERRICKVILLE.flowDistance - SHIP_SHORT_OF_MERRICKVILLE;
 
 // How far before the ship cannon fire starts, and how much room the player
 // gets to relocate across the channel to find the gap. This looks huge for

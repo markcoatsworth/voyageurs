@@ -90,6 +90,12 @@ src/
                        an 11s breathing cycle — ripple, back breaks the surface, blowhole spout, rolls under,
                        tail flukes lift clear, long stretch under. Height out of the water goes up-screen.
                        Every ellipse radius is clamped >0 (a negative one throws on a real canvas)
+    flag.js            a pair of Union Jacks on poles, one on each bank at the same point just inside the
+                       Rideau, flying toward each other over the water (the north one mirrored — its
+                       reverse side). UPPER_CANADA_FLAG_D = rideau start + 21.25 (hand-tuned), in view ~1s
+                       after game.js's "ENTERING UPPER CANADA" card for a canoe paddling through the
+                       crossing (smoke test times it); cloth built once, drawn a column at a time on a
+                       travelling wave
     weather.js         stateless hashed rain streaks (drawRain) — the Warship storm's only user so far
     sprites.js         (~1000 lines) hand-drawn pixel sprites
     impact.js          shared bullet-hit feedback for the two shootable fights (diable.js,
@@ -190,8 +196,9 @@ src/
                        the comments only — the player-facing banner just says "BRITISH BLOCKADE",
                        shown big via #boss-banner, not the small milestone one): Royal Navy frigate
                        holding the channel, dodge-only, survive & pass — no health/hull/hold-time
-                       readout, just find the gap. RIDEAU segment (SHIP_FLOW_DISTANCE = Kingston −
-                       700). Used to chain straight into the Warship chase below the instant the gap
+                       readout, just find the gap. RIDEAU segment, between Kars and Merrickville
+                       (SHIP_FLOW_DISTANCE = Merrickville − 60; cannon fire from APPROACH_RANGE 190
+                       out, ~40 past Kars's dock). Used to chain straight into the Warship chase below the instant the gap
                        cleared; now ends clean, ordinary paddling after. Guarded by `segment ===
                        'rideau'`.
     britishWarship.js  The British Warship — standalone held-arena chase, split out of blockade.js
@@ -244,6 +251,9 @@ src/
                        while their box reached past the centre line; smoke test reads the nave back
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging
                        fireballs. game.js clamps flowDistance while diable.isHolding(). DIABLE_FLOW_DISTANCE.
+                       A canoe already past the arena (a run started at Gatineau — CONTINUE, ?start=,
+                       ?debug) never meets him: diable.js marks him 'done', and the clamp only holds a
+                       canoe arriving at the arena, never one starting beyond it
   audio/
     music.js           shuffled playlist (PLAYLIST, 18 tracks). OPENING_TRACK (Reel des Forêts) is
                        reserved, NOT in PLAYLIST: it plays once, ahead of the first shuffle,
@@ -278,8 +288,18 @@ src/
   which segment is live. lawrenceWest genuinely runs upstream — negative ambient
   current (`UPRIVER_CURRENT`), so holding Up there is a constant slog; rideau is
   a calm downstream denouement. Segment jumps happen at forced junctions:
-  Tadoussac (mouth crossing → lawrenceWest) and Gatineau (`enterRideau()` on
-  cast-off or on crossing `GATINEAU_FLOW_DISTANCE`).
+  Tadoussac (mouth crossing → lawrenceWest) and the Upper Canada border
+  just past Gatineau (`enterRideau()` on crossing `RIDEAU_BORDER_DISTANCE`, 25
+  units past Gatineau's dock — casting off from Gatineau is an ordinary
+  cast-off back onto the Ottawa, a short upstream paddle before it; the
+  crossing brings up the "ENTERING UPPER CANADA" card and world/flag.js's
+  Union Jack). That crossing is seamless: path.js draws the start of the
+  Rideau as the Ottawa carrying on (RIDEAU_TO_OTTAWA maps a Rideau position
+  to the matching Ottawa one; the blend into the Rideau's own shape starts
+  beyond the top of the screen — RIDEAU_LEAD_CLEAR — and runs RIDEAU_LEAD_IN),
+  mirrored in waterGL.js (centerXRiver/widthRiver + wrappers, since GLSL
+  can't recurse), and enterSegment(..., keepPlace) keeps the canoe, camera
+  and obstacles where they were.
 - **Modes**: `river` / `village` (on-foot). Boss fights are states within the
   river mode, not separate modes. `state` is `playing` / `gameover` — there
   is no `won`: Kingston is the end by simply not letting you leave
@@ -302,10 +322,11 @@ src/
   Tadoussac), La Corriveau (Beaupré to Québec City, lawrenceWest), Wendigo
   (Lac Saint-Pierre, past Trois-Rivières, lawrenceWest), Chasse-galerie steeples + Le
   Diable (past Montréal, lawrenceWest), British Blockade (rideau, the frigate
-  gauntlet), British Warship (rideau, further downstream near where Kingston
+  gauntlet between Kars and Merrickville), British Warship (rideau, further downstream near where Kingston
   Mills sat — the last fight before Kingston). The Blockade and Warship used
   to be one continuous two-phase encounter; they're separate fights now, with
-  ordinary paddling (Newboro, Jones Falls) between them. Each is
+  ordinary paddling (Merrickville, Smiths Falls, Newboro, Jones Falls)
+  between them. Each is
   `segment ===`-gated (the first three via their own exported SEGMENT) and
   distance-triggered off MOUTH_DISTANCE or a village's flowDistance.
 - **`?start=<name>`** (main.js): dev cheat, one-shot (stripped from URL after

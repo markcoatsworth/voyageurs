@@ -13,7 +13,7 @@
 // JS function to the GPU — keep the two in sync if you retune the course.
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, CANOE_SCREEN_X, CANOE_SCREEN_Y, PIXELS_PER_UNIT, AHEAD_UNITS, BEHIND_UNITS } from '../shared/config.js';
-import { BRAID_PERIOD, BRAID_LENGTH, BRAID_SUPPRESSED_CYCLES, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE, OTTAWA_EASE_START, OTTAWA_EASE_LEN, KINGSTON_HARBOUR_SKEW } from './river/path.js';
+import { BRAID_PERIOD, BRAID_LENGTH, BRAID_SUPPRESSED_CYCLES, RAPIDS_PERIOD, RAPIDS_LENGTH, braidOffsetFraction, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE, OTTAWA_EASE_START, OTTAWA_EASE_LEN, KINGSTON_HARBOUR_SKEW, RIDEAU_ENTRY_D, RIDEAU_TO_OTTAWA, RIDEAU_LEAD_IN, RIDEAU_LEAD_BEHIND, RIDEAU_LEAD_CLEAR } from './river/path.js';
 import {
   MONTREAL_ISLAND_KEYFRAMES, MONTREAL_ISLAND_MIN_HALF, MONTREAL_ISLAND_MIN_SUBCHANNEL,
   LACHINE_RAPIDS_KEYFRAMES, FEATURE_ISLAND_RANGE, LACHINE_RAPIDS_RANGE,
@@ -104,6 +104,13 @@ const float RAPIDS_PERIOD = ${RAPIDS_PERIOD.toFixed(2)};
 const float RAPIDS_LENGTH = ${RAPIDS_LENGTH.toFixed(2)};
 const float RIDEAU_OFFSET = ${SEGMENT_SHAPE_OFFSET.rideau.toFixed(2)};
 const float RIDEAU_SPAN = ${RIDEAU_SPAN_DISTANCE.toFixed(2)};
+// The Rideau's lead-in from the Ottawa — mirrors path.js's "seam into Upper
+// Canada" block (rideauLeadK, RIDEAU_TO_OTTAWA).
+const float RIDEAU_ENTRY_D = ${RIDEAU_ENTRY_D.toFixed(4)};
+const float RIDEAU_TO_OTTAWA = ${RIDEAU_TO_OTTAWA.toFixed(4)};
+const float RIDEAU_LEAD_IN = ${RIDEAU_LEAD_IN.toFixed(2)};
+const float RIDEAU_LEAD_BEHIND = ${RIDEAU_LEAD_BEHIND.toFixed(2)};
+const float RIDEAU_LEAD_CLEAR = ${RIDEAU_LEAD_CLEAR.toFixed(2)};
 const float KINGSTON_HARBOUR_SKEW = ${KINGSTON_HARBOUR_SKEW.toFixed(2)};
 const float LAWRENCE_WEST_OFFSET = ${SEGMENT_SHAPE_OFFSET.lawrenceWest.toFixed(2)};
 const float LW_WIDTH_D_MIN = ${LAWRENCE_WEST_WIDTH_KEYFRAMES[0].d.toFixed(2)};
@@ -126,8 +133,11 @@ const float GORGE_D_MAX = ${GORGE_RANGE[1].toFixed(2)};
 // Mirrors world/river/gorge.js's gorgeCenterXAt() — codegen'd, see
 // featureIslandAt() further down for how.
 float gorgeCenterXAt(float d) {
+  // Clamped into the keyframe span, matching the JS clampOutside — see
+  // gorgeWidthAt() below for what not doing so cost.
+  float dd = clamp(d, GORGE_D_MIN, GORGE_D_MAX);
   float cx = 0.0;
-${glslKeyframeChain('d', GORGE_CENTERX_KEYFRAMES, ['centerX'], { centerX: 'cx' })}
+${glslKeyframeChain('dd', GORGE_CENTERX_KEYFRAMES, ['centerX'], { centerX: 'cx' })}
   return cx;
 }
 // Mirrors world/river/path.js's kingstonHarbourSkew() — see its own
@@ -141,14 +151,28 @@ float kingstonHarbourSkew(float d) {
   float eased = p * p * (3.0 - 2.0 * p);
   return KINGSTON_HARBOUR_SKEW * eased;
 }
-float centerX(float d) {
+float rideauLeadK(float d) {
+  float p = clamp((d - RIDEAU_ENTRY_D - RIDEAU_LEAD_CLEAR) / RIDEAU_LEAD_IN, 0.0, 1.0);
+  return p * p * (3.0 - 2.0 * p);
+}
+// Everything but the Rideau — split out because GLSL has no recursion and
+// the Rideau's lead-in has to read the Ottawa's shape (path.js calls
+// centerX() on itself for that).
+float centerXRiver(float d) {
   // The Chasse-galerie gorge — baked, checked first, same as the JS
   // mirror in river/path.js.
   if (d >= GORGE_D_MIN && d <= GORGE_D_MAX) return gorgeCenterXAt(d);
-  float base = sin(d * 0.09) * 3.0 + sin(d * 0.21 + 1.7) * 1.5;
-  // Subtracted, not added — see path.js's own comment on centerX().
-  if (d >= RIDEAU_OFFSET) return base - kingstonHarbourSkew(d);
-  return base;
+  return sin(d * 0.09) * 3.0 + sin(d * 0.21 + 1.7) * 1.5;
+}
+float centerX(float d) {
+  if (d >= RIDEAU_OFFSET - RIDEAU_LEAD_BEHIND) {
+    float base = sin(d * 0.09) * 3.0 + sin(d * 0.21 + 1.7) * 1.5;
+    // Subtracted, not added — see path.js's own comment on centerX().
+    float rideau = base - kingstonHarbourSkew(d);
+    // The Ottawa carrying on past the border, easing into the Rideau.
+    return mix(centerXRiver(d + RIDEAU_TO_OTTAWA), rideau, rideauLeadK(d));
+  }
+  return centerXRiver(d);
 }
 float estuaryProgress(float d) {
   // 1700.0 (WIDTH_EASE_DISTANCE), not 900.0 (MOUTH_DISTANCE/where Tadoussac
@@ -176,13 +200,20 @@ float rideauWidthAt(float d) {
   return clamp(trend + wobble, 6.5, 62.0);
 }
 // Mirrors world/river/gorge.js's gorgeWidthAt() — codegen'd, see
-// featureIslandAt() further down for how. clampOutside behaviour (holding
-// the nearest keyframe's value past either end) isn't needed here since
-// widthAt() below only ever calls this once d is already known to be
-// inside [GORGE_D_MIN, GORGE_D_MAX].
+// featureIslandAt() further down for how — INCLUDING its clampOutside:
+// holding the nearest keyframe's value past either end. widthAt() below
+// calls this for every d past OTTAWA_EASE_START, not just inside the
+// gorge: the ease starts 40 units before the first keyframe, and the river
+// carries on past the last one (Gatineau). This used to assume d was
+// always inside and skip the clamp: past Gatineau the shader's water held
+// the *first* keyframe's width (10.5) while the JS banks held the last
+// (11.0), and the half-unit gap showed as a black outline along both banks
+// from Gatineau to the Upper Canada border — unseen until casting off from
+// Gatineau stopped jumping straight onto the Rideau.
 float gorgeWidthAt(float d) {
+  float dd = clamp(d, GORGE_D_MIN, GORGE_D_MAX);
   float w = ${GORGE_WIDTH_KEYFRAMES[0].width.toFixed(4)};
-${glslKeyframeChain('d', GORGE_WIDTH_KEYFRAMES, ['width'], { width: 'w' })}
+${glslKeyframeChain('dd', GORGE_WIDTH_KEYFRAMES, ['width'], { width: 'w' })}
   return w;
 }
 // Mirrors world/river/lawrenceWidth.js's lawrenceWestWidthAt() — codegen'd
@@ -195,10 +226,8 @@ float lawrenceWestWidthAt(float d) {
 ${glslKeyframeChain('d', LAWRENCE_WEST_WIDTH_KEYFRAMES, ['width'], { width: 'w' }, true)}
   return w;
 }
-float widthAt(float d) {
-  // The Rideau leg — checked first, same as the JS widthAt(), because its
-  // offset sits past everything else on the shared number line.
-  if (d >= RIDEAU_OFFSET) return rideauWidthAt(d);
+// Everything but the Rideau — see centerXRiver() for why it's split out.
+float widthRiver(float d) {
   // Cubic ease-in, mirroring world/river/path.js's widthAt() — see its comment
   // for why this isn't just a linear ramp to ESTUARY_WIDTH.
   float t = estuaryProgress(d);
@@ -221,6 +250,15 @@ float widthAt(float d) {
     return mix(river, gorgeWidthAt(d), k);
   }
   return river;
+}
+float widthAt(float d) {
+  // The Rideau leg — checked first, same as the JS widthAt(), because its
+  // offset sits past everything else on the shared number line — with its
+  // lead-in from the Ottawa (path.js's "seam into Upper Canada").
+  if (d >= RIDEAU_OFFSET - RIDEAU_LEAD_BEHIND) {
+    return mix(widthRiver(d + RIDEAU_TO_OTTAWA), rideauWidthAt(d), rideauLeadK(d));
+  }
+  return widthRiver(d);
 }
 
 // Mirrors world/river/islands.js's featureIslandAt() — codegen'd straight

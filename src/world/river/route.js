@@ -280,16 +280,17 @@ const LAWRENCE_WEST_WAYPOINTS = [
 // d=0, you leave from there rather than arrive at it) with its own
 // cumulative-distance math. Kingston is the end of the whole game.
 //
-// Unlike the Saguenay/St. Lawrence lists above, `side` here is deliberately
-// left on makeSegment()'s alternating default rather than pinned to real
-// geography — there isn't a reliable "real bank" to pin most of these to in
-// the first place: Manotick sits on Long Island, split by both branches of
-// the Rideau; Newboro/Jones Falls are lake reaches and lock stations, not
-// two-bank river towns. Layered onto a genuinely invented
-// channel (no continuous river actually runs Gatineau to Kingston), forcing
-// a "correct" side per town would be presenting a guess as researched fact.
-// Kingston is the one exception — its own real shore (north, on Lake
-// Ontario) is well documented, hence its explicit pin below.
+// `side` here mostly falls back to makeSegment()'s alternating default
+// rather than being pinned to real geography — there isn't a reliable "real
+// bank" for every stop: Manotick sits on Long Island, split by both branches
+// of the Rideau; Newboro/Jones Falls are lake reaches and lock stations, not
+// two-bank river towns; and no continuous river actually runs Gatineau to
+// Kingston. Stops get pinned one at a time as their bank is settled by hand
+// ("I'll want to pin some of the other towns later instead of just
+// alternating"): -1 is the left-hand bank on screen (south, on this leg),
+// 1 the right (north). Pinned so far: Merrickville (south) and Kingston
+// (north, its real shore on Lake Ontario). Pinning a stop doesn't move any
+// other: the fallback goes by list position, not by its neighbour's side.
 const RIDEAU_WAYPOINTS = [
   // Same real place as lawrenceWest's own Gatineau entry above — same
   // width figure for consistency.
@@ -299,8 +300,11 @@ const RIDEAU_WAYPOINTS = [
   { name: 'Manotick', lat: 45.2250, lon: -75.6830, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, riverWidthKm: 0.3 },
   { name: 'Kars', lat: 45.1280, lon: -75.6390, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, riverWidthKm: 0.6 },
   // Merrickville and Smiths Falls are both small heritage canal towns on a
-  // genuinely narrow stretch of the real Rideau.
-  { name: 'Merrickville', lat: 44.9150, lon: -75.8380, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, riverWidthKm: 0.15 },
+  // genuinely narrow stretch of the real Rideau. Merrickville is pinned to
+  // the south (left-hand) bank — where the alternating fallback already put
+  // it, now fixed there so inserting or pinning another Rideau stop can't
+  // flip it. (Briefly moved to the north bank by mistake, then put back.)
+  { name: 'Merrickville', lat: 44.9150, lon: -75.8380, labelPos: { dx: 1.4, dy: -2.2, anchor: 'start' }, side: -1, riverWidthKm: 0.15 },
   { name: 'Smiths Falls', lat: 44.9000, lon: -76.0210, labelPos: { dx: -1.4, dy: 4.6, anchor: 'end' }, riverWidthKm: 0.2 },
   // Newboro and Jones Falls both sit on real lake reaches of the Rideau
   // Lakes system (Upper Rideau Lake; the Sand/Whitefish Lakes chain) —
@@ -399,12 +403,11 @@ function makeSegment(id, waypoints, spanDistance) {
     // A waypoint can pin its own side to its real bank (every fjord/
     // lawrenceEast/lawrenceWest waypoint now does — see their own list
     // comments) instead of taking whatever this alternating fallback lands
-    // on. The fallback only actually matters for the Rideau any more (its
-    // waypoints are deliberately left unpinned — see RIDEAU_WAYPOINTS'
-    // comment on why a real bank can't be honestly assigned there) — it's
-    // not a substitute for research, just cosmetic variety for a stop no
-    // one's pinned. Also why inserting a new stop earlier in an unpinned
-    // list would silently flip every later village's bank.
+    // on. The fallback only actually matters for the Rideau any more (most
+    // of its waypoints are still unpinned — see RIDEAU_WAYPOINTS' comment) —
+    // it's not a substitute for research, just cosmetic variety for a stop
+    // no one's pinned. It goes by list position, so inserting a new stop
+    // earlier in the list silently flips every later unpinned village's bank.
     side: w.side ?? (i % 2 === 0 ? -1 : 1),
     // On the map but not a save point (main.js skips it) — see the noSave
     // comment above Île-Perrot in LAWRENCE_WEST_WAYPOINTS.

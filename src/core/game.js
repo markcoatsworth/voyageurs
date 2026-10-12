@@ -1,8 +1,9 @@
-import { centerX, widthAt, braidAt, rapidsStrength, MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET } from '../world/river/path.js';
+import { centerX, widthAt, braidAt, rapidsStrength, MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_BORDER_DISTANCE, RIDEAU_ENTRY_D } from '../world/river/path.js';
 import { FEATURE_ISLAND_RANGE } from '../world/river/islands.js';
 import { worldToScreen, CANOE_SCREEN_X, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT, PIXELS_PER_UNIT, CANOE_HALF_LENGTH } from '../shared/config.js';
 import { drawBanks, drawWaterFallback, drawCurrentEffects } from '../world/terrain.js';
 import { drawWhales } from '../world/whales.js';
+import { drawUpperCanadaFlag } from '../world/flag.js';
 import { drawRain } from '../world/weather.js';
 import { createCanoeSprites } from '../world/canoe.js';
 import { createCapsize } from '../world/capsize.js';
@@ -216,11 +217,22 @@ const DIABLE_ARENA_HALF = 7;
 // it if you never walked up to the Montréal gunsmith) — the Diable fight
 // ahead can't be done unarmed.
 const MONTREAL_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Montreal')?.flowDistance ?? Infinity;
-// Gatineau is the last lawrenceWest waypoint and the junction onto the
-// made-up Rideau leg (world/river/route.js) — crossing its flowDistance, or
-// casting off from its dock, drops the canoe onto that segment (see
-// enterRideau()), the same way crossing MOUTH_DISTANCE does at Tadoussac.
-const GATINEAU_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Gatineau')?.flowDistance ?? Infinity;
+// Gatineau is the last lawrenceWest waypoint, and the border with Upper
+// Canada — the junction onto the made-up Rideau leg (world/river/route.js),
+// entered through enterRideau() — sits RIDEAU_BORDER_PAST_DOCK past the far
+// end of Gatineau's dock. It used to be Gatineau's flowDistance itself, and
+// casting off from Gatineau called enterRideau() directly, so leaving town
+// put you straight onto the border, the downstream current and the Union
+// Jack all at once ("I immediately start on the boundary line"). Now a
+// cast-off from Gatineau is an ordinary one — back on the Ottawa just past
+// the dock, still paddling against the current — and paddling past Gatineau
+// without stopping does the same, so either way there's a short upstream
+// paddle (~18 units from the cast-off spot, ~3s) before the river turns.
+// The Ottawa carries on calm and ~11 units wide past Gatineau. Defined in
+// river/path.js (Gatineau + 26, ~25 past the dock's far end), which needs
+// it too: the start of the Rideau is drawn as the Ottawa carrying on past
+// this border, so the swap from one river to the other doesn't show.
+export { RIDEAU_BORDER_DISTANCE };
 // Kingston is the end of the whole journey — reaching it (by dock or by
 // simply crossing its flowDistance on the Rideau) wins the run.
 const KINGSTON_FLOW_DISTANCE = VILLAGES.find((v) => v.name === 'Kingston')?.flowDistance ?? Infinity;
@@ -755,12 +767,14 @@ export class Game {
   // without every ordinary callout suddenly demanding the same. Shorter
   // hold than the milestone banner (it's a beat, not something to read at
   // length) and gameplay keeps running right underneath it.
-  showBossBanner(text) {
+  // ms: how long it stays up — 2.4s for the boss titles; longer where asked
+  // (the Upper Canada card, enterRideau()).
+  showBossBanner(text, ms = 2400) {
     clearTimeout(this._bossBannerTimeout);
     const el = this.ui.bossBanner;
     el.textContent = text;
     el.classList.add('show');
-    this._bossBannerTimeout = setTimeout(() => el.classList.remove('show'), 2400);
+    this._bossBannerTimeout = setTimeout(() => el.classList.remove('show'), ms);
   }
 
   start() {
@@ -885,10 +899,19 @@ export class Game {
   // obstacle pool (it seeds itself from world.distance — see the
   // constructor's comment on startFlowDistance — so without a reset here
   // it'd stay full of obstacles positioned for the segment you just left).
-  enterSegment(segmentId, flowDistance) {
+  // keepPlace: carry the canoe's place across the river, its sideways drift,
+  // the camera and the obstacles in view straight over — for the border
+  // into Upper Canada, where river/path.js draws the start of the Rideau as
+  // the Ottawa carrying on, so the river at the new flowDistance is exactly
+  // the river at the old one and nothing needs to move. (Re-centring there
+  // jumped the canoe sideways and cleared every rock and log on screen.)
+  // Obstacles keep their z — their position relative to the canoe — which
+  // the lead-in mapping keeps on the same water.
+  enterSegment(segmentId, flowDistance, keepPlace = false) {
     this.segment = segmentId;
     this.flowDistance = flowDistance;
     this.world.distance = flowDistance;
+    if (keepPlace) return;
     this.lateralOffset = 0;
     this.lateralVX = 0;
     this.cameraCenterX = centerX(flowDistance);
@@ -905,7 +928,10 @@ export class Game {
   // through here. Also becomes the run's checkpoint: the Devil is behind
   // you now, so a capsize on the Rideau respawns at its start, not back at
   // the Diable arena.
-  enterRideau() {
+  // overshoot: how far past RIDEAU_BORDER_DISTANCE the canoe was when it
+  // crossed, carried over so it lands at exactly the matching spot on the
+  // Rideau's lead-in (path.js) and the frame doesn't jump by a stroke.
+  enterRideau(overshoot = 0) {
     this._diableCheckpoint = false;
     this.diable.reset();
     this.diablePct = null;
@@ -914,14 +940,21 @@ export class Game {
     this.warshipPct = null;
     this.chasseGalerie.reset();
     this._chasseGalerieBannerShown = true; // no flight on the Rideau
-    const start = SEGMENT_SHAPE_OFFSET.rideau + 0.5;
+    const start = RIDEAU_ENTRY_D + Math.max(0, overshoot);
     this.startSegment = 'rideau';
     this.startFlowDistance = start;
     this.mode = 'river';
     this.currentVillage = null;
-    this.enterSegment('rideau', start);
+    this.enterSegment('rideau', start, true);
     this.music?.endBossTrack();
     this.showBanner('The storm breaks — the Rideau, and Kingston beyond');
+    // The big title card (#boss-banner) as the river turns from upstream to
+    // downstream past Gatineau — "can we briefly show a large banner saying
+    // 'Entering Upper Canada'" — held 4s rather than the boss titles' 2.4
+    // ("make it last longer. Let's try 4 seconds"). Here rather than at the
+    // crossing check, so it shows the same whether you paddle past Gatineau
+    // or cast off from its dock — both come through enterRideau().
+    this.showBossBanner('ENTERING UPPER CANADA', 4000);
   }
 
   // Reaching Kingston, whether by touching its dock or just crossing its
@@ -982,9 +1015,9 @@ export class Game {
       // resume in place like every other village's cast-off below).
       this.enterSegment('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 0.5);
       this.showBanner('Paddling upriver toward Québec City — fight the current');
-    } else if (this.currentVillage.name === 'Gatineau') {
-      this.enterRideau();
     } else {
+      // (Gatineau too, now — an ordinary cast-off back onto the Ottawa; the
+      // Rideau starts at RIDEAU_BORDER_DISTANCE, a short paddle on.)
       // Re-boarding drops the canoe right where it triggered the dock. Two
       // things then push it straight back in: on lawrenceWest the current
       // itself runs backward (upriver, toward the dock), and everywhere a
@@ -1526,7 +1559,13 @@ export class Game {
     // he's beaten. The clamp lands one frame before diable.update() below
     // flips the fight on; that's fine — a single frame of overshoot at
     // cruise speed is well under a tenth of a unit.
+    // Only for a canoe arriving at the arena, not one already beyond it —
+    // a run started past him (a CONTINUE from Gatineau, a ?start= jump),
+    // which diable.js then treats as having him behind it. Without this the
+    // clamp pulled such a canoe back on its very first frame, before
+    // diable.update() could see where it was.
     if (this.segment === 'lawrenceWest' && !this.diable.isDefeated()
+      && this.flowDistance <= DIABLE_FLOW_DISTANCE + 1
       && proposedFlowDistance >= DIABLE_FLOW_DISTANCE) {
       proposedFlowDistance = DIABLE_FLOW_DISTANCE;
     }
@@ -1820,12 +1859,12 @@ export class Game {
       return;
     }
 
-    // Gatineau is the junction onto the Rideau (world/river/route.js). Same
-    // shape as the mouth crossing just below: if the canoe reaches Gatineau's
-    // flowDistance without steering into its dock, it rolls straight on onto
-    // the Rideau leg toward Kingston.
-    if (this.segment === 'lawrenceWest' && this.flowDistance >= GATINEAU_FLOW_DISTANCE) {
-      this.enterRideau();
+    // The border with Upper Canada, a short paddle past Gatineau's dock
+    // (RIDEAU_BORDER_DISTANCE). Same shape as the mouth crossing just below:
+    // reach it — cast off from Gatineau or paddling straight past — and the
+    // canoe rolls on onto the Rideau leg toward Kingston.
+    if (this.segment === 'lawrenceWest' && this.flowDistance >= RIDEAU_BORDER_DISTANCE) {
+      this.enterRideau(this.flowDistance - RIDEAU_BORDER_DISTANCE);
       return;
     }
 
@@ -2279,6 +2318,8 @@ export class Game {
     // While flying the Chasse-galerie there are no docks or town buildings
     // below — the riverbank parishes read as steeples only (drawn later).
     drawBanks(ctx, this.flowDistance, cameraWorldX, { hideVillages: isFlying, time: this.time, canoeWorldX: this.canoeWorldX });
+    // The Union Jack on the south bank just inside Upper Canada (world/flag.js).
+    if (this.segment === 'rideau') drawUpperCanadaFlag(ctx, this.flowDistance, cameraWorldX, this.time, worldToScreen);
     if (this.water) {
       // warshipStorm reaches the water itself (chop, dead glints, slate
       // colour — waterGL.js's u_storm); 0 everywhere but the Rideau. frost

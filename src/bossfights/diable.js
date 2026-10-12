@@ -279,6 +279,18 @@ export function createDiable() {
       const hitBullets = [];
 
       if (phase === 'idle') {
+        // A canoe already past the arena never meets him: he's behind it.
+        // Only reachable by starting a run past him — a CONTINUE from a
+        // Gatineau save, or a ?start=/?debug jump there — since the arena
+        // holds anyone who reaches it the ordinary way until he's beaten.
+        // Without this he'd appear from behind and game.js's arena clamp
+        // would drag the canoe back to fight him again: found when casting
+        // off from Gatineau became an ordinary cast-off onto the Ottawa
+        // (game.js's RIDEAU_BORDER_DISTANCE) instead of a jump to the Rideau.
+        if (playerFlowDistance > DIABLE_FLOW_DISTANCE + 1) {
+          phase = 'done';
+          return { hitBullets };
+        }
         if (playerFlowDistance >= DIABLE_FLOW_DISTANCE - APPROACH) {
           phase = 'appearing';
           justAppeared = true;

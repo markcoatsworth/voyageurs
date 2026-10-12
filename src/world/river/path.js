@@ -81,6 +81,40 @@ const ESTUARY_AMP_SCALE = 2.8;
 // landmarks already stand — opens up disproportionately, matching that
 // asymmetry. Same HARBOUR_FROM window rideauWidthAt() uses, so the skew
 // and the width flare ease in together, not staggered.
+// --- the seam into Upper Canada -------------------------------------
+// The Rideau is its own stretch of the number line (RIDEAU_OFFSET), not a
+// continuation of the Ottawa: crossing the border (RIDEAU_BORDER_DISTANCE,
+// a short paddle past Gatineau's dock) swaps one river for the other in a
+// single frame. They were never shaped to meet — at the swap the Ottawa was
+// 11 units wide bending right, the Rideau 13.3 bending left, and the strip
+// just behind the canoe a third, unrelated shape — "the Upper Canada river
+// edges are roughly 70-80px wider on each side". So the Rideau gets a
+// lead-in: from RIDEAU_LEAD_BEHIND before its start to RIDEAU_LEAD_IN past
+// where the canoe comes in (RIDEAU_ENTRY_D), it's drawn as the Ottawa
+// carrying on past the border (RIDEAU_TO_OTTAWA maps a Rideau position to
+// the matching Ottawa one, entry <-> border), easing into the Rideau's own
+// shape over the lead-in. At the swap the frame is the same river as the
+// one before it. Mirrored in waterGL.js — keep in sync.
+const GATINEAU_D = VILLAGES.find((v) => v.name === 'Gatineau').flowDistance;
+export const RIDEAU_BORDER_PAST_GATINEAU = 26;
+export const RIDEAU_BORDER_DISTANCE = GATINEAU_D + RIDEAU_BORDER_PAST_GATINEAU;
+export const RIDEAU_ENTRY_D = RIDEAU_OFFSET + 0.5;
+export const RIDEAU_TO_OTTAWA = RIDEAU_BORDER_DISTANCE - RIDEAU_ENTRY_D;
+export const RIDEAU_LEAD_IN = 40;
+// Behind the entry point: the strip below the canoe on screen (~3.4 units)
+// plus the trees on the banks beside it, with room to spare.
+export const RIDEAU_LEAD_BEHIND = 12;
+// The ease only begins this far past the entry point — beyond the top of the
+// screen (~10.3 units ahead of the canoe) — so every row on screen at the
+// swap is pure Ottawa; the blend scrolls in from the top as ordinary river.
+// Starting it at the canoe left the top rows already ~0.4 units off at the
+// swap, a visible twitch.
+export const RIDEAU_LEAD_CLEAR = 12;
+function rideauLeadK(d) {
+  const p = Math.min(1, Math.max(0, (d - RIDEAU_ENTRY_D - RIDEAU_LEAD_CLEAR) / RIDEAU_LEAD_IN));
+  return p * p * (3 - 2 * p);
+}
+
 export const KINGSTON_HARBOUR_SKEW = 15;
 function kingstonHarbourSkew(d) {
   const frac = Math.min(1, Math.max(0, (d - RIDEAU_OFFSET) / RIDEAU_SPAN_DISTANCE));
@@ -106,7 +140,12 @@ export function centerX(d) {
   // (mostly) tracking just the width growth alone rather than the width
   // growth *plus* the skew stacking on top of it — see kingstonHarbourSkew's
   // own comment for the intent this has to produce.
-  if (d >= RIDEAU_OFFSET) return base - kingstonHarbourSkew(d);
+  if (d >= RIDEAU_OFFSET - RIDEAU_LEAD_BEHIND) {
+    const rideau = base - kingstonHarbourSkew(d);
+    const k = rideauLeadK(d);
+    // The Ottawa carrying on past the border — see RIDEAU_TO_OTTAWA.
+    return k >= 1 ? rideau : centerX(d + RIDEAU_TO_OTTAWA) * (1 - k) + rideau * k;
+  }
   return base;
 }
 
@@ -172,7 +211,12 @@ export function widthAt(d) {
   // The Rideau leg (river/route.js) — its own profile, checked first because
   // its shape offset sits past the Ottawa gorge ease below and would
   // otherwise blend into it.
-  if (d >= RIDEAU_OFFSET) return rideauWidthAt(d);
+  if (d >= RIDEAU_OFFSET - RIDEAU_LEAD_BEHIND) {
+    const rideau = rideauWidthAt(d);
+    const k = rideauLeadK(d);
+    // The Ottawa carrying on past the border — see RIDEAU_TO_OTTAWA.
+    return k >= 1 ? rideau : widthAt(d + RIDEAU_TO_OTTAWA) * (1 - k) + rideau * k;
+  }
 
   // Cubic ease-in, not the raw linear progress — the fjord should stay
   // close to its own width for most of the approach and only really open up

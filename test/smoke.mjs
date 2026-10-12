@@ -863,6 +863,148 @@ await step('belugas: only in the estuary, and they spout and show their flukes',
   if (lake) throw new Error('belugas drawn on Lac Saint-Pierre');
 });
 
+await step('blockade: the British Blockade sits between Kars and Merrickville, docks clear of it', async () => {
+  // "Move the British Blockade back between Kars and Merrickville." The
+  // whole gauntlet — cannon fire from APPROACH_RANGE out, the ship, and the
+  // clear water past it — between the two docks, neither dock inside it
+  // (a dock in the corridor would let the player walk ashore mid-fight).
+  const { APPROACH_RANGE } = await import('../src/bossfights/blockade.js');
+  const { dockHitZ } = await import('../src/world/villages.js');
+  const kars = VILLAGES.find((v) => v.name === 'Kars');
+  const merrickville = VILLAGES.find((v) => v.name === 'Merrickville');
+  const lo = SHIP_FLOW_DISTANCE - APPROACH_RANGE;
+  const hi = SHIP_FLOW_DISTANCE + 10;
+  if (!(lo > kars.flowDistance + dockHitZ(kars) + 20)) throw new Error(`the Blockade's cannon fire starts ${(lo - kars.flowDistance).toFixed(1)} units past Kars's dock`);
+  if (!(hi < merrickville.flowDistance - dockHitZ(merrickville) - 20)) throw new Error(`the Blockade runs to ${(merrickville.flowDistance - hi).toFixed(1)} units short of Merrickville's dock`);
+  for (const v of VILLAGES) {
+    if (v.segment === 'rideau' && v.flowDistance > lo && v.flowDistance < hi) throw new Error(`${v.name}'s dock is inside the Blockade's corridor`);
+  }
+});
+
+await step('rideau: past Gatineau, a big "ENTERING UPPER CANADA" title card', async () => {
+  // "After passing Gatineau, where the river flow changes from upstream to
+  // downstream, can we briefly show a large banner saying 'Entering Upper
+  // Canada'." Both ways onto the Rideau: paddling past Gatineau, and
+  // casting off from its dock.
+  const gat = VILLAGES.find((v) => v.name === 'Gatineau');
+  const { RIDEAU_BORDER_DISTANCE } = await import('../src/core/game.js');
+  const { dockHitZ } = await import('../src/world/villages.js');
+  // "I immediately start on the boundary line ... start just outside the
+  // Gatineau [dock], so that there's still a short upstream paddle before
+  // the river changes direction." The border sits a short paddle past the
+  // dock's far end, not on Gatineau itself.
+  const pastDock = RIDEAU_BORDER_DISTANCE - (gat.flowDistance + dockHitZ(gat));
+  if (!(pastDock >= 15 && pastDock <= 40)) throw new Error(`the Upper Canada border is ${pastDock.toFixed(1)} units past Gatineau's dock`);
+  const toBorder = (g) => {
+    let upstream = 0;
+    for (let i = 0; i < 900 && g.game.segment !== 'rideau'; i++) {
+      g.input.state.up = true;
+      g.game.update(1 / 30);
+      if (g.game.segment === 'lawrenceWest') upstream++;
+    }
+    return upstream / 30;
+  };
+  // Casting off from Gatineau: an ordinary cast-off, back on the Ottawa
+  // just past the dock, still paddling upriver — not onto the Rideau.
+  // A fresh run started at Gatineau (as a CONTINUE from a Gatineau save
+  // or a ?debug jump is) — Le Diable never met this session — must not be
+  // dragged back to his arena once it's on the water past him.
+  const castOff = newGame('lawrenceWest', gat.flowDistance - 5);
+  castOff.game.enterVillage(gat);
+  castOff.game.leaveVillage();
+  if (castOff.game.segment !== 'lawrenceWest') throw new Error(`casting off from Gatineau put the canoe on ${castOff.game.segment}, not back on the Ottawa`);
+  if (!(castOff.game.flowDistance < RIDEAU_BORDER_DISTANCE - 10)) throw new Error('casting off from Gatineau leaves hardly any paddle before the border');
+  const castOffSecs = toBorder(castOff);
+  if (castOff.game.segment !== 'rideau') throw new Error(`casting off from Gatineau never reached the border — stuck at ${castOff.game.flowDistance.toFixed(1)} (Le Diable's arena is ${DIABLE_FLOW_DISTANCE})`);
+  // Paddling straight past Gatineau without stopping (from just past its
+  // dock, so the bot doesn't run into it): the same border, the same card.
+  const paddled = newGame('lawrenceWest', gat.flowDistance + dockHitZ(gat) + 1);
+  toBorder(paddled);
+  if (paddled.game.segment !== 'rideau') throw new Error('never crossed onto the Rideau past Gatineau');
+  if (!(castOffSecs >= 1.5)) throw new Error(`only ${castOffSecs.toFixed(1)}s of upstream paddling between leaving Gatineau and the border`);
+  notes.push(`  note rideau: ${castOffSecs.toFixed(1)}s of upstream paddling from Gatineau's cast-off to the Upper Canada border`);
+  for (const [how, g] of [['paddling past Gatineau', paddled], ['casting off from Gatineau', castOff]]) {
+    const el = g.game.ui.bossBanner;
+    if (g.game.segment !== 'rideau') throw new Error(`${how} didn't reach the Rideau`);
+    if (el.textContent !== 'ENTERING UPPER CANADA') throw new Error(`${how}: the big banner says "${el.textContent}"`);
+    if (!el.classList.contains('show')) throw new Error(`${how}: the big banner isn't showing`);
+  }
+  // The seam: "When I transition across the boundary into Upper Canada,
+  // the river edges do not line up correctly." Every row on screen at the
+  // swap (CANOE_SCREEN_Y px behind the canoe to the top of the frame) is the
+  // same river on both sides of it — width and centreline — and the canoe,
+  // the camera and the obstacles in view all stay put across it.
+  const { RIDEAU_ENTRY_D, RIDEAU_TO_OTTAWA } = await import('../src/world/river/path.js');
+  const behind = (CANVAS_HEIGHT - CANOE_SCREEN_Y) / PIXELS_PER_UNIT + 1;
+  const ahead = CANOE_SCREEN_Y / PIXELS_PER_UNIT + 1;
+  for (let d = RIDEAU_ENTRY_D - behind; d <= RIDEAU_ENTRY_D + ahead; d += 0.1) {
+    const dw = Math.abs(widthAt(d) - widthAt(d + RIDEAU_TO_OTTAWA));
+    const dc = Math.abs(centerX(d) - centerX(d + RIDEAU_TO_OTTAWA));
+    if (dw > 1e-6 || dc > 1e-6) throw new Error(`at the swap the river ${(d - RIDEAU_ENTRY_D).toFixed(1)} units from the canoe changes by ${dw.toFixed(3)} in width / ${dc.toFixed(3)} in position`);
+  }
+  const seam = newGame('lawrenceWest', RIDEAU_BORDER_DISTANCE - 4);
+  let before = null;
+  for (let i = 0; i < 300 && seam.game.segment !== 'rideau'; i++) {
+    seam.input.state.up = true;
+    seam.input.state.right = i < 20; // somewhere off the centreline
+    before = {
+      screenX: seam.game.canoeWorldX - seam.game.cameraWorldX,
+      off: seam.game.canoeWorldX - centerX(seam.game.flowDistance),
+      obstacles: seam.obstacles.pool.map((e) => [e.z, e.x]),
+    };
+    seam.game.update(1 / 30);
+  }
+  if (seam.game.segment !== 'rideau') throw new Error('never crossed the border');
+  const offAfter = seam.game.canoeWorldX - centerX(seam.game.flowDistance);
+  if (Math.abs(offAfter - before.off) > 0.3) throw new Error(`the canoe jumped ${(offAfter - before.off).toFixed(2)} units sideways at the border`);
+  const screenAfter = seam.game.canoeWorldX - seam.game.cameraWorldX;
+  if (Math.abs(screenAfter - before.screenX) > 0.3) throw new Error(`the canoe jumped ${((screenAfter - before.screenX) * PIXELS_PER_UNIT).toFixed(0)}px on screen at the border`);
+  const kept = seam.obstacles.pool.filter((e, i) => Math.abs(e.x - before.obstacles[i][1]) < 1e-9).length;
+  if (kept < seam.obstacles.pool.length - 1) throw new Error(`crossing the border reshuffled the rocks and logs (${kept}/${seam.obstacles.pool.length} kept)`);
+  // And the Union Jack on the south (left) bank, on screen as you come in:
+  // "Can we put a big Union Jack flag on the south (left) river bank when
+  // crossing into Upper Canada?"
+  const { UPPER_CANADA_FLAG_D, FLAG_VISIBLE_AHEAD, upperCanadaFlagX, drawUpperCanadaFlag } = await import('../src/world/flag.js');
+  // ...and its twin on the north (right) bank "at exactly the same location
+  // along the river" — same flowDistance, so the same row on screen.
+  const half = widthAt(UPPER_CANADA_FLAG_D) / 2, mid = centerX(UPPER_CANADA_FLAG_D);
+  if (!(upperCanadaFlagX(-1) < mid - half)) throw new Error('the Union Jack is not on the left-hand bank');
+  if (!(upperCanadaFlagX(1) > mid + half)) throw new Error('the second Union Jack is not on the right-hand bank');
+  if (Math.abs((upperCanadaFlagX(1) - mid) + (upperCanadaFlagX(-1) - mid)) > 1e-9) throw new Error('the two Union Jacks are not set back the same distance from their banks');
+  const drawn = (worldD) => {
+    let n = 0;
+    const ctx = new Proxy({}, { get(_t, prop) { if (prop === 'fillRect' || prop === 'drawImage') return () => { n++; }; return () => {}; }, set() { return true; } });
+    drawUpperCanadaFlag(ctx, worldD, centerX(worldD), 1.2, (x, z, cam) => ({ x: 160 + (x - cam) * PIXELS_PER_UNIT, y: CANOE_SCREEN_Y + z * PIXELS_PER_UNIT }));
+    return n;
+  };
+  if (!drawn(UPPER_CANADA_FLAG_D - FLAG_VISIBLE_AHEAD)) throw new Error('the Union Jacks are not drawn when they should be in view');
+  if (drawn(UPPER_CANADA_FLAG_D + 200)) throw new Error('the Union Jack is drawn far down the Rideau');
+  // Then "halfway between where they were before [+6] and where they are
+  // now [+36.5]" — in view about a second after the card, paddling through.
+  const timing = newGame('lawrenceWest', RIDEAU_BORDER_DISTANCE - 6);
+  for (let i = 0; i < 300 && timing.game.segment !== 'rideau'; i++) {
+    timing.input.state.up = true;
+    timing.game.update(1 / 30);
+  }
+  let secs = 0;
+  while (secs < 6 && UPPER_CANADA_FLAG_D - timing.game.flowDistance > FLAG_VISIBLE_AHEAD) {
+    timing.input.state.up = true;
+    timing.game.health = 100;
+    timing.game.update(1 / 30);
+    secs += 1 / 30;
+  }
+  if (Math.abs(UPPER_CANADA_FLAG_D - (SEGMENT_SHAPE_OFFSET.rideau + 21.25)) > 1e-9) throw new Error(`the Union Jacks are ${(UPPER_CANADA_FLAG_D - SEGMENT_SHAPE_OFFSET.rideau).toFixed(2)} units into the Rideau, not halfway (21.25)`);
+  if (!(secs >= 0.5 && secs <= 1.6)) throw new Error(`the Union Jacks come into view ${secs.toFixed(2)}s after the Upper Canada card, not ~1s`);
+  notes.push(`  note flags: the Union Jacks come into view ${secs.toFixed(1)}s after the Upper Canada card (paddling)`);
+  // Held 4s ("make it last longer. Let's try 4 seconds") — up past the
+  // boss titles' 2.4s, gone by 4.5s.
+  const el = castOff.game.ui.bossBanner;
+  await new Promise((r) => setTimeout(r, 3600));
+  if (!el.classList.contains('show')) throw new Error('the Upper Canada card was gone before 4 seconds');
+  await new Promise((r) => setTimeout(r, 900));
+  if (el.classList.contains('show')) throw new Error('the Upper Canada card was still up after 4.5 seconds');
+});
+
 // --- scenario 3b: the Loup-garou, on the run down to Tadoussac -----------
 
 await step('loup-garou: the demon-wolf strikes, then the mouth at Tadoussac checks it', () => {
@@ -2719,14 +2861,22 @@ await step('diable: up/down move the canoe without unlocking the river', () => {
 
 // --- scenario 4g: the Rideau leg — Gatineau junction through to Kingston --
 
-await step('gatineau: casting off from the winter camp jumps onto the Rideau', () => {
+await step('gatineau: casting off from the winter camp, a short paddle up the Ottawa, then onto the Rideau', () => {
+  // Casting off used to jump straight onto the Rideau; now it's an ordinary
+  // cast-off back onto the Ottawa, and the border is a short paddle on (see
+  // game.js's RIDEAU_BORDER_DISTANCE and the Upper Canada card test).
   const gatineau = VILLAGES.find((v) => v.name === 'Gatineau');
   if (!gatineau) throw new Error('no "Gatineau" in VILLAGES — a name/lookup drifted');
   const g = newGame(gatineau.segment, gatineau.flowDistance - 20);
   g.game.enterVillage(gatineau);
   g.game.leaveVillage();
-  if (g.game.segment !== 'rideau') throw new Error(`leaving Gatineau should jump onto the Rideau, still on ${g.game.segment}`);
+  if (g.game.segment !== 'lawrenceWest') throw new Error(`leaving Gatineau should put the canoe back on the Ottawa, not on ${g.game.segment}`);
   if (g.game.mode !== 'river') throw new Error('leaveVillage did not return to river mode');
+  for (let i = 0; i < 900 && g.game.segment !== 'rideau'; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (g.game.segment !== 'rideau') throw new Error('paddling on from Gatineau never reached the Rideau');
   if (g.game.diable.isActive()) throw new Error('the Diable fight reactivated on the Rideau leg');
   // The Devil is behind you — a capsize now respawns on the Rideau, not the arena.
   if (g.game.startSegment !== 'rideau') throw new Error('the Rideau did not become the respawn checkpoint');
