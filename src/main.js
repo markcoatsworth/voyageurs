@@ -1,7 +1,7 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './shared/config.js';
 import { createObstacleField } from './world/obstacles.js';
 import { createWaterRenderer } from './world/waterGL.js';
-import { createMusic } from './audio/music.js';
+import { createMusic, regionForSegment } from './audio/music.js';
 import { createMinimap } from './world/minimap.js';
 import { createTouchControls, isTouchPrimary } from './core/touchControls.js';
 import { createDebugMenu } from './core/debugMenu.js';
@@ -1133,6 +1133,9 @@ export function beginRun(start, { fromMenu = false, intoVillage = null } = {}) {
   document.body.classList.remove('at-title');
   titleScene?.dismiss();
   music.setOpeningPinned(isPutIn(start.segment, start.flowDistance));
+  // A run that starts on the Rideau (CONTINUE from a Rideau save, a ?start=
+  // or ?debug jump) starts in the Upper Canada shuffle — audio/music.js.
+  music.setRegion(regionForSegment(start.segment));
   try {
     game = new Game({ ctx, water, input, obstacles, world, ui, music, startFlowDistance: start.flowDistance, startSegment: start.segment, easyMode: startedEasy, startFurs: start.furs ?? 0 });
     // ?start=diable is a checkpoint, not just a spawn point — hand over the

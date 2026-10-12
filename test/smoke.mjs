@@ -863,19 +863,22 @@ await step('belugas: only in the estuary, and they spout and show their flukes',
   if (lake) throw new Error('belugas drawn on Lac Saint-Pierre');
 });
 
-await step('blockade: the British Blockade sits between Kars and Merrickville, docks clear of it', async () => {
-  // "Move the British Blockade back between Kars and Merrickville." The
-  // whole gauntlet — cannon fire from APPROACH_RANGE out, the ship, and the
-  // clear water past it — between the two docks, neither dock inside it
-  // (a dock in the corridor would let the player walk ashore mid-fight).
+await step('blockade: the British Blockade sits between Smiths Falls and Newboro, docks clear of it', async () => {
+  // "Put it back between Smiths Falls and Newboro where it was before" —
+  // after a spell between Kars and Merrickville. The whole gauntlet — cannon
+  // fire from APPROACH_RANGE out, the ship, and the clear water past it —
+  // between the two docks, neither dock inside it (a dock in the corridor
+  // would let the player walk ashore mid-fight).
   const { APPROACH_RANGE } = await import('../src/bossfights/blockade.js');
   const { dockHitZ } = await import('../src/world/villages.js');
-  const kars = VILLAGES.find((v) => v.name === 'Kars');
-  const merrickville = VILLAGES.find((v) => v.name === 'Merrickville');
+  const before = VILLAGES.find((v) => v.name === 'Smiths Falls');
+  const after = VILLAGES.find((v) => v.name === 'Newboro');
+  const kingston = VILLAGES.find((v) => v.name === 'Kingston');
+  if (Math.abs(SHIP_FLOW_DISTANCE - (kingston.flowDistance - 700)) > 1e-9) throw new Error('the Blockade is not back at Kingston - 700, where it was before');
   const lo = SHIP_FLOW_DISTANCE - APPROACH_RANGE;
   const hi = SHIP_FLOW_DISTANCE + 10;
-  if (!(lo > kars.flowDistance + dockHitZ(kars) + 20)) throw new Error(`the Blockade's cannon fire starts ${(lo - kars.flowDistance).toFixed(1)} units past Kars's dock`);
-  if (!(hi < merrickville.flowDistance - dockHitZ(merrickville) - 20)) throw new Error(`the Blockade runs to ${(merrickville.flowDistance - hi).toFixed(1)} units short of Merrickville's dock`);
+  if (!(lo > before.flowDistance + dockHitZ(before) + 15)) throw new Error(`the Blockade's cannon fire starts ${(lo - before.flowDistance).toFixed(1)} units past Smiths Falls's dock`);
+  if (!(hi < after.flowDistance - dockHitZ(after) - 20)) throw new Error(`the Blockade runs to ${(after.flowDistance - hi).toFixed(1)} units short of Newboro's dock`);
   for (const v of VILLAGES) {
     if (v.segment === 'rideau' && v.flowDistance > lo && v.flowDistance < hi) throw new Error(`${v.name}'s dock is inside the Blockade's corridor`);
   }
@@ -993,11 +996,12 @@ await step('rideau: past Gatineau, a big "ENTERING UPPER CANADA" title card', as
     timing.game.update(1 / 30);
     secs += 1 / 30;
   }
-  if (Math.abs(UPPER_CANADA_FLAG_D - (SEGMENT_SHAPE_OFFSET.rideau + 21.25)) > 1e-9) throw new Error(`the Union Jacks are ${(UPPER_CANADA_FLAG_D - SEGMENT_SHAPE_OFFSET.rideau).toFixed(2)} units into the Rideau, not halfway (21.25)`);
-  if (!(secs >= 0.5 && secs <= 1.6)) throw new Error(`the Union Jacks come into view ${secs.toFixed(2)}s after the Upper Canada card, not ~1s`);
+  // ...then "a bit further along the river": +26.
+  if (Math.abs(UPPER_CANADA_FLAG_D - (SEGMENT_SHAPE_OFFSET.rideau + 26)) > 1e-9) throw new Error(`the Union Jacks are ${(UPPER_CANADA_FLAG_D - SEGMENT_SHAPE_OFFSET.rideau).toFixed(2)} units into the Rideau, not 26`);
+  if (!(secs >= 0.9 && secs <= 1.8)) throw new Error(`the Union Jacks come into view ${secs.toFixed(2)}s after the Upper Canada card, not ~1.3s`);
   notes.push(`  note flags: the Union Jacks come into view ${secs.toFixed(1)}s after the Upper Canada card (paddling)`);
-  // Held 4s ("make it last longer. Let's try 4 seconds") — up past the
-  // boss titles' 2.4s, gone by 4.5s. Timed from a fresh crossing, against
+  // Held 5s ("make it last longer. Let's try 4 seconds", then "1 second
+  // longer") — up past the boss titles' 2.4s, gone by 5.5s. Timed from a fresh crossing, against
   // the clock at the moment the card went up: timing it off the cast-off
   // above, after the seam and flag checks had each simulated seconds of
   // play, failed on Cloud Build's slower machine — those checks alone ate
@@ -1010,10 +1014,10 @@ await step('rideau: past Gatineau, a big "ENTERING UPPER CANADA" title card', as
   const shownAt = Date.now();
   const el = hold.game.ui.bossBanner;
   if (hold.game.segment !== 'rideau' || !el.classList.contains('show')) throw new Error('no Upper Canada card on a fresh crossing');
-  await new Promise((r) => setTimeout(r, Math.max(0, 3600 - (Date.now() - shownAt))));
-  if (!el.classList.contains('show')) throw new Error('the Upper Canada card was gone before 4 seconds');
-  await new Promise((r) => setTimeout(r, Math.max(0, 4500 - (Date.now() - shownAt))));
-  if (el.classList.contains('show')) throw new Error('the Upper Canada card was still up after 4.5 seconds');
+  await new Promise((r) => setTimeout(r, Math.max(0, 4600 - (Date.now() - shownAt))));
+  if (!el.classList.contains('show')) throw new Error('the Upper Canada card was gone before 5 seconds');
+  await new Promise((r) => setTimeout(r, Math.max(0, 5500 - (Date.now() - shownAt))));
+  if (el.classList.contains('show')) throw new Error('the Upper Canada card was still up after 5.5 seconds');
 });
 
 // --- scenario 3b: the Loup-garou, on the run down to Tadoussac -----------
@@ -1939,6 +1943,44 @@ await step('wendigo: the ?start= cheat lands past Trois-Rivières\' dock, a coup
 });
 
 // --- scenario 4c: the ship's fore/aft hold never renders off-screen --------
+
+await step('britishWarship: shot down, she sinks slowly in front of you', async () => {
+  // "When I beat the British Warship, I want to see it sink slowly." She
+  // goes down over SINK_TIME, drawn the whole way, with the canoe still held
+  // so she doesn't scroll off; then the hold and the storm let go.
+  const { SINK_TIME } = await import('../src/bossfights/britishWarship.js');
+  const g = newGame('rideau', WARSHIP_FLOW_DISTANCE - 2);
+  for (let i = 0; i < 600 && !g.game.britishWarship.isChaseHolding(); i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (!g.game.britishWarship.isChaseHolding()) throw new Error('never reached the Warship hold');
+  g.game.britishWarship.debugSink();
+  g.game.health = 100;
+  g.game.update(1 / 30);
+  if (!g.game.britishWarship.isSinking()) throw new Error('shooting the hull to 0 did not start the sinking');
+  let held = 0, drawnFrames = 0, frames = 0;
+  while (g.game.britishWarship.isChaseHolding() && held < SINK_TIME + 3) {
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    held += 1 / 30;
+    if (g.game.britishWarship.isSinking()) {
+      frames++;
+      let images = 0;
+      const ctx = new Proxy({}, { get(_t, prop) { if (prop === 'drawImage') return () => { images++; }; if (prop === 'canvas') return { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }; return () => {}; }, set() { return true; } });
+      g.game.britishWarship.draw(ctx, g.game.flowDistance - g.game._chaseHoldZ, g.game.cameraWorldX);
+      if (images) drawnFrames++;
+    }
+  }
+  if (!(held >= SINK_TIME - 0.3 && held <= SINK_TIME + 0.5)) throw new Error(`the canoe was held ${held.toFixed(1)}s for the sinking, expected ~${SINK_TIME}s`);
+  if (drawnFrames < frames * 0.9) throw new Error(`the sinking ship was drawn in only ${drawnFrames}/${frames} frames`);
+  if (g.game.britishWarship.stormIntensity(g.game.flowDistance) !== 0 && g.game.britishWarship.isSinking()) throw new Error('still sinking after the hold let go');
+  // Free to paddle on afterwards.
+  const d0 = g.game.flowDistance;
+  run(g, 60, 1 / 30, (st) => { st.up = true; });
+  if (!(g.game.flowDistance > d0 + 3)) throw new Error('the canoe is still held after she went down');
+  notes.push(`  note britishWarship: went down over ${held.toFixed(1)}s, drawn every frame of it`);
+});
 
 await step('britishWarship: Up/Down keeps the ship on screen', () => {
   // Reported as "Up/Down don't do anything" — the ship WAS moving (verified
@@ -3407,11 +3449,11 @@ await step('music: the Chasse-galerie flies to "Reel du gaucher", and Le Reel du
   if (mod.CHASSE_GALERIE_TRACK.title !== 'Reel du gaucher' || mod.CHASSE_GALERIE_TRACK.artist !== 'Les Frères Brunet') {
     throw new Error(`the Chasse-galerie plays "${mod.CHASSE_GALERIE_TRACK.title}" by ${mod.CHASSE_GALERIE_TRACK.artist}`);
   }
-  if (mod.PLAYLIST.some((t) => t.src === mod.CHASSE_GALERIE_TRACK.src)) throw new Error('the Chasse-galerie track is in the shuffle');
-  if (!mod.PLAYLIST.some((t) => t.title === 'Le Reel du Diable')) throw new Error('Le Reel du Diable is not back in the shuffle');
+  if (mod.QUEBEC_PLAYLIST.some((t) => t.src === mod.CHASSE_GALERIE_TRACK.src)) throw new Error('the Chasse-galerie track is in the shuffle');
+  if (!mod.QUEBEC_PLAYLIST.some((t) => t.title === 'Le Reel du Diable')) throw new Error('Le Reel du Diable is not back in the shuffle');
   // "Remove 'Entre ciel et terre' entirely" — not the flight's track, not
   // in the shuffle, not anywhere in the module.
-  if (mod.PLAYLIST.some((t) => /entre ciel/i.test(t.title))) throw new Error('"Entre ciel et terre" is in the shuffle');
+  if (mod.QUEBEC_PLAYLIST.some((t) => /entre ciel/i.test(t.title))) throw new Error('"Entre ciel et terre" is in the shuffle');
   // And liftoff really cues it.
   const g = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE - 3);
   for (let i = 0; i < 900 && !g.game._chasseGalerieBannerShown; i++) {
@@ -3425,6 +3467,112 @@ await step('music: the Chasse-galerie flies to "Reel du gaucher", and Le Reel du
   g.game.music.stop();
 });
 
+await step('music: two shuffles — Quebec up to the border, Upper Canada past it', async () => {
+  // "I now want to have 2 random shuffle playlists. The existing random
+  // shuffle playlist should only play up until the boundary into Upper
+  // Canada ... After we cross the boundary, we'll have a new random shuffle
+  // playlist with different songs."
+  const mod = await import('../src/audio/music.js');
+  const Q = mod.QUEBEC_PLAYLIST, U = mod.UPPER_CANADA_PLAYLIST;
+  const want = ['Bluebell Polka', 'Maple Leaf Two Step', 'Chain Lightning', 'The Broom Dance', 'Medley', 'No 2, No 1'];
+  for (const t of want) if (!U.some((x) => x.title === t)) throw new Error(`"${t}" is not in the Upper Canada shuffle`);
+  if (U.length !== want.length) throw new Error(`the Upper Canada shuffle has ${U.length} songs, expected ${want.length}`);
+  const srcQ = new Set(Q.map((t) => t.src));
+  if (U.some((t) => srcQ.has(t.src))) throw new Error('a song is in both shuffles');
+  // Songs pinned to a place or a fight are in neither shuffle.
+  const reserved = [mod.OPENING_TRACK, mod.CORRIVEAU_TRACK, mod.CHASSE_GALERIE_TRACK, ...mod.KINGSTON_PLAYLIST];
+  for (const r of reserved) if (U.some((t) => t.src === r.src) || Q.some((t) => t.src === r.src)) throw new Error(`"${r.title}" is reserved but sits in a shuffle`);
+  if (mod.regionForSegment('rideau') !== 'upperCanada' || mod.regionForSegment('lawrenceWest') !== 'quebec' || mod.regionForSegment('fjord') !== 'quebec') {
+    throw new Error('regionForSegment() puts a segment in the wrong shuffle');
+  }
+
+  // Live: Quebec songs until setRegion(), then a fade into an Upper Canada
+  // song, and only Upper Canada songs from then on — across a reshuffle.
+  const srcU = new Set(U.map((t) => t.src));
+  const music = mod.createMusic();
+  music.start();
+  await new Promise((r) => setTimeout(r, 20));
+  for (let k = 0; k < 3; k++) {
+    if (!srcQ.has(music.nowPlaying?.src)) throw new Error(`before the border, "${music.nowPlaying?.title}" played — not a Quebec song`);
+    music.debugAudioElement().dispatchEvent({ type: 'ended' });
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  music.setRegion('upperCanada');
+  if (music.region !== 'upperCanada') throw new Error('setRegion() did not switch');
+  await new Promise((r) => setTimeout(r, 1800)); // REGION_FADE_MS + a margin
+  if (!srcU.has(music.nowPlaying?.src)) throw new Error(`after the border, "${music.nowPlaying?.title}" is playing — not an Upper Canada song`);
+  for (let k = 0; k < U.length * 2 + 2; k++) {
+    music.debugAudioElement().dispatchEvent({ type: 'ended' });
+    await new Promise((r) => setTimeout(r, 10));
+    if (!srcU.has(music.nowPlaying?.src)) throw new Error(`past the border the shuffle played "${music.nowPlaying?.title}"`);
+  }
+  music.stop();
+
+  // The British Grenadiers, pinned to the border: "It should only play this
+  // one time and not appear anywhere else in the random shuffle." Leads the
+  // Upper Canada order when you cross, then never again — and isn't heard
+  // by a run that starts already past the border.
+  const G = mod.UPPER_CANADA_ENTRY_TRACK;
+  if (G.title !== 'The British Grenadiers' || G.artist !== 'The Redcoats') throw new Error(`the border track is "${G.title}" by ${G.artist}`);
+  if (U.some((t) => t.src === G.src) || Q.some((t) => t.src === G.src)) throw new Error('The British Grenadiers is in a shuffle');
+  const crossing = mod.createMusic();
+  crossing.start();
+  await new Promise((r) => setTimeout(r, 20));
+  crossing.setRegion('upperCanada', { pinEntry: true });
+  await new Promise((r) => setTimeout(r, 1800));
+  if (crossing.nowPlaying?.src !== G.src) throw new Error(`crossing the border played "${crossing.nowPlaying?.title}" first, not The British Grenadiers`);
+  for (let k = 0; k < U.length * 3; k++) {
+    crossing.debugAudioElement().dispatchEvent({ type: 'ended' });
+    await new Promise((r) => setTimeout(r, 10));
+    if (crossing.nowPlaying?.src === G.src) throw new Error(`The British Grenadiers played again, ${k + 1} songs after the border`);
+  }
+  crossing.stop();
+  // Interrupted by a boss cue, then the shuffle resumes: it must move on,
+  // not start the play-once song over. Reported: The British Grenadiers was
+  // still playing when the British Blockade's "Rule, Britannia!" cut in,
+  // and started again from the top once past the frigate. Both ways a cue
+  // ends — cut short as the fight resolves (endBossTrack), or playing out
+  // ('ended') — and the same for the put-in's Reel des Forêts.
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (const ending of ['cut short', 'played out']) {
+    for (const [label, make] of [
+      ['The British Grenadiers', async () => { const m = mod.createMusic(); m.start(); await wait(20); m.setRegion('upperCanada', { pinEntry: true }); await wait(1800); return m; }],
+      ['Reel des Forêts', async () => { const m = mod.createMusic({ pinOpeningTrack: true }); m.start(); await wait(20); return m; }],
+    ]) {
+      const m = await make();
+      const pinnedSrc = m.nowPlaying?.src;
+      if (m.nowPlaying?.title !== label) throw new Error(`setup: expected ${label} playing, got "${m.nowPlaying?.title}"`);
+      m.playBossTrack();
+      await wait(2300); // playSpecial's canplay fallback
+      if (ending === 'cut short') m.endBossTrack();
+      else m.debugAudioElement().dispatchEvent({ type: 'ended' });
+      await wait(30);
+      if (m.nowPlaying?.src === pinnedSrc) throw new Error(`${label} started over after a boss cue (${ending}) — it should play only once`);
+      m.stop();
+    }
+  }
+
+  const startedPast = mod.createMusic();
+  startedPast.setRegion('upperCanada'); // as main.js does for a run starting on the Rideau
+  startedPast.start();
+  await new Promise((r) => setTimeout(r, 20));
+  if (startedPast.nowPlaying?.src === G.src) throw new Error('a run starting on the Rideau opened on The British Grenadiers');
+  startedPast.stop();
+
+  // And the game does it at the border.
+  const { RIDEAU_BORDER_DISTANCE } = await import('../src/world/river/path.js');
+  const g = newGame('lawrenceWest', RIDEAU_BORDER_DISTANCE - 2);
+  for (let i = 0; i < 120 && g.game.segment !== 'rideau'; i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (g.game.music.region !== 'upperCanada') throw new Error('crossing into Upper Canada left the music on the Quebec shuffle');
+  g.game.music.start();
+  await new Promise((r) => setTimeout(r, 30));
+  if (g.game.music.nowPlaying?.src !== G.src) throw new Error(`the game crossed the border into "${g.game.music.nowPlaying?.title}", not The British Grenadiers`);
+  g.game.music.stop();
+});
+
 await step('music: La Corriveau has her own song, kept out of the shuffle', async () => {
   // "Make this the boss fight music for the fight with La Corriveau. As
   // with other boss fight songs, it should not play anywhere else in the
@@ -3433,7 +3581,7 @@ await step('music: La Corriveau has her own song, kept out of the shuffle', asyn
   if (mod.CORRIVEAU_TRACK.title !== 'La Corriveau' || mod.CORRIVEAU_TRACK.artist !== 'Le Rêve du Caribou') {
     throw new Error(`La Corriveau's fight plays "${mod.CORRIVEAU_TRACK.title}" by ${mod.CORRIVEAU_TRACK.artist}`);
   }
-  if (mod.PLAYLIST.some((t) => t.src === mod.CORRIVEAU_TRACK.src)) throw new Error('La Corriveau\'s song is in the shuffle');
+  if (mod.QUEBEC_PLAYLIST.some((t) => t.src === mod.CORRIVEAU_TRACK.src)) throw new Error('La Corriveau\'s song is in the shuffle');
   // And the fight really cues it.
   const g = newGame(CORRIVEAU_SEGMENT, CORRIVEAU_TRIGGER - 3);
   for (let i = 0; i < 300 && !g.game.corriveau.isActive(); i++) {
@@ -3458,7 +3606,7 @@ await step('music: a run from the put-in opens on Reel des Forêts; one starting
   // shuffle" — so it's reserved like the boss cues, out of PLAYLIST.
   const mod = await import('../src/audio/music.js');
   if (mod.OPENING_TRACK == null) throw new Error('OPENING_TRACK is gone');
-  if (mod.PLAYLIST.some((t) => t.src === mod.OPENING_TRACK.src)) {
+  if (mod.QUEBEC_PLAYLIST.some((t) => t.src === mod.OPENING_TRACK.src)) {
     throw new Error(`the opener ("${mod.OPENING_TRACK.title}") is back in the ambient shuffle — it should play once at the put-in and never again`);
   }
 
@@ -3479,7 +3627,7 @@ await step('music: a run from the put-in opens on Reel des Forêts; one starting
     if (music.nowPlaying?.title) seconds.add(music.nowPlaying.title);
     // Played once — never again, through the whole first shuffle and well
     // into the reshuffles after it.
-    for (let k = 0; k < mod.PLAYLIST.length * 2 + 3; k++) {
+    for (let k = 0; k < mod.QUEBEC_PLAYLIST.length * 2 + 3; k++) {
       if (music.nowPlaying?.src === mod.OPENING_TRACK.src) {
         throw new Error(`session ${i + 1} played "${mod.OPENING_TRACK.title}" a second time, ${k + 1} tracks after the opening`);
       }
@@ -3641,7 +3789,7 @@ await step('music: the Kingston playlist cycles through every track, never falli
   const kingstonTitles = mod.KINGSTON_PLAYLIST.map((t) => t.title);
   // "I don't want the existing music to change" — none of these must ever
   // have been folded into the regular ambient shuffle itself.
-  const ambientTitles = mod.PLAYLIST.map((t) => t.title);
+  const ambientTitles = mod.QUEBEC_PLAYLIST.map((t) => t.title);
   for (const t of kingstonTitles) {
     if (ambientTitles.includes(t)) throw new Error(`"${t}" is in both the Kingston playlist and the ambient shuffle — should be exclusive to Kingston`);
   }

@@ -26,11 +26,12 @@ import { centerX, widthAt, SEGMENT_SHAPE_OFFSET } from './river/path.js';
 // then +6 (on screen the moment you cross), then +36.5 (in view ~2s after
 // the "ENTERING UPPER CANADA" card — "too far along the river now"), and
 // now halfway between those last two ("halfway between where they were
-// before, and where they are now"): +21.25, in view ~1s after the card for
-// a canoe paddling through the crossing (~29 units in 2s; slower if you
-// drift). The cloth shows ~FLAG_VISIBLE_AHEAD units ahead of the canoe.
+// before, and where they are now"): +21.25, then on a bit ("a bit further
+// along the river") to +26 — in view ~1.3s after the card for a canoe
+// paddling through the crossing (~29 units in 2s; slower if you drift).
+// The cloth shows ~FLAG_VISIBLE_AHEAD units ahead of the canoe.
 export const FLAG_VISIBLE_AHEAD = 7;
-export const UPPER_CANADA_FLAG_D = SEGMENT_SHAPE_OFFSET.rideau + (6 + 36.5) / 2;
+export const UPPER_CANADA_FLAG_D = SEGMENT_SHAPE_OFFSET.rideau + 26;
 const BANK_SIDES = [-1, 1]; // south (left on screen) and north (right)
 const SET_BACK = 1.4; // units back from the water's edge, onto the bank
 

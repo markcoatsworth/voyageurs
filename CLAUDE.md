@@ -92,7 +92,7 @@ src/
                        Every ellipse radius is clamped >0 (a negative one throws on a real canvas)
     flag.js            a pair of Union Jacks on poles, one on each bank at the same point just inside the
                        Rideau, flying toward each other over the water (the north one mirrored — its
-                       reverse side). UPPER_CANADA_FLAG_D = rideau start + 21.25 (hand-tuned), in view ~1s
+                       reverse side). UPPER_CANADA_FLAG_D = rideau start + 26 (hand-tuned), in view ~1.3s
                        after game.js's "ENTERING UPPER CANADA" card for a canoe paddling through the
                        crossing (smoke test times it); cloth built once, drawn a column at a time on a
                        travelling wave
@@ -196,9 +196,9 @@ src/
                        the comments only — the player-facing banner just says "BRITISH BLOCKADE",
                        shown big via #boss-banner, not the small milestone one): Royal Navy frigate
                        holding the channel, dodge-only, survive & pass — no health/hull/hold-time
-                       readout, just find the gap. RIDEAU segment, between Kars and Merrickville
-                       (SHIP_FLOW_DISTANCE = Merrickville − 60; cannon fire from APPROACH_RANGE 190
-                       out, ~40 past Kars's dock). Used to chain straight into the Warship chase below the instant the gap
+                       readout, just find the gap. RIDEAU segment, between Smiths Falls and Newboro
+                       (SHIP_FLOW_DISTANCE = Kingston − 700; cannon fire from APPROACH_RANGE 190 out,
+                       ~21 past Smiths Falls's dock). Used to chain straight into the Warship chase below the instant the gap
                        cleared; now ends clean, ordinary paddling after. Guarded by `segment ===
                        'rideau'`.
     britishWarship.js  The British Warship — standalone held-arena chase, split out of blockade.js
@@ -244,7 +244,10 @@ src/
                        wind/rain audio bed (sfx.js's setStormBed) and the ambient shuffle ducked to
                        silence by the second clap (music.js's setDuck via musicDuck()) so the pursuit
                        track lands at full. One banner as the sky first turns
-                       (consumeJustStormArrived).
+                       (consumeJustStormArrived). Shot down, she sinks slowly (SINK_TIME, 6s — drawSinkingShip:
+                       lists, rolls under as the water closes over her, smoke, foam, bubbles, planks), the
+                       hold and storm kept on through it (isChaseHolding/isSinking) so she goes down in
+                       front of you, then cleared; debugSink() is the smoke test's shortcut to it.
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
                        TRIGGER_DISTANCE, FLIGHT_END. Every church is drawn across exactly its collision
                        box (churchDrawSpan) — ordinary ones used to be drawn a fixed 26px off the bank
@@ -255,8 +258,16 @@ src/
                        ?debug) never meets him: diable.js marks him 'done', and the clamp only holds a
                        canoe arriving at the arena, never one starting beyond it
   audio/
-    music.js           shuffled playlist (PLAYLIST, 18 tracks). OPENING_TRACK (Reel des Forêts) is
-                       reserved, NOT in PLAYLIST: it plays once, ahead of the first shuffle,
+    music.js           two shuffled playlists by region (REGION_PLAYLISTS): QUEBEC_PLAYLIST (18 tracks) up
+                       to the border into Upper Canada, UPPER_CANADA_PLAYLIST (6) past it. setRegion()
+                       switches (game.js's enterRideau() at the border — fades out the playing Quebec
+                       song, 1.5s, and starts the new shuffle; main.js's beginRun() via
+                       regionForSegment() for a run starting on the Rideau). Pinned/boss tracks sit in
+                       neither. UPPER_CANADA_ENTRY_TRACK (The British Grenadiers) is pinned to the
+                       border: setRegion(..., { pinEntry: true }) leads the first Upper Canada order with
+                       it, once, as OPENING_TRACK leads the put-in's; a run starting on the Rideau
+                       doesn't hear it. OPENING_TRACK (Reel des Forêts) is
+                       reserved, NOT in either shuffle: it plays once, ahead of the first shuffle,
                        only when createMusic() is passed pinOpeningTrack (openingOrder()), which
                        main.js sets from isPutIn(startSegment, startFlowDistance) — so the
                        put-in always opens on it, it never recurs, and every other start
@@ -267,7 +278,7 @@ src/
                        by Les Frères Brunet/chasse-galerie) — each plays via playSpecial() the instant its fight
                        starts, replacing whatever's playing, and endBossTrack() drops back into the
                        shuffle once it resolves. KINGSTON_PLAYLIST is its own isolated track set
-                       (never mixed into PLAYLIST) for the Kingston arrival/on-foot visit —
+                       (never mixed into either shuffle) for the Kingston arrival/on-foot visit —
                        playSpecial() takes an optional onEnded override so, unlike every other
                        reserved track, a finished Kingston track advances to the next Kingston track
                        instead of falling back to the shuffle; loops for the rest of the run, never
@@ -322,11 +333,10 @@ src/
   Tadoussac), La Corriveau (Beaupré to Québec City, lawrenceWest), Wendigo
   (Lac Saint-Pierre, past Trois-Rivières, lawrenceWest), Chasse-galerie steeples + Le
   Diable (past Montréal, lawrenceWest), British Blockade (rideau, the frigate
-  gauntlet between Kars and Merrickville), British Warship (rideau, further downstream near where Kingston
+  gauntlet between Smiths Falls and Newboro), British Warship (rideau, further downstream near where Kingston
   Mills sat — the last fight before Kingston). The Blockade and Warship used
   to be one continuous two-phase encounter; they're separate fights now, with
-  ordinary paddling (Merrickville, Smiths Falls, Newboro, Jones Falls)
-  between them. Each is
+  ordinary paddling (Newboro, Jones Falls) between them. Each is
   `segment ===`-gated (the first three via their own exported SEGMENT) and
   distance-triggered off MOUTH_DISTANCE or a village's flowDistance.
 - **`?start=<name>`** (main.js): dev cheat, one-shot (stripped from URL after

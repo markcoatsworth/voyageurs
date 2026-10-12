@@ -946,15 +946,22 @@ export class Game {
     this.mode = 'river';
     this.currentVillage = null;
     this.enterSegment('rideau', start, true);
+    // Into the Upper Canada shuffle (audio/music.js's setRegion): the Quebec
+    // song playing fades out at the border and the new region's starts —
+    // with The British Grenadiers first (pinEntry, its one play). Before
+    // endBossTrack(), so a boss cue cut here drops straight into the new
+    // order rather than starting a Quebec song only to fade it out.
+    this.music?.setRegion('upperCanada', { pinEntry: true });
     this.music?.endBossTrack();
     this.showBanner('The storm breaks — the Rideau, and Kingston beyond');
     // The big title card (#boss-banner) as the river turns from upstream to
     // downstream past Gatineau — "can we briefly show a large banner saying
-    // 'Entering Upper Canada'" — held 4s rather than the boss titles' 2.4
-    // ("make it last longer. Let's try 4 seconds"). Here rather than at the
+    // 'Entering Upper Canada'" — held 5s rather than the boss titles' 2.4
+    // ("make it last longer. Let's try 4 seconds", then "1 second longer").
+    // Here rather than at the
     // crossing check, so it shows the same whether you paddle past Gatineau
     // or cast off from its dock — both come through enterRideau().
-    this.showBossBanner('ENTERING UPPER CANADA', 4000);
+    this.showBossBanner('ENTERING UPPER CANADA', 5000);
   }
 
   // Reaching Kingston, whether by touching its dock or just crossing its

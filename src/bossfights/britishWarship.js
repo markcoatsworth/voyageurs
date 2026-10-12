@@ -360,6 +360,15 @@ export const MUSKET_DAMAGE_TO_HULL = 18;
 // slower and less consistent than a scripted bot, still lands squarely in
 // the requested 3-4 minutes either way.
 const CHASE_HULL_HP = 3000;
+
+// Shot down, she doesn't just vanish: "When I beat the British Warship, I
+// want to see it sink slowly." SINK_TIME seconds of listing, rolling under
+// as the water closes over the hull, smoke, foam, bubbles and drifting
+// planks (drawSinkingShip). The hold (isChaseHolding) and the storm stay on
+// through it, so the wreck goes down in front of you instead of scrolling
+// off the bottom of the screen the moment you paddle on, then everything
+// clears as it did before.
+export const SINK_TIME = 6;
 // Wider than a stationary hull's own tolerance would be, because the
 // target itself is moving every frame here, not just the bullet crossing a
 // fixed band. Loosened further (2.2 -> 3) in the same "impossible"
@@ -388,6 +397,8 @@ export function createBritishWarship() {
   let chaseHullHP = CHASE_HULL_HP;
   let chaseSunk = false;
   let justSunk = false;
+  let sinkT = -1; // seconds into the sinking, -1 when not sinking
+  let sinkAt = null; // { x, d, angle } where she went down
   let clap1Fired = false; // latches once FIRST_THUNDERCLAP_DISTANCE is crossed — never resets on its own
   let clap2Fired = false; // ditto, SECOND_THUNDERCLAP_DISTANCE
   let stormT = 0; // this module's own clock for the flicker/gust schedules — advanced every update()
@@ -420,6 +431,8 @@ export function createBritishWarship() {
     chaseHullHP = CHASE_HULL_HP;
     chaseSunk = false;
     justSunk = false;
+    sinkT = -1;
+    sinkAt = null;
   }
 
   return {
@@ -428,7 +441,17 @@ export function createBritishWarship() {
     // fight is live and unresolved, so game.js clamps flowDistance at
     // getChaseHoldFlowDistance() every frame this holds.
     isChaseHolding() {
-      return chasePhase;
+      return chasePhase || sinkT >= 0;
+    },
+    // True while she's going down (SINK_TIME after the kill shot).
+    isSinking() {
+      return sinkT >= 0;
+    },
+    // Test-only, like debugChaseShipPosition(): put the hull at 0, so the
+    // next update() during the hold sinks her — the smoke test's way to the
+    // sinking without minutes of gunnery.
+    debugSink() {
+      chaseHullHP = 0;
     },
     getChaseHoldFlowDistance() {
       return chaseHoldFlowDistance;
@@ -463,7 +486,7 @@ export function createBritishWarship() {
     // TRIGGER_DISTANCE the very next frame, where stormIntensityAt already
     // returns 0 by construction, so no separate fade-out is needed.
     stormIntensity(flowDistance) {
-      return chasePhase ? 1 : stormIntensityAt(flowDistance);
+      return chasePhase || sinkT >= 0 ? 1 : stormIntensityAt(flowDistance);
     },
     stormFlash(flowDistance) {
       return stormFlashAt(flowDistance);
@@ -473,7 +496,7 @@ export function createBritishWarship() {
     // read 0 through the hold (flowDistance is clamped at/after
     // TRIGGER_DISTANCE), so the fight's own held levels are set here.
     stormGloom(flowDistance) {
-      return chasePhase ? FIGHT_GLOOM : stormGloomAt(flowDistance);
+      return chasePhase || sinkT >= 0 ? FIGHT_GLOOM : stormGloomAt(flowDistance);
     },
     // Flicker keeps going through the fight (the storm is still overhead),
     // scaled down so a flash never masks a cannonball's telegraph.
@@ -528,6 +551,10 @@ export function createBritishWarship() {
     // comment); applied to the hull hit below, nowhere else in this file.
     update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit, bullets = [], damageGivenScale = 1) {
       const hitBullets = [];
+      if (sinkT >= 0) {
+        sinkT += dt;
+        if (sinkT >= SINK_TIME) sinkT = -1; // gone — the hold and storm let go
+      }
 
       // If the player starts well past the trigger (e.g. ?start=kingston),
       // auto-resolve it as if the fight never happened — no banner, no
@@ -706,6 +733,8 @@ export function createBritishWarship() {
           chasePhase = false;
           chaseSunk = true;
           justSunk = true;
+          sinkT = 0;
+          sinkAt = { x: chaseShipWorldX, d: chaseShipD, roll: Math.random() < 0.5 ? -1 : 1 };
           // A shot already in flight from a volley fired moments earlier
           // shouldn't still land after the ship that fired it is gone.
           hazards = [];
@@ -797,6 +826,12 @@ export function createBritishWarship() {
           const fz = worldDistance - f.d;
           if (Math.abs(fz) < VISIBLE_Z_RANGE) drawMuzzleFlash(ctx, f, fz, cameraWorldX);
         }
+      }
+
+      // Going down — see SINK_TIME.
+      if (sinkT >= 0 && sinkAt) {
+        const sz = worldDistance - sinkAt.d;
+        if (Math.abs(sz) < VISIBLE_Z_RANGE) drawSinkingShip(ctx, cameraWorldX, sz, sinkAt, sinkT / SINK_TIME);
       }
 
       // Hull hit impacts — a landed shot, sized by the gun that landed it
@@ -1165,6 +1200,98 @@ function drawChaseShip(ctx, cameraWorldX, z0, shipWorldX) {
 // the hazard just appearing near the player a moment later — the thing
 // actually missing from an early report that the chase "wasn't engaging in
 // combat."
+// The sinking: the ship drawn once into its own canvas (drawChaseShip, as
+// in the fight), then laid back down rolled over and shrinking a little as
+// she settles, the water closing over the hull — water-colour washed onto
+// the ship's own pixels only ('source-atop'), heavier as she goes — fading
+// out at the end. Around her: smoke rising from the wreck early on, a
+// spreading ring of foam, bubbles breaking the surface, and planks drifting
+// off. p is 0..1 through SINK_TIME.
+let sinkCanvas = null;
+function drawSinkingShip(ctx, cameraWorldX, z, at, p) {
+  const c = worldToScreen(at.x, z, cameraWorldX);
+  const cx = c.x, cy = c.y;
+  const ease = p * p * (3 - 2 * p);
+  if (!sinkCanvas) {
+    sinkCanvas = document.createElement('canvas');
+    sinkCanvas.width = CANVAS_WIDTH;
+    sinkCanvas.height = CANVAS_HEIGHT;
+  }
+  const g = sinkCanvas.getContext('2d');
+
+  // Foam ring and bubbles first, so the hull sits in them.
+  ctx.save();
+  const ring = 18 + ease * 30;
+  ctx.globalAlpha = 0.5 * (1 - p);
+  ctx.strokeStyle = '#e6f2f6';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, ring, ring * 0.7, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.3 * (1 - p);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, ring * 0.65, ring * 0.45, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = '#eaf6fa';
+  for (let i = 0; i < 18; i++) {
+    const a = i * 2.39996 + p * 3;
+    const r = (6 + (i % 5) * 5) * (0.4 + ease);
+    const life = (p * 3 + i * 0.137) % 1;
+    ctx.globalAlpha = (1 - life) * 0.8 * (p < 0.92 ? 1 : (1 - p) / 0.08);
+    ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * 0.7), 2, 2);
+  }
+  // Planks drifting off.
+  ctx.fillStyle = '#5a3a20';
+  for (let i = 0; i < 6; i++) {
+    const a = i * 1.047 + 0.4;
+    const r = 12 + ease * (18 + i * 4);
+    ctx.globalAlpha = 0.9 * (1 - Math.max(0, p - 0.7) / 0.3);
+    ctx.save();
+    ctx.translate(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.7);
+    ctx.rotate(a + p * 2);
+    ctx.fillRect(-4, -1, 8, 2);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // The hull, rolled over and settling, the water closing over it.
+  if (g) {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 1;
+    g.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawChaseShip(g, cameraWorldX, z, at.x);
+    g.globalCompositeOperation = 'source-atop';
+    g.globalAlpha = Math.min(0.85, ease * 1.1);
+    g.fillStyle = '#163a52';
+    g.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 1;
+    ctx.save();
+    ctx.globalAlpha = 1 - Math.max(0, (p - 0.55) / 0.45);
+    ctx.translate(cx, cy);
+    ctx.rotate(at.roll * ease * 0.6);
+    const shrink = 1 - ease * 0.25;
+    ctx.scale(shrink, shrink);
+    ctx.translate(-cx, -cy);
+    ctx.drawImage(sinkCanvas, 0, 0);
+    ctx.restore();
+  }
+
+  // Smoke from the wreck, rising up the screen and thinning out.
+  ctx.save();
+  for (let i = 0; i < 10; i++) {
+    const life = (p * 2.2 + i * 0.1) % 1;
+    const puff = 4 + life * 9;
+    ctx.globalAlpha = 0.35 * (1 - life) * (1 - ease);
+    ctx.fillStyle = i % 2 ? '#3c3c40' : '#57575c';
+    ctx.beginPath();
+    ctx.arc(cx + Math.sin(i * 1.7 + p * 4) * 6, cy - 6 - life * 40, puff, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawMuzzleFlash(ctx, f, z, cameraWorldX) {
   const p = worldToScreen(f.x, z, cameraWorldX);
   const k = clamp(1 - f.t / MUZZLE_FLASH_LIFETIME, 0, 1);

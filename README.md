@@ -9,9 +9,11 @@ beluga-whale estuary — no install required, just a browser tab.
 
 ## Music
 
-Five traditional Quebecois fiddle/reel recordings play as a shuffled
-playlist (`src/twod/music.js`) — reshuffled each time it cycles through, so
-it's not the same running order every session:
+Music plays as two shuffled playlists (`src/audio/music.js`), reshuffled
+each time they cycle through: a Quebec shuffle of traditional Québécois and
+Acadian fiddle recordings up to the border into Upper Canada (just past
+Gatineau), and an Upper Canada shuffle down the Rideau to Kingston. Songs
+pinned to a place or a fight sit in neither. The Quebec recordings:
 
 - "Grande Gigue Simple" and "Reel du Pendu," performed by Isidore Soucy
   (Starr Records, 1931), sourced from Internet Archive's Great 78 Project
@@ -36,6 +38,15 @@ it's not the same running order every session:
   else — provenance and rights status not independently verified.
 - "Avec les Ruine-Babine" and "Les Batteux," performed by Louis « Pitou »
   Boudreault.
+- The Upper Canada shuffle: "Bluebell Polka," performed by Jimmy Shand;
+  "Maple Leaf Two Step" and "Chain Lightning," performed by Ward Allen;
+  "The Broom Dance," performed by Scan Tester; "Medley," performed by Scott
+  Skinner; and "No 2, No 1," performed by Walter Bulwer. Supplied directly
+  as .wav files and normalized like everything else — provenance and rights
+  status not independently verified.
+- "The British Grenadiers," performed by The Redcoats — plays once, as you
+  cross the border into Upper Canada, then never again; not in either
+  shuffle. Supplied directly like the Upper Canada shuffle above.
 - "St. Anne's Reel," performed by Joe Dobbs with The 1937 Flood — reserved
   for the Wendigo encounter (on Lac Saint-Pierre, past Trois-Rivières),
   not in the regular shuffle. It's a genuine French-Canadian

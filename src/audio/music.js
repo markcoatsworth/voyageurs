@@ -10,14 +10,22 @@
 // title and artist — those are shown in the "now playing" card (main.js),
 // so they're player-facing text, not just filenames.
 //
-// These are early-20th-century Québécois and Acadian fiddle recordings,
-// mostly 78rpm transfers from the Internet Archive and Library and
-// Archives Canada; titles keep their original French.
+// Two shuffles, by region ("I now want to have 2 random shuffle
+// playlists"): QUEBEC_PLAYLIST up to the border into Upper Canada (game.js's
+// enterRideau(), a short paddle past Gatineau), UPPER_CANADA_PLAYLIST after
+// it. setRegion() switches between them; crossing the border fades out the
+// Quebec song that's playing and starts the Upper Canada shuffle. Tracks
+// pinned to a place (OPENING_TRACK at the put-in) and the boss cues sit in
+// neither shuffle.
+//
+// The Quebec shuffle: early-20th-century Québécois and Acadian fiddle
+// recordings, mostly 78rpm transfers from the Internet Archive and Library
+// and Archives Canada; titles keep their original French.
 //
 // Exported for test/smoke.mjs — checking KINGSTON_PLAYLIST below never ends
 // up mixed in here needs the real list, not a hardcoded guess at its
 // contents.
-export const PLAYLIST = [
+export const QUEBEC_PLAYLIST = [
   { src: '/audio/grande-gigue-simple.mp3', title: 'Grande Gigue Simple', artist: 'Isidore Soucy' },
   { src: '/audio/reel-du-pendu.mp3', title: 'Reel du Pendu', artist: 'Isidore Soucy' },
   { src: '/audio/reel-du-chapeau-de-paille.mp3', title: 'Reel du Chapeau de Paille', artist: 'Isidore Soucy' },
@@ -45,6 +53,42 @@ export const PLAYLIST = [
   { src: '/audio/reel-du-gouvernement.mp3', title: 'Reel du Gouvernement', artist: 'Les Chevaliers du Folklore' },
 ];
 
+// The Upper Canada shuffle — past the border, down the Rideau to Kingston:
+// British-Isles and Ontario fiddle and dance music, the music of the
+// Loyalist and settler country you're paddling into. Supplied directly as
+// .wav files (public/audio/src/) and normalized via
+// scripts/normalize-audio.mjs to the same -21 LUFS as everything else; see
+// README.md's Music section for the rights caveat every directly-supplied
+// track carries.
+export const UPPER_CANADA_PLAYLIST = [
+  { src: '/audio/jimmy-shand-bluebell-polka.mp3', title: 'Bluebell Polka', artist: 'Jimmy Shand' },
+  { src: '/audio/ward-allen-maple-leaf-two-step.mp3', title: 'Maple Leaf Two Step', artist: 'Ward Allen' },
+  { src: '/audio/ward-allen-chain-lightning.mp3', title: 'Chain Lightning', artist: 'Ward Allen' },
+  { src: '/audio/scan-tester-the-broom-dance.mp3', title: 'The Broom Dance', artist: 'Scan Tester' },
+  { src: '/audio/scott-skinner-medley.mp3', title: 'Medley', artist: 'Scott Skinner' },
+  { src: '/audio/walter-bulwer-no-2-no-1.mp3', title: 'No 2, No 1', artist: 'Walter Bulwer' },
+];
+
+// Pinned to the border into Upper Canada: "The British Grenadiers" — "pin
+// this song to the boundary point where we enter Upper Canada. It should
+// only play this one time and not appear anywhere else in the random
+// shuffle." Like OPENING_TRACK at the put-in: not in UPPER_CANADA_PLAYLIST,
+// it leads the first Upper Canada order dealt at the crossing
+// (setRegion(..., { pinEntry: true }), from game.js's enterRideau()) and is
+// never dealt again. A run that starts already on the Rideau (CONTINUE, a
+// jump) never crossed the border, so it doesn't hear it. Supplied directly
+// (public/audio/src/), normalized to -21 LUFS like everything else.
+// Exported for test/smoke.mjs.
+export const UPPER_CANADA_ENTRY_TRACK = { src: '/audio/the-redcoats-the-british-grenadiers.mp3', title: 'The British Grenadiers', artist: 'The Redcoats' };
+const REGION_ENTRY_TRACKS = { upperCanada: UPPER_CANADA_ENTRY_TRACK };
+
+// Which shuffle plays where. 'quebec' everywhere up to the border,
+// 'upperCanada' on the Rideau — see regionForSegment().
+export const REGION_PLAYLISTS = { quebec: QUEBEC_PLAYLIST, upperCanada: UPPER_CANADA_PLAYLIST };
+export function regionForSegment(segment) {
+  return segment === 'rideau' ? 'upperCanada' : 'quebec';
+}
+
 // The put-in's own tune. A run that starts at the very beginning always
 // opens on this one, so the first bars of the journey are recognizable —
 // but ONLY there: "I don't want it to be the opening track every time I
@@ -54,7 +98,7 @@ export const PLAYLIST = [
 // jump) never hears it at all, which is why the pin is a createMusic()
 // option rather than baked into the order itself.
 //
-// Reserved, like the boss cues below — NOT in PLAYLIST. It used to stay in
+// Reserved, like the boss cues below — NOT in QUEBEC_PLAYLIST. It used to stay in
 // the shuffle (only slot 0 of a pinned session's first order was fixed)
 // and so could come round again later in the same run; then: "I want
 // reel-des-forets to only play once, at the very beginning of the game.
@@ -63,6 +107,10 @@ export const PLAYLIST = [
 // Exported for test/smoke.mjs so the assertion reads the real entry
 // instead of re-hardcoding the title.
 export const OPENING_TRACK = { src: '/audio/reel-des-forets.mp3', title: 'Reel des Forêts', artist: 'Tommy Duchesne' };
+// Songs that play exactly once — pinned to a place, never in a shuffle.
+// Once one has started it's never played again, not even by the shuffle
+// resuming "in place" after a boss cue interrupts it (see playCurrent()).
+const PLAY_ONCE = new Set([OPENING_TRACK.src, ...Object.values(REGION_ENTRY_TRACKS).map((t) => t.src)]);
 
 // Not part of the shuffle above — this only ever plays on cue, the moment
 // the Château Gauntlet (bossfights/blockade.js) is spotted, replacing whatever
@@ -116,7 +164,7 @@ const LOUP_GAROU_TRACK = { src: '/audio/reel-du-terreur.mp3', title: 'La Reel du
 // (the Hanged Man's Reel), which held the role first, picked for the title,
 // and has gone back into the regular shuffle — the same as "Le Reel du
 // Diable" and "Reel du Gouvernement" did when their fights got new cues.
-// Exported for test/smoke.mjs, which checks it never lands in PLAYLIST.
+// Exported for test/smoke.mjs, which checks it never lands in QUEBEC_PLAYLIST.
 export const CORRIVEAU_TRACK = { src: '/audio/le-reve-du-caribou-la-corriveau.mp3', title: 'La Corriveau', artist: 'Le Rêve du Caribou' };
 // The Chasse-galerie flight's cue, cut in the instant the canoe lifts off
 // (game.js): "Reel du gaucher" by Les Frères Brunet (from 1,2,3). Supplied
@@ -133,7 +181,7 @@ export const CORRIVEAU_TRACK = { src: '/audio/le-reve-du-caribou-la-corriveau.mp
 // "Le Reel du Diable" (Jos Bouchard) — both of those back in the regular
 // shuffle — then briefly "Entre ciel et terre" (Le Vent du Nord), dropped
 // from the game entirely.
-// Exported for test/smoke.mjs, which checks it never lands in PLAYLIST.
+// Exported for test/smoke.mjs, which checks it never lands in QUEBEC_PLAYLIST.
 export const CHASSE_GALERIE_TRACK = { src: '/audio/les-freres-brunet-reel-du-gaucher.mp3', title: 'Reel du gaucher', artist: 'Les Frères Brunet' };
 // Reserved for the Pursuit chase phase of the British Blockade fight
 // (bossfights/blockade.js) — cuts in the instant the frigate itself is
@@ -178,7 +226,7 @@ const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de 
 export const KINGSTON_TRACK = { src: '/audio/un-siecle-davance.mp3', title: "Un Siècle d'Avance", artist: 'Les Chevaliers', volume: 1.0 };
 // Two more, added for the Artillery Park bandstand scene (villageScene.js)
 // — "an isolated playlist exclusively for Kingston," explicitly not folded
-// into the ambient shuffle above (PLAYLIST) the way an ordinary new track
+// into the ambient shuffle above (QUEBEC_PLAYLIST) the way an ordinary new track
 // would be. Title/artist here are provisional (derived from the filenames
 // — no embedded tags, unlike the archive-sourced catalog above, which ships
 // with real ID3 data) — flag if these need correcting; every other title/
@@ -187,7 +235,7 @@ const KINGSTON_TRACK_2 = { src: '/audio/boutique-de-cadeaux.mp3', title: 'Boutiq
 const KINGSTON_TRACK_3 = { src: '/audio/le-caygeon-de-bob.mp3', title: 'Le Caygeon de Bob', artist: 'Les Chevaliers', volume: 1.0 };
 // Added fourth, deliberately ("make it last place in the Kingston
 // playlist" at the time — KINGSTON_TRACK_5 below came later), and here —
-// not PLAYLIST above — deliberately too ("explicitly just for Kingston, I
+// not QUEBEC_PLAYLIST above — deliberately too ("explicitly just for Kingston, I
 // don't want to hear that song anywhere else in the game"). Artist was
 // "Unknown" for a while: supplied directly like the rest of this set, so
 // there's no archive listing to credit a performer from, and it seemed
@@ -222,8 +270,8 @@ const KINGSTON_TRACK_7 = { src: '/audio/depense-a-tout-vitesse.mp3', title: 'Dé
 // end of the run, not a fight that resolves back into the ambient shuffle.
 // Instead, once the first one ends on its own, the next plays (see
 // playKingstonTrack() below) — a closed loop of its own, never handing back
-// to PLAYLIST, for as long as the run goes on.
-// THIS ORDER IS THE PLAY ORDER. Unlike PLAYLIST above, this set is never
+// to QUEBEC_PLAYLIST, for as long as the run goes on.
+// THIS ORDER IS THE PLAY ORDER. Unlike QUEBEC_PLAYLIST above, this set is never
 // shuffled: Un Siècle d'Avance first, every time, then straight through
 // and back around to the top — "make the playlist straight order so
 // there is no randomness." Exported for test/smoke.mjs, which asserts
@@ -302,11 +350,11 @@ function shuffled(list) {
 }
 
 // The first play order for a run that starts at the put-in: OPENING_TRACK,
-// then an ordinary shuffle of PLAYLIST (which doesn't contain it). Only this
+// then an ordinary shuffle of QUEBEC_PLAYLIST (which doesn't contain it). Only this
 // first order has it — the reshuffle in playCurrent()'s 'ended' handler is
-// plain shuffled(PLAYLIST) — so it plays exactly once per run.
+// plain shuffled(QUEBEC_PLAYLIST) — so it plays exactly once per run.
 function openingOrder() {
-  return [OPENING_TRACK, ...shuffled(PLAYLIST)];
+  return [OPENING_TRACK, ...shuffled(QUEBEC_PLAYLIST)];
 }
 
 // pinOpeningTrack: true only when this run begins at the put-in (main.js
@@ -345,13 +393,18 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
   // openingOrder() only for a run starting at the put-in (see
   // OPENING_TRACK and pinOpeningTrack above); everywhere else this is the
   // plain shuffle it always was. The reshuffle in playCurrent()'s 'ended'
-  // handler is plain shuffled(PLAYLIST) either way, and PLAYLIST doesn't
+  // handler is plain shuffled(QUEBEC_PLAYLIST) either way, and QUEBEC_PLAYLIST doesn't
   // hold the opener, so it never comes round a second time.
-  let order = pinOpeningTrack ? openingOrder() : shuffled(PLAYLIST);
+  // The shuffle in play: 'quebec' until setRegion() says otherwise (main.js
+  // for a run that starts on the Rideau, game.js's enterRideau() at the
+  // border). pool() is the list every reshuffle draws from.
+  let region = 'quebec';
+  const pool = () => REGION_PLAYLISTS[region];
+  let order = pinOpeningTrack ? openingOrder() : shuffled(pool());
   let index = 0;
   // Kingston's own position in KINGSTON_PLAYLIST — entirely separate from
   // order/index above, the same way that set is entirely separate from
-  // PLAYLIST. No `kingstonOrder` any more: the play order IS the array
+  // QUEBEC_PLAYLIST. No `kingstonOrder` any more: the play order IS the array
   // (KINGSTON_PLAYLIST's own comment), so an index is all the state there
   // is. Reset to 0 by every playKingstonTrack() call.
   let kingstonIndex = 0;
@@ -411,12 +464,14 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
   // loaded audio element), but it isn't subject to either failure mode
   // above. The regular shuffle keeps the blob-prefetch optimization; it
   // isn't the one that's been breaking.
-  for (const track of PLAYLIST) prefetch(track.src);
+  // (The Upper Canada shuffle is prefetched when setRegion() first switches
+  // to it, not here — most sessions don't get that far.)
+  for (const track of QUEBEC_PLAYLIST) prefetch(track.src);
   // The opener goes through playCurrent() like a shuffle track, so it wants
   // the same head start — but only when this run will actually play it.
   if (pinOpeningTrack) prefetch(OPENING_TRACK.src);
 
-  // The track (from PLAYLIST / BOSS_TRACK) that's actually playing right
+  // The track (from QUEBEC_PLAYLIST / BOSS_TRACK) that's actually playing right
   // now, or null before the first successful play(). onTrack — passed by
   // main.js — fires with it every time a new track starts, driving the
   // "now playing" card.
@@ -467,7 +522,21 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
   // silently preventing playback rather than fixing anything, and it didn't
   // resolve the actual report. Back to the plain, well-supported path while
   // debug() below narrows down what's really happening on-device.
+  // Play-once songs (PLAY_ONCE) that have already started this session.
+  const playedOnce = new Set();
   async function playCurrent() {
+    // A boss cue interrupting the shuffle resumes it in place afterwards —
+    // the same song again, from the top. Right for an ordinary shuffle
+    // song; wrong for a play-once one: The British Grenadiers, cut off by
+    // the British Blockade's "Rule, Britannia!", started over once past
+    // the frigate — "I don't want to hear it again." Skip past it instead.
+    while (playedOnce.has(order[index]?.src)) {
+      index++;
+      if (index >= order.length) {
+        order = shuffled(pool());
+        index = 0;
+      }
+    }
     const requestedIndex = index;
     const requestedGeneration = generation;
     const track = order[requestedIndex];
@@ -484,7 +553,7 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
     attachEndedHandler(requestedGeneration, () => {
       index++;
       if (index >= order.length) {
-        order = shuffled(PLAYLIST);
+        order = shuffled(pool());
         index = 0;
       }
       playCurrent();
@@ -492,6 +561,7 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
     audio.play().then(
       () => {
         started = true;
+        if (PLAY_ONCE.has(track.src)) playedOnce.add(track.src);
         debug(`playing ${track.title}`);
         emitTrack(track);
       },
@@ -544,10 +614,12 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
   // step immediately finds `generation` has moved on and stops there,
   // costing one cheap timer firing each, not a full chain.
   const FADE_STEP_MS = 50;
+  // How long the outgoing region's song takes to fade at the border.
+  const REGION_FADE_MS = 1500;
 
   // onEnded (default: drop back into the ambient shuffle) is overridable —
   // the Kingston playlist below is the one caller that needs something
-  // else: the *next* Kingston track, not PLAYLIST, once the current one
+  // else: the *next* Kingston track, not QUEBEC_PLAYLIST, once the current one
   // finishes on its own. Everything else (fights, chases) still wants the
   // default.
   function playSpecial(track, fadeOutMs = 0, onEnded) {
@@ -647,9 +719,9 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
 
   // Plays KINGSTON_PLAYLIST[kingstonIndex] via playSpecial(), with a custom
   // onEnded that advances to the next Kingston track instead of the
-  // default (drop back into PLAYLIST) — wrapping straight back to the top
+  // default (drop back into QUEBEC_PLAYLIST) — wrapping straight back to the top
   // once exhausted. Deliberately NOT a reshuffle the way playCurrent()'s
-  // own 'ended' handler reshuffles PLAYLIST: a reshuffle here is what put
+  // own 'ended' handler reshuffles QUEBEC_PLAYLIST: a reshuffle here is what put
   // the same track back-to-back across the wrap (a 1-in-N chance every
   // time round) and, worse, let anything but Un Siècle d'Avance lead.
   // Recurses through playSpecial's onEnded callback rather than a loop, so
@@ -682,9 +754,48 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
     // would just make the *next* track jump, which is not what this is for.
     setOpeningPinned(pin) {
       if (started || current) return;
-      order = pin ? openingOrder() : shuffled(PLAYLIST);
+      order = pin ? openingOrder() : shuffled(pool());
       index = 0;
       if (pin) prefetch(OPENING_TRACK.src);
+    },
+    get region() {
+      return region;
+    },
+    // Switch shuffles: 'quebec' or 'upperCanada' (REGION_PLAYLISTS). A no-op
+    // if already there. Deals a fresh order from the new list either way;
+    // then, if a shuffle song is actually playing, fades it out over
+    // REGION_FADE_MS and starts the new region's first song — "the existing
+    // random shuffle playlist should only play up until the boundary into
+    // Upper Canada". A boss cue that's playing is left alone; when it ends
+    // (or endBossTrack() cuts it) it drops into the new shuffle. Before
+    // anything has played (a run starting on the Rideau), it just sets
+    // what start() will play.
+    //
+    // pinEntry: lead the new order with the region's own entry track
+    // (REGION_ENTRY_TRACKS — The British Grenadiers for Upper Canada), the
+    // way OPENING_TRACK leads the put-in's. Only for actually crossing the
+    // border; the reshuffles after never deal it again.
+    setRegion(next, { pinEntry = false } = {}) {
+      if (!REGION_PLAYLISTS[next] || next === region) return;
+      region = next;
+      for (const track of pool()) prefetch(track.src);
+      const entry = pinEntry ? REGION_ENTRY_TRACKS[next] : null;
+      if (entry) prefetch(entry.src);
+      order = entry ? [entry, ...shuffled(pool())] : shuffled(pool());
+      index = 0;
+      if (!started || special || audio.paused) return;
+      generation++;
+      const fadeGeneration = generation;
+      const startVolume = audio.volume;
+      const startedAt = Date.now();
+      const step = () => {
+        if (generation !== fadeGeneration) return; // something else took over mid-fade
+        const t = Math.min(1, (Date.now() - startedAt) / REGION_FADE_MS);
+        audio.volume = startVolume * (1 - t);
+        if (t < 1) setTimeout(step, FADE_STEP_MS);
+        else playCurrent();
+      };
+      step();
     },
     // The track playing right now ({ src, title, artist }), or null before
     // playback has started — main.js reads this to re-show the card on a
@@ -831,7 +942,7 @@ export function createMusic({ onTrack, pinOpeningTrack = false } = {}) {
     // Kingston's arrival cue — same cut-in-now behaviour as the other
     // trigger-fired tracks, but a small closed playlist of its own
     // (KINGSTON_PLAYLIST) rather than one track — "an isolated playlist
-    // exclusively for Kingston," never mixed into PLAYLIST above. Always
+    // exclusively for Kingston," never mixed into QUEBEC_PLAYLIST above. Always
     // starts from the top: Un Siècle d'Avance (KINGSTON_TRACK, index 0),
     // then the rest in list order, whether this is a real approach, the
     // ?start=kingston cheat, or a capsize+restart re-crossing the approach
