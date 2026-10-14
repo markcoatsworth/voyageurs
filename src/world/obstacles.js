@@ -1,5 +1,7 @@
 import { centerX, widthAt, braidAt, southIslandAt, MOUTH_DISTANCE } from './river/path.js';
 import { dockSpanAt, VILLAGES } from './villages.js';
+import { SHIP_FLOW_DISTANCE as BLOCKADE_SHIP_D, APPROACH_RANGE as BLOCKADE_APPROACH, SHIP_CLEAR_BEFORE, inShipClearZone } from '../bossfights/blockade.js';
+import { drawMiniFlag } from './flag.js';
 import { FEATURE_ISLAND_RANGE } from './river/islands.js';
 import { createRockSprite, createLogSprite, createIslandSprite, createPeltSprite } from './sprites.js';
 import { AHEAD_UNITS, BEHIND_UNITS, PIXELS_PER_UNIT, CANOE_HALF_LENGTH } from '../shared/config.js';
@@ -16,12 +18,15 @@ const EDGE_MARGIN = 0.6;
 const ROCK = 'rock';
 const LOG = 'log';
 const ISLAND = 'island';
+// The British Blockade's own obstacle — see FLAG_ISLAND_RANGE.
+const FLAG_ISLAND = 'flagIsland';
 const PELT = 'pelt';
 
 const sprites = {
   [ROCK]: createRockSprite(),
   [LOG]: createLogSprite(),
   [ISLAND]: createIslandSprite(),
+  [FLAG_ISLAND]: createIslandSprite(false),
   [PELT]: createPeltSprite(),
 };
 
@@ -66,7 +71,7 @@ function pickType(hasBraid) {
 
 function hitRadiusFor(type) {
   if (type === LOG) return 1.0;
-  if (type === ISLAND) return 1.7;
+  if (type === ISLAND || type === FLAG_ISLAND) return 1.7;
   return 0.55;
 }
 
@@ -121,7 +126,7 @@ function hullHit(entry, canoeWorldX, hullZHalf, hullTan) {
 // what's actually drawn.
 function drawHalfWidthFor(type) {
   if (type === LOG) return 30 / 2 / PIXELS_PER_UNIT;
-  if (type === ISLAND) return 40 / 2 / PIXELS_PER_UNIT;
+  if (type === ISLAND || type === FLAG_ISLAND) return 40 / 2 / PIXELS_PER_UNIT;
   if (type === PELT) return 15 / 2 / PIXELS_PER_UNIT;
   return 18 / 2 / PIXELS_PER_UNIT; // rock
 }
@@ -198,6 +203,13 @@ function pickX(type, d) {
 
   const half = widthAt(d) / 2 - EDGE_MARGIN;
   const dock = dockExclusionAt(type, d);
+  if (type === FLAG_ISLAND) {
+    // Anywhere across the channel, bank to bank — they're there to crowd
+    // the water the canoe dodges the cannon fire in, not just mid-river.
+    const reach = half - hitRadiusFor(FLAG_ISLAND);
+    if (reach < 0.4) return null;
+    return pickInLanes(centerX(d) - reach, centerX(d) + reach, dock);
+  }
   if (type === ISLAND) {
     const clearance = half - 1.3;
     if (clearance < 0.4) return null;
@@ -254,13 +266,38 @@ export function hazardKeepFractionAt(d) {
   return 1;
 }
 
+// The British Blockade's flag islands: "an island flying a Union Jack flag.
+// Drop a bunch of these in the river during the Blockade fight to make it
+// harder to dodge the cannonballs." From where the frigates' cannon fire
+// starts (APPROACH_RANGE out from the last of the line) to
+// SHIP_CLEAR_BEFORE short of the last, FLAG_ISLAND_SHARE of the hazards
+// that spawn are flag islands, spread across the whole channel, and things
+// spawn closer together (FLAG_ISLAND_GAP_SCALE). They hit for half a
+// rock (game.js's FLAG_ISLAND_DAMAGE). Nothing at all — flag
+// island, rock or log — in each frigate's own clear zone (blockade.js's
+// inShipClearZone: SHIP_CLEAR_BEFORE in front of it, a little past), so
+// the gap you've crossed the river to reach is never blocked. Only on this
+// stretch of the Rideau — nowhere else in the game.
+export const FLAG_ISLAND_RANGE = [BLOCKADE_SHIP_D - BLOCKADE_APPROACH, BLOCKADE_SHIP_D - SHIP_CLEAR_BEFORE];
+// 0.65 with one frigate. With the line you cross the whole field between
+// gaps two more times, and at that share a careful test pilot spent most
+// of its hull on islands before the guns got a look in — 0.5 now.
+const FLAG_ISLAND_SHARE = 0.5;
+// 0.75 when it was one frigate; eased to 0.9 with the line, which has you
+// crossing the whole field between gaps rather than running down one bank.
+const FLAG_ISLAND_GAP_SCALE = 0.9;
+export function inFlagIslandRange(d) {
+  return d >= FLAG_ISLAND_RANGE[0] && d <= FLAG_ISLAND_RANGE[1] && !inShipClearZone(d);
+}
+
 function place(world, z) {
   const d = world.distance - z;
   const hasBraid = braidAt(d) !== null;
   let type = pickType(hasBraid);
-  if (type !== PELT && Math.random() >= hazardKeepFractionAt(d)) {
+  if (type !== PELT && (Math.random() >= hazardKeepFractionAt(d) || inShipClearZone(d))) {
     return { type, x: centerX(d), z, active: false, hidden: true, spinPhase: 0 };
   }
+  if (type !== PELT && !hasBraid && inFlagIslandRange(d) && Math.random() < FLAG_ISLAND_SHARE) type = FLAG_ISLAND;
   let x = pickX(type, d);
   if (x === null) { type = ROCK; x = pickX(type, d); }
   if (x === null) {
@@ -367,7 +404,9 @@ export function createObstacleField(world) {
   function respawn(entry) {
     let furthest = 0;
     for (const e of pool) if (e.z < furthest) furthest = e.z;
-    const newZ = furthest - gapFor(world.distance);
+    // Closer together through the Blockade's flag-island stretch.
+    const scale = inFlagIslandRange(world.distance - furthest) ? FLAG_ISLAND_GAP_SCALE : 1;
+    const newZ = furthest - gapFor(world.distance) * scale;
     const fresh = place(world, newZ);
     entry.type = fresh.type;
     entry.x = fresh.x;
@@ -434,6 +473,10 @@ export function createObstacleField(world) {
           ctx.restore();
         } else {
           ctx.drawImage(sprite, sx - sprite.width / 2, sy - sprite.height / 2);
+          // The pole stands where the plain island's tree does: the mound's
+          // crown, ~8px below the sprite's centre (its ground is centred at
+          // y 32 of 44), left of centre so the (wider) cloth streams out over it.
+          if (entry.type === FLAG_ISLAND) drawMiniFlag(ctx, sx - 8, sy + 6, time, entry.spinPhase);
         }
       }
     },

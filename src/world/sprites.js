@@ -213,7 +213,10 @@ export function createLogSprite() {
   });
 }
 
-export function createIslandSprite() {
+// withTree false: the same mound with nothing on it — the British
+// Blockade's flag islands (world/obstacles.js's FLAG_ISLAND), which get a
+// flagpole drawn on each frame instead (world/flag.js's drawMiniFlag).
+export function createIslandSprite(withTree = true) {
   const w = 40, h = 44;
   return makeSprite(w, h, (ctx) => {
     const cx = w / 2, cy = 32;
@@ -244,6 +247,7 @@ export function createIslandSprite() {
     ctx.fill();
 
     // Tree scaled down so the mound stays visible around its base.
+    if (!withTree) return;
     const tree = createPineTreeSprite(0);
     const tw = tree.width * 0.7, th = tree.height * 0.7;
     ctx.drawImage(tree, cx - tw / 2, cy - 4 - th, tw, th);

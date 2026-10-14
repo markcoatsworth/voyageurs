@@ -81,7 +81,7 @@ const { getDockHit, drawVillages, debugKingstonGreeterX, dockSpanAt } = await im
 const { KINGSTON_CATARAQUI } = await import('../src/world/villageScene.js');
 const { SEGMENT_SHAPE_OFFSET, MOUTH_DISTANCE, centerX, widthAt, braidAt, rapidsStrength } = await import('../src/world/river/path.js');
 const { FEATURE_ISLAND_RANGE } = await import('../src/world/river/islands.js');
-const { SHIP_FLOW_DISTANCE } = await import('../src/bossfights/blockade.js');
+const { SHIP_FLOW_DISTANCE, BLOCKADE_SHIPS, SHIP_COUNT: BLOCKADE_SHIP_COUNT, SHIP_SPACING: BLOCKADE_SHIP_SPACING, inShipClearZone } = await import('../src/bossfights/blockade.js');
 const { TRIGGER_DISTANCE: WARSHIP_FLOW_DISTANCE } = await import('../src/bossfights/britishWarship.js');
 const { TRIGGER_DISTANCE: CHASSE_GALERIE_FLOW_DISTANCE, FLIGHT_END } = await import('../src/bossfights/chasseGalerie.js');
 const { DIABLE_FLOW_DISTANCE, HP_MAX: DIABLE_HP_MAX, PISTOL_DAMAGE: DIABLE_PISTOL_DAMAGE, MUSKET_DAMAGE: DIABLE_MUSKET_DAMAGE } = await import('../src/bossfights/diable.js');
@@ -131,6 +131,67 @@ function run({ game, input }, frames, dt, inputFn) {
     if (inputFn) inputFn(input.state, i);
     game.update(dt);
   }
+}
+
+// Steers a canoe through the British Blockade's line of frigates the way a
+// careful player would: aim for the next frigate's gap (read from the
+// fight itself — a player reads it off the sails on the horizon), and
+// ease off the paddle whenever the swing across won't make it at full
+// speed. Returns false (inputs untouched) when the fight isn't live.
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const PILOT_LATERAL = 2.3; // u/s — a bit under the measured ~2.7, for margin
+function blockadePilot(g) {
+  const sides = g.game.blockade.isApproachEngaged() ? g.game.blockade.debugGapSides() : null;
+  if (!sides) return false;
+  const fd = g.game.flowDistance;
+  const i = BLOCKADE_SHIPS.findIndex((sd) => sd + 3 > fd);
+  if (i < 0) return false;
+  const sd = BLOCKADE_SHIPS[i];
+  // The gap's middle at the frigate — but held inside the water here: the
+  // banks wiggle a few units in the run-in, and chasing the frigate's x
+  // straight through a bend just grinds the canoe along the shore.
+  const reachHere = widthAt(fd) / 2 - 1.6;
+  let wantX = clamp(centerX(sd) + sides[i] * (widthAt(sd) / 2 - 3.5), centerX(fd) - reachHere, centerX(fd) + reachHere);
+  // Steer round a rock, log or island coming up in the line (a player
+  // would) — pass it on the side toward the gap.
+  // Looking far enough ahead to get round it at this speed (~1.3s).
+  const look = Math.max(6, Math.max(0, g.game.speed) * 1.3);
+  for (const e of g.obstacles.pool) {
+    if (!e.active || e.hidden || e.type === 'pelt' || e.z > 0.5 || e.z < -look) continue;
+    if (Math.abs(e.x - wantX) < 2.6 && Math.abs(e.x - g.game.canoeWorldX) < 3.2) {
+      wantX = e.x + (wantX >= e.x ? 2.8 : -2.8);
+    }
+  }
+  // And step out of a cannon shot's warning ring before it lands.
+  let underFire = false;
+  for (const h of g.game.blockade.debugHazards()) {
+    // ...except in the last stretch, where it commits to the gap and takes
+    // the hit (dodging out of a gap hard against the bank, every volley,
+    // had it backing and filling short of the hull for minutes).
+    if (sd - fd < 15) break;
+    if (h.t > 0.6 || Math.abs(h.d - fd) > 4) continue;
+    if (Math.abs(h.x - g.game.canoeWorldX) < 2.4) {
+      underFire = true;
+      const away = g.game.canoeWorldX >= h.x ? 1 : -1;
+      const room = widthAt(fd) / 2 - 1.6;
+      const side = Math.abs(g.game.canoeWorldX + away * 3 - centerX(fd)) < room ? away : -away;
+      wantX = h.x + side * 3;
+    }
+  }
+  const err = g.game.canoeWorldX - wantX;
+  const dist = sd - fd;
+  const secondsNeeded = Math.abs(err) / PILOT_LATERAL;
+  g.input.state.up = secondsNeeded * 16 < dist - 8 || Math.abs(err) < 0.8;
+  g.input.state.down = dist < 25 && Math.abs(err) > 1.5;
+  // Hemmed in against the bank in a gap, change pace too: shots are led at
+  // the speed you're doing when they're fired.
+  if (underFire && Math.abs(err) < 2) {
+    g.input.state.up = g.game.speed < 8;
+    g.input.state.down = false;
+  }
+  g.input.state.left = err > 0.3;
+  g.input.state.right = err < -0.3;
+  return true;
 }
 
 // --- scenario 0: main.js itself loads and wires without a swallowed crash ---
@@ -216,6 +277,27 @@ await step('continue: a saved fur count is restored on the first start, and a ca
   g.game.start();
   if (g.game.furs !== 0) throw new Error(`a capsize restart should reset furs to 0, got ${g.game.furs}`);
   if (newGame('fjord', 0).game.furs !== 0) throw new Error('a run with no startFurs should open with 0 furs');
+});
+
+await step('mute: the button silences the sound effects too, not just the music', async () => {
+  // "Right now the 'mute' button only mutes the music, not the sound
+  // effects (ie. the wind effects during the British Warship fight)." Every
+  // sfx.js cue now goes out through one master gain (out()); the Web Audio
+  // shim can't be listened to, so this checks the routing in the source —
+  // a cue wired straight to the destination would play through a mute —
+  // and that the button drives it.
+  const { readFile } = await import('node:fs/promises');
+  const sfxSrc = await readFile(new URL('../src/audio/sfx.js', import.meta.url), 'utf8');
+  const direct = sfxSrc.match(/\.destination/g) || [];
+  if (direct.length !== 1) throw new Error(`sfx.js connects to the destination ${direct.length} times — every cue should go through the muteable master gain (only out() connects it)`);
+  const mainSrc = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+  if (!/music\.toggleMute\(\);\s*setSfxMuted\(muted\);/.test(mainSrc)) throw new Error('the mute button does not mute the sound effects (setSfxMuted) along with the music');
+  const sfx = await import('../src/audio/sfx.js');
+  sfx.setSfxMuted(true);
+  sfx.playCannonBoom();
+  sfx.setStormBed(1);
+  sfx.setSfxMuted(false);
+  sfx.setStormBed(0);
 });
 
 await step('hud icons: speaker / muted speaker / pause / play are four distinct SVGs', async () => {
@@ -622,6 +704,16 @@ await step('wendigo: it listens, you go still, Sorel checks it', () => {
   }
   if (wendigoFrostAt(tr.flowDistance + 20) > 0) throw new Error('the cold is already down within 20 units of Trois-Rivières');
   if (wendigoFrostAt(sorel.flowDistance) > 0) throw new Error('the cold still hangs over Sorel-Tracy\'s dock');
+  // "Make the Wendigo boss fight last all the way to just outside Sorel
+  // Tracy, however long it takes me to get there."
+  const toSorel = sorel.flowDistance - WENDIGO_DELIVERANCE;
+  if (!(toSorel >= 10 && toSorel <= 30)) throw new Error(`the Wendigo lets go ${toSorel.toFixed(1)} units short of Sorel — wanted just outside it`);
+  // However long: stopping for a long while doesn't end it.
+  const idle = newGame(WENDIGO_SEGMENT, WENDIGO_TRIGGER + 2);
+  run(idle, 30, 1 / 30, (st) => { st.up = true; });
+  if (!idle.game.wendigo.isActive()) throw new Error('the Wendigo never started');
+  run(idle, 30 * 45, 1 / 30, (st) => { st.up = false; idle.game.health = 100; });
+  if (!idle.game.wendigo.isActive()) throw new Error('the Wendigo let go of a canoe that stopped for 45s, short of Sorel');
 
   // A: keep working the paddle through every LISTEN and the raking blows
   // land. Hull pinned so bank scrapes don't muddy the "did the *lunge*
@@ -874,7 +966,18 @@ await step('blockade: the British Blockade sits between Smiths Falls and Newboro
   const before = VILLAGES.find((v) => v.name === 'Smiths Falls');
   const after = VILLAGES.find((v) => v.name === 'Newboro');
   const kingston = VILLAGES.find((v) => v.name === 'Kingston');
-  if (Math.abs(SHIP_FLOW_DISTANCE - (kingston.flowDistance - 700)) > 1e-9) throw new Error('the Blockade is not back at Kingston - 700, where it was before');
+  // Kingston − 630 since it became a line of frigates 70 apart (the fight
+  // is longer; the last ship moved down to keep it all between the docks).
+  if (Math.abs(SHIP_FLOW_DISTANCE - (kingston.flowDistance - 630)) > 1e-9) throw new Error('the last frigate is not at Kingston - 630');
+  // No sandbar across any frigate's run-in to its gap, or just past it —
+  // one sat right on the second frigate when the line was first laid down.
+  for (const sd of BLOCKADE_SHIPS) {
+    for (let d = sd - 35; d <= sd + 10; d += 0.25) {
+      if (braidAt(d)) throw new Error(`a sandbar at ${d.toFixed(1)}, in the frigate at ${sd}'s way`);
+    }
+  }
+  if (BLOCKADE_SHIPS.length !== BLOCKADE_SHIP_COUNT || BLOCKADE_SHIPS.at(-1) !== SHIP_FLOW_DISTANCE) throw new Error('the line of frigates does not end at SHIP_FLOW_DISTANCE');
+  if (BLOCKADE_SHIP_COUNT < 2) throw new Error('the Blockade is a single ship again');
   const lo = SHIP_FLOW_DISTANCE - APPROACH_RANGE;
   const hi = SHIP_FLOW_DISTANCE + 10;
   if (!(lo > before.flowDistance + dockHitZ(before) + 15)) throw new Error(`the Blockade's cannon fire starts ${(lo - before.flowDistance).toFixed(1)} units past Smiths Falls's dock`);
@@ -882,6 +985,63 @@ await step('blockade: the British Blockade sits between Smiths Falls and Newboro
   for (const v of VILLAGES) {
     if (v.segment === 'rideau' && v.flowDistance > lo && v.flowDistance < hi) throw new Error(`${v.name}'s dock is inside the Blockade's corridor`);
   }
+});
+
+await step('blockade: flag islands crowd the approach, only there, and never the gap past the frigate', async () => {
+  // "For the British Blockade boss fight, and only for that boss fight, let's
+  // add a variation of the island sprite: an island flying a Union Jack flag.
+  // Drop a bunch of these in the river during the Blockade fight." Paddles
+  // the real field from well above the approach to the ship and records
+  // every fresh spawn's type and place.
+  const { FLAG_ISLAND_RANGE, inFlagIslandRange } = await import('../src/world/obstacles.js');
+  const { APPROACH_RANGE } = await import('../src/bossfights/blockade.js');
+  const [lo, hi] = FLAG_ISLAND_RANGE;
+  if (lo !== SHIP_FLOW_DISTANCE - APPROACH_RANGE) throw new Error('flag islands do not start where the cannon fire does');
+  if (!(hi <= SHIP_FLOW_DISTANCE - 30)) throw new Error(`flag islands run to ${(SHIP_FLOW_DISTANCE - hi).toFixed(1)} units short of the frigate — into the gap`);
+  const flags = [];
+  let before = 0;
+  await withSeededRandom(1812, () => {
+    for (let run = 0; run < 4; run++) {
+      const g = newGame('rideau', lo - 80);
+      const lastZ = new Map();
+      for (let i = 0; i < 6000 && g.world.distance < SHIP_FLOW_DISTANCE - 5; i++) {
+        // Through the frigates' gaps — the line's hulls would hold a
+        // straight-ahead canoe at the first one for good.
+        if (!blockadePilot(g)) {
+          g.input.state.up = true;
+          g.input.state.left = g.input.state.right = g.input.state.down = false;
+        }
+        g.game.health = 100;
+        g.game.update(1 / 30);
+        if (g.game.mode === 'village') g.game.leaveVillage();
+        for (const e of g.obstacles.pool) {
+          const prev = lastZ.get(e);
+          lastZ.set(e, e.z);
+          // A respawn jumps far up the screen; backing off a hull only
+          // eases z back a fraction of a unit a frame.
+          if (prev === undefined || prev - e.z < 3) continue;
+          const d = g.world.distance - e.z;
+          if (e.type === 'flagIsland') flags.push({ d, off: e.x - centerX(d), half: widthAt(d) / 2 });
+          else if (d < lo && e.active && !e.hidden && e.type !== 'pelt') before++;
+        }
+      }
+    }
+  });
+  // (0.6 in from each edge: d read back here is off the d place() saw at
+  // spawn by up to a frame's travel, z and the world clock being stepped
+  // at different points in the frame.)
+  const blocking = flags.find((f) => inShipClearZone(f.d - 0.6) && inShipClearZone(f.d + 0.6));
+  if (blocking) throw new Error(`a flag island spawned at ${blocking.d.toFixed(1)}, in a frigate's gap approach`);
+  const stray = flags.find((f) => !inFlagIslandRange(f.d));
+  if (stray) throw new Error(`a flag island spawned at ${stray.d.toFixed(1)}, outside the Blockade's approach`);
+  if (flags.length < 40) throw new Error(`only ${flags.length} flag islands over 4 runs of the approach`);
+  const left = flags.filter((f) => f.off < -f.half * 0.4).length;
+  const right = flags.filter((f) => f.off > f.half * 0.4).length;
+  if (!(left > 4 && right > 4)) throw new Error(`flag islands are not spread bank to bank (${left} near the south bank, ${right} near the north)`);
+  const out = flags.find((f) => Math.abs(f.off) > f.half);
+  if (out) throw new Error(`a flag island spawned out of the water (${out.off.toFixed(2)} off centre, half-width ${out.half.toFixed(2)})`);
+  if (before === 0) throw new Error('no ordinary hazards counted above the approach — the probe is broken');
+  notes.push(`  note flag islands: ${flags.length} over 4 runs of the Blockade approach (${left} south-bank side, ${right} north)`);
 });
 
 await step('rideau: past Gatineau, a big "ENTERING UPPER CANADA" title card', async () => {
@@ -1110,6 +1270,14 @@ await step('loup-garou: the demon-wolf strikes, then the mouth at Tadoussac chec
   // odd ring. The real guarantee is that a steer-away dodge isn't getting
   // mauled (5+), and that it still reaches the city.
   if (dodgeHits > 3) throw new Error(`steering clear of the marked spot still ate ${dodgeHits} strikes — not dodgeable enough for the first encounter`);
+
+  // No failsafe exit: braking hard for a long while (no forward progress)
+  // doesn't end it — reaching the mouth is the only way out.
+  const braking = newGame(LOUP_GAROU_SEGMENT, LOUP_GAROU_TRIGGER + 2);
+  run(braking, 15, 1 / 30, (st) => { st.up = true; });
+  if (!braking.game.loupGarou.isActive()) throw new Error('the loup-garou never started');
+  run(braking, 30 * 20, 1 / 30, (st) => { st.up = false; st.down = true; braking.game.health = 100; });
+  if (!braking.game.loupGarou.isActive()) throw new Error('the loup-garou let go of a canoe that braked for 20s, short of the mouth');
 
   // And the wolf is inert everywhere else (its trigger is a fjord number).
   const elsewhere = newGame('lawrenceWest', SEGMENT_SHAPE_OFFSET.lawrenceWest + 4);
@@ -1508,6 +1676,9 @@ await step('blockade: approach -> cleared -> ordinary paddling continues', () =>
   // comment on why that fight was split into its own, much further
   // downstream encounter, no longer this scenario's concern.
   const g = newGame('rideau', SHIP_FLOW_DISTANCE + 2);
+  // The last frigate's gap is on the first one's side (an odd count,
+  // alternating) — fix the roll so it's the right bank.
+  g.game.blockade.debugForceFirstGapSide(1);
   g.game.lateralOffset = widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // gap centre
   let cleared = false;
   for (let i = 0; i < 500 && !cleared; i++) {
@@ -1535,30 +1706,122 @@ await step('blockade: approach -> cleared -> ordinary paddling continues', () =>
   notes.push('  note blockade: cleared the frigate cleanly, ordinary paddling resumed');
 });
 
+await step('blockade: a line of frigates, gaps on alternating banks, rolled per fight — no hugging one bank through it', () => withSeededRandom(1813, () => {
+  // "If you know there's a passageway on the right side, you can pretty
+  // much cruise right past it." Now: SHIP_COUNT frigates SHIP_SPACING
+  // apart, each gap on the other bank to the last, the first one's bank
+  // rolled each fight.
+  for (let i = 1; i < BLOCKADE_SHIPS.length; i++) {
+    if (BLOCKADE_SHIPS[i] - BLOCKADE_SHIPS[i - 1] !== BLOCKADE_SHIP_SPACING) throw new Error('frigates not evenly spaced');
+  }
+  const firsts = new Set();
+  for (let run = 0; run < 12; run++) {
+    const g = newGame('rideau', BLOCKADE_SHIPS[0] - 60);
+    g.game.update(1 / 30);
+    const sides = g.game.blockade.debugGapSides();
+    if (!sides) throw new Error('the fight did not start 60 short of the first frigate');
+    for (let i = 1; i < sides.length; i++) if (sides[i] !== -sides[i - 1]) throw new Error(`gaps don't alternate: ${sides}`);
+    firsts.add(sides[0]);
+  }
+  if (firsts.size !== 2) throw new Error('the first gap is on the same bank every fight — it can be memorised');
+
+  // Hugging one bank, flat out, gets stopped by a hull: whichever bank,
+  // some frigate fills it.
+  for (const side of [-1, 1]) {
+    const g = newGame('rideau', BLOCKADE_SHIPS[0] - 100);
+    let wall = false;
+    for (let i = 0; i < 2000 && g.game.flowDistance < SHIP_FLOW_DISTANCE + 5; i++) {
+      const want = centerX(g.game.flowDistance) + side * (widthAt(g.game.flowDistance) / 2 - 3.5);
+      const err = g.game.canoeWorldX - want;
+      g.input.state.up = true;
+      g.input.state.left = err > 0.3;
+      g.input.state.right = err < -0.3;
+      g.game.health = 100;
+      const before = g.game.flowDistance;
+      g.game.update(1 / 30);
+      if (g.game.blockade.isApproachEngaged() && g.game.flowDistance <= before && BLOCKADE_SHIPS.some((sd) => Math.abs(sd - before) < 3)) wall = true;
+      if (wall) break;
+    }
+    if (!wall) throw new Error(`hugging the ${side < 0 ? 'south' : 'north'} bank flat out was never stopped by a frigate`);
+  }
+
+  // Every swing from one gap to the next is makeable: a careful pilot —
+  // easing off to make each crossing, sidestepping warning rings, steering
+  // round what's in the water — gets through the whole line every time
+  // with the hull pinned (so only the geometry is being tested: a gap it
+  // can't reach in time stops it dead at a hull, pinned health or not).
+  // Then the same pilot with real damage, as a note only: it's a crude
+  // pilot (never shoots back, clips a few islands a run), so its pass
+  // rate is a floor on what a player manages, not a target.
+  let worstHealth = 100;
+  let clearedRuns = 0;
+  let pinnedClears = 0;
+  let pinnedFail = '';
+  let banners = 0;
+  const RUNS = 8;
+  for (let run = 0; run < RUNS * 2; run++) {
+    const pinned = run < RUNS;
+    const g = newGame('rideau', BLOCKADE_SHIPS[0] - 100);
+    let cleared = false;
+    let lastBanner = '';
+    for (let i = 0; i < 9000 && !cleared; i++) {
+      if (!blockadePilot(g)) {
+        g.input.state.up = true;
+        g.input.state.down = false;
+        const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
+        g.input.state.left = err > 0.4;
+        g.input.state.right = err < -0.4;
+      }
+      if (pinned) g.game.health = 100;
+      g.game.update(1 / 30);
+      const banner = g.game.ui.milestoneBanner.textContent;
+      if (pinned && banner !== lastBanner && /FRIGATES? LEFT/.test(banner)) banners++;
+      lastBanner = banner;
+      if (g.game.state === 'gameover' || g.game.capsize.isActive()) break;
+      if (g.game.flowDistance > SHIP_FLOW_DISTANCE + 5 && !g.game.blockade.isApproachEngaged()) cleared = true;
+    }
+    if (pinned && cleared) pinnedClears++;
+    if (pinned && !cleared) pinnedFail = `stopped at ${g.game.flowDistance.toFixed(1)} (${(g.game.canoeWorldX - centerX(g.game.flowDistance)).toFixed(2)} off centre, state ${g.game.state}, capsizing ${g.game.capsize.isActive()}, sides ${g.game.blockade.debugGapSides()})`;
+    if (!pinned) {
+      worstHealth = Math.min(worstHealth, g.game.health);
+      if (cleared) clearedRuns++;
+    }
+  }
+  if (pinnedClears < RUNS) throw new Error(`with the hull pinned, a careful pilot only threaded the whole line ${pinnedClears}/${RUNS} times — a gap out of reach; ${pinnedFail}`);
+  if (banners < (BLOCKADE_SHIP_COUNT - 1) * RUNS) throw new Error(`only ${banners} "frigates left" banners over ${RUNS} clean runs`);
+  notes.push(`  note blockade line: pinned hull, threaded ${pinnedClears}/${RUNS}; real damage, the crude pilot got through ${clearedRuns}/${RUNS}`);
+}));
+
 // --- scenario 4a: the British Warship — a standalone held encounter --------
 
-await step('britishWarship: triggers ~1/3 of the way from Jones Falls to Kingston, held until resolved', () => {
+await step('britishWarship: triggers ~1/3 of the way from Jones Falls to Kingston, held until she\'s sunk — surviving never ends it', () => {
   if (WARSHIP_FLOW_DISTANCE <= SHIP_FLOW_DISTANCE) {
     throw new Error(`British Warship @ ${WARSHIP_FLOW_DISTANCE | 0} isn't downstream of the frigate @ ${SHIP_FLOW_DISTANCE | 0} any more`);
   }
   // The fight is a held arena the instant it triggers (britishWarship.js's
-  // own module comment) — no amount of paddling ends it early, only
-  // CHASE_HOLD_TIME surviving it (or sinking the ship, not exercised by
-  // this no-combat scenario) does, so the budget below has to clear that
-  // floor, not just a travel distance.
+  // own module comment) — no amount of paddling ends it, and since the
+  // "final boss" rework no amount of surviving either: 250s held (past the
+  // old 210s CHASE_HOLD_TIME win) and she's still there. Then sunk
+  // (debugSink — the gunfight itself is the next scenario), it resolves.
   const g = newGame('rideau', WARSHIP_FLOW_DISTANCE + 2);
   let started = false;
-  let escaped = false;
-  for (let i = 0; i < 7000 && !escaped; i++) {
+  for (let i = 0; i < 7500; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     g.game.update(1 / 30);
     if (g.game.britishWarship.isChaseHolding()) started = true;
-    if (started && g.game.warshipPct === null) escaped = true;
-    if (g.game.state === 'gameover') throw new Error('died in the Warship hold with no combat — too harsh');
+    if (g.game.state === 'gameover') throw new Error('died in the Warship hold with health pinned');
   }
   if (!started) throw new Error('the British Warship never triggered approaching its own flowDistance');
-  if (!escaped) throw new Error('the Warship fight never resolved — it (and its music) would run forever');
+  if (g.game.warshipPct === null || !g.game.britishWarship.isChaseHolding()) throw new Error('the Warship fight ended without being sunk — waiting her out still wins');
+  g.game.britishWarship.debugSink();
+  let escaped = false;
+  for (let i = 0; i < 600 && !escaped; i++) {
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    if (g.game.warshipPct === null && !g.game.britishWarship.isChaseHolding()) escaped = true;
+  }
+  if (!escaped) throw new Error('sinking her never ended the fight');
 
   // Past the Warship, the remaining ~2/3 of the run to Kingston still
   // works. Arriving is game.js's journeyComplete — either the oversized
@@ -1575,8 +1838,8 @@ await step('britishWarship: triggers ~1/3 of the way from Jones Falls to Kingsto
     g.game.update(1 / 30);
     if (g.game.journeyComplete) arrived = true;
   }
-  if (!arrived) throw new Error('escaped the Warship but never reached Kingston — the run home is broken');
-  notes.push('  note britishWarship ran on its own, held until it resolved, then reached the Kingston finish');
+  if (!arrived) throw new Error('sank the Warship but never reached Kingston — the run home is broken');
+  notes.push('  note britishWarship held through 250s unsunk, resolved when sunk, then reached the Kingston finish');
 });
 
 // --- scenario 4b: the British Warship's hull is shootable, and sinkable ----
@@ -1600,11 +1863,8 @@ await step('britishWarship: shooting it sinks it', () => {
   // that only works because it knows the ship's exact position out of band
   // (debugChaseShipPosition() is the same kind of test-only accessor
   // diable.js's debugCentreX() already provides).
-  // Budget just past CHASE_HOLD_TIME (210s) — CHASE_HULL_HP is calibrated
-  // (see its own comment) so even this same continuous-fire bot takes ~200s
-  // to sink it, deliberately just under the hold-time floor. A real budget
-  // tighter than that would make this scenario fail on the exact tuning
-  // it's meant to confirm, not catch an actual regression.
+  // Budget ~220s — far more than this continuous-fire bot needs (it's
+  // ~65s); sinking is the only way the fight ends now.
   let resolved = false;
   let sunk = false;
   let frames = 0;
@@ -1625,10 +1885,121 @@ await step('britishWarship: shooting it sinks it', () => {
     if (g.game.state === 'gameover') throw new Error('died trying to shoot down the Warship');
     if (g.game.warshipPct === null) resolved = true;
   }
-  if (!resolved) throw new Error('the Warship fight never resolved (sunk or escaped) within budget');
-  if (!sunk) throw new Error('resolved via the CHASE_HOLD_TIME timeout instead of sinking — the gunfight itself was never exercised');
+  if (!resolved) throw new Error('the Warship fight never resolved within budget — never sunk');
+  if (!sunk) throw new Error('the fight resolved without the sinking banner');
   notes.push(`  note britishWarship: sank it after ${(frames / 30).toFixed(1)}s of gunnery`);
 });
+
+await step('britishWarship: the final boss — hits hurt, shots find a paddling canoe, three phases with broadsides', () => withSeededRandom(1814, () => {
+  // "This is the final boss fight in the game, it should also be the
+  // toughest boss fight in the game ... the hits from the warship don't
+  // deal very much damage." Plus the bug under it: shots were led by the
+  // paddling speed, but held in the arena the canoe barely moves, so
+  // holding Up threw every shot out in front of it.
+  const g = newGame('rideau', WARSHIP_FLOW_DISTANCE + 2);
+  const hits = [];
+  const orig = g.game.handleHit.bind(g.game);
+  g.game.handleHit = (e) => { if (e?.type === 'cannon') hits.push(e.damage); return orig(e); };
+  for (let i = 0; i < 500 && !g.game.britishWarship.isChaseHolding(); i++) {
+    g.input.state.up = true;
+    g.game.update(1 / 30);
+  }
+  if (!g.game.britishWarship.isChaseHolding()) throw new Error('never entered the held arena');
+  // 40s holding Up and doing nothing else — the old immune strategy.
+  for (let i = 0; i < 1200; i++) {
+    g.input.state.up = true;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+  }
+  if (hits.length < 6) throw new Error(`only ${hits.length} cannon hits in 40s on a canoe just holding Up — shots still missing a paddling canoe`);
+  if (!(Math.min(...hits) >= 12)) throw new Error(`a Warship hit did ${Math.min(...hits)} — should hurt (at least the Blockade's 12)`);
+  if (g.game.britishWarship.debugPhase() !== 0) throw new Error('not in the bow-gun phase at full hull');
+
+  // Phases, by hull: each announced.
+  const banners = [];
+  const watch = () => { const t = g.game.ui.bossBanner.textContent; if (t && banners.at(-1) !== t) banners.push(t); };
+  g.game.britishWarship.debugSetHull(0.6);
+  let broadside = null;
+  for (let i = 0; i < 400 && !broadside; i++) {
+    g.input.state.up = false;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    watch();
+    const lines = new Map();
+    for (const h of g.game.britishWarship.debugHazards()) {
+      if (h.t > 0.05 || h.warn <= 0.7) continue;
+      lines.set(h.d, [...(lines.get(h.d) || []), h.x]);
+    }
+    for (const xs of lines.values()) if (xs.length >= 2) broadside = xs.sort((a, b) => a - b);
+  }
+  if (g.game.britishWarship.debugPhase() !== 1) throw new Error('hull at 60% is not the broadside phase');
+  if (!banners.some((b) => b.includes('BROADSIDES'))) throw new Error(`no BROADSIDES banner (saw ${JSON.stringify(banners)})`);
+  if (!broadside) throw new Error('no broadside fired in the broadside phase');
+  // The arena's river is narrow (~11), so a broadside spans it bank to
+  // bank: across the canoe's reachable water, the only safe water (clear
+  // of every shot's 1.3 hit radius by a hull's width) is one stretch —
+  // the gap — and most of the river is covered.
+  const fd = g.game.flowDistance;
+  const reachHalf = widthAt(fd) / 2 - 0.8;
+  let safeRuns = 0, safe = 0, total = 0, prevSafe = false;
+  for (let x = centerX(fd) - reachHalf; x <= centerX(fd) + reachHalf; x += 0.1) {
+    const ok = broadside.every((sx) => Math.abs(sx - x) > 1.3 + 0.3);
+    if (ok && !prevSafe) safeRuns++;
+    if (ok) safe++;
+    total++;
+    prevSafe = ok;
+  }
+  if (safeRuns !== 1) throw new Error(`a broadside should leave exactly one safe stretch, found ${safeRuns} (shots at ${broadside.map((x) => x.toFixed(1))})`);
+  if (!(safe / total < 0.45)) throw new Error(`a broadside leaves ${Math.round(safe / total * 100)}% of the river safe — not much of a wall`);
+  g.game.britishWarship.debugSetHull(0.3);
+  for (let i = 0; i < 60; i++) { g.game.health = 100; g.game.update(1 / 30); watch(); }
+  if (g.game.britishWarship.debugPhase() !== 2) throw new Error('hull at 30% is not the last phase');
+  if (!banners.some((b) => b.includes('ALL GUNS'))) throw new Error(`no ALL GUNS banner (saw ${JSON.stringify(banners)})`);
+  notes.push(`  note britishWarship: ${hits.length} hits of ${hits[0]} in 40s just holding Up; a broadside of ${broadside.length} leaves ${Math.round(safe / total * 100)}% of the river safe, in one gap`);
+}));
+
+await step('britishWarship: tough, but a sharp player sinks her — real damage, dodging and shooting back', () => withSeededRandom(1815, () => {
+  // The other side of "toughest fight in the game": still winnable. A bot
+  // that sidesteps every warning ring (including a broadside's gap) and
+  // fires whenever it's lined up under the ship, pistol only, real hull.
+  // It reacts instantly and perfectly, so it's an upper bound on how easy
+  // this is, not a human — a human takes longer to sink her and more hits
+  // doing it.
+  const RUNS = 4;
+  let wins = 0, worst = 100, longest = 0;
+  for (let run = 0; run < RUNS; run++) {
+    const g = newGame('rideau', WARSHIP_FLOW_DISTANCE + 2);
+    for (let i = 0; i < 500 && !g.game.britishWarship.isChaseHolding(); i++) { g.input.state.up = true; g.game.update(1 / 30); }
+    let t = 0;
+    for (let i = 0; i < 9000; i++) {
+      const w = g.game.britishWarship;
+      const fd = g.game.flowDistance - g.game._chaseHoldZ;
+      const x = g.game.canoeWorldX;
+      const c = centerX(g.game.flowDistance), reach = widthAt(g.game.flowDistance) / 2 - 1;
+      const ship = w.debugChaseShipPosition();
+      let want = ship.worldX;
+      const threats = w.debugHazards().filter((h) => h.t < h.warn + 0.32 && !h.hit && Math.abs(h.d - fd) < 2.6);
+      const safeAt = (sx) => threats.every((h) => Math.abs(h.x - sx) > 1.9);
+      if (!safeAt(x) || !safeAt(want)) {
+        let best = null;
+        for (let sx = c - reach; sx <= c + reach; sx += 0.2) if (safeAt(sx) && (best === null || Math.abs(sx - x) < Math.abs(best - x))) best = sx;
+        if (best !== null) want = best;
+      }
+      const err = x - want;
+      g.input.state.left = err > 0.25;
+      g.input.state.right = err < -0.25;
+      g.input.state.up = false;
+      if (Math.abs(x - ship.worldX) < 1.5) g.input.onWeaponFire?.('pistol');
+      g.game.update(1 / 30);
+      t += 1 / 30;
+      if (g.game.state === 'gameover' || g.game.capsize.isActive()) break;
+      if (!w.isChaseHolding() && g.game.warshipPct === null) { wins++; worst = Math.min(worst, g.game.health); longest = Math.max(longest, t); break; }
+    }
+  }
+  if (wins < RUNS - 1) throw new Error(`a perfect-dodging, shooting bot only sank her ${wins}/${RUNS} times — not winnable`);
+  if (!(worst < 75)) throw new Error(`the perfect bot finished every win above 75 hull (worst ${worst}) — not the toughest fight`);
+  notes.push(`  note britishWarship: perfect bot sank her ${wins}/${RUNS}, slowest ${longest.toFixed(0)}s, worst finish at ${worst} hull`);
+}));
 
 // --- scenario 4b2: the pre-fight approach — storm, thunder, then brooding --
 
@@ -1847,15 +2218,16 @@ await step('britishWarship: the storm holds through the whole fight, then clears
     throw new Error('storm should be held at full darkness during the fight, via stormIntensity()');
   }
 
-  // Survive out the CHASE_HOLD_TIME floor without fighting back — same
-  // no-combat resolution shape as the "held until resolved" scenario above
-  // — then confirm the storm clears the instant it does.
+  // Sink her (debugSink — surviving no longer ends it), let her go down,
+  // then confirm the storm clears the instant it does.
+  g.game.britishWarship.debugSink();
   let resolved = false;
   for (let i = 0; i < 7000 && !resolved; i++) {
     g.input.state.up = true;
     g.game.health = 100;
     g.game.update(1 / 30);
-    if (g.game.warshipPct === null) resolved = true;
+    // Over once she's gone down (SINK_TIME), not when the hull bar drops.
+    if (g.game.warshipPct === null && !g.game.britishWarship.isChaseHolding()) resolved = true;
     if (g.game.state === 'gameover') throw new Error('died in the Warship hold with no combat — too harsh');
   }
   if (!resolved) throw new Error('the Warship fight never resolved within budget');
@@ -2597,6 +2969,46 @@ await step("kingston: MIN_SPEED (the ?start= cheat's own starting speed) is genu
 
 // --- scenario 4b: the Chasse-galerie flight, from the ?start= drop point ---
 
+await step('chasse-galerie: steeple clusters and storm gusts make it trickier, still short of Le Diable', async () => {
+  // "Too easy to dodge all the steeples" — clusters (opposite-bank pairs
+  // and triples ~11 apart, same-bank "bait" doubles) and telegraphed gusts.
+  const { STEEPLE_LAYOUT, GUST_WARN } = await import('../src/bossfights/chasseGalerie.js');
+  const steps = STEEPLE_LAYOUT.slice(1).map((s, i) => ({ gap: s.flowDistance - STEEPLE_LAYOUT[i].flowDistance, swap: s.side !== STEEPLE_LAYOUT[i].side }));
+  const pairs = steps.filter((x) => x.gap <= 11.5 && x.swap).length;
+  const bait = steps.filter((x) => x.gap <= 11.5 && !x.swap).length;
+  if (pairs < 8) throw new Error(`only ${pairs} tight opposite-bank pairs in the gorge`);
+  if (bait < 2) throw new Error(`only ${bait} same-bank "bait" doubles`);
+  if (Math.min(...steps.map((x) => x.gap)) < 8) throw new Error('two churches closer than 8 — no room to thread between them');
+
+  // Gusts: fly the gorge with the thread-following pilot and watch them.
+  const g = newGame('lawrenceWest', CHASSE_GALERIE_FLOW_DISTANCE + 3);
+  let gusts = 0, warnFrames = 0, blowFrames = 0, prevLevel = 0, badStart = false, inFight = false, fightFrames = 0;
+  for (let i = 0; i < 20000 && g.game.flowDistance < DIABLE_FLOW_DISTANCE + 20; i++) {
+    const cg = g.game.chasseGalerie;
+    g.input.state.up = true;
+    const want = cg.isActive() ? cg.clearOffsetAhead(g.game.flowDistance) : 0;
+    const err = g.game.lateralOffset - want;
+    g.input.state.left = err > 0.12;
+    g.input.state.right = err < -0.12;
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    const level = cg.gustLevel();
+    if (level > 0 && prevLevel === 0) { gusts++; if (cg.isGustBlowing()) badStart = true; }
+    if (level > 0 && !cg.isGustBlowing()) warnFrames++;
+    if (cg.isGustBlowing()) blowFrames++;
+    if (g.game.diable.isActive() && level > 0) inFight = true;
+    // Held in Le Diable's arena: watch 10s of it for gusts, then stop.
+    if (g.game.diable.isActive() && ++fightFrames > 300) break;
+    prevLevel = level;
+    if (g.game.state === 'gameover') g.game.start();
+  }
+  if (gusts < 8) throw new Error(`only ${gusts} gusts over the whole gorge`);
+  if (badStart) throw new Error('a gust blew without its warning first');
+  if (!(warnFrames / gusts >= GUST_WARN * 30 * 0.9)) throw new Error(`gust warnings average ${(warnFrames / gusts / 30).toFixed(2)}s — under GUST_WARN`);
+  if (inFight) throw new Error('a gust blew during the Le Diable fight');
+  notes.push(`  note chasse-galerie: ${pairs} tight pairs, ${bait} bait doubles; ${gusts} gusts on the way to Le Diable`);
+});
+
 await step('chasse-galerie: fly the gorge, no landing, glide down', () => {
   // A simple autopilot: steer toward the thread through the churches ahead
   // (chasseGalerie.clearOffsetAhead), which also has to fight the crosswind.
@@ -2994,20 +3406,23 @@ await step('rideau: paddle the whole leg and reach Kingston, where the canoe is 
   // gauntlet itself are covered by the other scenarios; here the hull wall
   // still has to be threaded (health can't shortcut a solid wall), so a
   // failure to find the gap fails this test loudly.
-  const gapX = centerX(SHIP_FLOW_DISTANCE) + widthAt(SHIP_FLOW_DISTANCE) / 2 - 3.5; // right-side lane
   for (let i = 0; i < 12000 && !arrived; i++) {
     g.input.state.up = true;
+    g.input.state.down = false;
     // blockade.js no longer exposes a progress field at all (no health/
     // hull/hold-time concept during a pure dodge-and-thread-the-gap leg);
     // isApproachEngaged() is the non-consuming status check for "is the
     // gauntlet currently live."
-    const threading = g.game.blockade.isApproachEngaged() && g.game.flowDistance < SHIP_FLOW_DISTANCE + 6;
-    const wantX = threading ? gapX : centerX(g.game.flowDistance);
-    const err = g.game.canoeWorldX - wantX;
-    g.input.state.left = err > 0.4;
-    g.input.state.right = err < -0.4;
+    if (!blockadePilot(g)) {
+      const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
+      g.input.state.left = err > 0.4;
+      g.input.state.right = err < -0.4;
+    }
     g.game.health = 100;
     g.game.invulnTimer = Math.max(g.game.invulnTimer, 0.1);
+    // The Warship only ends sunk now; the gunnery is covered by its own
+    // scenarios — here, sink her the moment she's met and carry on.
+    if (g.game.britishWarship.isChaseHolding() && !g.game.britishWarship.isSinking()) g.game.britishWarship.debugSink();
     g.game.update(1 / 30);
     maxWidthSeen = Math.max(maxWidthSeen, widthAt(g.game.flowDistance));
     if (g.game.ui.milestoneBanner.textContent.includes('KINGSTON')) sawApproachBanner = true;

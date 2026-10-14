@@ -15,8 +15,9 @@
 //
 // It's a HELD encounter, same pattern as bossfights/diable.js's arena:
 // game.js clamps flowDistance at getChaseHoldFlowDistance() while
-// isChaseHolding() is true, so it resolves on CHASE_HOLD_TIME survived or
-// the hull sunk, never on distance covered. It didn't start that way — it
+// isChaseHolding() is true, so it resolves on the hull sunk — the only way
+// out since the "final boss" rework (it used to be that or CHASE_HOLD_TIME
+// survived) — never on distance covered. It didn't start that way — it
 // used to just end once you'd made CHASE_DISTANCE units of headway past
 // the frigate, the same "outrun it" shape as the blockade's own
 // gap-finding. Reported through several rounds as "impossible," then
@@ -249,16 +250,58 @@ export function stormGustAt(flowDistance, time) {
 // return fire, at anything close to the old approach frigate's own
 // broadside, left no margin for the learning curve of tracking a swinging
 // ship.
-const CHASE_CANNON_DAMAGE = 4;
-const CHASE_VOLLEY_INTERVAL = 3.2; // was 2.2, then 1.6, then 1.3 — under half the original rate now
-// The chase's real win condition: survive this long, held in place, and
-// it's called off — same idea as simply outrunning it used to be, just
-// time-gated instead of distance-gated so it can't be resolved in under a
-// minute by construction. 210s (3.5min) — the middle of a requested 3-4
-// minute range. Sinking the ship (CHASE_HULL_HP below) still ends it
-// immediately for a player who'd rather fight than wait it out — a
-// skill-based shortcut, not a replacement for this floor.
-const CHASE_HOLD_TIME = 210;
+//
+// Then the other way, as the game's final fight: "The fight is too easy.
+// This is the final boss fight in the game, it should also be the toughest
+// boss fight in the game ... the hits from the warship don't deal very
+// much damage; these should be more punishing." 4 a hit — a third of a
+// Blockade frigate's 12 — on one loosely-aimed shot every 3.2s was barely
+// a threat. Now 15 (more than any frigate), about seven hits to sink you,
+// on aimed fire (CHASE_AIM_SCATTER) that escalates by phase (PHASES).
+const CHASE_CANNON_DAMAGE = 15;
+// Bow-gun shots: led at where the canoe is heading (its own measured
+// velocity in the arena — see aimVX/aimVD in update()), then scattered by
+// up to this much. Was ±3.5 sideways, ±1.2 along — wide enough that most
+// shots missed a canoe that hadn't moved at all.
+const CHASE_AIM_SCATTER_X = 0.9;
+const CHASE_AIM_SCATTER_D = 0.5;
+const SHOT_WARN = 0.65; // a bow shot's telegraph, as before
+const SHOT_HOT = 0.3;
+const SHOT_FADE = 0.15;
+
+// Three phases on the hull's way down, each announced (consumeJustPhase ->
+// game.js's banner): the bow gun alone; then broadsides — a line of shots
+// right across your water with one gap in it, between bow shots; then
+// everything, faster, as she founders. hp: the hull fraction it starts at.
+// bow / broadside: seconds between each (null = not in this phase).
+// slots: shots in a broadside line, BROADSIDE_SPACING apart, two of them
+// left out for the gap.
+const PHASES = [
+  { hp: 1, bow: 2.4, broadside: null, slots: 0 },
+  { hp: 2 / 3, bow: 2.6, broadside: 5.0, slots: 9 },
+  { hp: 1 / 3, bow: 1.6, broadside: 3.6, slots: 11 },
+];
+// Shots in a broadside line, centre to centre. The hit radius is 1.3, so
+// 2.2 apart is a solid wall — the only way through is the gap (two slots
+// left out: 4.4 between the shots either side of it, ~1.8 of clear water
+// either side of its middle) or getting out of the line's band fore/aft.
+const BROADSIDE_SPACING = 2.2;
+// A broadside's telegraph runs longer than a bow shot's: the gap is up to
+// BROADSIDE_GAP_REACH from where you are, and at the arena's 4.5 u/s
+// sideways (half that on touch... 8 there, see game.js's CHASE_LATERAL_SPEED)
+// that's a real move to make, not a twitch.
+const BROADSIDE_WARN = 1.15;
+const BROADSIDE_GAP_REACH = 4;
+// Bow shots and broadsides each keep their own clock, but never land
+// within this long of each other — a bow shot right on top of a broadside's
+// gap would make the gap a lie.
+const BROADSIDE_BOW_CLEAR = 0.9;
+// It used to have a second win condition: survive CHASE_HOLD_TIME (210s)
+// held in place and the ship was called off, with sinking her a shortcut.
+//
+// Removed with the "final boss" rework: waiting her out made the toughest
+// fight in the game the one you could win by not fighting. The only way
+// out now is sinking her.
 
 // Circling pursuit: reported as "floats next to me instead of engaging" —
 // an early version just held a straight trailing distance directly behind
@@ -386,11 +429,23 @@ export function createBritishWarship() {
   let chaseOrbitAngle = 0;
   let chaseShipD = 0; // the ship's actual, orbit-adjusted flowDistance this frame — what draw() and firing both use
   let chaseShipWorldX = 0; // ditto, lateral position
-  let chaseEscaped = false;
   let justStartedChase = false;
   let chaseHoldFlowDistance = 0;
-  let chaseHoldT = 0;
-  let volleyTimer = CHASE_VOLLEY_INTERVAL;
+  let volleyTimer = PHASES[0].bow;
+  let broadsideTimer = 0;
+  let phase = 0;
+  let justPhase = null;
+  // The canoe's own velocity in the arena (sideways, and fore/aft in the
+  // virtual hold distance), smoothed, for leading shots. It used to lead
+  // along the river by effectiveSpeed — the paddling speed — but in the
+  // held arena the canoe doesn't travel: Up only nudges it forward a
+  // couple of units (game.js's _chaseHoldZ). Holding Up threw every shot
+  // ~10 units out in front, out of reach — a canoe that just kept
+  // paddling was all but untouchable.
+  let lastX = null;
+  let lastD = null;
+  let aimVX = 0;
+  let aimVD = 0;
   let hazards = [];
   let sparks = [];
   let muzzleFlashes = [];
@@ -420,11 +475,16 @@ export function createBritishWarship() {
     chaseOrbitAngle = 0;
     chaseShipD = 0;
     chaseShipWorldX = 0;
-    chaseEscaped = false;
     justStartedChase = false;
     chaseHoldFlowDistance = 0;
-    chaseHoldT = 0;
-    volleyTimer = CHASE_VOLLEY_INTERVAL;
+    volleyTimer = PHASES[0].bow;
+    broadsideTimer = 0;
+    phase = 0;
+    justPhase = null;
+    lastX = null;
+    lastD = null;
+    aimVX = 0;
+    aimVD = 0;
     hazards = [];
     sparks = [];
     muzzleFlashes = [];
@@ -461,11 +521,19 @@ export function createBritishWarship() {
       justStartedChase = false;
       return v;
     },
-    consumeJustEscaped() {
-      const v = chaseEscaped && !chasePhase; // only true for one frame
-      if (v) chaseEscaped = false;
+    // The phase just entered (1 or 2) the frame the hull crosses into it,
+    // for game.js's banner; null otherwise.
+    consumeJustPhase() {
+      const v = justPhase;
+      justPhase = null;
       return v;
     },
+    // Test-only: which phase she's in, and her hull as a fraction —
+    // debugSetHull(f) puts it at f (the smoke test's way to the later
+    // phases without minutes of gunnery, like debugSink()).
+    debugPhase() { return phase; },
+    debugSetHull(f) { chaseHullHP = CHASE_HULL_HP * f; },
+    debugHazards() { return hazards; },
     consumeJustSunk() {
       const v = justSunk;
       justSunk = false;
@@ -618,8 +686,9 @@ export function createBritishWarship() {
         // exact point (wherever the player happened to cross the trigger)
         // for the rest of the fight. See the module's own opening comment.
         chaseHoldFlowDistance = playerFlowDistance;
-        chaseHoldT = 0;
-        volleyTimer = CHASE_VOLLEY_INTERVAL;
+        volleyTimer = PHASES[0].bow;
+        broadsideTimer = 0;
+        phase = 0;
         hazards = [];
         console.log('[WARSHIP] Started. Player:', playerFlowDistance);
       }
@@ -631,7 +700,7 @@ export function createBritishWarship() {
       let boomCount = 0;
       for (const h of hazards) {
         h.t += dt;
-        const hot = h.t >= 0.65 && h.t < 0.65 + 0.3;
+        const hot = h.t >= h.warn && h.t < h.warn + SHOT_HOT;
         if (hot && !h.boomed) {
           h.boomed = true;
           boomCount++;
@@ -643,7 +712,7 @@ export function createBritishWarship() {
           }
         }
       }
-      hazards = hazards.filter((h) => h.t < 0.65 + 0.3 + 0.15);
+      hazards = hazards.filter((h) => h.t < h.warn + SHOT_HOT + SHOT_FADE);
 
       // Hit sparks: pure visual feedback for a landed shot, ticked the same
       // unconditional way as hazards above.
@@ -658,6 +727,13 @@ export function createBritishWarship() {
         // why that matters). Only the opening beat eases in over fixed
         // real time, via chaseIntroT, independent of anything else.
         chaseIntroT = Math.min(chaseIntroT + dt, CHASE_INTRO_TIME);
+        if (lastX !== null && dt > 0) {
+          const k = Math.min(1, dt / 0.15);
+          aimVX += ((playerWorldX - lastX) / dt - aimVX) * k;
+          aimVD += ((playerFlowDistance - lastD) / dt - aimVD) * k;
+        }
+        lastX = playerWorldX;
+        lastD = playerFlowDistance;
         const introFrac = 1 - chaseIntroT / CHASE_INTRO_TIME; // 1 -> 0 over CHASE_INTRO_TIME
         const introExtraGap = introFrac * CHASE_INTRO_EXTRA_GAP;
 
@@ -740,34 +816,69 @@ export function createBritishWarship() {
           hazards = [];
           console.log('[WARSHIP] Sunk!');
         } else {
-          // Bow cannon: a real volley, led the same way splash hazards
-          // elsewhere in the game are — tagged with the ship's current
-          // position so drawHazard can render the shot as actually coming
-          // from the hull, not materializing out of nowhere.
+          // Phase by hull — each crossing announced once.
+          const frac = chaseHullHP / CHASE_HULL_HP;
+          let p = 0;
+          while (p + 1 < PHASES.length && frac <= PHASES[p + 1].hp) p++;
+          if (p > phase) {
+            phase = p;
+            justPhase = p;
+            // The first broadside comes a beat after the banner, not on it.
+            broadsideTimer = 1.5;
+          }
+          const cfg = PHASES[phase];
+          const c = centerX(playerFlowDistance);
+          const reach = widthAt(playerFlowDistance) / 2 - 0.8;
+
+          // Bow cannon: one aimed shot, led at where the canoe is going —
+          // tagged with the ship's position so drawHazard renders it as
+          // fired from the hull, not materializing out of nowhere.
           volleyTimer -= dt;
           if (volleyTimer <= 0) {
-            volleyTimer = CHASE_VOLLEY_INTERVAL;
-            muzzleFlashes.push({ x: chaseShipWorldX, d: chaseShipD, t: 0 });
-            hazards.push({
-              d: playerFlowDistance + effectiveSpeed * 0.65 + (Math.random() * 2 - 1) * 1.2,
-              x: playerWorldX + (Math.random() * 2 - 1) * 3.5,
-              t: 0,
-              hit: false,
-              boomed: false,
-              fromX: chaseShipWorldX,
-              fromD: chaseShipD,
-            });
+            if (cfg.broadside && broadsideTimer < BROADSIDE_BOW_CLEAR) {
+              volleyTimer = BROADSIDE_BOW_CLEAR; // hold it — see BROADSIDE_BOW_CLEAR
+            } else {
+              volleyTimer = cfg.bow;
+              muzzleFlashes.push({ x: chaseShipWorldX, d: chaseShipD, t: 0 });
+              hazards.push({
+                d: playerFlowDistance + aimVD * SHOT_WARN + (Math.random() * 2 - 1) * CHASE_AIM_SCATTER_D,
+                x: clamp(playerWorldX + aimVX * SHOT_WARN + (Math.random() * 2 - 1) * CHASE_AIM_SCATTER_X, c - reach, c + reach),
+                t: 0,
+                warn: SHOT_WARN,
+                hit: false,
+                boomed: false,
+                fromX: chaseShipWorldX,
+                fromD: chaseShipD,
+              });
+            }
           }
 
-          // Time survived, held in place, not distance made good. Sinking
-          // the ship above is a separate, immediate way to end the fight;
-          // this is the floor everyone gets regardless of how the gunnery
-          // goes.
-          chaseHoldT += dt;
-          if (chaseHoldT >= CHASE_HOLD_TIME) {
-            chasePhase = false;
-            chaseEscaped = true;
-            console.log('[WARSHIP] Escaped!');
+          // Broadside: a line of shots straight across the canoe's water,
+          // centred near it, with one gap (two slots left out) somewhere
+          // up to BROADSIDE_GAP_REACH away — never where you already are,
+          // so it always means moving. Every gun along her side flashes.
+          if (cfg.broadside) {
+            broadsideTimer -= dt;
+            if (broadsideTimer <= 0) {
+              broadsideTimer = cfg.broadside;
+              const n = cfg.slots;
+              const lineD = playerFlowDistance + aimVD * BROADSIDE_WARN * 0.5;
+              const side = Math.random() < 0.5 ? -1 : 1;
+              const off = side * (1.5 + Math.random() * (BROADSIDE_GAP_REACH - 1.5));
+              // Gap middle, kept in the water; the line is laid out around it.
+              const gapX = clamp(playerWorldX + off, c - reach + 1, c + reach - 1);
+              const gapSlot = Math.floor(Math.random() * (n - 3)) + 1; // first of the two gap slots, never an end
+              const x0 = gapX - (gapSlot + 0.5) * BROADSIDE_SPACING;
+              for (let i = 0; i < n; i++) {
+                if (i === gapSlot || i === gapSlot + 1) continue;
+                const x = x0 + i * BROADSIDE_SPACING;
+                if (x < c - reach - 1.3 || x > c + reach + 1.3) continue; // over the bank — nothing to hit there
+                hazards.push({ d: lineD, x, t: 0, warn: BROADSIDE_WARN, hit: false, boomed: false, fromX: chaseShipWorldX, fromD: chaseShipD });
+              }
+              for (let k = -2; k <= 2; k++) {
+                muzzleFlashes.push({ x: chaseShipWorldX + k * 0.5, d: chaseShipD + k * 0.9, t: 0 });
+              }
+            }
           }
         }
 
@@ -775,9 +886,7 @@ export function createBritishWarship() {
         muzzleFlashes = muzzleFlashes.filter((f) => f.t < MUZZLE_FLASH_LIFETIME);
 
         // A genuine health bar: full when the hold starts, draining toward
-        // 0 exactly as the hull sinks. CHASE_HOLD_TIME above is still the
-        // floor everyone gets regardless of gunnery; it just isn't what
-        // this bar shows.
+        // 0 exactly as the hull sinks — and the only way the fight ends.
         const chaseHullPct = clamp((chaseHullHP / CHASE_HULL_HP) * 100, 0, 100);
         return { active: true, progressPct: chaseHullPct, boomCount, chaseShipDistance: chaseShipD, hitBullets, thunderCount, rumbleCount };
       }
@@ -1312,16 +1421,16 @@ function drawMuzzleFlash(ctx, f, z, cameraWorldX) {
 
 function drawHazard(ctx, h, z, cameraWorldX, zFrom) {
   const p = worldToScreen(h.x, z, cameraWorldX);
-  const warnProgress = clamp(h.t / 0.65, 0, 1);
-  const hot = h.t >= 0.65 && h.t < 0.65 + 0.3;
+  const warnProgress = clamp(h.t / h.warn, 0, 1);
+  const hot = h.t >= h.warn && h.t < h.warn + SHOT_HOT;
 
   // A tracer arcing from the ship's own position at spawn to the impact
   // point — reads as a shot from a ship visibly maneuvering right there in
   // frame, not lobbed from off-screen. Drawn across the whole warning
   // window so its motion itself is part of the telegraph.
-  if (!hot && h.t < 0.65) {
+  if (!hot && h.t < h.warn) {
     const from = worldToScreen(h.fromX, zFrom, cameraWorldX);
-    const k = clamp(h.t / 0.65, 0, 1);
+    const k = clamp(h.t / h.warn, 0, 1);
     const bx = from.x + (p.x - from.x) * k;
     const by = from.y + (p.y - from.y) * k;
     ctx.save();
@@ -1337,7 +1446,7 @@ function drawHazard(ctx, h, z, cameraWorldX, zFrom) {
     ctx.fill();
     ctx.restore();
   }
-  const fading = h.t >= 0.65 + 0.3;
+  const fading = h.t >= h.warn + SHOT_HOT;
 
   if (hot) {
     // The impact itself: a bright, opaque foam burst — this is the frame
@@ -1352,7 +1461,7 @@ function drawHazard(ctx, h, z, cameraWorldX, zFrom) {
     ctx.arc(p.x, p.y, 1.3 * PIXELS_PER_UNIT, 0, Math.PI * 2);
     ctx.stroke();
   } else if (fading) {
-    const fadeT = clamp((h.t - 0.65 - 0.3) / 0.15, 0, 1);
+    const fadeT = clamp((h.t - h.warn - SHOT_HOT) / SHOT_FADE, 0, 1);
     ctx.strokeStyle = `rgba(220, 235, 240, ${0.6 * (1 - fadeT)})`;
     ctx.lineWidth = 2;
     ctx.beginPath();

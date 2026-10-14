@@ -198,6 +198,9 @@ export const CHASSE_GALERIE_TRACK = { src: '/audio/les-freres-brunet-reel-du-gau
 // not enough at this setting, the fix has to move from this knob to the
 // file itself (re-normalize the source to a louder integrated target) —
 // see that constant's own comment.
+// Re-encoded from a better recording ("Les Chevaliers - La Mer de La
+// Folie.wav", replacing la-mer-du-folie.wav) — same file name, same -21
+// LUFS normalization as everything else.
 const PURSUIT_TRACK = { src: '/audio/la-mer-de-la-folie.mp3', title: 'La Mer de la Folie', artist: 'Les Chevaliers', volume: 1.0 };
 // Kingston's own arrival cues — supplied directly like DIABLE_TRACK/
 // PURSUIT_TRACK above (same normalize-audio.mjs treatment, same README.md

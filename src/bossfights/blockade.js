@@ -25,25 +25,34 @@
 // Rideau segment's shape offset) ever changes — one lookup at module load,
 // not duplicated geography.
 //
+// A LINE of frigates now, not one: BLOCKADE_SHIPS, SHIP_COUNT of them
+// SHIP_SPACING apart, each holding the channel with its gap at the
+// opposite bank to the one before — "if you know there's a passageway on
+// the right side, you can pretty much cruise right past it". One ship was
+// a single decision made once; a line of them is a slalom under fire,
+// and which bank the first gap is on is rolled each time the fight starts
+// (then alternates), so it can't be memorised either. The view only
+// reaches ~10 units ahead, far too short to cross the channel in, so the
+// next frigate's sails show at the top of the screen from well out
+// (drawHorizonSails) — the gap reads as the open water beside them.
+//
 // "The River Styx" — a small fun detail, a nickname for this exact stretch
 // kept here in the comments rather than shown to the player (game.js's
 // banner just says "BRITISH BLOCKADE" — see its own big #boss-banner
 // treatment). Nothing in the code keys off the name.
 import { centerX, widthAt } from '../world/river/path.js';
-import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT } from '../shared/config.js';
-import { VILLAGES } from '../world/villages.js';
+import { worldToScreen, CANVAS_HEIGHT, CANVAS_WIDTH, PIXELS_PER_UNIT, CANOE_SCREEN_Y } from '../shared/config.js';
 
-const KINGSTON = VILLAGES.find((v) => v.name === 'Kingston');
-// How far before Kingston the frigate sits. Tuned so the gauntlet
-// (APPROACH_RANGE of cannon fire) falls in the open Rideau Lake water
-// *between* two riverbank towns, Smiths Falls and Newboro — a village dock
-// landing inside the approach corridor would let the player walk ashore
-// mid-fight — with a real stretch of clear channel left before the harbour
-// narrows toward the arrival. Cannon fire starts ~21 units past Smiths
-// Falls's dock; the frigate is ~158 short of Newboro's. (The smoke test
-// checks both docks stay outside it.)
-const SHIP_D_OFFSET = 700;
-export const SHIP_FLOW_DISTANCE = KINGSTON.flowDistance - SHIP_D_OFFSET;
+// The line's positions live in world/river/blockadeLine.js (so path.js can
+// keep sandbars off them); re-exported here, where everything else looks.
+import {
+  SHIP_FLOW_DISTANCE, SHIP_COUNT, SHIP_SPACING, FIRST_APPROACH, FIRST_SHIP_FLOW_DISTANCE,
+  BLOCKADE_SHIPS, SHIP_CLEAR_BEFORE, SHIP_CLEAR_AFTER, inShipClearZone,
+} from '../world/river/blockadeLine.js';
+export {
+  SHIP_FLOW_DISTANCE, SHIP_COUNT, SHIP_SPACING, FIRST_SHIP_FLOW_DISTANCE,
+  BLOCKADE_SHIPS, SHIP_CLEAR_BEFORE, SHIP_CLEAR_AFTER, inShipClearZone,
+};
 
 // How far before the ship cannon fire starts, and how much room the player
 // gets to relocate across the channel to find the gap. This looks huge for
@@ -57,18 +66,21 @@ export const SHIP_FLOW_DISTANCE = KINGSTON.flowDistance - SHIP_D_OFFSET;
 // seconds at cruising speed to close a ~40-unit channel, with real margin
 // left over for reacting to cannon fire along the way rather than needing
 // to commit blind at frame one.
+//
+// Now the whole fight's span: FIRST_APPROACH before the first frigate plus
+// the line itself, measured back from the LAST one (SHIP_FLOW_DISTANCE),
+// so its users (game.js's rapids silence, the flag islands, the smoke
+// test's dock checks) still cover all of it.
 // Exported so game.js can silence the periodic rapids pattern (river/
 // path.js's rapidsStrength) across this same "clear water" span — see that
 // call site's own comment for why a fixed naval encounter fighting
 // unrelated ambient whitewater turned out to be a real bug, not a
 // difficulty feature.
-export const APPROACH_RANGE = 190;
-// A single commitment, decided (and telegraphed) the moment the ship is
-// first spotted, not a late swing partway through — the same steering-speed
-// math above makes a *fair* late swing impossible: reacting to a switch
-// close to the ship would need crossing the whole channel in whatever
-// distance is left, which is an even harder version of the exact unfair
-// scenario 190 was chosen to avoid. One early, readable choice instead.
+export const APPROACH_RANGE = FIRST_APPROACH + (SHIP_COUNT - 1) * SHIP_SPACING;
+// Each frigate's gap is fixed the moment the fight starts, never moved
+// late — the same steering-speed math above makes a *fair* late swing
+// impossible. What's fair is seeing it coming: drawHorizonSails shows the
+// next frigate (and so its gap) from SHIP_SPACING out.
 const GAP_WIDTH = 7; // world units of clear water always left open, at one bank
 const SHIP_DEPTH_Z = 3.4; // hull's own extent along the flow axis
 const CLEAR_MARGIN = 3; // how far past the ship counts as "in the clear"
@@ -105,6 +117,12 @@ const SPLASH_SPREAD_MIN = 3; // how wide a volley fans out early in the approach
 const SPLASH_SPREAD_MAX = 9; // and how wide it fans out right before the ship
 
 const VISIBLE_Z_RANGE = CANVAS_HEIGHT / PIXELS_PER_UNIT + 5;
+const CROSS_CURRENT_RANGE = 40;
+const CROSS_CURRENT_MAX = 4;
+// The horizon sails take over from the real ship once it's within this
+// far beyond the canoe (z, so negative is ahead) — about where its own
+// masts come onto the top of the screen.
+const SAILS_FROM_Z = 10;
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -114,9 +132,9 @@ function clamp(v, lo, hi) {
 // fills the rest of the channel — always evaluated at the ship's own
 // flowDistance (SHIP_FLOW_DISTANCE), not the canoe's, so the lane doesn't
 // drift as the player approaches.
-function gapBounds(gapSide) {
-  const half = widthAt(SHIP_FLOW_DISTANCE) / 2;
-  const c = centerX(SHIP_FLOW_DISTANCE);
+function gapBounds(gapSide, shipD = SHIP_FLOW_DISTANCE) {
+  const half = widthAt(shipD) / 2;
+  const c = centerX(shipD);
   const leftBank = c - half;
   const rightBank = c + half;
   if (gapSide > 0) {
@@ -144,50 +162,79 @@ export const MUSKET_DAMAGE_TO_HULL = 18;
 const HULL_HIT_D_TOLERANCE = 1.5;
 const SPARK_LIFETIME = 0.35;
 
+// Which bank frigate i leaves open: alternating, from the first ship's.
+function gapSideOf(firstGapSide, i) {
+  return i % 2 === 0 ? firstGapSide : -firstGapSide;
+}
+
 export function createBlockade() {
-  // null until the encounter first activates — decided once, right then
-  // (see the module comment on why a late swing isn't fair here), not
-  // re-rolled or changed for the rest of the fight.
-  let gapSide = null;
+  // null until the encounter first activates — rolled once, right then,
+  // and the rest of the line alternates from it; never changed after.
+  let firstGapSide = null;
+  // Test-only: pin the next roll (smoke test bots need a known layout).
+  let forcedFirstGapSide = null;
   let resolved = false;
   let volleyTimer = VOLLEY_INTERVAL_FAR;
   let hazards = [];
   let justCleared = false;
   let justSpotted = false;
+  // Frigates behind the canoe so far (0..SHIP_COUNT), and a one-shot for
+  // game.js's "one down" banner.
+  let passed = 0;
+  let justPassed = false;
 
-  // Dogfight: hull HP the pistol chips away at, and the resulting hit
-  // sparks (drawn, not gameplay-relevant beyond feedback).
-  let hullHP = SHIP_HULL_HP;
-  let gunsSilenced = false;
+  // Dogfight: hull HP the pistol chips away at, per frigate, and the
+  // resulting hit sparks (drawn, not gameplay-relevant beyond feedback).
+  let hullHP = BLOCKADE_SHIPS.map(() => SHIP_HULL_HP);
+  let silenced = BLOCKADE_SHIPS.map(() => false);
   let justGunsSilenced = false;
   let sparks = [];
 
   function reset() {
-    gapSide = null;
+    firstGapSide = null;
     resolved = false;
     volleyTimer = VOLLEY_INTERVAL_FAR;
     hazards = [];
     justCleared = false;
     justSpotted = false;
-    hullHP = SHIP_HULL_HP;
-    gunsSilenced = false;
+    passed = 0;
+    justPassed = false;
+    hullHP = BLOCKADE_SHIPS.map(() => SHIP_HULL_HP);
+    silenced = BLOCKADE_SHIPS.map(() => false);
     justGunsSilenced = false;
     sparks = [];
+  }
+
+  // The frigate nearest a flowDistance — the one whose hull a canoe there
+  // could be touching.
+  function nearestShip(d) {
+    let best = 0;
+    for (let i = 1; i < BLOCKADE_SHIPS.length; i++) {
+      if (Math.abs(BLOCKADE_SHIPS[i] - d) < Math.abs(BLOCKADE_SHIPS[best] - d)) best = i;
+    }
+    return best;
   }
 
   return {
     reset,
     // A real physical wall, checked by game.js *before* it commits to
     // advancing flowDistance — see that call site's own comment. True
-    // whenever (d, worldX) lands inside the hull's own depth range but
-    // outside the gap; always false before the ship's been spotted at all
-    // (gapSide isn't decided yet, so there's nothing to collide with).
+    // whenever (d, worldX) lands inside a frigate's own depth range but
+    // outside its gap; always false before the fight's started (no gaps
+    // decided yet, so there's nothing to collide with).
     isHullBlocking(flowDistance, worldX) {
-      if (gapSide === null) return false;
+      if (firstGapSide === null) return false;
+      const i = nearestShip(flowDistance);
+      const shipD = BLOCKADE_SHIPS[i];
       const half = SHIP_DEPTH_Z / 2;
-      if (flowDistance < SHIP_FLOW_DISTANCE - half || flowDistance > SHIP_FLOW_DISTANCE + half) return false;
-      const { gapLo, gapHi } = gapBounds(gapSide);
+      if (flowDistance < shipD - half || flowDistance > shipD + half) return false;
+      const { gapLo, gapHi } = gapBounds(gapSideOf(firstGapSide, i), shipD);
       return worldX < gapLo || worldX > gapHi;
+    },
+    // The flowDistance of the frigate nearest d — game.js's "retreating
+    // from the hull" check measures against this one, not a fixed ship.
+    nearestShipD(d) {
+      return BLOCKADE_SHIPS[nearestShip(d)];
     },
     // True only during the live approach — spotted, not yet cleared. A
     // non-consuming, repeatable status check (unlike consumeJustSpotted()/
@@ -196,7 +243,20 @@ export function createBlockade() {
     // test can't also use them without racing that internal consumption)
     // for anything that needs to know "is the gauntlet currently live."
     isApproachEngaged() {
-      return gapSide !== null && !resolved;
+      return firstGapSide !== null && !resolved;
+    },
+    // Test-only: the gap side of each frigate (null before the fight), and
+    // a way to fix the roll. Never read by game.js — see below.
+    debugGapSides() {
+      return firstGapSide === null ? null : BLOCKADE_SHIPS.map((_, i) => gapSideOf(firstGapSide, i));
+    },
+    debugForceFirstGapSide(side) {
+      forcedFirstGapSide = side;
+    },
+    // Test-only: the cannon shots in the air ({d, x, t}), for the smoke
+    // test's pilot to sidestep the warning rings the way a player does.
+    debugHazards() {
+      return hazards;
     },
     // Consumed once by game.js so each event fires exactly one banner, not
     // one every frame the condition happens to still be true.
@@ -215,9 +275,15 @@ export function createBlockade() {
       justGunsSilenced = false;
       return v;
     },
-    // No gapSide() accessor on purpose — which side is clear is deliberately
-    // never surfaced to game.js; finding it is the point of the fight, not
-    // something to hand the player in a banner.
+    // How many frigates are still ahead, the frame one is passed (not the
+    // last — that's consumeJustCleared()); null otherwise.
+    consumeJustPassedShip() {
+      if (!justPassed) return null;
+      justPassed = false;
+      return SHIP_COUNT - passed;
+    },
+    // No gapSide() accessor for game.js on purpose — which side is clear
+    // is never put in a banner; the sails on the horizon show it.
 
     // onHit(entry) is only ever called with { type: 'cannon' } or
     // { type: 'shiphull' } — game.js's handleHit() gives each its own
@@ -226,8 +292,8 @@ export function createBlockade() {
     // comment) — without it, every shot whiffs by construction, not
     // because it was dodged. `bullets` is the player's live pistol shots
     // (weapons.js's getBullets(), world-space {worldX, flowDistance}) —
-    // checked against the hull below. Returns hitBullets: [ref] (shots
-    // that struck the hull this frame) alongside the usual fields, same
+    // checked against the hulls below. Returns hitBullets: [ref] (shots
+    // that struck a hull this frame) alongside the usual fields, same
     // contract as bossfights/diable.js's update(), for game.js to remove
     // from the weapon pool.
     update(dt, playerFlowDistance, playerWorldX, effectiveSpeed, onHit, bullets = []) {
@@ -251,15 +317,25 @@ export function createBlockade() {
       const engaged = !resolved && distToShip < APPROACH_RANGE + 5;
 
       if (engaged) {
-        if (gapSide === null) {
-          gapSide = 1; // always right side - consistent encounter every time
+        if (firstGapSide === null) {
+          firstGapSide = forcedFirstGapSide ?? (Math.random() < 0.5 ? -1 : 1);
+          // A ?start= dropped part-way down the line counts the frigates
+          // already behind it as passed, quietly.
+          while (passed < SHIP_COUNT - 1 && playerFlowDistance > BLOCKADE_SHIPS[passed] + CLEAR_MARGIN) passed++;
           justSpotted = true;
         }
         // No hull check here any more — isHullBlocking() (checked by
         // game.js before it even commits to advancing flowDistance) is
-        // what actually stops the canoe outside the gap now, so distToShip
-        // can only ever go negative by genuinely passing through it.
+        // what actually stops the canoe outside the gap now, so the canoe
+        // can only ever get past a frigate by genuinely threading its gap.
+        if (passed < SHIP_COUNT - 1 && playerFlowDistance >= BLOCKADE_SHIPS[passed] + CLEAR_MARGIN) {
+          passed++;
+          justPassed = true;
+          // The last frigate's shots stay live — they're already in the
+          // air. Only clearing the whole line wipes them.
+        }
         if (distToShip <= -CLEAR_MARGIN) {
+          passed = SHIP_COUNT;
           resolved = true;
           justCleared = true;
           // Clear ALL cannonballs - no cannon fire once past the frigate
@@ -267,30 +343,47 @@ export function createBlockade() {
           console.log('[BLOCKADE] Cleared. Player:', playerFlowDistance);
         }
 
-        // Dogfight: pistol shots that land on the hull (not through the
-        // gap — that's open water, nothing to hit) chip away at hullHP.
-        // Firing into the hull means *not* sitting in the safe lane, so
-        // suppressing the guns is a real trade against staying dodged —
-        // not a free action on top of threading the gap.
-        if (!gunsSilenced && gapSide !== null) {
-          const { hullLo, hullHi } = gapBounds(gapSide);
-          const half = SHIP_DEPTH_Z / 2 + HULL_HIT_D_TOLERANCE;
+        // Dogfight: pistol shots that land on a hull (not through its gap
+        // — that's open water, nothing to hit) chip away at that frigate's
+        // hullHP. Firing into the hull means *not* sitting in the safe
+        // lane, so suppressing the guns is a real trade against staying
+        // dodged — not a free action on top of threading the gap.
+        const half = SHIP_DEPTH_Z / 2 + HULL_HIT_D_TOLERANCE;
+        for (let i = 0; i < SHIP_COUNT; i++) {
+          if (silenced[i]) continue;
+          const shipD = BLOCKADE_SHIPS[i];
+          const { hullLo, hullHi } = gapBounds(gapSideOf(firstGapSide, i), shipD);
           for (const b of bullets) {
-            if (Math.abs(b.flowDistance - SHIP_FLOW_DISTANCE) < half && b.worldX > hullLo && b.worldX < hullHi) {
+            if (hitBullets.includes(b)) continue;
+            if (Math.abs(b.flowDistance - shipD) < half && b.worldX > hullLo && b.worldX < hullHi) {
               hitBullets.push(b);
-              hullHP -= b.type === 'musket' ? MUSKET_DAMAGE_TO_HULL : PISTOL_DAMAGE_TO_HULL;
-              sparks.push({ x: b.worldX, d: SHIP_FLOW_DISTANCE, t: 0 });
-              if (hullHP <= 0) {
-                hullHP = 0;
-                gunsSilenced = true;
+              hullHP[i] -= b.type === 'musket' ? MUSKET_DAMAGE_TO_HULL : PISTOL_DAMAGE_TO_HULL;
+              sparks.push({ x: b.worldX, d: shipD, t: 0 });
+              if (hullHP[i] <= 0) {
+                hullHP[i] = 0;
+                silenced[i] = true;
                 justGunsSilenced = true;
               }
             }
           }
         }
 
-        if (distToShip > 0 && !gunsSilenced) {
-          const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
+        // The guns firing are the next frigate's: silence it and there's
+        // quiet until you're past it, then the one after opens up.
+        const firing = passed < SHIP_COUNT && !silenced[passed];
+        if (distToShip > 0 && firing) {
+          // Escalates frigate by frigate: each one's guns build as you
+          // close on it and ease off once you're past (the next is still
+          // SHIP_SPACING away), and each builds further than the last —
+          // the final frigate reaches the old single ship's full fury.
+          // First cut escalated across the whole line, which put the
+          // heaviest volleys (3 shots a second, 9 wide) right on the swing
+          // across to the last gap; a careful bot that sidestepped the
+          // warning rings still sank there in most runs.
+          const legLen = passed === 0 ? FIRST_APPROACH : SHIP_SPACING;
+          const toNext = BLOCKADE_SHIPS[passed] - playerFlowDistance;
+          const reach = SHIP_COUNT > 1 ? 0.7 + 0.3 * (passed / (SHIP_COUNT - 1)) : 1;
+          const progress = (1 - clamp(toNext / legLen, 0, 1)) * reach;
           volleyTimer -= dt;
           if (volleyTimer <= 0) {
             const shots = progress > 0.9 ? 3 : progress > 0.55 ? 2 : 1;
@@ -354,39 +447,63 @@ export function createBlockade() {
       for (const s of sparks) s.t += dt;
       sparks = sparks.filter((s) => s.t < SPARK_LIFETIME);
 
-      if (!engaged) return { active: false, progressPct: 0, boomCount, crossCurrent: 0, gapSide: null, hitBullets };
-      const progressPct = distToShip <= 0 ? 100 : (1 - clamp(distToShip / APPROACH_RANGE, 0, 1)) * 100;
-      // Cross-current pushes you away from the gap side, getting stronger as you approach
-      const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
-      const crossCurrent = -gapSide * progress * 5.5; // negative gap side means push away from gap
-      return { active: true, progressPct, boomCount, crossCurrent, gapSide, hitBullets };
+      if (!engaged) return { active: false, boomCount, crossCurrent: 0, hitBullets };
+      // Cross-current pushes you away from the NEXT frigate's gap, over the
+      // last CROSS_CURRENT_RANGE before it. It used to run across the whole
+      // approach at up to 5.5; with a line of ships that would fight every
+      // crossing from one gap to the next the whole way, which on touch
+      // (half the steering) left almost nothing to cross with. Now it's a
+      // last-stretch shove you hold your line against once you're lined up.
+      let crossCurrent = 0;
+      if (passed < SHIP_COUNT) {
+        const toNext = BLOCKADE_SHIPS[passed] - playerFlowDistance;
+        if (toNext > 0 && toNext < CROSS_CURRENT_RANGE) {
+          crossCurrent = -gapSideOf(firstGapSide, passed) * (1 - toNext / CROSS_CURRENT_RANGE) * CROSS_CURRENT_MAX;
+        }
+      }
+      return { active: true, boomCount, crossCurrent, hitBullets };
     },
 
     // Rendering doesn't care whether the encounter is currently "active" by
     // update()'s gating — it just draws whatever's within visible range,
-    // same as villages.js's own drawVillages(). The ship stays drawn (and
-    // recedes naturally behind the canoe via the usual z depth-sort) well
-    // after it's been passed.
+    // same as villages.js's own drawVillages(). Ships stay drawn (and
+    // recede naturally behind the canoe via the usual z depth-sort) well
+    // after they've been passed.
     draw(ctx, worldDistance, cameraWorldX, time) {
-      const z0 = worldDistance - SHIP_FLOW_DISTANCE;
       const distToShip = SHIP_FLOW_DISTANCE - worldDistance;
+      const live = firstGapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE;
 
-      // Cross-current flow visualization: animated streaks showing water movement
-      if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
-        const progress = 1 - clamp(distToShip / APPROACH_RANGE, 0, 1);
-        drawCurrentFlow(ctx, time, gapSide, progress);
+      // Cross-current flow visualization: animated streaks, while it pushes.
+      if (live && passed < SHIP_COUNT) {
+        const toNext = BLOCKADE_SHIPS[passed] - worldDistance;
+        if (toNext > 0 && toNext < CROSS_CURRENT_RANGE) {
+          drawCurrentFlow(ctx, time, gapSideOf(firstGapSide, passed), 1 - toNext / CROSS_CURRENT_RANGE);
+        }
       }
 
-      // gapSide is null until the encounter first activates (update()'s own
-      // gating, at APPROACH_RANGE+5) — practically always well before the
+      // firstGapSide is null until the encounter first activates (update()'s
+      // own gating, at APPROACH_RANGE+5) — practically always well before a
       // ship comes within visible render range anyway, but this guards the
-      // rare case (e.g. a ?start= cheat dropped right on top of it) where
+      // rare case (e.g. a ?start= cheat dropped right on top of one) where
       // it wouldn't be.
-      if (gapSide !== null && Math.abs(z0) < VISIBLE_Z_RANGE) drawShip(ctx, cameraWorldX, z0, gapSide);
+      if (firstGapSide !== null) {
+        for (let i = 0; i < SHIP_COUNT; i++) {
+          const z0 = worldDistance - BLOCKADE_SHIPS[i];
+          if (Math.abs(z0) < VISIBLE_Z_RANGE) drawShip(ctx, cameraWorldX, z0, gapSideOf(firstGapSide, i), BLOCKADE_SHIPS[i]);
+        }
+      }
 
-      // Fog of war: thicker when farther from ship, reveals as you approach
-      if (gapSide !== null && distToShip > 0 && distToShip < APPROACH_RANGE) {
-        drawFog(ctx, distToShip);
+      // Fog of war: thicker when farther from the line, reveals as you approach
+      if (live) drawFog(ctx, distToShip);
+
+      // Over the fog: the next frigate's sails, while it's still beyond
+      // the top of the screen — where it sits, and so where its gap is.
+      if (live && passed < SHIP_COUNT) {
+        const shipD = BLOCKADE_SHIPS[passed];
+        const z0 = worldDistance - shipD;
+        if (z0 < -SAILS_FROM_Z && shipD - worldDistance < SHIP_SPACING + 10) {
+          drawHorizonSails(ctx, worldDistance, cameraWorldX, gapSideOf(firstGapSide, passed), shipD, time);
+        }
       }
 
       // Hazards (cannon shots)
@@ -404,8 +521,8 @@ export function createBlockade() {
   };
 }
 
-function drawShip(ctx, cameraWorldX, z0, gapSide) {
-  const { hullLo, hullHi } = gapBounds(gapSide);
+function drawShip(ctx, cameraWorldX, z0, gapSide, shipD) {
+  const { hullLo, hullHi } = gapBounds(gapSide, shipD);
   const top = worldToScreen(hullLo, z0 - SHIP_DEPTH_Z / 2, cameraWorldX);
   const bot = worldToScreen(hullHi, z0 + SHIP_DEPTH_Z / 2, cameraWorldX);
   const left = Math.min(top.x, bot.x);
@@ -440,19 +557,7 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
   // Masts + furled sails, plus a small red ensign at the stern (the end
   // away from the gap, so it reads as "the far end" regardless of which
   // side the lane is currently on).
-  const mastXs = [left + (right - left) * 0.32, left + (right - left) * 0.62];
-  for (const mx of mastXs) {
-    ctx.strokeStyle = '#3a2a18';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(mx, y0);
-    ctx.lineTo(mx, y0 - hullH * 1.6);
-    ctx.stroke();
-    ctx.fillStyle = '#cfc6ae';
-    ctx.fillRect(mx - hullH * 0.55, y0 - hullH * 1.25, hullH * 1.1, hullH * 0.5);
-    ctx.fillStyle = '#a89f86';
-    ctx.fillRect(mx - hullH * 0.55, y0 - hullH * 0.85, hullH * 1.1, hullH * 0.12);
-  }
+  drawRig(ctx, left, right, y0, hullH);
   const sternX = gapSide > 0 ? left + 6 : right - 6;
   const flagX = sternX - 4;
   const flagY = y0 - hullH * 1.9;
@@ -490,6 +595,102 @@ function drawShip(ctx, cameraWorldX, z0, gapSide) {
   ctx.fillStyle = '#C8102E';
   ctx.fillRect(flagX + 3.5, flagY, 1, 5); // vertical
   ctx.fillRect(flagX, flagY + 2, 8, 1); // horizontal
+}
+
+// The next frigate while it's still out beyond the top of the screen: the
+// foot of its sails hanging down from the top edge, the same rig in the
+// same place across the channel as the ship you then meet — the gap is the
+// open water beside them. Without it the line of frigates was unreadable: the view
+// reaches ~10 units ahead and crossing to the next gap takes ~30 of river
+// even easing off, so you'd only have seen which side to be on once it was
+// already too late to get there. Laid out across the river at the screen's
+// top row, relative to that row's centreline (not the ship's world x — the
+// river bends between here and there, and the hull's place *in the
+// channel* is what the player needs). Firmer the closer it gets.
+function drawHorizonSails(ctx, worldDistance, cameraWorldX, gapSide, shipD, time) {
+  const { hullLo, hullHi } = gapBounds(gapSide, shipD);
+  const shipC = centerX(shipD);
+  const shipHalf = widthAt(shipD) / 2;
+  const topZ = -CANOE_SCREEN_Y / PIXELS_PER_UNIT;
+  const rowD = worldDistance - topZ;
+  const rowC = centerX(rowD);
+  const rowHalf = widthAt(rowD) / 2;
+  // Scale the ship's place in its own channel onto this row's channel.
+  const toRow = (x) => rowC + ((x - shipC) / shipHalf) * rowHalf;
+  const left = worldToScreen(toRow(hullLo), topZ, cameraWorldX).x;
+  const right = worldToScreen(toRow(hullHi), topZ, cameraWorldX).x;
+  const near = clamp(1 - (shipD - worldDistance) / (SHIP_SPACING + 10), 0, 1);
+  const alpha = 0.6 + 0.4 * near;
+  const drop = Math.round(14 + near * 12); // how far the sails hang into view
+
+  // The frigate's own rig (drawRig), with its deck set just far enough
+  // below the top edge that the lower edge of its sails hangs `drop` px
+  // into view, clipped there — the tops of the masts and canvas of a ship
+  // still out of sight. First cut drew its own two courses of bright sail
+  // on a dark band with an ensign beside them, which looked nothing like
+  // the frigates and was reported as "a bunch of flags floating in front
+  // of the frigates".
+  const hullH = SHIP_DEPTH_Z * PIXELS_PER_UNIT;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.rect(0, 0, CANVAS_WIDTH, drop + 1);
+  ctx.clip();
+  drawRig(ctx, left, right, drop + hullH * 0.73, hullH);
+  ctx.restore();
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // The view is only ~20 units across and a hull fills ~31 of the channel,
+  // so from the wrong bank the sails run clean across the top of the
+  // screen and say nothing about which way the gap is. Then a gold arrow
+  // pinned to the top edge on the gap's side, pointing out toward it,
+  // pulsing — gone once the gap itself (open water beside the last sail)
+  // is in view.
+  const { gapLo, gapHi } = gapBounds(gapSide, shipD);
+  const gapX = worldToScreen(toRow((gapLo + gapHi) / 2), topZ, cameraWorldX).x;
+  if (gapX < 6 || gapX > CANVAS_WIDTH - 6) {
+    const dir = gapX > CANVAS_WIDTH / 2 ? 1 : -1;
+    const pulse = 0.55 + 0.45 * Math.sin(time * 7);
+    // Below the HUD's corner panels (the music card on the left, the
+    // minimap on the right, both down to ~y 70) — first cut sat it beside
+    // the sails, right under the minimap.
+    const ax = dir > 0 ? CANVAS_WIDTH - 14 : 14;
+    const ay = 92;
+    ctx.globalAlpha = 1;
+    for (const [tip, back, half, fill] of [
+      [11, 9, 13, `rgba(20, 14, 6, ${0.55 + 0.3 * pulse})`],
+      [8, 6, 9, `rgba(255, 210, 90, ${0.6 + 0.4 * pulse})`],
+    ]) {
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.moveTo(ax + dir * tip, ay);
+      ctx.lineTo(ax - dir * back, ay - half);
+      ctx.lineTo(ax - dir * back, ay + half);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = alpha;
+  }
+  ctx.restore();
+}
+
+// The masts and furled sails over a hull spanning left..right with its
+// deck at y0 — shared by drawShip and drawHorizonSails, so the early sight
+// of the next frigate is the same rig you then meet.
+function drawRig(ctx, left, right, y0, hullH) {
+  const mastXs = [left + (right - left) * 0.32, left + (right - left) * 0.62];
+  for (const mx of mastXs) {
+    ctx.strokeStyle = '#3a2a18';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(mx, y0);
+    ctx.lineTo(mx, y0 - hullH * 1.6);
+    ctx.stroke();
+    ctx.fillStyle = '#cfc6ae';
+    ctx.fillRect(mx - hullH * 0.55, y0 - hullH * 1.25, hullH * 1.1, hullH * 0.5);
+    ctx.fillStyle = '#a89f86';
+    ctx.fillRect(mx - hullH * 0.55, y0 - hullH * 0.85, hullH * 1.1, hullH * 0.12);
+  }
 }
 
 // A landed pistol shot on the hull: a quick bright burst that fades over

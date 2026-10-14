@@ -7,7 +7,7 @@ import { drawUpperCanadaFlag } from '../world/flag.js';
 import { drawRain } from '../world/weather.js';
 import { createCanoeSprites } from '../world/canoe.js';
 import { createCapsize } from '../world/capsize.js';
-import { playCapsizeHorn, playPeltChime, playRepairTrade, playWeaponAcquired, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playChainRattle, playCorriveauWail, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed } from '../audio/sfx.js';
+import { playCapsizeHorn, playPeltChime, playRepairTrade, playWeaponAcquired, playDamageBoop, playCannonBoom, playDiableRoar, playDiableDefeat, playWolfHowl, playChainRattle, playCorriveauWail, playWendigoBreath, playWendigoShriek, playThunderclap, playDistantRumble, setStormBed, playGustWhoosh } from '../audio/sfx.js';
 import { getDockHit, dockHitZ, VILLAGES } from '../world/villages.js';
 import { createVillageScene } from '../world/villageScene.js';
 import {
@@ -275,6 +275,14 @@ const BANK_INVULN_TIME = 0.7;
 // penalty, so every collision matters, not just the big ones.
 const MAX_HEALTH = 100;
 const ROCK_DAMAGE = 32;
+// The British Blockade's flag islands (world/obstacles.js) — half a rock.
+// They hit as hard as any island at first, but once the Blockade became a
+// line of frigates with the gaps on alternating banks, every crossing from
+// one gap to the next is a swing across the whole channel through them at
+// full lock (the widest the hull reaches), and three of them sank a
+// careful run before the frigates ever got a say. Now they bruise: the
+// cannon and the hulls are the fight, the islands crowd it.
+const FLAG_ISLAND_DAMAGE = 16;
 const LOG_DAMAGE = 12;
 const BANK_DAMAGE = 8;
 // The Château Gauntlet (bossfights/blockade.js) — a cannon splash used to cost as
@@ -1080,8 +1088,8 @@ export class Game {
 
   handleHit(entry) {
     if (this.invulnTimer > 0) return;
-    if (entry.type === 'rock' || entry.type === 'island') {
-      this.takeDamage(ROCK_DAMAGE);
+    if (entry.type === 'rock' || entry.type === 'island' || entry.type === 'flagIsland') {
+      this.takeDamage(entry.type === 'flagIsland' ? FLAG_ISLAND_DAMAGE : ROCK_DAMAGE);
       this.invulnTimer = INVULN_TIME;
     } else if (entry.type === 'bank') {
       this.speed = Math.max(MIN_SPEED - 1, this.speed - BANK_PENALTY_SPEED);
@@ -1519,6 +1527,7 @@ export class Game {
     // per SEGMENT_FLOOR's comment — no ceiling at all, on any segment.
     const floor = SEGMENT_FLOOR[this.segment] ?? 0;
     let proposedFlowDistance = Math.max(floor, this.flowDistance + effectiveSpeed * dt);
+    let hullHeld = false;
 
     // The frigate's hull is a genuine solid wall, not just a one-off "you
     // clipped it" penalty — outside the gap, forward progress is simply
@@ -1543,17 +1552,20 @@ export class Game {
     // holding it) still gets stopped.
     if (this.segment === 'rideau') {
       const tentativeWorldX = centerX(proposedFlowDistance) + this.lateralOffset;
-      const retreating = Math.abs(proposedFlowDistance - BLOCKADE_SHIP_FLOW_DISTANCE)
-        > Math.abs(this.flowDistance - BLOCKADE_SHIP_FLOW_DISTANCE);
+      // Measured against the nearest frigate of the line, not the last.
+      const blockShipD = this.blockade.nearestShipD(proposedFlowDistance);
+      const retreating = Math.abs(proposedFlowDistance - blockShipD)
+        > Math.abs(this.flowDistance - blockShipD);
       if (!retreating && this.blockade.isHullBlocking(proposedFlowDistance, tentativeWorldX)) {
         proposedFlowDistance = this.flowDistance; // held in place, not pushed through
+        hullHeld = true;
         // Bounce off the hull: strong backward push so you can escape
         this.speed = -8 * speedScale;
         this.handleHit({ type: 'shiphull' });
       }
       // The British Warship's own held arena, same pattern as Diable's
       // below — once triggered, forward progress is clamped at the point
-      // it began until it resolves (sunk or CHASE_HOLD_TIME survived — see
+      // it began until it resolves (sunk — the only way out now; see
       // britishWarship.js's own opening comment for why a plain "paddle
       // past it" resolution couldn't be stretched past about a minute no
       // matter how the fight itself was tuned).
@@ -1821,6 +1833,7 @@ export class Game {
       if (flight.hit && !this.diable.isActive() && this.flowDistance > (this._steepleGraceUntil ?? -Infinity)) {
         this.handleHit({ type: 'steeple' });
       }
+      if (this.chasseGalerie.consumeJustGustWarned() && !this.diable.isActive()) playGustWhoosh();
       if (flight.active && flight.altitude > 0.1 && !this._chasseGalerieBannerShown) {
         this.showBanner('LA CHASSE-GALERIE — thread the steeples!');
         this._chasseGalerieBannerShown = true;
@@ -1979,8 +1992,13 @@ export class Game {
     // are the same every time) — see the reply that came with this request
     // about wanting a static landscape.
     const warshipHeld = this.segment === 'rideau' && this.britishWarship.isChaseHolding();
+    // Held against a frigate's hull the river doesn't advance this frame,
+    // so neither does anything on it — passing effectiveSpeed here slid
+    // every rock and flag island on down toward the hull while the banks
+    // stood still (d = world.distance - z stopped being invariant), into
+    // the water each frigate's gap is meant to keep clear.
     this.obstacles.update(
-      this.time, dt, effectiveSpeed, this.canoeWorldX,
+      this.time, dt, hullHeld ? 0 : effectiveSpeed, this.canoeWorldX,
       (entry) => this.handleHit(entry),
       (entry) => this.handleCollect(entry),
       !airborne && !warshipHeld,
@@ -2088,6 +2106,11 @@ export class Game {
       if (this.blockade.consumeJustGunsSilenced()) {
         this.showBanner('GUNS SILENCED — find the gap!');
       }
+      // One frigate of the line behind you — how many still hold the river.
+      const shipsLeft = this.blockade.consumeJustPassedShip();
+      if (shipsLeft !== null) {
+        this.showBanner(shipsLeft === 1 ? 'ONE FRIGATE LEFT' : `${shipsLeft} FRIGATES LEFT`);
+      }
       if (this.blockade.consumeJustCleared()) {
         // Past the frigate — back to the regular shuffle. The British
         // Warship, now a separate encounter much further downstream (see
@@ -2176,13 +2199,12 @@ export class Game {
         const villageName = nextVillage ? nextVillage.name : 'Safe Waters';
         this.showBanner(`SHE'S GOING DOWN! — ${villageName} Ahead`);
       }
-      if (this.britishWarship.consumeJustEscaped()) {
-        console.log('[GAME] Warship escaped, ending boss track');
-        this.music?.endBossTrack();
-        const nextVillage = VILLAGES.find(v => v.segment === this.segment && v.flowDistance > this.flowDistance);
-        const villageName = nextVillage ? nextVillage.name : 'Safe Waters';
-        this.showBanner(`${villageName} Ahead — Safe Waters`);
-      }
+      // Her phases (britishWarship.js's PHASES) as the hull goes — each one
+      // a change of tactics, so each gets the big card. There's no "escaped"
+      // ending any more: sinking her is the only way out.
+      const warshipPhase = this.britishWarship.consumeJustPhase();
+      if (warshipPhase === 1) this.showBossBanner('BROADSIDES!');
+      else if (warshipPhase === 2) this.showBossBanner('ALL GUNS — SHE\'S TAKING ON WATER!', 3000);
       if (this._warshipTrackCued && !warship.active) {
         this.music?.endBossTrack();
         this._warshipTrackCued = false;
@@ -2554,7 +2576,7 @@ export class Game {
     }
     if (this.segment === CORRIVEAU_SEGMENT) this.corriveau.draw(ctx, this.flowDistance, cameraWorldX);
     // Draw the Chasse-galerie churches cutting into the gorge
-    if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX);
+    if (this.segment === 'lawrenceWest') this.chasseGalerie.drawStorm(ctx, this.flowDistance, cameraWorldX, this.time);
 
     // The Wendigo's cold over Lac Saint-Pierre. Asked for as "actually
     // darker on the color palette, not just dimmer" — the first cut was

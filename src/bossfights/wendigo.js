@@ -42,30 +42,22 @@ const SOREL = VILLAGES.find((v) => v.name === 'Sorel-Tracy');
 // palette was already turning as you passed the town. That's also what
 // lets ?start=wendigo (main.js) sit a few seconds short of the dark without
 // landing on the dock — "I don't want to pass a town dock before Wendigo."
-// Deliverance is a fixed FIGHT_LENGTH on from the trigger, well short of
-// Sorel: the lake beyond is open, cold-free water up to the town.
+// Deliverance is just outside Sorel-Tracy — "Make the Wendigo boss fight
+// last all the way to just outside Sorel Tracy, however long it takes me
+// to get there." It hunts you the whole way up the lake, ~190 units, and
+// reaching SOREL_CLEARANCE short of Sorel's dock is the only way out: no
+// time limit, no stall failsafe (stopping isn't an exit), no minimum count
+// of listens. (It used to end after a fixed 95 units, ~30s, with those
+// three early outs; at this length a player ignoring every listen is
+// caught by plenty of them anyway, each blow stopping the canoe dead.)
 const FROST_CLEAR_OF_TOWN = 40;
-// ~95 units, about what the Loup-garou had on the run into Québec City.
-// Upstream a freeze-or-flee fight is slow going — every listen stops you
-// dead, and the upriver paddle takes seconds to build back up — so the
-// ~160 units to Sorel-50 measured at well over a minute.
-const FIGHT_LENGTH = 95;
+const SOREL_CLEARANCE = 20; // Sorel's dock reaches ~6 units, so ~14 of clear water to steer in
 // A brisk ramp (~3-4s up the current): the cold should come down, not seep.
 const FROST_FADE_IN = 26;
-const FROST_FADE_OUT = 42;
+// The cold lifts over the last stretch and is gone just short of the dock.
+const FROST_FADE_OUT = 15;
 export const TRIGGER_DISTANCE = TROIS_RIVIERES.flowDistance + FROST_CLEAR_OF_TOWN + FROST_FADE_IN;
-export const DELIVERANCE_DISTANCE = TRIGGER_DISTANCE + FIGHT_LENGTH;
-// Reaching DELIVERANCE_DISTANCE isn't enough on its own: it lets go only
-// once it has listened MIN_LISTENS times (the free one plus two that can
-// strike). Otherwise a player who ignores it entirely and keeps paddling
-// at full speed covers the ~95 units before its second listen, and since
-// the first never strikes, gets through untouched — true on the fjord
-// too, where the current carried you down the reach (the smoke test hid
-// it by pinning the canoe in place). It goes on hunting past the mark
-// until it's had its listens, up to HARD_STOP_DISTANCE, clear of Sorel's
-// dock, where it lets go regardless.
-const MIN_LISTENS = 3;
-export const HARD_STOP_DISTANCE = SOREL.flowDistance - 40;
+export const DELIVERANCE_DISTANCE = SOREL.flowDistance - SOREL_CLEARANCE;
 // Where the cold first becomes visible — exported for main.js's
 // ?start=wendigo, which lands a few seconds short of it (see there).
 export const FROST_START_DISTANCE = TRIGGER_DISTANCE - FROST_FADE_IN;
@@ -79,22 +71,12 @@ export const FROST_START_DISTANCE = TRIGGER_DISTANCE - FROST_FADE_IN;
 // Saint-Pierre a listen stops you dead and the paddle takes a few seconds
 // to build back up, so PROWL_TIME went 2.6 -> 4.0: at 2.6 you barely got
 // moving before the next listen, a few units of headway a cycle. (4.4 was
-// a shade too long the other way: a player ignoring every listen could
-// reach HARD_STOP_DISTANCE before its third, and got off with one blow.)
+// a shade too long the other way while the fight was a short 95 units: a
+// player ignoring every listen got clear before its third listen.)
 const PROWL_TIME = 4.0;
 const LISTEN_TELEGRAPH = 1.3;
 const LISTEN_HOT = 2.0;
 const LISTEN_RECOVER = 0.8;
-// Stall failsafe, the same as the Loup-garou's and La Corriveau's: let go
-// of a player who's made no headway for this long, rather than hounding
-// them forever. Replaced a flat MAX_CLOCK of 40s, which was fine on the
-// fjord (the current carried you down ~120 units in ~17s) but not on Lac
-// Saint-Pierre: upstream, every listen means going still and losing ground
-// to the current, so the ~140-unit fight runs far longer, and a flat clock
-// let a player go mid-lake for no reason but time. A listen is ~4s of no
-// progress, so this never trips on someone simply obeying it.
-const STALL_TIME_LIMIT = 10;
-const STALL_PROGRESS_EPS = 0.05;
 
 // It used to just pop onto the screen at full opacity the instant it was
 // spotted — jarring for the very first encounter in the game. Now it
@@ -145,8 +127,6 @@ export function createWendigo() {
   let lunge = 0;             // 0..1, decays — the strike animation
   let sway = 0;              // screen-space position along the far shore
   let retreatT = 0;          // 0..1 once delivered, sliding back into the cliff
-  let bestD = 0;             // stall failsafe: furthest point reached...
-  let stallClock = 0;        // ...and how long since it last advanced
 
   function reset() {
     phase = 'idle';
@@ -161,8 +141,6 @@ export function createWendigo() {
     lunge = 0;
     sway = 0;
     retreatT = 0;
-    bestD = 0;
-    stallClock = 0;
   }
 
   // 0 while prowling, ramps to 1 across the telegraph, holds through the hot
@@ -181,10 +159,10 @@ export function createWendigo() {
     isActive() { return active; },
     isListening() { return phase === 'stalking' && sub === 'listen'; },
     listenGlare,
-    // The distance curve, but held at full while it's still hunting — it can
-    // follow you past DELIVERANCE_DISTANCE (MIN_LISTENS), and game.js draws
-    // the Wendigo itself inside the frost pass — then eased out with its
-    // retreat rather than snapping off.
+    // The distance curve, but held at full while it's still hunting (game.js
+    // draws the Wendigo itself inside the frost pass, and a canoe drifting
+    // back down the lake can leave the curve's span while it's still on
+    // you), then eased out with its retreat rather than snapping off.
     frostIntensity(flowDistance) {
       const held = active ? 1 : phase === 'delivered' ? 1 - retreatT : 0;
       return Math.max(frostIntensityAt(flowDistance), held);
@@ -211,26 +189,14 @@ export function createWendigo() {
         clock = 0;
         sub = 'prowl';
         subT = 0;
-        bestD = playerFlowDistance;
-        stallClock = 0;
       }
       if (!spotted) return { active, spotted };
 
       clock += dt;
 
-      if (phase === 'stalking') {
-        if (playerFlowDistance > bestD + STALL_PROGRESS_EPS) {
-          bestD = playerFlowDistance;
-          stallClock = 0;
-        } else {
-          stallClock += dt;
-        }
-      }
-      const hadItsListens = listenCount >= MIN_LISTENS && sub === 'prowl';
-      if (phase === 'stalking'
-        && ((playerFlowDistance >= DELIVERANCE_DISTANCE && hadItsListens)
-          || playerFlowDistance >= HARD_STOP_DISTANCE
-          || stallClock > STALL_TIME_LIMIT)) {
+      // Reaching just outside Sorel is the only way out — see
+      // DELIVERANCE_DISTANCE.
+      if (phase === 'stalking' && playerFlowDistance >= DELIVERANCE_DISTANCE) {
         phase = 'delivered';
         justDelivered = true;
         active = false;

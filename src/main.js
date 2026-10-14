@@ -2,6 +2,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from './shared/config.js';
 import { createObstacleField } from './world/obstacles.js';
 import { createWaterRenderer } from './world/waterGL.js';
 import { createMusic, regionForSegment } from './audio/music.js';
+import { setSfxMuted } from './audio/sfx.js';
 import { createMinimap } from './world/minimap.js';
 import { createTouchControls, isTouchPrimary } from './core/touchControls.js';
 import { createDebugMenu } from './core/debugMenu.js';
@@ -13,7 +14,7 @@ import { Input } from './core/input.js';
 import { Game, MIN_SPEED, KINGSTON_APPROACH_LEAD } from './core/game.js';
 import { VILLAGES } from './world/river/route.js';
 import { SEGMENT_SHAPE_OFFSET } from './world/river/path.js';
-import { SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
+import { FIRST_SHIP_FLOW_DISTANCE } from './bossfights/blockade.js';
 import { TRIGGER_DISTANCE as WARSHIP_FLOW_DISTANCE, FIRST_THUNDERCLAP_DISTANCE as WARSHIP_FIRST_THUNDERCLAP_DISTANCE } from './bossfights/britishWarship.js';
 import { TRIGGER_DISTANCE as CHASSE_GALERIE_FLOW_DISTANCE } from './bossfights/chasseGalerie.js';
 import { DIABLE_FLOW_DISTANCE } from './bossfights/diable.js';
@@ -114,7 +115,8 @@ function normalizeStartName(s) {
 // does. "british-blockade" drops the canoe on the Rideau already within
 // firing range of the Château Gauntlet (now on the run into Kingston — see
 // bossfights/blockade.js) instead of paddling the whole leg to reach it —
-// 90 units short of the ship, comfortably inside APPROACH_RANGE (190) so
+// 80 units short of the FIRST frigate of the line (FIRST_APPROACH is 110 —
+// and 80 keeps it 60+ past Smiths Falls's save, see the smoke test) so
 // cannon fire starts immediately, but with real room left to practice
 // finding the gap before the hull itself.
 //
@@ -259,7 +261,7 @@ export const START_KEYWORD_LIST = [
   { name: 'chasse-galerie', label: 'Chasse-galerie (take flight)', flowDistance: CHASSE_GALERIE_FLOW_DISTANCE + 3, segment: 'lawrenceWest' },
   { name: 'diable', label: 'Le Diable', flowDistance: DIABLE_FLOW_DISTANCE - 22, segment: 'lawrenceWest' },
   { name: 'rideau', label: 'Rideau leg (start)', ...RIDEAU_START },
-  { name: 'british-blockade', label: 'British Blockade', flowDistance: SHIP_FLOW_DISTANCE - 90, segment: 'rideau' },
+  { name: 'british-blockade', label: 'British Blockade', flowDistance: FIRST_SHIP_FLOW_DISTANCE - 80, segment: 'rideau' },
   { name: 'british-warship', label: 'British Warship', flowDistance: WARSHIP_FIRST_THUNDERCLAP_DISTANCE, segment: 'rideau' },
   // See the module comment above (six rounds of tuning) on why this one.
   { name: 'kingston', label: 'Kingston (journey\'s end)', flowDistance: KINGSTON_FLOW_DISTANCE - KINGSTON_APPROACH_LEAD, segment: 'rideau' },
@@ -1255,12 +1257,14 @@ if (explicitStart) {
 
 const muteBtn = document.getElementById('mute-btn');
 // Icons, not words (core/hudIcons.js): the speaker, with a slash through
-// the same speaker while the music's off. The label moves to title +
+// the same speaker while the sound's off. The label moves to title +
 // aria-label, which is where a screen reader and a hovering mouse look.
 function syncMuteBtn(muted) {
   muteBtn.classList.toggle('muted', muted);
   muteBtn.innerHTML = speakerIcon(muted);
-  const label = muted ? 'Turn the music back on' : 'Turn the music off';
+  // Mutes everything — the music and every sound effect (sfx.js's
+  // setSfxMuted) — not just the music, as it first did.
+  const label = muted ? 'Turn the sound back on' : 'Turn the sound off';
   muteBtn.title = label;
   muteBtn.setAttribute('aria-label', label);
   muteBtn.setAttribute('aria-pressed', String(muted));
@@ -1268,6 +1272,7 @@ function syncMuteBtn(muted) {
 syncMuteBtn(music.muted);
 muteBtn.addEventListener('click', () => {
   const muted = music.toggleMute();
+  setSfxMuted(muted);
   syncMuteBtn(muted);
   // Unmuting is a natural "wait, what is this?" moment — flash the card
   // back up for the track that's currently going.

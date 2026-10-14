@@ -80,7 +80,11 @@ src/
     terrain.js         redraws river/banks/trees every frame by sampling centerX/widthAt down the screen
     waterGL.js         GLSL water under the 2D layer; river shape is DUPLICATED in GLSL — keep in sync with path.js
     obstacles.js       the one stateful system: pooled rocks/logs/islands/pelts with collision/collection.
-                       hullHit() tests each one against the canoe's *turned* hull (see Key models).
+                       hullHit() tests each one against the canoe's *turned* hull (see Key models)
+                       FLAG_ISLAND: the British Blockade's own obstacle (an island flying a big (28x14)
+                       waving Union Jack, flag.js's drawMiniFlag) — only across FLAG_ISLAND_RANGE
+                       (cannon fire start .. 35 short of the last frigate, minus each frigate's clear zone),
+                       where 50% of hazards become one, bank to bank, spawned 0.9x as far apart; half a rock's damage.
                        hazardKeepFractionAt(d): none around the Island of Montreal (HAZARD_FREE_RANGE),
                        a quarter from Petit-Saguenay to Tadoussac (LIGHT_HAZARD_RANGE — the first boss
                        fight); thinned entries spawn hidden + inert, so pelts keep their usual rate
@@ -160,7 +164,8 @@ src/
                        by MOUTH − 5, before the mouth crossing changes segment). No projectiles: it
                        hangs over the water and strikes (telegraphed, led at your current speed like the
                        blockade shots); juke away / change pace to dodge. Downstream it's a ~9.5s fight,
-                       hence the tight strike cadence. You outlast it to the mouth. Cold-blue night
+                       hence the tight strike cadence. You outlast it to the mouth — the only way out
+                       (its 10s no-progress stall failsafe was removed by request, like the Wendigo's). Cold-blue night
                        render (nightIntensityAt) + moon. MVP — one phase. Was the second fight, Beaupré
                        to Québec City, before the reshuffle.
     corriveau.js       La Corriveau — the hanged woman in her iron gibbet cage, the SECOND fight, on the
@@ -181,24 +186,36 @@ src/
                        (1.7 -> 1.3s) because sideways is slow in rough water. Grey-green mist render
                        (mistIntensityAt). Hit types 'corriveau' / 'feu-follet', no speed knock.
     wendigo.js         Le Wendigo — famine-spirit, the THIRD fight, on Lac Saint-Pierre (lawrenceWest,
-                       TRIGGER_DISTANCE = Trois-Rivières + 66, frost from + 40, DELIVERANCE = trigger +
-                       95). No projectiles, freeze-or-flee: it PROWLs the far shore, then stops to LISTEN
-                       (telegraphed) — release Up/Left/Right (Down/brake is allowed) and go still until
-                       it moves on. First LISTEN never strikes (taught dry run). Upstream-specific: while
-                       it listens a canoe left alone glides to a stop instead of drifting back on the
-                       current (game.js — without that, obeying it lost ground every cycle and the fight
-                       was unwinnable); a landed blow stops the canoe dead; and it lets go only after
-                       MIN_LISTENS (3) even past DELIVERANCE (else a full-speed paddler got through
-                       untouched), capped at HARD_STOP_DISTANCE (Sorel − 40). Stall failsafe like the
-                       others. Cold-white render (frostIntensityAt; the instance frostIntensity() holds
-                       full while it's still hunting). Was the first fight, on the lower fjord.
+                       TRIGGER_DISTANCE = Trois-Rivières + 66, frost from + 40, DELIVERANCE = Sorel − 20 —
+                       it hunts you the whole way up the lake, however long that takes: reaching
+                       deliverance is the only way out, no time limit or stall failsafe). No projectiles,
+                       freeze-or-flee: it PROWLs the far shore, then stops to LISTEN (telegraphed) —
+                       release Up/Left/Right (Down/brake is allowed) and go still until it moves on. First
+                       LISTEN never strikes (taught dry run). Upstream-specific: while it listens a canoe
+                       left alone glides to a stop instead of drifting back on the current (game.js —
+                       without that, obeying it lost ground every cycle and the fight was unwinnable); a
+                       landed blow stops the canoe dead. Cold-white render (frostIntensityAt; the instance
+                       frostIntensity() holds full while it's still hunting), lifting by Sorel's dock.
+                       Was the first fight, on the lower fjord.
     blockade.js        "Château Gauntlet"/"the River Styx" (the latter a small fun detail kept in
                        the comments only — the player-facing banner just says "BRITISH BLOCKADE",
                        shown big via #boss-banner, not the small milestone one): Royal Navy frigate
                        holding the channel, dodge-only, survive & pass — no health/hull/hold-time
-                       readout, just find the gap. RIDEAU segment, between Smiths Falls and Newboro
-                       (SHIP_FLOW_DISTANCE = Kingston − 700; cannon fire from APPROACH_RANGE 190 out,
-                       ~21 past Smiths Falls's dock). Used to chain straight into the Warship chase below the instant the gap
+                       readout, just find the gap. RIDEAU segment, between Smiths Falls and Newboro.
+                       A LINE of SHIP_COUNT (3) frigates SHIP_SPACING (70; 90 was "too much spacing") apart (BLOCKADE_SHIPS, in world/river/blockadeLine.js so path.js can keep sandbars off each run-in), each
+                       with its 7-wide gap at the opposite bank to the last; the first one's bank is
+                       rolled per fight ("cruise right past it" once you knew it was always the right).
+                       A gap-to-gap swing (~31 sideways at ~2.7 u/s, ~12s) only makes it if you
+                       ease off the paddle. SHIP_FLOW_DISTANCE is the LAST frigate (Kingston − 630);
+                       APPROACH_RANGE (250) is the whole fight's span back from it — cannon fire starts
+                       ~31 past Smiths Falls's dock. The view reaches ~10 ahead, so the next frigate
+                       shows early (drawHorizonSails: the foot of its own rig, drawRig, hanging from the top edge at its hull's place
+                       in the channel, plus a gold arrow below the HUD pointing to its gap whenever the
+                       gap's off screen). Guns escalate per frigate (each eases once passed; the last
+                       reaches the old single ship's full fury), hull HP/silencing per frigate, cross-
+                       current only in the last 40 before each. Nothing spawns in each gap's run-in
+                       (inShipClearZone). "N FRIGATES LEFT" banner per pass. game.js holds obstacles
+                       still while a hull holds the canoe (they used to slide on into the gap). Used to chain straight into the Warship chase below the instant the gap
                        cleared; now ends clean, ordinary paddling after. Guarded by `segment ===
                        'rideau'`.
     britishWarship.js  The British Warship — standalone held-arena chase, split out of blockade.js
@@ -207,10 +224,17 @@ src/
                        the real-world spot Kingston Mills held before it was removed as a village
                        (route.js), once that landed the fight crowded right against Kingston's own
                        dock. Held the instant it triggers (game.js clamps flowDistance while
-                       isChaseHolding()); resolves on CHASE_HOLD_TIME (210s) survived or the orbiting
-                       gunboat's hull shot down — never on distance covered, since that always
-                       resolved in under a minute regardless of tuning (see the module's own
-                       comment). Up/Down move a virtual `_chaseHoldZ` offset (game.js) that closes or
+                       isChaseHolding()); resolves ONLY on the gunboat's hull shot down — the final
+                       boss, "the toughest boss fight in the game": the old CHASE_HOLD_TIME (210s)
+                       survive-it win is gone, and never on distance covered. Hits do 15
+                       (CHASE_CANNON_DAMAGE, was 4); bow shots are led by the canoe's own measured
+                       arena velocity (aimVX/aimVD — leading by paddling speed threw every shot ~10
+                       units ahead of a canoe holding Up, since held it barely moves). PHASES by
+                       hull: bow gun; then (<2/3) broadsides — a line of shots across the narrow
+                       (~11) arena with one 2-slot gap, longer warning, never within
+                       BROADSIDE_BOW_CLEAR of a bow shot; then (<1/3) both, faster. consumeJustPhase
+                       -> game.js's "BROADSIDES!" / "ALL GUNS" cards. A perfect-dodging, pistol-only
+                       smoke-test bot sinks her in ~90s and doesn't always survive. Up/Down move a virtual `_chaseHoldZ` offset (game.js) that closes or
                        opens range without touching real flowDistance — shifts the canoe's own
                        on-screen position, not the ship's, so it reads as your own movement. Guarded
                        by `segment === 'rideau'`. Pre-fight approach, layered on the instant trigger:
@@ -249,7 +273,12 @@ src/
                        hold and storm kept on through it (isChaseHolding/isSinking) so she goes down in
                        front of you, then cleared; debugSink() is the smoke test's shortcut to it.
     chasseGalerie.js   flying-canoe flight past Montréal up to Gatineau; steeple slalom + crosswind, no landing.
-                       TRIGGER_DISTANCE, FLIGHT_END. Every church is drawn across exactly its collision
+                       TRIGGER_DISTANCE, FLIGHT_END. Trickier but kept short of Le Diable: STEEPLE_DEFS has
+                       CLUSTERS (opposite-bank pairs/triples 11 apart, the last 10; same-bank "bait" doubles
+                       8 apart) between singles, and telegraphed GUSTS (GUST_*: every 5-8s aloft, GUST_WARN
+                       0.9s of wind streaks + sfx.js's playGustWhoosh, then a 1s shove, 70% toward the next
+                       church; off for Le Diable). clearOffsetAhead holds each gap through its church's box
+                       and swings in the clear water between (a centre-to-centre ramp clipped clusters). Every church is drawn across exactly its collision
                        box (churchDrawSpan) — ordinary ones used to be drawn a fixed 26px off the bank
                        while their box reached past the centre line; smoke test reads the nave back
     diable.js          Le Diable — held-arena boss before Gatineau; kill him with pistol shots while dodging

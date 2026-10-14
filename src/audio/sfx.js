@@ -11,6 +11,27 @@ function getCtx() {
   return ctx;
 }
 
+// Every cue goes out through one master gain, not straight to the
+// destination, so the HUD's mute button can silence the effects too —
+// "the 'mute' button only mutes the music, not the sound effects (ie. the
+// wind effects during the British Warship fight)". Looping beds (the storm's
+// wind and rain) keep running under it, just silent, and come back at
+// whatever level they're at on unmute.
+let master = null;
+let sfxMuted = false;
+function out(c) {
+  if (!master) {
+    master = c.createGain();
+    master.gain.value = sfxMuted ? 0 : 1;
+    master.connect(c.destination);
+  }
+  return master;
+}
+export function setSfxMuted(muted) {
+  sfxMuted = muted;
+  if (master && ctx) master.gain.setValueAtTime(muted ? 0 : 1, ctx.currentTime);
+}
+
 // One "wah" — a muted-brass tone (sawtooth through a low-pass filter) with
 // a short attack/decay envelope, optionally sliding to a lower pitch.
 function wah(c, startTime, freq, duration, glideTo) {
@@ -29,7 +50,7 @@ function wah(c, startTime, freq, duration, glideTo) {
   gain.gain.setValueAtTime(0.3, startTime + duration * 0.7);
   gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
-  osc.connect(filter).connect(gain).connect(c.destination);
+  osc.connect(filter).connect(gain).connect(out(c));
   osc.start(startTime);
   osc.stop(startTime + duration + 0.02);
 }
@@ -51,7 +72,7 @@ function ding(c, startTime, freq, duration) {
   gain.gain.setValueAtTime(0.0001, startTime);
   gain.gain.exponentialRampToValueAtTime(0.25, startTime + 0.008);
   gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-  gain.connect(c.destination);
+  gain.connect(out(c));
 
   for (const [mult, level] of [[1, 1], [2, 0.35]]) {
     const osc = c.createOscillator();
@@ -89,7 +110,7 @@ function knock(c, startTime) {
   const clickGain = c.createGain();
   clickGain.gain.setValueAtTime(0.35, startTime);
   clickGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.04);
-  noise.connect(band).connect(clickGain).connect(c.destination);
+  noise.connect(band).connect(clickGain).connect(out(c));
   noise.start(startTime);
   noise.stop(startTime + len);
 
@@ -101,7 +122,7 @@ function knock(c, startTime) {
   body.gain.setValueAtTime(0.0001, startTime);
   body.gain.exponentialRampToValueAtTime(0.4, startTime + 0.004);
   body.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.11);
-  osc.connect(body).connect(c.destination);
+  osc.connect(body).connect(out(c));
   osc.start(startTime);
   osc.stop(startTime + 0.13);
 }
@@ -122,7 +143,7 @@ function cockClick(c, startTime) {
   const g = c.createGain();
   g.gain.setValueAtTime(1.0, startTime);
   g.gain.exponentialRampToValueAtTime(0.0001, startTime + len);
-  noise.connect(band).connect(g).connect(c.destination);
+  noise.connect(band).connect(g).connect(out(c));
   noise.start(startTime);
   noise.stop(startTime + len);
 
@@ -132,7 +153,7 @@ function cockClick(c, startTime) {
   const tick = c.createGain();
   tick.gain.setValueAtTime(0.16, startTime);
   tick.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.025);
-  osc.connect(tick).connect(c.destination);
+  osc.connect(tick).connect(out(c));
   osc.start(startTime);
   osc.stop(startTime + 0.04);
 }
@@ -190,7 +211,7 @@ function boop(c, startTime, freq, duration) {
   gain.gain.exponentialRampToValueAtTime(0.26, startTime + 0.015);
   gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
-  osc.connect(filter).connect(gain).connect(c.destination);
+  osc.connect(filter).connect(gain).connect(out(c));
   osc.start(startTime);
   osc.stop(startTime + duration + 0.02);
 }
@@ -229,7 +250,7 @@ function noiseBurst(c, startTime, duration, startFreq) {
   gain.gain.setValueAtTime(0.45, startTime);
   gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
-  noise.connect(filter).connect(gain).connect(c.destination);
+  noise.connect(filter).connect(gain).connect(out(c));
   noise.start(startTime);
   noise.stop(startTime + duration + 0.02);
 }
@@ -245,7 +266,7 @@ function thump(c, startTime, duration, startFreq, endFreq) {
   gain.gain.exponentialRampToValueAtTime(0.7, startTime + 0.008);
   gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(out(c));
   osc.start(startTime);
   osc.stop(startTime + duration + 0.02);
 }
@@ -276,7 +297,7 @@ function growl(c, startTime, freq, duration) {
     gain.gain.exponentialRampToValueAtTime(0.22, startTime + 0.05);
     gain.gain.setValueAtTime(0.22, startTime + duration * 0.6);
     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-    osc.connect(filter).connect(gain).connect(c.destination);
+    osc.connect(filter).connect(gain).connect(out(c));
     osc.start(startTime);
     osc.stop(startTime + duration + 0.02);
   }
@@ -318,7 +339,7 @@ export function playWolfHowl() {
     gain.gain.setValueAtTime(0.16 * level, t0 + 1.15);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.0);
 
-    osc.connect(filter).connect(gain).connect(c.destination);
+    osc.connect(filter).connect(gain).connect(out(c));
     osc.start(t0);
     osc.stop(t0 + 2.05);
   }
@@ -348,7 +369,7 @@ export function playChainRattle() {
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(peak, t + 0.003);
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
-      osc.connect(hp).connect(g).connect(c.destination);
+      osc.connect(hp).connect(g).connect(out(c));
       osc.start(t);
       osc.stop(t + 0.08);
     }
@@ -377,7 +398,7 @@ export function playCorriveauWail() {
   g.gain.exponentialRampToValueAtTime(0.11, t0 + 0.35);
   g.gain.setValueAtTime(0.11, t0 + 1.2);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  osc.connect(g).connect(c.destination);
+  osc.connect(g).connect(out(c));
   osc.start(t0);
   lfo.start(t0);
   osc.stop(t0 + dur + 0.02);
@@ -396,7 +417,7 @@ export function playCorriveauWail() {
   cg.gain.setValueAtTime(0.0001, t0);
   cg.gain.exponentialRampToValueAtTime(0.09, t0 + 0.2);
   cg.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.3);
-  creak.connect(band).connect(cg).connect(c.destination);
+  creak.connect(band).connect(cg).connect(out(c));
   creak.start(t0);
   creak.stop(t0 + 1.35);
 
@@ -429,7 +450,7 @@ export function playWendigoBreath() {
   ng.gain.setValueAtTime(0.0001, t0);
   ng.gain.exponentialRampToValueAtTime(0.16, t0 + dur * 0.75);
   ng.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  noise.connect(band).connect(ng).connect(c.destination);
+  noise.connect(band).connect(ng).connect(out(c));
   noise.start(t0);
   noise.stop(t0 + dur + 0.02);
 
@@ -441,7 +462,7 @@ export function playWendigoBreath() {
   sg.gain.setValueAtTime(0.0001, t0);
   sg.gain.exponentialRampToValueAtTime(0.12, t0 + dur * 0.6);
   sg.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  sub.connect(sg).connect(c.destination);
+  sub.connect(sg).connect(out(c));
   sub.start(t0);
   sub.stop(t0 + dur + 0.02);
 }
@@ -462,7 +483,7 @@ export function playWendigoShriek() {
   gain.gain.setValueAtTime(0.0001, t0);
   gain.gain.exponentialRampToValueAtTime(0.24, t0 + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
-  osc.connect(filter).connect(gain).connect(c.destination);
+  osc.connect(filter).connect(gain).connect(out(c));
   osc.start(t0);
   osc.stop(t0 + 0.3);
   noiseBurst(c, t0, 0.22, 3000);
@@ -502,7 +523,7 @@ export function playThunderclap() {
     gain.gain.setValueAtTime(0.0001, t0 + delay);
     gain.gain.exponentialRampToValueAtTime(level, t0 + delay + 0.15);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + dur);
-    noise.connect(filter).connect(gain).connect(c.destination);
+    noise.connect(filter).connect(gain).connect(out(c));
     noise.start(t0 + delay);
     noise.stop(t0 + delay + dur + 0.05);
   }
@@ -515,7 +536,7 @@ export function playThunderclap() {
   subGain.gain.setValueAtTime(0.0001, t0);
   subGain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.06);
   subGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
-  sub.connect(subGain).connect(c.destination);
+  sub.connect(subGain).connect(out(c));
   sub.start(t0);
   sub.stop(t0 + 0.65);
 }
@@ -546,7 +567,7 @@ export function playDistantRumble() {
     gain.gain.setValueAtTime(0.0001, t0 + delay);
     gain.gain.exponentialRampToValueAtTime(level, t0 + delay + 0.5);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + dur);
-    noise.connect(filter).connect(gain).connect(c.destination);
+    noise.connect(filter).connect(gain).connect(out(c));
     noise.start(t0 + delay);
     noise.stop(t0 + delay + dur + 0.05);
   }
@@ -589,7 +610,7 @@ function makeStormBed(c) {
   lfo.connect(lfoGain).connect(windFilter.frequency);
   const windGain = c.createGain();
   windGain.gain.value = 0;
-  wind.connect(windFilter).connect(windGain).connect(c.destination);
+  wind.connect(windFilter).connect(windGain).connect(out(c));
 
   const rain = c.createBufferSource();
   rain.buffer = buffer;
@@ -601,7 +622,7 @@ function makeStormBed(c) {
   rainFilter.Q.value = 0.6;
   const rainGain = c.createGain();
   rainGain.gain.value = 0;
-  rain.connect(rainFilter).connect(rainGain).connect(c.destination);
+  rain.connect(rainFilter).connect(rainGain).connect(out(c));
 
   const t0 = c.currentTime;
   wind.start(t0);
@@ -640,9 +661,38 @@ export function playDiableDefeat() {
   gain.gain.setValueAtTime(0.0001, t0);
   gain.gain.exponentialRampToValueAtTime(0.28, t0 + 0.1);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.55);
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(out(c));
   osc.start(t0);
   osc.stop(t0 + 0.6);
   growl(c, t0 + 0.5, 120, 1.2);
   noiseBurst(c, t0 + 0.5, 0.9, 1600);
+}
+
+// The Chasse-galerie's gust warning (chasseGalerie.js's GUST_WARN): wind
+// rising to a howl over the warning and carrying on through the blow —
+// band-passed noise sweeping up, so "here it comes" is heard as well as
+// seen.
+export function playGustWhoosh() {
+  const c = getCtx();
+  const t0 = c.currentTime;
+  const dur = 1.9;
+  const bufferSize = Math.max(1, Math.floor(c.sampleRate * dur));
+  const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const noise = c.createBufferSource();
+  noise.buffer = buffer;
+  const band = c.createBiquadFilter();
+  band.type = 'bandpass';
+  band.Q.value = 1.2;
+  band.frequency.setValueAtTime(300, t0);
+  band.frequency.exponentialRampToValueAtTime(1100, t0 + 0.9);
+  band.frequency.exponentialRampToValueAtTime(500, t0 + dur);
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.85);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  noise.connect(band).connect(gain).connect(out(c));
+  noise.start(t0);
+  noise.stop(t0 + dur + 0.05);
 }

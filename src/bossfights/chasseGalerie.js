@@ -104,6 +104,27 @@ export function flightWind(flowDistance, time, altFrac) {
   return WIND_STRENGTH * wave * Math.max(0, Math.min(1, altFrac));
 }
 
+// --- gusts ---------------------------------------------------------------
+// On top of that sway: real gusts — "storm gusts" picked to make the
+// steeples "trickier" without making the flight the hard part. Every
+// GUST_EVERY_MIN..MAX seconds aloft, a gust is telegraphed for GUST_WARN
+// (wind streaks sliding across the screen its way, building, with a
+// whoosh — game.js's playGustWhoosh on consumeJustGustWarned), then blows
+// for GUST_BLOW: a hard sideways shove of GUST_ACCEL — ~1.3 units off your
+// line if you don't correct, fully correctable on desktop (steering is
+// 20), just about held on touch (10). GUST_INTO_CHURCH of them blow toward
+// the bank of the next church ahead, i.e. into it, mid-thread. Scaled by
+// altitude like the sway, and suspended for Le Diable (game.js only applies
+// windAccel while he isn't up).
+const GUST_EVERY_MIN = 5;
+const GUST_EVERY_MAX = 8;
+export const GUST_WARN = 0.9;
+const GUST_BLOW = 1.0;
+const GUST_ACCEL = 9;
+const GUST_INTO_CHURCH = 0.7;
+// Nothing in the first few seconds aloft — climbing out is its own beat.
+const GUST_FIRST_DELAY = 6;
+
 // --- the churches along the gorge -------------------------------------
 // Every church stands on a bank and reaches out past the centre line (see
 // PAST_CENTRE_NORMAL below — they used to stop short of it); the ones that
@@ -172,21 +193,43 @@ const DIABLE_ARENA_D = FLIGHT_END - 45;
 // the last ~100 units before the arena — a real climb in pressure, not a
 // flat chance the whole flight. The last two (past the arena, `d > 0`) are
 // deliberately calm: the glide home to Gatineau, not more fight.
+//
+// Re-authored for "too easy to dodge all the steeples" (but still short of
+// Le Diable — "I want to save the truly tough part for the fight with Le
+// Diable"). At the flight's cruise speed singles ~20 apart gave ~6s to line
+// up each one. Now the singles are broken up by CLUSTERS: opposite-bank
+// pairs and triples 11 apart (10 in the last one before the arena) — a
+// quick S-turn through the gaps, ~2s apart even paddling — and "bait"
+// doubles, two on the SAME bank 8 apart, for anyone weaving on rhythm
+// alone. (First cut was 10 and 9: holding Up the whole way, the test
+// pilot couldn't make the tightest swings even with the gusts off — and
+// touch steering is half as strong. Le Diable is meant to be the hard
+// part.) Escalation by stretch: singles and one pair after liftoff; then
+// pairs and a bait double; then triples; then the tight triple at the end.
+// (-644 and -622 fall before GORGE_ENGAGED_D and aren't built — see below.)
 const STEEPLE_DEFS = [
   { d: -644, side: 1, reaching: true }, { d: -622, side: -1, reaching: false },
+  // Liftoff stretch: singles, then the first pair.
   { d: -597, side: 1, reaching: false }, { d: -577, side: -1, reaching: false },
-  { d: -551, side: -1, reaching: false }, { d: -532, side: 1, reaching: true },
-  { d: -509, side: -1, reaching: false }, { d: -491, side: 1, reaching: false },
-  { d: -467, side: 1, reaching: true }, { d: -446, side: -1, reaching: false },
-  { d: -420.5, side: 1, reaching: false }, { d: -401, side: -1, reaching: false },
-  { d: -378.5, side: -1, reaching: true }, { d: -356.5, side: 1, reaching: false },
-  { d: -331.5, side: -1, reaching: false }, { d: -311.5, side: 1, reaching: true },
-  { d: -285.5, side: 1, reaching: false }, { d: -266.5, side: -1, reaching: false },
-  { d: -243.5, side: 1, reaching: true }, { d: -225.5, side: -1, reaching: false },
-  { d: -201.5, side: -1, reaching: true }, { d: -180.5, side: 1, reaching: false },
-  { d: -155, side: -1, reaching: true }, { d: -135.5, side: 1, reaching: false },
-  { d: -113, side: 1, reaching: true }, { d: -91, side: -1, reaching: true },
-  { d: -66, side: 1, reaching: false }, { d: -46, side: -1, reaching: true },
+  { d: -555, side: 1, reaching: false }, { d: -534, side: -1, reaching: true },
+  { d: -512, side: 1, reaching: false }, { d: -501, side: -1, reaching: false },
+  { d: -478, side: 1, reaching: true }, { d: -456, side: -1, reaching: false },
+  { d: -434, side: 1, reaching: false },
+  // Pairs, and the first bait double.
+  { d: -412, side: -1, reaching: true }, { d: -401, side: 1, reaching: false },
+  { d: -380, side: -1, reaching: false }, { d: -372, side: -1, reaching: false },
+  { d: -350, side: 1, reaching: true },
+  { d: -328, side: -1, reaching: false }, { d: -317, side: 1, reaching: false },
+  { d: -296, side: -1, reaching: true }, { d: -274, side: 1, reaching: false },
+  // Triples.
+  { d: -252, side: -1, reaching: false }, { d: -241, side: 1, reaching: false }, { d: -230, side: -1, reaching: true },
+  { d: -208, side: 1, reaching: true },
+  { d: -186, side: -1, reaching: false }, { d: -175, side: 1, reaching: true },
+  { d: -154, side: 1, reaching: false }, { d: -146, side: 1, reaching: true },
+  { d: -124, side: -1, reaching: true }, { d: -113, side: 1, reaching: false }, { d: -102, side: -1, reaching: true },
+  // The run-in to Le Diable: a pair, then the tight triple.
+  { d: -82, side: 1, reaching: true }, { d: -71, side: -1, reaching: true },
+  { d: -52, side: 1, reaching: false }, { d: -42, side: -1, reaching: true }, { d: -32, side: 1, reaching: true },
   // (A church at d: -1 stood right in the middle of Le Diable's arena —
   // removed; see ARENA_CLEAR below.)
   { d: -20, side: -1, reaching: true },
@@ -271,6 +314,13 @@ export function createChasseGalerie() {
   // player's up/down input during the Diable fight so the canoe can dodge
   // vertically in the arena. Defaults to the baseline hover.
   let heldAlt = BOSS_HOVER_HEIGHT;
+  // Gusts (see GUST_*): the countdown to the next, then its warning and
+  // blow, and which way (+1 right, -1 left).
+  let gustTimer = GUST_FIRST_DELAY;
+  let gustT = -1; // seconds into the current gust (warning then blow), -1 between
+  let gustDir = 1;
+  let justGustWarned = false;
+  let gustCount = 0;
 
   return {
     update(playerFlowDistance, canoeWorldX, dt) {
@@ -296,6 +346,28 @@ export function createChasseGalerie() {
       const rate = heldAloft ? 6 : 3;
       altitude += Math.max(-rate * dt, Math.min(rate * dt, targetAlt - altitude));
 
+      // Gusts only while really aloft and flying the gorge — not on the
+      // climb out, the glide in, or held for Le Diable.
+      if (active && !heldAloft && altitude / FLIGHT_HEIGHT > 0.6) {
+        if (gustT >= 0) {
+          gustT += dt;
+          if (gustT >= GUST_WARN + GUST_BLOW) gustT = -1;
+        } else {
+          gustTimer -= dt;
+          if (gustTimer <= 0) {
+            gustTimer = GUST_EVERY_MIN + Math.random() * (GUST_EVERY_MAX - GUST_EVERY_MIN);
+            gustT = 0;
+            justGustWarned = true;
+            gustCount++;
+            // Toward the next church's own bank, mostly — into it.
+            const next = STEEPLES.find((st) => st.flowDistance + st.hz > playerFlowDistance);
+            gustDir = next && Math.random() < GUST_INTO_CHURCH ? next.side : (Math.random() < 0.5 ? -1 : 1);
+          }
+        }
+      } else {
+        gustT = -1;
+      }
+
       let hit = false;
       if (active && altitude > 0.5) {
         for (const s of STEEPLES) {
@@ -313,8 +385,25 @@ export function createChasseGalerie() {
     // Lateral acceleration from the storm wind at the canoe's position.
     windAccel(flowDistance, time) {
       if (!active) return 0;
-      return flightWind(flowDistance, time, altitude / FLIGHT_HEIGHT);
+      const altFrac = Math.max(0, Math.min(1, altitude / FLIGHT_HEIGHT));
+      const gust = gustT >= GUST_WARN ? gustDir * GUST_ACCEL * altFrac : 0;
+      return flightWind(flowDistance, time, altFrac) + gust;
     },
+    // 0 between gusts; ramps 0 -> 1 across the warning, 1 through the blow
+    // — what the streaks are drawn from.
+    gustLevel() {
+      if (gustT < 0) return 0;
+      return gustT < GUST_WARN ? gustT / GUST_WARN : 1;
+    },
+    gustDirection() { return gustDir; },
+    isGustBlowing() { return gustT >= GUST_WARN; },
+    // True once per gust, the frame its warning starts (game.js's whoosh).
+    consumeJustGustWarned() {
+      const v = justGustWarned;
+      justGustWarned = false;
+      return v;
+    },
+    debugGustCount() { return gustCount; },
 
     // Diable fight: keep the canoe hovering (the Devil won't let you land)
     // instead of the position-driven descent. setHeldAloft toggles the hold;
@@ -334,9 +423,14 @@ export function createChasseGalerie() {
       altitude = 0;
       heldAloft = false;
       heldAlt = BOSS_HOVER_HEIGHT;
+      gustTimer = GUST_FIRST_DELAY;
+      gustT = -1;
+      gustDir = 1;
+      justGustWarned = false;
+      gustCount = 0;
     },
 
-    drawStorm(ctx, worldDistance, cameraWorldX) {
+    drawStorm(ctx, worldDistance, cameraWorldX, time = 0) {
       if (!active) return;
 
       const visible = [];
@@ -351,6 +445,11 @@ export function createChasseGalerie() {
       for (const { s, z } of visible) {
         drawChurch(ctx, s, z, cameraWorldX);
       }
+
+      // The gust: streaks of wind sliding across the screen its way, a few
+      // faint ones as the warning starts, building to a sheet as it blows.
+      const g = gustT < 0 ? 0 : (gustT < GUST_WARN ? gustT / GUST_WARN : 1);
+      if (g > 0) drawGustStreaks(ctx, g, gustDir, gustT, gustT >= GUST_WARN);
     },
 
     isActive() {
@@ -380,9 +479,8 @@ export function createChasseGalerie() {
     },
 
     // The centre-relative lateral offset to be at right now to thread the
-    // churches: a straight ramp from the gap you just flew to the gap you're
-    // headed for, so at each church you're exactly in its gap and the weave
-    // between is gradual and trackable. There is always a clear line; this
+    // churches: in each church's gap all the way past it, then a straight
+    // ramp to the next gap across the clear water between them. There is always a clear line; this
     // is it. Used by the smoke test (proves the flight stays fair) and could
     // drive an assist line later.
     clearOffsetAhead(flowDistance) {
@@ -393,8 +491,16 @@ export function createChasseGalerie() {
       if (idx === -1) return 0;
       const next = STEEPLES[idx];
       const prev = idx > 0 ? STEEPLES[idx - 1] : null;
-      if (!prev || flowDistance >= next.flowDistance) return next.gapOffset;
-      const t = (flowDistance - prev.flowDistance) / (next.flowDistance - prev.flowDistance);
+      // Hold each gap the whole way through its church's box, and make the
+      // swing in the clear water between one box and the next. It used to
+      // ramp straight from centre to centre, which was fine with churches
+      // ~20 apart but, with clusters 9-10 apart, entered a reaching
+      // church's box still a hair outside its gap — the line itself hit.
+      if (!prev || flowDistance >= next.flowDistance - next.hz) return next.gapOffset;
+      const from = prev.flowDistance + prev.hz;
+      const to = next.flowDistance - next.hz;
+      if (flowDistance <= from) return prev.gapOffset;
+      const t = (flowDistance - from) / (to - from);
       return prev.gapOffset + (next.gapOffset - prev.gapOffset) * Math.max(0, Math.min(1, t));
     },
 
@@ -406,6 +512,29 @@ export function createChasseGalerie() {
       return FLIGHT_LATERAL_MARGIN * Math.max(0, Math.min(1, altitude / FLIGHT_HEIGHT));
     },
   };
+}
+
+// Wind streaks for a gust: level 0..1, dir +1/-1, t the gust's own clock.
+// Hashed rows so they don't flicker about frame to frame; each slides
+// across at its own speed, wrapping.
+function drawGustStreaks(ctx, level, dir, t, blowing) {
+  const W = 320, H = 220;
+  const count = Math.round(4 + level * (blowing ? 22 : 12));
+  ctx.save();
+  for (let i = 0; i < count; i++) {
+    const y = 8 + hashRange(i, 31, 0, H - 16);
+    const speed = (blowing ? 380 : 240) * hashRange(i, 32, 0.7, 1.3);
+    const len = (blowing ? 34 : 20) * hashRange(i, 33, 0.6, 1.4);
+    const x0 = (hashRange(i, 34, 0, W + 60) + t * speed) % (W + 60) - 30;
+    const x = dir > 0 ? x0 : W - x0;
+    ctx.strokeStyle = `rgba(214, 222, 236, ${(blowing ? 0.42 : 0.28) * level * hashRange(i, 35, 0.6, 1)})`;
+    ctx.lineWidth = blowing ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - dir * len, y - 2);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // The screen-x span a church is drawn across: exactly its collision box

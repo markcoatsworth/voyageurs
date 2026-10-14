@@ -105,8 +105,11 @@ const REACH_INTERVAL_NEAR = 2.6;
 // wrong way spends the first part of any wind-up just stopping. First cut
 // was 1.3 -> 0.95 with a 1.7 lane, which a canoe caught in rough water
 // couldn't clear at all.
-const WINDUP_FAR = 1.7;
-const WINDUP_NEAR = 1.3;
+// Then brought in again, 1.7 -> 1.3 to 1.5 -> 1.0 ("Let's make her strike a
+// bit faster"), once the rapids were calmed under her (game.js's
+// corriveauCalm) and the canoe could always come round at full lock.
+const WINDUP_FAR = 1.5;
+const WINDUP_NEAR = 1.0;
 const HOT_TIME = 0.32;
 const RECOVER_TIME = 0.5;    // hauled back up the chain, slower than it fell
 // Lane half-width, world units — narrower than the Loup-garou's maw (2.0):

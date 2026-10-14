@@ -157,3 +157,40 @@ function drawFlagpole(ctx, px, base, fly, time) {
   }
   ctx.restore();
 }
+
+// A Union Jack on a short pole — the British Blockade's flag islands
+// (world/obstacles.js's FLAG_ISLAND). Same cloth as the big pair, laid down
+// at MINI_W x MINI_H a column at a time on the same travelling wave, with
+// the same fold shading, so it flutters rather than hangs. (x, base) is the
+// pole's foot on screen; seed staggers each island's wave so a cluster
+// doesn't flap in unison. Was 14x7 on a 20px pole, which at game scale read
+// as a red-and-white smudge — "make those Union Jacks bigger so I can
+// clearly see what they are. Don't worry about being a bit obnoxious".
+// Now 28x14 on a 36px pole: 70% of the big border flags' cloth, wider than
+// the island under it, so the crosses read at a glance.
+const MINI_W = 28, MINI_H = 14, MINI_POLE = 36;
+export function drawMiniFlag(ctx, x, base, time, seed = 0) {
+  if (!cloth) cloth = buildCloth();
+  const px = Math.round(x), top = Math.round(base) - MINI_POLE;
+  ctx.save();
+  ctx.fillStyle = '#4a3220';
+  ctx.fillRect(px - 1, top, 2, MINI_POLE);
+  ctx.fillStyle = '#7a5a3a';
+  ctx.fillRect(px - 1, top, 1, MINI_POLE);
+  ctx.fillStyle = '#e0b84a';
+  ctx.fillRect(px - 2, top - 3, 4, 3);
+  if (cloth) {
+    for (let i = 0; i < MINI_W; i++) {
+      const f = i / MINI_W;
+      const phase = time * 5.4 + seed - i * 0.42;
+      const dy = Math.round(Math.sin(phase) * (0.4 + f * 2.2));
+      const sx = Math.min(FLAG_W - 1, Math.floor(f * FLAG_W));
+      const cx = px + 1 + i, fy = top + 1 + dy;
+      ctx.drawImage(cloth, sx, 0, 1, FLAG_H, cx, fy, 1, MINI_H);
+      const shade = Math.cos(phase);
+      ctx.fillStyle = shade > 0 ? `rgba(255,255,255,${0.12 * shade * f})` : `rgba(0,0,0,${-0.2 * shade * (0.3 + f)})`;
+      ctx.fillRect(cx, fy, 1, MINI_H);
+    }
+  }
+  ctx.restore();
+}

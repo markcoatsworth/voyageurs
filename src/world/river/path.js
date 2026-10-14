@@ -20,6 +20,7 @@ import { gorgeWidthAt, gorgeCenterXAt, GORGE_RANGE } from './gorge.js';
 import { lawrenceWestWidthAt } from './lawrenceWidth.js';
 import { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE } from './segments.js';
 import { VILLAGES } from './route.js';
+import { BLOCKADE_SHIPS, SHIP_CLEAR_BEFORE } from './blockadeLine.js';
 export { MOUTH_DISTANCE, SEGMENT_SHAPE_OFFSET, RIDEAU_SPAN_DISTANCE };
 
 export const FJORD_WIDTH = 8;
@@ -306,6 +307,7 @@ export function braidOffsetFraction(cycle) {
 // approach — not just a dock with a sandbar sat right off its end.
 const BRAID_LAUNCH_CLEARANCE = 30;
 const BRAID_DOCK_CLEARANCE = 16;
+const BLOCKADE_BRAID_AFTER = 10;
 function cyclesNear(d, clearance) {
   const out = [];
   const lo = Math.floor((d - clearance) / BRAID_PERIOD);
@@ -319,6 +321,10 @@ function cyclesNear(d, clearance) {
 export const BRAID_SUPPRESSED_CYCLES = [...new Set([
   ...Object.values(SEGMENT_SHAPE_OFFSET).flatMap((start) => cyclesNear(start, BRAID_LAUNCH_CLEARANCE)),
   ...VILLAGES.flatMap((v) => cyclesNear(v.flowDistance, BRAID_DOCK_CLEARANCE)),
+  // The British Blockade's frigates (blockadeLine.js): none across a
+  // frigate's run-in to its gap or the water just past it — one sat right
+  // across the second frigate once the line was laid down.
+  ...BLOCKADE_SHIPS.flatMap((sd) => cyclesNear(sd - (SHIP_CLEAR_BEFORE - BLOCKADE_BRAID_AFTER) / 2, (SHIP_CLEAR_BEFORE + BLOCKADE_BRAID_AFTER) / 2)),
 ])].sort((a, b) => a - b);
 const braidSuppressed = new Set(BRAID_SUPPRESSED_CYCLES);
 
