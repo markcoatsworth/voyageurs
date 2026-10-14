@@ -208,11 +208,14 @@ src/
                        A gap-to-gap swing (~31 sideways at ~2.7 u/s, ~12s) only makes it if you
                        ease off the paddle. SHIP_FLOW_DISTANCE is the LAST frigate (Kingston − 630);
                        APPROACH_RANGE (250) is the whole fight's span back from it — cannon fire starts
-                       ~31 past Smiths Falls's dock. The view reaches ~10 ahead, so the next frigate
-                       shows early (drawHorizonSails: the foot of its own rig, drawRig, hanging from the top edge at its hull's place
-                       in the channel, plus a gold arrow below the HUD pointing to its gap whenever the
-                       gap's off screen). Guns escalate per frigate (each eases once passed; the last
-                       reaches the old single ship's full fury), hull HP/silencing per frigate, cross-
+                       ~31 past Smiths Falls's dock. NO early warning of where the next frigate is —
+                       it (rig, flag) shows only once on screen; an early-sails + gold-arrow telegraph
+                       was removed by request ("no hints or clue about how far away the frigates are"). Guns step up at each frigate passed, never back down (VOLLEY_STAGES):
+                       1 shot every 2.2s, then 2 every 1.6s, then 3 every 1.2s (each gap ±20%). Volleys
+                       RIPPLE (shots RIPPLE_GAP 0.22s apart, each aimed as it fires, led by the canoe's
+                       measured sideways velocity aimVX: on you, then RIPPLE_FLANK the way you're going,
+                       then the other way) — replaced one row of shots landing together; 0.9s warning (from rest the bow
+                       swing makes 0.65s undodgeable); 10 a hit. Hull HP/silencing per frigate, cross-
                        current only in the last 40 before each. Nothing spawns in each gap's run-in
                        (inShipClearZone). "N FRIGATES LEFT" banner per pass. game.js holds obstacles
                        still while a hull holds the canoe (they used to slide on into the gap). Used to chain straight into the Warship chase below the instant the gap

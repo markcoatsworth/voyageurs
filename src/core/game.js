@@ -290,8 +290,10 @@ const BANK_DAMAGE = 8;
 // real approach exposes you to, the higher numbers added up to the approach
 // killing runs before the ship — the fight's actual climax — was ever
 // reached. Kept low enough that a bad patch of luck on the way in costs
-// real health without ending the run on its own.
-const CANNON_DAMAGE = 12;
+// real health without ending the run on its own. 10 once the fire became
+// a steady escalation to 4-shot volleys every second over the whole line
+// of frigates — the volume went up a lot, so each splash costs a bit less.
+const CANNON_DAMAGE = 10;
 // The hull itself is a solid wall, not a one-off "you clipped it" penalty
 // (see the isHullBlocking check in update()) — outside the gap you simply
 // can't push through it at all, taking this (the single hardest hit in the

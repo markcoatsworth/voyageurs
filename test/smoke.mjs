@@ -135,12 +135,12 @@ function run({ game, input }, frames, dt, inputFn) {
 
 // Steers a canoe through the British Blockade's line of frigates the way a
 // careful player would: aim for the next frigate's gap (read from the
-// fight itself — a player reads it off the sails on the horizon), and
+// fight itself; a player finds it when the frigate comes on screen), and
 // ease off the paddle whenever the swing across won't make it at full
 // speed. Returns false (inputs untouched) when the fight isn't live.
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const PILOT_LATERAL = 2.3; // u/s — a bit under the measured ~2.7, for margin
-function blockadePilot(g) {
+function blockadePilot(g, { dodge = true } = {}) {
   const sides = g.game.blockade.isApproachEngaged() ? g.game.blockade.debugGapSides() : null;
   if (!sides) return false;
   const fd = g.game.flowDistance;
@@ -162,30 +162,38 @@ function blockadePilot(g) {
       wantX = e.x + (wantX >= e.x ? 2.8 : -2.8);
     }
   }
-  // And step out of a cannon shot's warning ring before it lands.
+  // And step out of a cannon shot's warning ring before it lands — to the
+  // nearest water clear of every ring in the volley (a volley's shots
+  // flank each other ~4 apart, so a fixed sidestep from one just lands in
+  // the next). Preferring the side toward wantX keeps the crossing going.
   let underFire = false;
-  for (const h of g.game.blockade.debugHazards()) {
-    // ...except in the last stretch, where it commits to the gap and takes
-    // the hit (dodging out of a gap hard against the bank, every volley,
-    // had it backing and filling short of the hull for minutes).
-    if (sd - fd < 15) break;
-    if (h.t > 0.6 || Math.abs(h.d - fd) > 4) continue;
-    if (Math.abs(h.x - g.game.canoeWorldX) < 2.4) {
-      underFire = true;
-      const away = g.game.canoeWorldX >= h.x ? 1 : -1;
-      const room = widthAt(fd) / 2 - 1.6;
-      const side = Math.abs(g.game.canoeWorldX + away * 3 - centerX(fd)) < room ? away : -away;
-      wantX = h.x + side * 3;
+  const live = dodge ? g.game.blockade.debugHazards().filter((h) => h.t < h.warn + 0.32 && !h.hit && Math.abs(h.d - fd) < 2.6) : [];
+  const clearOf = (x) => live.every((h) => Math.abs(h.x - x) > 1.7);
+  if (live.length && !clearOf(g.game.canoeWorldX)) {
+    underFire = true;
+    const room = widthAt(fd) / 2 - 1.4;
+    let best = null;
+    for (let x = centerX(fd) - room; x <= centerX(fd) + room; x += 0.1) {
+      if (!clearOf(x)) continue;
+      // Already moving? Keep going that way — reversing into a ring you're
+      // halfway out of is how this pilot used to take most of its hits.
+      const dir = Math.sign(x - g.game.canoeWorldX);
+      const vx = g.game.lateralVX;
+      const cost = Math.abs(x - g.game.canoeWorldX)
+        + (Math.abs(vx) > 1 && dir !== Math.sign(vx) ? 3 : 0)
+        + (dir !== Math.sign(wantX - g.game.canoeWorldX) ? 0.5 : 0);
+      if (best === null || cost < best.cost) best = { x, cost };
     }
+    if (best) wantX = best.x;
   }
   const err = g.game.canoeWorldX - wantX;
   const dist = sd - fd;
   const secondsNeeded = Math.abs(err) / PILOT_LATERAL;
   g.input.state.up = secondsNeeded * 16 < dist - 8 || Math.abs(err) < 0.8;
-  g.input.state.down = dist < 25 && Math.abs(err) > 1.5;
-  // Hemmed in against the bank in a gap, change pace too: shots are led at
+  g.input.state.down = dist < 25 && Math.abs(err) > 1.5 && !underFire;
+  // Can't get clear sideways in time: change pace too — shots are led at
   // the speed you're doing when they're fired.
-  if (underFire && Math.abs(err) < 2) {
+  if (underFire && Math.abs(err) > 1.75) {
     g.input.state.up = g.game.speed < 8;
     g.input.state.down = false;
   }
@@ -1007,7 +1015,7 @@ await step('blockade: flag islands crowd the approach, only there, and never the
       for (let i = 0; i < 6000 && g.world.distance < SHIP_FLOW_DISTANCE - 5; i++) {
         // Through the frigates' gaps — the line's hulls would hold a
         // straight-ahead canoe at the first one for good.
-        if (!blockadePilot(g)) {
+        if (!blockadePilot(g, { dodge: false })) {
           g.input.state.up = true;
           g.input.state.left = g.input.state.right = g.input.state.down = false;
         }
@@ -1481,6 +1489,105 @@ const WARSHIP_HULL_FILL = '#3a2716';
 // draws, so it marks where his silhouette landed in the paint order.
 const DEVIL_BODY_FILL = '#0d0d16';
 
+await step('blockade: the cannon fire steps up at each frigate passed — more shots a volley, more often', () => withSeededRandom(1816, () => {
+  // "I would expect the number of parallel shots to increase as time goes
+  // on, as well as the frequency. But instead it just shifts back and forth
+  // between 1 and 2 shots at a time." Then "I was hoping to make the
+  // frequency change each time we pass a frigate" — so the guns step up at
+  // each pass: 1 shot every 2.2s, then 2 every 1.6s, then 3 every 1.2s. Fly
+  // the whole line (hull pinned) and log every volley: its size, the time
+  // since the last, and how many frigates were behind the canoe.
+  const g = newGame('rideau', BLOCKADE_SHIPS[0] - 120);
+  const volleys = [];
+  let seen = new Set(), t = 0, lastT = null;
+  for (let i = 0; i < 9000 && g.game.flowDistance < SHIP_FLOW_DISTANCE + 4; i++) {
+    // Hull pinned, so no need to dodge — just thread the gaps.
+    if (!blockadePilot(g, { dodge: false })) { g.input.state.up = true; g.input.state.left = g.input.state.right = g.input.state.down = false; }
+    g.game.health = 100;
+    g.game.update(1 / 30);
+    t += 1 / 30;
+    const fresh = g.game.blockade.debugHazards().filter((h) => !seen.has(h));
+    for (const h of fresh) seen.add(h);
+    // A volley ripples — its shots land ~0.22s apart — so shots within half
+    // a second of the volley's first belong to it.
+    for (const h of fresh) {
+      if (lastT !== null && t - lastT < 0.5) { volleys.at(-1).shots++; continue; }
+      volleys.push({ shots: 1, gap: lastT === null ? null : t - lastT, stage: g.game.blockade.debugStage() });
+      lastT = t;
+    }
+  }
+  // The very last can be cut off mid-ripple by the fight ending — drop it.
+  volleys.pop();
+  if (volleys.length < 10) throw new Error(`only ${volleys.length} volleys over the whole fight`);
+  for (let i = 1; i < volleys.length; i++) {
+    if (volleys[i].shots < volleys[i - 1].shots) throw new Error(`volley ${i} dropped from ${volleys[i - 1].shots} to ${volleys[i].shots} shots — it should never ease off`);
+  }
+  const bad = volleys.find((v) => v.shots !== v.stage + 1);
+  if (bad) throw new Error(`a ${bad.shots}-shot volley with ${bad.stage} frigate(s) passed — the size should step with each frigate`);
+  if (volleys[0].shots !== 1) throw new Error(`the first volley is ${volleys[0].shots} shots — it should open on one`);
+  if (volleys.at(-1).shots !== 3) throw new Error(`the last volley is ${volleys.at(-1).shots} shots — it should end on three`);
+  // Pace inside each stage: a steady interval, faster each stage.
+  const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const pace = [0, 1, 2].map((st) => avg(volleys.filter((v, i) => i > 0 && v.stage === st && volleys[i - 1].stage === st).map((v) => v.gap)));
+  const want = [2.2, 1.6, 1.2];
+  for (let st = 0; st < 3; st++) {
+    // ±20% off the beat per gap (VOLLEY_BEAT_JITTER), so the average.
+    if (!(Math.abs(pace[st] - want[st]) < 0.25)) throw new Error(`with ${st} frigate(s) passed volleys come every ${pace[st].toFixed(2)}s, not ${want[st]}s`);
+  }
+  notes.push(`  note blockade fire: ${volleys.length} volleys; by frigates passed: 1 shot every ${pace[0].toFixed(1)}s, 2 every ${pace[1].toFixed(1)}s, 3 every ${pace[2].toFixed(1)}s`);
+}));
+
+await step('blockade: shots lead a canoe crossing sideways — a steady crossing is no longer a free pass', () => withSeededRandom(1817, () => {
+  // Idea A of "make it more challenging": the shots used to aim at where
+  // the canoe was when they fired, so one already moving sideways left
+  // every shot behind. Sweep steadily bank to bank before the first frigate
+  // (1-shot volleys), hull pinned, and count what lands.
+  const g = newGame('rideau', BLOCKADE_SHIPS[0] - 105);
+  const hits = [];
+  const orig = g.game.handleHit.bind(g.game);
+  g.game.handleHit = (e) => { if (e?.type === 'cannon') hits.push(1); return orig(e); };
+  let dir = 1, shots = 0;
+  const seen = new Set();
+  for (let i = 0; i < 600; i++) {
+    const off = g.game.canoeWorldX - centerX(g.game.flowDistance);
+    const half = widthAt(g.game.flowDistance) / 2 - 2;
+    if (off > half) dir = -1;
+    if (off < -half) dir = 1;
+    g.input.state.up = false;
+    g.input.state.down = false;
+    g.input.state.right = dir > 0;
+    g.input.state.left = dir < 0;
+    g.game.health = 100;
+    g.game.invulnTimer = 0;
+    g.game.update(1 / 30);
+    for (const h of g.game.blockade.debugHazards()) if (!seen.has(h)) { seen.add(h); shots++; }
+  }
+  if (shots < 5) throw new Error(`only ${shots} shots in 20s of the approach`);
+  if (!(hits.length >= shots * 0.4)) throw new Error(`a canoe sweeping steadily sideways took ${hits.length} of ${shots} shots — the shots aren't leading it`);
+  notes.push(`  note blockade aim: a steady sideways sweep took ${hits.length} of ${shots} shots`);
+}));
+
+await step('blockade: no sign of a frigate until it is on screen — no early sails, flags or arrows', () => {
+  // "I don't want any hints or clue about how far away the frigates are.
+  // The only flags I want to see are on the frigates when I can see them on
+  // the screen." Mid-fight, 30 units short of the first frigate (off the top
+  // of the screen), the Blockade draws none of a ship's colours — sail
+  // canvas, the ensign's navy, or the old gold arrow. Then on screen, it does.
+  const g = newGame('rideau', BLOCKADE_SHIPS[0] - 30);
+  g.game.update(1 / 30);
+  if (!g.game.blockade.isApproachEngaged()) throw new Error('the fight is not live 30 short of the first frigate');
+  const SHIP_COLOURS = ['#cfc6ae', '#012169', '#4a3320'];
+  const draw = (d) => {
+    const { ctx, rec } = recordingCtx();
+    g.game.blockade.draw(ctx, d, centerX(d), 0);
+    return rec.painted.filter((c) => SHIP_COLOURS.includes(c) || /^rgba\(255, 210, 90/.test(String(c)));
+  };
+  const early = draw(BLOCKADE_SHIPS[0] - 30);
+  if (early.length) throw new Error(`30 units short of the first frigate the Blockade painted ${[...new Set(early)].join(', ')} — a frigate (or a hint of one) before it's on screen`);
+  const near = draw(BLOCKADE_SHIPS[0] - 4);
+  if (!near.includes('#4a3320')) throw new Error('the frigate does not draw once it is on screen — this check is not looking at the right thing');
+});
+
 await step('impacts: a landed shot leaves a mark, and a bigger gun leaves a bigger one', async () => {
   const { drawImpact, impactLife, impactTierFor } = await import('../src/world/impact.js');
 
@@ -1765,7 +1872,9 @@ await step('blockade: a line of frigates, gaps on alternating banks, rolled per 
     let cleared = false;
     let lastBanner = '';
     for (let i = 0; i < 9000 && !cleared; i++) {
-      if (!blockadePilot(g)) {
+      // Pinned runs thread the gaps without dodging (nothing to save);
+      // real-damage runs dodge too.
+      if (!blockadePilot(g, { dodge: !pinned })) {
         g.input.state.up = true;
         g.input.state.down = false;
         const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
@@ -3413,7 +3522,7 @@ await step('rideau: paddle the whole leg and reach Kingston, where the canoe is 
     // hull/hold-time concept during a pure dodge-and-thread-the-gap leg);
     // isApproachEngaged() is the non-consuming status check for "is the
     // gauntlet currently live."
-    if (!blockadePilot(g)) {
+    if (!blockadePilot(g, { dodge: false })) {
       const err = g.game.canoeWorldX - centerX(g.game.flowDistance);
       g.input.state.left = err > 0.4;
       g.input.state.right = err < -0.4;
