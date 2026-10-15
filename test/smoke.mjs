@@ -1567,6 +1567,20 @@ await step('blockade: shots lead a canoe crossing sideways — a steady crossing
   notes.push(`  note blockade aim: a steady sideways sweep took ${hits.length} of ${shots} shots`);
 }));
 
+await step('blockade: shots only tell on a frigate from close in — no silencing it from 70 units out', () => {
+  // "I should need to be reasonably close to the frigate before my guns
+  // have any effect on it." A bullet placed on the first frigate's hull
+  // does nothing with the canoe 40 short of it, and lands with it 15 short.
+  const g = newGame('rideau', BLOCKADE_SHIPS[0] - 40);
+  g.game.update(1 / 30);
+  const sides = g.game.blockade.debugGapSides();
+  const sd = BLOCKADE_SHIPS[0];
+  const hullX = centerX(sd) - sides[0] * (widthAt(sd) / 2 - 10); // well inside the hull, away from the gap
+  const shoot = (playerD) => g.game.blockade.update(1 / 30, playerD, centerX(playerD), 0, () => {}, [{ worldX: hullX, flowDistance: sd, type: 'musket' }]).hitBullets.length;
+  if (shoot(sd - 40) !== 0) throw new Error('a shot landed on a frigate with the canoe 40 units short of it');
+  if (shoot(sd - 15) !== 1) throw new Error('a shot on the hull with the canoe 15 short did not land');
+});
+
 await step('blockade: no sign of a frigate until it is on screen — no early sails, flags or arrows', () => {
   // "I don't want any hints or clue about how far away the frigates are.
   // The only flags I want to see are on the frigates when I can see them on

@@ -215,7 +215,7 @@ src/
                        RIPPLE (shots RIPPLE_GAP 0.22s apart, each aimed as it fires, led by the canoe's
                        measured sideways velocity aimVX: on you, then RIPPLE_FLANK the way you're going,
                        then the other way) — replaced one row of shots landing together; 0.9s warning (from rest the bow
-                       swing makes 0.65s undodgeable); 10 a hit. Hull HP/silencing per frigate, cross-
+                       swing makes 0.65s undodgeable); 10 a hit. Hull HP/silencing per frigate (shots only count within HULL_GUN_RANGE 25 of it), cross-
                        current only in the last 40 before each. Nothing spawns in each gap's run-in
                        (inShipClearZone). "N FRIGATES LEFT" banner per pass. game.js holds obstacles
                        still while a hull holds the canoe (they used to slide on into the gap). Used to chain straight into the Warship chase below the instant the gap

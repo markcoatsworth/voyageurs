@@ -117,6 +117,12 @@ const PLAY_ONCE = new Set([OPENING_TRACK.src, ...Object.values(REGION_ENTRY_TRAC
 // track happens to be playing. Once it ends (or the fight resolves first —
 // see endBossTrack()), the normal shuffle picks back up right where it
 // left off, not from scratch.
+// Re-encoded from a new recording ("Thomas Arne - Rule Britannia 2.wav"),
+// straight to MP3 with no loudness normalization, by request (to test as
+// supplied). The first export measured -21.3 LUFS, on the catalog's -21,
+// and wasn't loud enough over the cannon fire; the WAV was turned up and
+// re-exported — -18.3 LUFS, then (still not loud enough) turned up again:
+// -16.3 LUFS, ~5 dB over the rest; then re-adjusted to -17.0 LUFS.
 const BOSS_TRACK = { src: '/audio/rule-britannia.mp3', title: 'Rule, Britannia!', artist: 'Thomas Arne' };
 // Same deal for the Diable fight at the head of the Chasse-galerie — the
 // Devil is a fiddler, so his fight gets a reel. Reserved for that fight

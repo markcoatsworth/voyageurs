@@ -185,6 +185,13 @@ export const MUSKET_DAMAGE_TO_HULL = 18;
 // so a bullet advancing in discrete dt-sized steps can't tunnel through the
 // band between two frames without ever landing inside it.
 const HULL_HIT_D_TOLERANCE = 1.5;
+// Your shots only tell on a frigate while the canoe is within this far of
+// it. A bullet carries ~70 units (weapons.js: 35 u/s for 2s), so a held
+// trigger used to silence a frigate long before you were anywhere near it
+// — "I can just unload a volley of gunfire from far away and disable it
+// long before I get anywhere close to it". 25: a little before it comes
+// on screen (~10 ahead), not from the far end of the reach.
+const HULL_GUN_RANGE = 25;
 const SPARK_LIFETIME = 0.35;
 
 // Which bank frigate i leaves open: alternating, from the first ship's.
@@ -390,6 +397,8 @@ export function createBlockade() {
         for (let i = 0; i < SHIP_COUNT; i++) {
           if (silenced[i]) continue;
           const shipD = BLOCKADE_SHIPS[i];
+          // Out of range — shots fly past/over without telling (HULL_GUN_RANGE).
+          if (shipD - playerFlowDistance > HULL_GUN_RANGE) continue;
           const { hullLo, hullHi } = gapBounds(gapSideOf(firstGapSide, i), shipD);
           for (const b of bullets) {
             if (hitBullets.includes(b)) continue;
