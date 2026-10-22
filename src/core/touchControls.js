@@ -80,6 +80,29 @@ export function createTouchControls(input) {
     });
   }
 
+  // Sliding a thumb from one key to another switches to the key now under
+  // it — rock ← to → (or onto ↑) without lifting. Without this each key kept
+  // the finger that pressed it (pointer capture), so changing direction
+  // meant lifting and tapping again — most of why the pad "felt less
+  // responsive" than the keyboard. Sliding off every key keeps the last one
+  // held, as a thumb drifting off the pad's edge mid-turn means to.
+  function keyAt(x, y) {
+    const el = document.elementFromPoint?.(x, y);
+    for (const dir of DIRS) if (el && (el === arrows[dir] || arrows[dir].contains(el))) return dir;
+    return null;
+  }
+  document.addEventListener('pointermove', (e) => {
+    const from = heldBy.get(e.pointerId);
+    if (from === undefined) return;
+    const to = keyAt(e.clientX, e.clientY);
+    if (!to || to === from) return;
+    heldBy.set(e.pointerId, to);
+    counts[from] = Math.max(0, counts[from] - 1);
+    counts[to] += 1;
+    sync(from);
+    sync(to);
+  });
+
   // Release on lift/cancel wherever it happens — captured to this key or not.
   document.addEventListener('pointerup', (e) => release(e.pointerId));
   document.addEventListener('pointercancel', (e) => release(e.pointerId));

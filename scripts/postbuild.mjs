@@ -18,8 +18,9 @@ if (existsSync(strip)) {
 }
 
 // Stamp dist/index.html with the version + real build time + git SHA,
-// replacing the __BUILD_STAMP__ placeholder. This is the corner badge's
-// whole point: a deployed page that still shows an old stamp means a stale
+// replacing the __BUILD_STAMP__ placeholder (index.html's voyageurs-build
+// meta tag — it was a visible corner badge until that was dropped). The
+// point: a deployed page that still carries an old stamp means a stale
 // index.html is being served (browser heuristic cache, a proxy, an
 // unreloaded tab) — not that the deploy didn't happen.
 const indexPath = resolve(root, 'dist/index.html');
@@ -57,7 +58,7 @@ if (existsSync(indexPath)) {
   const html = readFileSync(indexPath, 'utf8');
   if (html.includes('__BUILD_STAMP__')) {
     writeFileSync(indexPath, html.replace('__BUILD_STAMP__', stamp));
-    console.log(`postbuild: stamped build badge — ${stamp}`);
+    console.log(`postbuild: stamped build — ${stamp}`);
   } else {
     console.warn('postbuild: __BUILD_STAMP__ placeholder not found in dist/index.html');
   }

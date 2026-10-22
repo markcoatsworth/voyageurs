@@ -106,6 +106,29 @@ html, body {
   }
 }
 
+/* Phones: the left column (this HUD, then the now-playing card under it)
+   is spaced to end level with the bottom of the minimap beside it —
+   main.js's alignHudToMinimap() sets --hud-gap, spreading whatever room
+   there is evenly between the rows; 4px is the tight starting point it
+   measures from. Captions above their bars, as on desktop (a two-column
+   "caption beside bar" cut was tried and walked back); the fur count a
+   touch smaller than desktop's 22. */
+@media (hover: none) and (pointer: coarse) {
+  #top-left-panel,
+  #hud {
+    gap: var(--hud-gap, 4px);
+  }
+  #hud-score {
+    font-size: 18px;
+  }
+  /* Each caption tight over its own bar (2px), whatever --hud-gap is —
+     alignHudToMinimap() leaves these two gaps out of the share-out. */
+  #hud-speed-label,
+  #hud-health-label {
+    margin-bottom: calc(2px - var(--hud-gap, 4px));
+  }
+}
+
 #hud-speed-fill {
   height: 100%;
   width: 30%;
@@ -521,6 +544,36 @@ html, body {
   .np-title { font-size: 9px; }
 }
 
+/* Phones: one compact row. The "NOW PLAYING" heading goes; the bouncing
+   bars sit to the left of the title and artist; and each of those is held
+   to a single line (cut with "…" if it doesn't fit) rather than wrapping
+   — together with the compact HUD above (#hud's own phone rule) it keeps
+   the card clear of the top of the game screen, which it used to hang
+   30-45px into. Still clear of the minimap beside it at 220 wide. */
+@media (hover: none) and (pointer: coarse) {
+  #now-playing {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    max-width: 220px;
+    padding: 7px 10px;
+  }
+  .np-label { display: none; }
+  .np-head { margin-bottom: 0; }
+  .np-body { min-width: 0; }
+  .np-title,
+  .np-artist {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .np-artist { margin-top: 3px; }
+  /* No ♪ before the artist on phones: Press Start 2P has no such glyph, a
+     phone's fallback drew it as a comma, and the two spaces after it
+     pushed the name out of line with the title above. */
+  .np-artist::before { content: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   #now-playing {
     transform: none;
@@ -884,6 +937,78 @@ button:hover {
   }
 }
 
+/* A phone on its side: the now-playing card fits the narrow margin beside
+   the game screen (--side-room, from main.js) instead of portrait's 220px,
+   which ran longer titles out over the screen — and gets its lines back
+   instead: the title wraps to three lines, the artist to two, before "…"
+   (a line is only ~11 characters here; two cut "Reel du Gouvernement"
+   and "Gigue du Poteau Blanc"). Words break only when one alone is longer
+   than a line. A pixel smaller and a little tighter than portrait. */
+body.touch-landscape #now-playing {
+  max-width: var(--side-room, 130px);
+  gap: 4px;
+  padding: 6px;
+}
+body.touch-landscape .np-title,
+body.touch-landscape .np-artist {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+/* Slimmer bars here (2px, 1px apart): the 12px gap off the screen left the
+   text a few px short of a 12-letter line, and "Gouvernement" split. */
+body.touch-landscape .np-eq { gap: 1px; }
+body.touch-landscape .np-eq span { width: 2px; }
+body.touch-landscape .np-title {
+  font-size: 8px;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+body.touch-landscape .np-artist { font-size: 7px; }
+
+/* A phone, either way up (main.js toggles body.touch-bare): no keycaps —
+   the outlined keys are really the desktop "which keys to press" cue — just
+   bigger arrowheads, with a dark halo so they read over the river, still
+   red while held. The touch targets are the same squares as before (--k,
+   sized by main.js — to fit the margin beside the game screen on its side,
+   thumb-sized under it held upright). First landscape only; then portrait
+   too ("replace the ... buttons in portrait mode with the same borderless
+   buttons and layout"). */
+body.touch-bare #steer-pad {
+  --gap: calc(var(--k) * 0.05); /* keycap spacing isn't needed with no keycaps */
+}
+body.touch-bare .steer-arrow {
+  background: transparent;
+  border-color: transparent;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)) drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.6));
+}
+body.touch-bare .steer-up::before,
+body.touch-bare .steer-down::before {
+  width: calc(var(--k) * 0.86);
+  height: calc(var(--k) * 0.66);
+}
+body.touch-bare .steer-left::before,
+body.touch-bare .steer-right::before {
+  width: calc(var(--k) * 0.66);
+  height: calc(var(--k) * 0.86);
+}
+/* ← and → halfway up, level with the gap between ↑ and ↓ — a cross, not
+   the keyboard's inverted T ("vertically centered relative to the up and
+   down arrows"). Same touch squares, same pad box. */
+body.touch-bare .steer-left,
+body.touch-bare .steer-right {
+  top: calc((100% - var(--k)) / 2);
+  bottom: auto;
+}
+body.touch-bare .steer-arrow.active {
+  background: transparent;
+  border-color: transparent;
+}
+
 /* Desktop: a cue, not a control — label it. Sizing/layout is all inherited
    from the base rules above now. */
 @media (hover: hover) and (pointer: fine) {
@@ -1011,6 +1136,81 @@ button:hover {
   border-color: #ff6b6b;
   transform: none;
   box-shadow: none;
+}
+
+/* The gun icons inside the fire buttons (main.js's wireFireButton) — the
+   phone's button faces. Hidden on desktop, where the Z/X keycap cue stays. */
+.weapon-icon { display: none; }
+
+/* Phones: console-style round buttons on a diagonal instead of Z/X
+   keycaps — "Z ... only applies to keyboards". The pistol at the bottom-
+   left, the musket up and to its right (hidden until you have it, as
+   before), both the same size: the first cut gave the pistol (fired most)
+   a bigger button than the musket, which read backwards — the bigger gun
+   on the smaller button. Each shows its gun;
+   holding one keeps firing (main.js). The pad's box is fixed so its
+   placement (positionWeaponPad) doesn't jump when the musket appears. */
+@media (hover: none) and (pointer: coarse) {
+  #weapon-dpad {
+    --fire-big: 70px;
+    --fire-small: 70px;
+    display: block;
+    width: calc(var(--fire-big) + var(--fire-small) * 0.72);
+    height: calc(var(--fire-big) + var(--fire-small) * 0.62);
+  }
+  /* The button is the 70px touch area; the circle you see is drawn 65px
+     (::before, inset 2.5px) — "visually a bit smaller ... while keeping
+     the click area the same size". */
+  #weapon-dpad .weapon-key {
+    --fire-visual-inset: 2.5px;
+    position: absolute;
+    border-radius: 50%;
+    border-color: transparent;
+    background: transparent;
+    font-size: 0; /* the Z/X text — the icon is the face here */
+  }
+  #weapon-dpad .weapon-key::before {
+    content: '';
+    position: absolute;
+    inset: var(--fire-visual-inset);
+    border-radius: 50%;
+    border: 2px solid rgba(244, 234, 210, 0.45);
+    background: rgba(10, 14, 20, 0.45);
+    pointer-events: none;
+  }
+  #weapon-dpad .weapon-key .weapon-icon { position: relative; }
+  #fire-z {
+    left: 0;
+    bottom: 0;
+    width: var(--fire-big);
+    height: var(--fire-big);
+  }
+  #fire-x {
+    right: 0;
+    top: 0;
+    width: var(--fire-small);
+    height: var(--fire-small);
+  }
+  .weapon-icon {
+    display: block;
+    width: 67%; /* ~72% of the 65px circle you see */
+    height: 67%;
+    pointer-events: none;
+  }
+  #weapon-dpad .weapon-key.active,
+  #weapon-dpad .weapon-key:active {
+    border-color: transparent;
+    background: transparent;
+  }
+  #weapon-dpad .weapon-key.active::before,
+  #weapon-dpad .weapon-key:active::before {
+    border-color: #ff6b6b;
+    background: rgba(214, 69, 69, 0.35);
+  }
+  #weapon-dpad .weapon-key.active .weapon-icon,
+  #weapon-dpad .weapon-key:active .weapon-icon {
+    filter: sepia(1) saturate(6) hue-rotate(-30deg);
+  }
 }
 
 /* Desktop: the keyboard's Z/X are the real controls, so this is a labelled

@@ -705,8 +705,25 @@ export function createMinimap() {
 
   wrap.appendChild(svg);
 
+  // Height / width of the map's window — 1 (square) everywhere except a
+  // phone held upright, where main.js's fitMinimapAboveScreen() makes the
+  // widget shorter than it is wide to clear the game screen. The viewBox
+  // follows, so the map shows a wider-than-tall slice rather than being
+  // letterboxed or squashed.
+  let aspect = 1;
+  let lastP = null;
+  function frame(p) {
+    const half = VIEW_SIZE / 2;
+    const h = VIEW_SIZE * aspect;
+    svg.setAttribute('viewBox', `${(p.x - half).toFixed(2)} ${(p.y - h / 2).toFixed(2)} ${VIEW_SIZE} ${h.toFixed(2)}`);
+  }
+
   return {
     el: wrap,
+    setAspect(a) {
+      aspect = a > 0 && Number.isFinite(a) ? a : 1;
+      if (lastP) frame(lastP);
+    },
     labelLayout,
     // segmentId + flowDistance, not a single flowDistance — flowDistance
     // alone no longer says where the canoe is on the *real* map now that
@@ -720,8 +737,8 @@ export function createMinimap() {
       const p = seg.pointAtCumulative(cum);
       marker.setAttribute('cx', p.x.toFixed(2));
       marker.setAttribute('cy', p.y.toFixed(2));
-      const half = VIEW_SIZE / 2;
-      svg.setAttribute('viewBox', `${(p.x - half).toFixed(2)} ${(p.y - half).toFixed(2)} ${VIEW_SIZE} ${VIEW_SIZE}`);
+      lastP = p;
+      frame(p);
     },
   };
 }

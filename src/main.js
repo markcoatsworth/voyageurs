@@ -1,4 +1,4 @@
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from './shared/config.js';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, TALL_SCREEN } from './shared/config.js';
 import { createObstacleField } from './world/obstacles.js';
 import { createWaterRenderer } from './world/waterGL.js';
 import { createMusic, regionForSegment } from './audio/music.js';
@@ -7,7 +7,7 @@ import { createMinimap } from './world/minimap.js';
 import { createTouchControls, isTouchPrimary } from './core/touchControls.js';
 import { createDebugMenu } from './core/debugMenu.js';
 import { createTitleScene } from './world/titleScene.js';
-import { speakerIcon, pauseIcon, playIcon } from './core/hudIcons.js';
+import { speakerIcon, pauseIcon, playIcon, pistolIcon, musketIcon } from './core/hudIcons.js';
 import { townBannerLayout } from './core/townBanner.js';
 import { createSaveIndicator } from './core/saveIndicator.js';
 import { Input } from './core/input.js';
@@ -694,9 +694,8 @@ const saveIndicator = createSaveIndicator();
 screen.appendChild(saveIndicator.element);
 // Bottom-right, except where something fixed sits over that corner of the
 // screen: on a desktop window not much wider than the game, the MOVE keys
-// cue (#touch-dpad) hangs into the screen's bottom-right corner, and on a
-// wider one the BUILD badge (#build-version, index.html) can. Either would
-// cover it. For each one it collides with, it steps clear by whichever is
+// cue (#touch-dpad) hangs into the screen's bottom-right corner and would
+// cover it. (The BUILD badge used to be the other one; it's gone.) For each one it collides with, it steps clear by whichever is
 // the shorter move — left of it, or up above it — then checks again
 // against the rest. Re-run on resize and on each show (the dpad is
 // positioned by resize() too).
@@ -705,7 +704,7 @@ const SAVE_INDICATOR_EDGE = 6;
 // cue's "MOVE" caption is a #steer-pad::after hung above it (style.css),
 // outside the box getBoundingClientRect() reports, and the first cut of
 // this sat its bottom edge right on top of the caption.
-const SAVE_INDICATOR_AVOID = [{ id: 'touch-dpad', above: 20 }, { id: 'build-version', above: 0 }];
+const SAVE_INDICATOR_AVOID = [{ id: 'touch-dpad', above: 20 }];
 function placeSaveIndicator() {
   const el = saveIndicator.element;
   let right = SAVE_INDICATOR_EDGE;
@@ -771,7 +770,15 @@ const MINIMAP_MAX = 280;
 
 const dpad = document.getElementById('touch-dpad'); // the steer pad wrapper
 const weaponDpad = document.getElementById('weapon-dpad'); // the fire-button column, opposite side
-const DPAD_GAP = 4; // breathing room between the canvas and the steer pad
+// Breathing room between the canvas and the steer pad (and, on phones, the
+// FIRE pad beside it). Was 4 — "a tiny bit more buffer between the game
+// window and the other UI elements".
+const DPAD_GAP = 12;
+// A phone on its side (resize()'s touchLandscape): the bare arrow pad keeps
+// this far off the game screen's edge and the window's side, and this far
+// off the window's bottom.
+const LANDSCAPE_PAD_EDGE = 8;
+const LANDSCAPE_PAD_BOTTOM = 16;
 
 // Keep the weapon controls (index.html #weapon-dpad) level with the move
 // controls, straight across on the left edge: vertically centred on the move
@@ -783,6 +790,7 @@ const DPAD_GAP = 4; // breathing room between the canvas and the steer pad
 // being display:none, since resize() may not fire around then. A zero-size
 // rect (still hidden) just parks it at the cluster's centre — harmless, and
 // the follow-up call once it's visible fixes it.
+const FIRE_CAPTION_PX = 14; // the touch caption: 8px text + 6px margin, over the pad
 function positionWeaponPad() {
   const r = dpad.getBoundingClientRect();
   const wr = weaponDpad.getBoundingClientRect();
@@ -799,7 +807,16 @@ function positionWeaponPad() {
   // exactly the window shape where the cluster is already overlapping the
   // canvas anyway.
   const centred = r.top + r.height / 2 - wr.height / 2;
-  weaponDpad.style.top = `${Math.round(Math.min(centred, window.innerHeight - wr.height))}px`;
+  let top = Math.min(centred, window.innerHeight - wr.height);
+  // On a phone held upright both pads sit below the game screen, and the
+  // FIRE column is taller than the arrow cluster it centres on — its caption
+  // (style.css's #weapon-dpad::after, ~14px over the pad) reached up to the
+  // screen's bottom edge. Keep it DPAD_GAP clear, like the arrows.
+  const s = screen.getBoundingClientRect();
+  if (isTouchPrimary() && wr.height && r.top >= s.bottom) {
+    top = Math.max(top, s.bottom + DPAD_GAP + FIRE_CAPTION_PX);
+  }
+  weaponDpad.style.top = `${Math.round(top)}px`;
 }
 
 function resize() {
@@ -825,8 +842,12 @@ function resize() {
   // margin (minus its own edge gaps) instead of sitting at a fixed size
   // that's lost in a much bigger sidebar on a wide window.
   const sidebarWidth = (window.innerWidth - canvasWidth) / 2;
-  const minimapMin = isTouchPrimary() ? MOBILE_MINIMAP_MIN : MINIMAP_MIN;
-  const size = Math.round(Math.max(minimapMin, Math.min(MINIMAP_MAX, sidebarWidth - 32)));
+  // A phone on its side has only a narrow margin beside the screen — the
+  // usual phone minimum (150) poked the minimap into the game screen there,
+  // so it just fills the margin (less #right-panel's 16px edge and a gap).
+  const touchSide = isTouchPrimary() && window.innerWidth > window.innerHeight;
+  const minimapMin = touchSide ? 60 : isTouchPrimary() ? MOBILE_MINIMAP_MIN : MINIMAP_MIN;
+  const size = Math.round(Math.max(minimapMin, Math.min(MINIMAP_MAX, sidebarWidth - (touchSide ? 28 : 32))));
   minimap.el.style.width = `${size}px`;
 
   // Keycap size (style.css's --key) drives both the MOVE pad (#steer-pad)
@@ -837,12 +858,32 @@ function resize() {
   //     scaled a little to the viewport but held in a comfortable tap range.
   //   - Desktop: it's a "how to play" cue — fill the sidebar column beside
   //     the game, as wide as fits without running into the minimap above.
-  if (isTouchPrimary()) {
+  // A phone on its side: the arrows go bare (style.css's body.touch-landscape
+  // — no keycaps, bigger arrowheads) and are sized to fit the margin beside
+  // the game screen rather than a thumb-size that hung into it.
+  const touchLandscape = isTouchPrimary() && window.innerWidth > window.innerHeight;
+  document.body.classList.toggle('touch-landscape', touchLandscape);
+  // Bare arrows (no keycaps, a cross) on any phone — style.css.
+  document.body.classList.toggle('touch-bare', isTouchPrimary());
+  // The room beside the screen on that side, less #top-left-panel's 16px
+  // edge and a 12px gap — the same 12 the minimap keeps off the screen's
+  // other side (its width is sidebarWidth - 28 there too: 16 + 12). style.css
+  // holds the now-playing card to it.
+  document.documentElement.style.setProperty('--side-room', `${Math.max(100, Math.round(sidebarWidth - 28))}px`);
+  if (touchLandscape) {
+    // 3 keys + 2 gaps of 0.05 key (style.css closes the gaps up here).
+    const key = Math.round(Math.max(36, Math.min(72, (sidebarWidth - 2 * LANDSCAPE_PAD_EDGE) / 3.1)));
+    document.documentElement.style.setProperty('--key', `${key}px`);
+  } else if (isTouchPrimary()) {
     // Bigger targets — the pad is what people are actually dodging with, and
     // small keys were costing hits. Scales with the viewport's short side
     // (so portrait doesn't blow it up) and stays in a thumb-friendly band.
     const shortSide = Math.min(window.innerWidth, window.innerHeight);
-    const key = Math.round(Math.max(58, Math.min(80, shortSide * 0.22)));
+    // Capped at 72 (was 80): "make the up-left-down-right buttons just a
+    // tiny bit smaller", for a little more room around the game screen.
+    // (The arrows are bare now — body.touch-bare — so this is the size of
+    // each touch square; the arrowhead fills most of it.)
+    const key = Math.round(Math.max(54, Math.min(72, shortSide * 0.2)));
     document.documentElement.style.setProperty('--key', `${key}px`);
   } else {
     const byWidth = (sidebarWidth - 24) / 3.32;
@@ -870,7 +911,13 @@ function resize() {
   const rightMargin = window.innerWidth - screenRect.right;
   const bottomMargin = window.innerHeight - screenRect.bottom;
 
-  if (rightMargin >= dpadRect.width + DPAD_GAP) {
+  if (touchLandscape) {
+    // Centred in the margin to the right of the screen, sitting low for the
+    // thumb — sized above to fit inside it, so it never reaches the screen.
+    dpad.style.right = `${Math.round(Math.max(LANDSCAPE_PAD_EDGE, (rightMargin - dpadRect.width) / 2))}px`;
+    dpad.style.bottom = 'auto';
+    dpad.style.top = `${Math.round(window.innerHeight - dpadRect.height - LANDSCAPE_PAD_BOTTOM)}px`;
+  } else if (rightMargin >= dpadRect.width + DPAD_GAP) {
     dpad.style.right = '20px';
     // Centre it vertically in the empty column between the minimap (which
     // sits at the top of this same margin) and the bottom of the window,
@@ -909,9 +956,110 @@ function resize() {
     dpad.style.top = `${Math.round(window.innerHeight - dpadRect.height)}px`;
   }
 
+  fitMinimapAboveScreen();
+  alignHudToMinimap();
+  placeBossBarsOnScreen();
   positionWeaponPad();
   fitTownBanner();
   placeSaveIndicator();
+}
+
+// Phones only: the minimap (square, top-right, under the mute/pause
+// buttons) hung down over the top of the game screen (held upright) or
+// onto the steer pad (landscape) — "On mobile only,
+// can we reduce the vertical height of the minimap so it doesn't overlap
+// the game window?" It keeps its width and gets only as tall as the gap
+// above the screen allows (a wider, shorter slice of the map — see
+// minimap.js's setAspect), never shorter than MOBILE_MINIMAP_MIN_H. Desktop
+// keeps the square: there it sits in the margin beside the game anyway.
+const MOBILE_MINIMAP_MIN_H = 70;
+// Was 6 — "a little bit shorter" and "a tiny bit more buffer".
+const MINIMAP_SCREEN_GAP = 12;
+function fitMinimapAboveScreen() {
+  const el = minimap.el;
+  el.style.height = '';
+  el.style.aspectRatio = '';
+  minimap.setAspect(1);
+  if (!isTouchPrimary()) return;
+  const m = el.getBoundingClientRect();
+  if (!m.width) return;
+  // Whatever's below the minimap in its own column: the game screen (held
+  // upright, the screen spans the full width under it) or, in landscape —
+  // "the minimap is way too big and it overlaps with the up-left-down-right
+  // arrows" — the steer pad sharing the right-hand column under it. The
+  // nearest one sets how tall it may be.
+  const below = [screen, dpad]
+    .map((e) => e.getBoundingClientRect())
+    .filter((r) => r.width && r.top > m.top && r.left < m.right && r.right > m.left);
+  if (!below.length) return;
+  const limit = Math.min(...below.map((r) => r.top)) - MINIMAP_SCREEN_GAP;
+  if (m.bottom <= limit + 0.5) return;
+  const h = Math.max(MOBILE_MINIMAP_MIN_H, Math.floor(limit - m.top));
+  el.style.aspectRatio = 'auto';
+  el.style.height = `${h}px`;
+  // Border-box: the map inside is the box less the 3px border each side.
+  minimap.setAspect((h - 6) / (m.width - 6));
+}
+
+// On a phone held upright Le Diable's title + health bar (#hud-diable) ran
+// across the HUD at the top of the window — "move these down to overlap the
+// top of the game window". Pinned just inside the screen's top edge there
+// instead; diable.js drops him and his fire (STAGE_DROP) to make room.
+// Elsewhere (desktop, landscape) the stylesheet's top: 12px already sits
+// over the game screen.
+const BOSS_BAR_INSET = 6;
+// The British Warship's hull bar (#hud-blockade — the element's older name)
+// sat in the same spot and gets the same treatment ("give the British
+// Warship the same fix"). Her ship needs no moving: she orbits a few units
+// ahead of the canoe, well down the screen from the bar.
+function placeBossBarsOnScreen() {
+  const top = TALL_SCREEN ? `${Math.round(screen.getBoundingClientRect().top + BOSS_BAR_INSET)}px` : '';
+  for (const id of ['hud-diable', 'hud-blockade']) {
+    const bar = document.getElementById(id);
+    if (bar) bar.style.top = top;
+  }
+}
+
+// Phones: space the left column — the HUD rows, then the now-playing card —
+// so its bottom sits level with the minimap's ("fill the vertical space
+// between the HUD and the game window, so that the bottom of the HUD is
+// vertically aligned along the bottom with the minimap"). Measured at the
+// tight HUD_GAP_MIN, then whatever room is left before the minimap's bottom
+// is shared evenly between the gaps (style.css's --hud-gap). Re-run on
+// resize, when a track's card is filled in (an empty card is shorter), and
+// when the HUD itself shows or hides (title screen, ashore). With the HUD
+// hidden there's nothing to line up — the last spacing stands.
+const HUD_GAP_MIN = 4;
+// On a phone on its side the column rarely has room to stretch (the card
+// runs to several lines there), so it sat at HUD_GAP_MIN — "a tiny bit more
+// spacing (maybe 3-5px) between the individual cards". The caption-to-bar
+// gaps are pinned in style.css and don't move.
+const HUD_GAP_MIN_LANDSCAPE = 8;
+function alignHudToMinimap() {
+  const root = document.documentElement;
+  const hud = document.getElementById('hud');
+  if (!isTouchPrimary() || !hud || hud.classList.contains('hidden')) return;
+  const min = document.body.classList.contains('touch-landscape') ? HUD_GAP_MIN_LANDSCAPE : HUD_GAP_MIN;
+  root.style.setProperty('--hud-gap', `${min}px`);
+  const target = minimap.el.getBoundingClientRect().bottom;
+  // Looked up here, not via nowPlayingEl: resize() first runs before that
+  // const is declared further down this file.
+  const np = document.getElementById('now-playing');
+  const card = np && np.childElementCount ? np : null;
+  const bottom = (card || hud).getBoundingClientRect().bottom;
+  // Every gap between visible rows takes a share — except each caption's
+  // gap to its own bar, which style.css pins at 2px.
+  const rows = [...hud.children].filter((c) => c.getBoundingClientRect().height > 0);
+  const pinned = rows.filter((c) => c.id === 'hud-health-label' || c.id === 'hud-speed-label').length;
+  const gaps = rows.length - 1 - pinned + (card ? 1 : 0);
+  const extra = target - bottom;
+  if (!target || gaps <= 0 || extra <= 0) return;
+  root.style.setProperty('--hud-gap', `${(min + extra / gaps).toFixed(2)}px`);
+}
+{
+  const hud = document.getElementById('hud');
+  // (Guarded: the smoke test's DOM shim has no MutationObserver.)
+  if (hud && typeof MutationObserver !== 'undefined') new MutationObserver(alignHudToMinimap).observe(hud, { attributes: true, attributeFilter: ['class'] });
 }
 window.addEventListener('resize', resize);
 resize();
@@ -1005,9 +1153,17 @@ function showNowPlaying(track) {
   const artist = document.createElement('div');
   artist.className = 'np-artist';
   artist.textContent = track.artist;
-  nowPlayingEl.append(head, title, artist);
+  // Title + artist in their own box, so on a phone (style.css) the card can
+  // lay out as one row — the bouncing bars beside the two lines, no "NOW
+  // PLAYING" heading — and stay short enough to clear the game screen. On
+  // desktop the box is just a plain block under the heading, as before.
+  const body = document.createElement('div');
+  body.className = 'np-body';
+  body.append(title, artist);
+  nowPlayingEl.append(head, body);
 
   nowPlayingEl.classList.add('show');
+  alignHudToMinimap();
   syncMediaSession(track);
 }
 
@@ -1446,35 +1602,43 @@ window.addEventListener('keydown', (e) => {
 
 pauseBtn.addEventListener('click', togglePause);
 
-// The on-screen fire button (index.html #fire-z). Drives the exact same
-// path the Z key does — input.onWeaponFire, wired by game.js, which ignores
-// the shot unless you're actually paddling the river. One press = one shot.
-// The lit state mirrors input.js's keycap feedback so tap and keypress look
-// the same. Kept clear of whether the pad is currently shown — game.js
-// handles that; a press on a display:none button can't reach here anyway.
-const fireBtn = document.getElementById('fire-z');
-fireBtn.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  input.onWeaponFire?.('pistol');
-  fireBtn.classList.add('active');
-});
-const clearFireBtn = () => fireBtn.classList.remove('active');
-for (const evt of ['pointerup', 'pointercancel', 'pointerleave']) {
-  fireBtn.addEventListener(evt, clearFireBtn);
+// The on-screen fire buttons (index.html #fire-z pistol, #fire-x musket).
+// Drive the exact same path the Z/X keys do — input.onWeaponFire, wired by
+// game.js, which ignores the shot unless you're actually paddling the
+// river. On a phone they're round buttons with a gun on each (style.css's
+// touch rules; the icons go in here, the keys' Z/X text stays for desktop's
+// keycap cue), and HOLDING one keeps firing: loop() re-fires every held gun
+// each frame and weapons.js's own per-gun cooldown sets the rate (~6 shots
+// a second for the pistol, ~2 for the musket) — the same as holding Z on a
+// keyboard, whose key-repeat already did this. It used to be one press,
+// one shot. The lit state mirrors input.js's keycap feedback.
+const heldFire = new Set();
+function wireFireButton(btn, weapon, icon) {
+  if (!btn) return;
+  const face = document.createElement('span');
+  face.className = 'weapon-icon';
+  face.innerHTML = icon;
+  btn.appendChild(face);
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    input.onWeaponFire?.(weapon);
+    heldFire.add(weapon);
+    btn.classList.add('active');
+  });
+  const release = () => {
+    heldFire.delete(weapon);
+    btn.classList.remove('active');
+  };
+  for (const evt of ['pointerup', 'pointercancel', 'pointerleave']) btn.addEventListener(evt, release);
 }
-
-// The musket's own on-screen fire button (index.html #fire-x) — same
-// wiring as #fire-z above, one weapon name over.
-const fireMusketBtn = document.getElementById('fire-x');
-fireMusketBtn.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  input.onWeaponFire?.('musket');
-  fireMusketBtn.classList.add('active');
+wireFireButton(document.getElementById('fire-z'), 'pistol', pistolIcon());
+wireFireButton(document.getElementById('fire-x'), 'musket', musketIcon());
+// A blur (app switch, notification) can eat the pointerup — don't leave a
+// gun firing on its own.
+window.addEventListener('blur', () => {
+  heldFire.clear();
+  for (const id of ['fire-z', 'fire-x']) document.getElementById(id)?.classList.remove('active');
 });
-const clearFireMusketBtn = () => fireMusketBtn.classList.remove('active');
-for (const evt of ['pointerup', 'pointercancel', 'pointerleave']) {
-  fireMusketBtn.addEventListener(evt, clearFireMusketBtn);
-}
 
 let lastTime = performance.now();
 let loopBroken = false;
@@ -1572,6 +1736,8 @@ function loop(now) {
   syncPauseBtn();
   syncTownBanner();
   if (game && !loopBroken) {
+    // Held fire buttons keep firing — see wireFireButton().
+    for (const weapon of heldFire) input.onWeaponFire?.(weapon);
     try {
       game.update(dt);
     } catch (err) {

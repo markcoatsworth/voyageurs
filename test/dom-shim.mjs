@@ -177,7 +177,14 @@ const windowShim = {
   removeEventListener: noop,
   requestAnimationFrame: noop,
   cancelAnimationFrame: noop,
-  matchMedia: () => ({ matches: false, addEventListener: noop, removeEventListener: noop, addListener: noop, removeListener: noop }),
+  // VOYAGEURS_TOUCH=1 makes this a phone held upright — the touch / no-hover
+  // / portrait queries match (touchControls.js's isTouchPrimary, config.js's
+  // TALL_SCREEN), so the phone tuning in game.js is what runs. Anything else
+  // (reduced motion, etc.) still reads false.
+  matchMedia: (q = '') => ({
+    matches: process.env.VOYAGEURS_TOUCH === '1' && /pointer:\s*coarse|hover:\s*none|orientation:\s*portrait/.test(q),
+    addEventListener: noop, removeEventListener: noop, addListener: noop, removeListener: noop,
+  }),
   getComputedStyle: () => ({ getPropertyValue: () => '' }),
   AudioContext: audioCtxShim,
   webkitAudioContext: audioCtxShim,

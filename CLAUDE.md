@@ -16,8 +16,10 @@ nginx on Cloud Run.
   any change works**. "build passes" is not verification — `vite build` never
   executes game code.
 - `npm run build` — `prebuild` runs the smoke test, `vite build`, then
-  `postbuild.mjs` (strips `dist/audio/src/`, stamps the build badge in
-  `dist/index.html` from `__BUILD_STAMP__`).
+  `postbuild.mjs` (strips `dist/audio/src/`, stamps the build into
+  `dist/index.html`'s hidden `<meta name="voyageurs-build">` from `__BUILD_STAMP__` —
+  it was a visible corner badge until that was removed; check a deploy with
+  `curl -s voyageurs-game.ca | grep voyageurs-build`).
 - Pre-commit hook (`.githooks/pre-commit`, enable with
   `git config core.hooksPath .githooks`) runs the smoke test. `--no-verify` to bypass.
 
@@ -30,8 +32,8 @@ Confirm the project/service before any `gcloud run deploy`. Never the
 
 Before a deploy meant to ship (not just a local check), run `npm run
 bump-build` and commit the resulting `build-number.txt` + `package.json`
-changes along with the rest of the change — it's what makes the on-page
-build badge's version (`0.1.<build number>` — no expectation of ever
+changes along with the rest of the change — it's what makes the page's
+build stamp's version (`0.1.<build number>` — no expectation of ever
 reaching a real "1.0"; the version exists to distinguish builds, not to
 promise semver) advance. It has to happen as its own committed step, not
 inside the build itself: `gcloud run deploy --source .` builds in an
@@ -57,7 +59,11 @@ src/
                        beginRun() is called from one of them; an explicit ?start= skips the menu.
                        body.at-title hides the in-game chrome while it's up
   shared/
-    config.js          320x220 internal res, PIXELS_PER_UNIT=16, worldToScreen, camera anchor
+    config.js          320x220 internal res — 320x320 on a phone held upright (TALL_SCREEN: touch + portrait,
+                       decided at load; ?tall=1/0 forces it; VOYAGEURS_TALL=1 for node) — PIXELS_PER_UNIT=16,
+                       worldToScreen, camera anchor. Anything meaning "just past the top of the screen" is
+                       derived from CANOE_SCREEN_Y, never a fixed number (path.js's RIDEAU_LEAD_CLEAR,
+                       chasseGalerie.js's ARENA_CLEAR). npm test re-runs a subset at 320 tall (SMOKE_ONLY)
     hash.js            deterministic "distance bucket" pseudo-randomness for stateless scenery
   core/
     game.js            (~1300 lines) game state, physics, HUD, per-frame draw, mode/segment machine
@@ -129,7 +135,9 @@ src/
                        dockHitZ() is never less than the drawn deck's half-depth — every visible plank
                        docks you (smoke test walks each drawn deck)
     villageScene.js    on-foot scene at a dock; walk back onto the dock to re-board
-    minimap.js         moving SVG locator map over the real three-way geography. Village names are
+    minimap.js         moving SVG locator map over the real three-way geography. Square, except on a phone
+                       held upright: main.js's fitMinimapAboveScreen() makes it only as tall as the gap above
+                       the game screen (min 70px) and setAspect() widens the viewBox to match. Village names are
                        placed together by layoutLabels() (route.js's labelPos is only the preferred
                        spot) so every name keeps LABEL_MARGIN off every other name and icon —
                        asserted by the smoke test. Press Start 2P is 1em/char, so names are huge.

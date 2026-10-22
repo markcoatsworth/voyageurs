@@ -72,3 +72,31 @@ export function playIcon() {
   }
   return svg(rects);
 }
+
+// The phone fire buttons' faces (main.js's round #fire-z / #fire-x): a
+// flintlock pistol and a long musket, side-on, muzzle to the right — so a
+// thumb reads "which gun" rather than the keyboard's Z/X. Same white-over-
+// black-outline pixel idiom as the speaker above.
+const PISTOL = [
+  [5, 5, 10, 2], // barrel
+  [3, 5, 4, 4], // lock and breech
+  [4, 3, 2, 2], // hammer
+  [3, 9, 3, 2], // grip, raking back and down
+  [2, 11, 3, 2],
+  [6, 9, 1, 2], // trigger guard
+  [7, 10, 2, 1],
+];
+const MUSKET = [
+  [4, 6, 12, 1], // the long barrel
+  [5, 7, 8, 1], // forestock under it
+  [0, 7, 6, 2], // the butt stock
+  [0, 9, 3, 2],
+  [5, 4, 1, 2], // hammer
+  [6, 9, 1, 1], // trigger
+];
+export function pistolIcon() {
+  return svg(PISTOL);
+}
+export function musketIcon() {
+  return svg(MUSKET);
+}

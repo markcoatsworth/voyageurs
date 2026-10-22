@@ -12,6 +12,7 @@
 // re-evaluated every frame.
 
 import { hashRange } from '../../shared/hash.js';
+import { CANOE_SCREEN_Y, PIXELS_PER_UNIT } from '../../shared/config.js';
 import {
   featureIslandAt, FEATURE_ISLAND_RANGE, lachineRapidsAt, LACHINE_RAPIDS_RANGE,
   southIslandAt as southIslandAtBaked, SOUTH_ISLAND_RANGE,
@@ -106,11 +107,13 @@ export const RIDEAU_LEAD_IN = 40;
 // plus the trees on the banks beside it, with room to spare.
 export const RIDEAU_LEAD_BEHIND = 12;
 // The ease only begins this far past the entry point — beyond the top of the
-// screen (~10.3 units ahead of the canoe) — so every row on screen at the
-// swap is pure Ottawa; the blend scrolls in from the top as ordinary river.
-// Starting it at the canoe left the top rows already ~0.4 units off at the
-// swap, a visible twitch.
-export const RIDEAU_LEAD_CLEAR = 12;
+// screen (~10.3 units ahead of the canoe; ~16.6 on a phone held upright,
+// config.js's TALL_SCREEN) — so every row on screen at the swap is pure
+// Ottawa; the blend scrolls in from the top as ordinary river. Starting it
+// at the canoe left the top rows already ~0.4 units off at the swap, a
+// visible twitch. 12 on the usual screen, as tuned; past the top of the
+// taller one there.
+export const RIDEAU_LEAD_CLEAR = Math.max(12, Math.ceil(CANOE_SCREEN_Y / PIXELS_PER_UNIT) + 2);
 function rideauLeadK(d) {
   const p = Math.min(1, Math.max(0, (d - RIDEAU_ENTRY_D - RIDEAU_LEAD_CLEAR) / RIDEAU_LEAD_IN));
   return p * p * (3 - 2 * p);

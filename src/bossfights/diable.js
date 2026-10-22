@@ -15,7 +15,7 @@
 // on reflex. Phases / the drag attack / imps / a weak point all come later —
 // see the design notes this came out of.
 import {
-  CANVAS_WIDTH, CANVAS_HEIGHT,
+  CANVAS_WIDTH, CANVAS_HEIGHT, TALL_SCREEN,
 } from '../shared/config.js';
 import { drawImpact, impactLife, impactTierFor } from '../world/impact.js';
 import { FLIGHT_END } from './chasseGalerie.js';
@@ -101,7 +101,14 @@ const CONTACT_DAMAGE = 30;
 // so there's a real arena between them for the fire to cross.
 const BODY_HALF_W = 34;       // collision half-extent (his suited torso) for incoming bullets
 const BODY_HALF_H = 32;
-const BASE_CY = 64;           // torso centre at rest — head & horns clear the top edge
+// On a phone held upright (config.js's TALL_SCREEN) his title and health
+// bar sit just inside the top of the game screen (main.js) — they'd been
+// running across the HUD above it — so he and his wall of fire stand
+// STAGE_DROP px lower, clear of them ("push the devil and flames down a bit
+// further so they don't collide with the title and health bar"). The tall
+// screen has the room: the canoe is still ~170px below him.
+const STAGE_DROP = TALL_SCREEN ? 40 : 0;
+const BASE_CY = 64 + STAGE_DROP; // torso centre at rest — head & horns clear the top edge (or the bar)
 const SWAY_X = CANVAS_WIDTH * 0.17;
 
 // --- his fireballs
@@ -494,6 +501,9 @@ function drawHellfireWall(ctx, cx, time, k) {
   if (k <= 0.01) return;
   ctx.save();
   ctx.globalAlpha = 1;
+  // Lowered with him (STAGE_DROP); the glow still fills right up to the top
+  // edge, so there's no dark strip above it.
+  ctx.translate(0, STAGE_DROP);
   const flick = 0.8 + Math.sin(time * 17) * 0.1 + Math.sin(time * 6.3) * 0.07;
   const a = clamp01(k) * flick;
 
@@ -503,7 +513,7 @@ function drawHellfireWall(ctx, cx, time, k) {
   glow.addColorStop(0.58, `rgba(150,34,6,${(0.4 * a).toFixed(3)})`);
   glow.addColorStop(1, 'rgba(30,4,0,0)');
   ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT * 0.72);
+  ctx.fillRect(0, -STAGE_DROP, CANVAS_WIDTH, CANVAS_HEIGHT * 0.72);
 
   // tongues of flame licking up along the top edge
   for (let i = 0; i < 12; i++) {

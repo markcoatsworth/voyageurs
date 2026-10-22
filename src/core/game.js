@@ -32,18 +32,32 @@ import { isTouchPrimary } from './touchControls.js';
 // same numbers that felt right on desktop consistently played as "way too
 // fast" on touch. Scale forward-motion constants down for touch specifically
 // rather than changing the feel for everyone.
-const MOBILE_SPEED_SCALE = 0.45;
+//
+// Was 0.45, with the paddle's top speed and acceleration cut further still
+// (FWD_MAX_SCALE / FWD_ACCEL_SCALE below): net ~35% of desktop's top speed,
+// ~19% of its acceleration — "the boat is moving a lot slower" on a phone.
+// That was tuned on the 220-tall screen; held upright a phone now gets the
+// 320-tall one (config.js's TALL_SCREEN), 60% more river ahead, so most of
+// the "too fast on a small screen" reason went with it. 0.7, no extra cuts
+// — then 0.85: "the start speed is still a bit slow on mobile".
+const MOBILE_SPEED_SCALE = 0.85;
 const speedScale = isTouchPrimary() ? MOBILE_SPEED_SCALE : 1;
 // On top of the overall touch slowdown, the forward paddle specifically is
 // dialled down further for phone play: pushing "up" should *ease* the canoe
 // up to speed, not launch it, and top speed sits lower. Only touches how
 // "up" behaves — not the current, the brake, reverse, or steering.
-const FWD_ACCEL_SCALE = isTouchPrimary() ? 0.42 : 1; // gentler ramp
-const FWD_MAX_SCALE = isTouchPrimary() ? 0.78 : 1;   // lower ceiling
+// Both back to 1 (were 0.42 / 0.78) — see MOBILE_SPEED_SCALE.
+const FWD_ACCEL_SCALE = 1; // was a gentler ramp on touch
+const FWD_MAX_SCALE = 1;   // was a lower ceiling on touch
 // And when you let go of "up", the canoe settles back to its calm drift
 // speed quicker on touch — so "not pushing forward" reliably reads as slow
 // rather than coasting fast for ten-plus seconds.
-const DRIFT_DECEL_TOUCH_MULT = isTouchPrimary() ? 2.4 : 1;
+//
+// Gone (1 everywhere): it was 2.4 on touch, and on a phone your thumb leaves
+// ↑ to press ← or →, so every steer was a hard brake — "moving left and
+// right dramatically reduces my boat speed on mobile ... it almost grinds my
+// boat to a halt super quickly", where desktop eases off gradually.
+const DRIFT_DECEL_TOUCH_MULT = 1;
 
 // MIN_SPEED is really the ambient current's own speed — holding Down long
 // enough now overcomes it and actually paddles upstream (negative
@@ -106,12 +120,12 @@ const ACCEL = 7 * speedScale * FWD_ACCEL_SCALE;
 // ACCEL so the response is immediate.
 const BRAKE_DECEL = 17 * speedScale;
 const DECEL_DRIFT = 1.8 * speedScale;
-// Steering authority is halved for touch play: on a phone the pad is on/off,
-// so any nudge was full desktop steering and the canoe swung too hard.
-// Damping is unchanged, so it still settles promptly when you let go — it
-// just turns at half the rate while you're pushing.
-const STEER_ACCEL = 20 * (isTouchPrimary() ? 0.5 : 1);
-const STEER_MAX = 7 * (isTouchPrimary() ? 0.5 : 1);
+// Steering authority used to be halved for touch play (on a phone the pad is
+// on/off, so any nudge was full desktop steering and the canoe swung too
+// hard). Full desktop steering on touch now — halved, with the bow having
+// to swing round first, the pad felt sluggish.
+const STEER_ACCEL = 20;
+const STEER_MAX = 7;
 const STEER_DAMPING = 6;
 
 // --- Heading -------------------------------------------------------------
@@ -142,8 +156,7 @@ const HEADING_RESPONSE = 12;
 // Lateral thrust per unit of sin(heading). Derived from STEER_ACCEL, not
 // tuned on its own: at full lock sin(HEADING_MAX) * STEER_THRUST is exactly
 // the old steerInput * STEER_ACCEL, so the force the player commands is
-// unchanged and only its *source* moved to the heading. Keeps the touch
-// halving baked into STEER_ACCEL coming along for free, too.
+// unchanged and only its *source* moved to the heading.
 const STEER_THRUST = STEER_ACCEL / Math.sin(HEADING_MAX);
 // Heading held in the two arcade-dodge fights (Diable's arena, the Warship
 // chase), which assign lateralVX directly and bypass the thrust model
@@ -1659,7 +1672,7 @@ export class Game {
 
     // Diable fight: direct lateral control for instant dodging, matching the
     // vertical responsiveness. No accel ramp, no damping, and — critically —
-    // NOT run through the STEER_MAX clamp below, which is halved on touch
+    // NOT run through the STEER_MAX clamp below, which used to be halved on touch
     // and was quietly throttling this to a crawl. Releasing the key snaps
     // the canoe to a dead stop, same as the up/down dodge.
     if (this.diable.isHolding()) {

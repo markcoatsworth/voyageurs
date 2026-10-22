@@ -36,7 +36,11 @@ function restoreConsole() {
 }
 
 // Handles both sync and async scenario bodies — always await the result.
+// SMOKE_ONLY (a regex): run only the matching scenarios — how the
+// tall-screen pass at the end of this file runs its subset.
+const ONLY = process.env.SMOKE_ONLY ? new RegExp(process.env.SMOKE_ONLY) : null;
 async function step(name, fn) {
+  if (ONLY && !ONLY.test(name)) return;
   try {
     await fn();
     notes.push(`  ok   ${name}`);
@@ -1166,7 +1170,11 @@ await step('rideau: past Gatineau, a big "ENTERING UPPER CANADA" title card', as
   }
   // ...then "a bit further along the river": +26.
   if (Math.abs(UPPER_CANADA_FLAG_D - (SEGMENT_SHAPE_OFFSET.rideau + 26)) > 1e-9) throw new Error(`the Union Jacks are ${(UPPER_CANADA_FLAG_D - SEGMENT_SHAPE_OFFSET.rideau).toFixed(2)} units into the Rideau, not 26`);
-  if (!(secs >= 0.9 && secs <= 1.8)) throw new Error(`the Union Jacks come into view ${secs.toFixed(2)}s after the Upper Canada card, not ~1.3s`);
+  // ~1.3s at desktop paddling speed; a phone paddles slower (game.js's
+  // MOBILE_SPEED_SCALE), so a little longer there.
+  const flagLo = process.env.VOYAGEURS_TOUCH === '1' ? 1.1 : 0.9;
+  const flagHi = process.env.VOYAGEURS_TOUCH === '1' ? 2.5 : 1.8;
+  if (!(secs >= flagLo && secs <= flagHi)) throw new Error(`the Union Jacks come into view ${secs.toFixed(2)}s after the Upper Canada card, not ~${process.env.VOYAGEURS_TOUCH === '1' ? '1.5' : '1.3'}s`);
   notes.push(`  note flags: the Union Jacks come into view ${secs.toFixed(1)}s after the Upper Canada card (paddling)`);
   // Held 5s ("make it last longer. Let's try 4 seconds", then "1 second
   // longer") — up past the boss titles' 2.4s, gone by 5.5s. Timed from a fresh crossing, against
@@ -4954,6 +4962,34 @@ if (failures.length) {
     console.log('');
   }
   process.exit(1);
+}
+
+// --- the tall screen ---------------------------------------------------------
+// On a phone held upright the canvas is 320 tall, not 220 (config.js's
+// TALL_SCREEN) — decided as the modules load, so it needs a process of its
+// own. Re-run the scenarios most tied to the screen's height under it:
+// the whole-river ones, the screen-edge margins (the Upper Canada seam,
+// Le Diable's clear arena), a held fight and the Kingston finish.
+if (!process.env.VOYAGEURS_TALL) {
+  const { spawnSync } = await import('node:child_process');
+  const tall = spawnSync(process.execPath, [new URL(import.meta.url).pathname], {
+    env: {
+      ...process.env,
+      VOYAGEURS_TALL: '1',
+      // A phone held upright: touch tuning (game.js) as well as the tall screen.
+      VOYAGEURS_TOUCH: '1',
+      SMOKE_ONLY: '^(main\\.js loads|fjord: paddle|mouth crossing|lawrenceWest: fight|rideau: past Gatineau|chasse-galerie: no steeple|chasse-galerie: fly the gorge|diable: up/down|britishWarship: Up/Down|blockade: no sign of a frigate|rideau: paddle the whole leg|title backdrop|town saves: landing)',
+    },
+    encoding: 'utf8',
+  });
+  const out = (tall.stdout || '') + (tall.stderr || '');
+  if (tall.status !== 0) {
+    console.log('\n— phone (touch, 320 tall) pass FAILED —');
+    console.log(out);
+    process.exit(1);
+  }
+  const ran = (out.match(/^ {2}ok {3}/gm) || []).length;
+  console.log(`phone (touch, 320 tall): ${ran} scenario(s) re-run, all ok`);
 }
 
 console.log('\nall scenarios ran without crashing.\n');

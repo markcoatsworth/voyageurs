@@ -11,7 +11,7 @@
 
 import { centerX, widthAt, OTTAWA_EASE_START, OTTAWA_EASE_LEN } from '../world/river/path.js';
 import { VILLAGES } from '../world/river/route.js';
-import { worldToScreen, PIXELS_PER_UNIT } from '../shared/config.js';
+import { worldToScreen, PIXELS_PER_UNIT, CANOE_SCREEN_Y, CANVAS_WIDTH, CANVAS_HEIGHT } from '../shared/config.js';
 import { hashRange } from '../shared/hash.js';
 
 const MONTREAL = VILLAGES.find(v => v.name === 'Montreal');
@@ -254,7 +254,9 @@ const GORGE_ENGAGED_D = OTTAWA_EASE_START + OTTAWA_EASE_LEN;
 // steeple right in the middle of the fight scene" — the one at d: -1. Their
 // hits are already suspended for the fight (game.js); this is the look.
 // Exported for the smoke test.
-export const ARENA_CLEAR = { behind: 12, ahead: 11 };
+// `ahead` reaches past the top of the frame: 11 on the usual screen, more on
+// a phone held upright (config.js's TALL_SCREEN — ~16.6 units in view ahead).
+export const ARENA_CLEAR = { behind: 12, ahead: Math.max(11, Math.ceil(CANOE_SCREEN_Y / PIXELS_PER_UNIT) + 1) };
 const STEEPLES = STEEPLE_DEFS.filter(({ d: offset }) => DIABLE_ARENA_D + offset >= GORGE_ENGAGED_D).map(({ d: offset, side, reaching }) => {
   const d = DIABLE_ARENA_D + offset;
   const waterHalf = widthAt(d) / 2;
@@ -518,7 +520,7 @@ export function createChasseGalerie() {
 // Hashed rows so they don't flicker about frame to frame; each slides
 // across at its own speed, wrapping.
 function drawGustStreaks(ctx, level, dir, t, blowing) {
-  const W = 320, H = 220;
+  const W = CANVAS_WIDTH, H = CANVAS_HEIGHT;
   const count = Math.round(4 + level * (blowing ? 22 : 12));
   ctx.save();
   for (let i = 0; i < count; i++) {
